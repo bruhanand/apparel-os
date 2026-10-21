@@ -27,8 +27,11 @@ const valuesCheck = (policy: 4 | 10): ValidityCheck => ({
   locks: () => Promise.resolve([]),
 });
 
+/** The SYNTHETIC validity check reporting one value of policy 10, which receiving needs beside policy 4. */
+export const RECEIVING_STATUTORY_CHECK = valuesCheck(10);
+
 /** The SYNTHETIC validity checks reporting one value of policies 4 and 10, registered in the test composition. */
-export const receivingValidityChecks: readonly ValidityCheck[] = [valuesCheck(4), valuesCheck(10)];
+export const receivingValidityChecks: readonly ValidityCheck[] = [valuesCheck(4), RECEIVING_STATUTORY_CHECK];
 
 /** Every stock record type, viewed: what writing receipt counts needs under row-level security (stock-ledger 14.3). */
 export const STOCK_VIEW: readonly SyntheticAuthority[] = permissionRegistry
@@ -114,6 +117,17 @@ export interface ReceivingFixture extends SyntheticStores {
   };
   /** A product of the brand whose tracking profile requires a batch and expiry. */
   readonly batchSku: { readonly id: string; readonly styleCode: string };
+  /** How the screens name the Site, the Stores' units and the first Store's location: "CODE · Name". */
+  readonly options: {
+    readonly site: string;
+    readonly wholeStore: string;
+    readonly warehouse: string;
+    readonly storeLocation: string;
+    readonly supplier: string;
+    readonly brand: string;
+    readonly sizeList: string;
+    readonly sizes: readonly string[];
+  };
 }
 
 /**
@@ -201,12 +215,13 @@ export async function receivingFixture(
 
   // The size list: a list attribute and two confirmed values (structure-and-masters 4.2; goods-in 4.3; GI-3).
   const attributeCode = next('SIZE');
+  const sizeListName = syntheticName('Size');
   const sizeAttributeId = ok(
     await setup.asPreparerDo((c, p) =>
       setup.catalogue.prepareAttribute(c, p, {
         code: attributeCode,
         valueKind: 'list',
-        name: syntheticName('Size'),
+        name: sizeListName,
         validFrom: today,
       }),
     ),
@@ -316,8 +331,22 @@ export async function receivingFixture(
   } finally {
     await owner.end();
   }
+  const structure = await setup.run(setup.preparer.id, (c) => setup.organisation.structureOn(c, setup.today()));
+  const option = (record: { readonly code: string; readonly name: string } | undefined) =>
+    record === undefined ? '' : `${record.code} · ${record.name}`;
+  const options = {
+    site: option(structure.sites.find((each) => each.id === stores.siteId)),
+    wholeStore: option(structure.businessUnits.find((each) => each.id === stores.wholeStore)),
+    warehouse: option(structure.businessUnits.find((each) => each.id === stores.warehouse)),
+    storeLocation: option(structure.locations.find((each) => each.id === storeLocation)),
+    supplier: `${supplier.code} · ${supplier.name}`,
+    brand: `${brandCode} · ${brandName}`,
+    sizeList: `${attributeCode} · ${sizeListName}`,
+    sizes: sizeValues.map((each) => `${each.code} · ${syntheticName(each.code)}`),
+  };
   return {
     ...stores,
+    options,
     storeLocation,
     otherStoreLocation,
     warehouseLocation,
@@ -331,11 +360,49 @@ export async function receivingFixture(
   };
 }
 
+/** A policy Signed and validated as a fixture, and the values its validation covers, `<check>:<key>@<version>`. */
+export interface SignedPolicy {
+  readonly policy: number;
+  readonly validatedValues: readonly string[];
+}
+
+/** Policies 4 and 10, covering the SYNTHETIC values of receivingValidityChecks. */
+export const RECEIVING_POLICIES: readonly SignedPolicy[] = receivingValidityChecks.map((check) => ({
+  policy: check.policy ?? 0,
+  validatedValues: [`${check.code}:syn-value@v1`],
+}));
+
+/** The policies Signed and validated as SYNTHETIC fixtures (module-map 4.4; DM-6; S1-F04-T01). */
+export async function policiesSigned(database: string, policies: readonly SignedPolicy[]): Promise<void> {
+  const owner = await connect(database, 'migration');
+  try {
+    for (const { policy, validatedValues } of policies) {
+      await owner.query(
+        `insert into configuration.policy_signature (id, policy_number, signatory, signed_on, origin,
+           evidence_attachment_ids, recorded_by_user_id, role_assignment_id, recorded_at)
+         values ($1, $2, 'SYNTHETIC signatory', current_date, 'synthetic', array[$3::uuid], $4, $5, now())`,
+        [uuidv7(), policy, uuidv7(), uuidv7(), uuidv7()],
+      );
+      await owner.query(
+        `insert into configuration.policy_validation (id, policy_number, origin, validated_values,
+           evidence_attachment_ids, validated_by_user_id, role_assignment_id, validated_at)
+         values ($1, $2, 'synthetic', $6::text[], array[$3::uuid], $4, $5, now())`,
+        [uuidv7(), policy, uuidv7(), uuidv7(), uuidv7(), [...validatedValues]],
+      );
+    }
+  } finally {
+    await owner.end();
+  }
+}
+
 /**
- * The receiving capability switched on and policies 4 and 10 Signed and validated, covering the SYNTHETIC values of
- * receivingValidityChecks, as fixtures (module-map 4.4; DM-6; S1-F04-T01).
+ * The receiving capability switched on and policies 4 and 10 Signed and validated, as fixtures (module-map 4.4; DM-6;
+ * S1-F04-T01): by default covering the SYNTHETIC values of receivingValidityChecks.
  */
-export async function receivingGateOpen(database: string): Promise<void> {
+export async function receivingGateOpen(
+  database: string,
+  policies: readonly SignedPolicy[] = RECEIVING_POLICIES,
+): Promise<void> {
   const owner = await connect(database, 'migration');
   try {
     await owner.query(
@@ -344,23 +411,10 @@ export async function receivingGateOpen(database: string): Promise<void> {
        values ($1, $2, true, $3, $4, now())`,
       [uuidv7(), RECEIVING_CAPABILITY, uuidv7(), uuidv7()],
     );
-    for (const check of receivingValidityChecks) {
-      await owner.query(
-        `insert into configuration.policy_signature (id, policy_number, signatory, signed_on, origin,
-           evidence_attachment_ids, recorded_by_user_id, role_assignment_id, recorded_at)
-         values ($1, $2, 'SYNTHETIC signatory', current_date, 'synthetic', array[$3::uuid], $4, $5, now())`,
-        [uuidv7(), check.policy, uuidv7(), uuidv7(), uuidv7()],
-      );
-      await owner.query(
-        `insert into configuration.policy_validation (id, policy_number, origin, validated_values,
-           evidence_attachment_ids, validated_by_user_id, role_assignment_id, validated_at)
-         values ($1, $2, 'synthetic', array[$6], array[$3::uuid], $4, $5, now())`,
-        [uuidv7(), check.policy, uuidv7(), uuidv7(), uuidv7(), `${check.code}:syn-value@v1`],
-      );
-    }
   } finally {
     await owner.end();
   }
+  await policiesSigned(database, policies);
 }
 
 /** A SYNTHETIC format of GRN numbers: no format is the Organisation's until it chooses one (numbering-and-audit 3.5). */

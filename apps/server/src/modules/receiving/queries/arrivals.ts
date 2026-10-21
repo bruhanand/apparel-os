@@ -1,5 +1,13 @@
-import type { Arrival, Grn, Inbox, InboxEntry, InboxView, MissingItem } from '@apparel-os/schemas';
-import { asc, desc, eq, inArray } from 'drizzle-orm';
+import {
+  INBOX_PAGE_CAP,
+  type Arrival,
+  type Grn,
+  type Inbox,
+  type InboxEntry,
+  type InboxQuery,
+  type MissingItem,
+} from '@apparel-os/schemas';
+import { and, asc, desc, eq, inArray, lt } from 'drizzle-orm';
 import type { TransactionContext } from '../../../kernel/index.js';
 import type { RecordFacts } from '../../access/index.js';
 import type { OrganisationInterface } from '../../organisation/index.js';
@@ -159,8 +167,9 @@ export function peopleOf(arrival: Arrival): string[] {
 }
 
 /**
- * The Receive Goods inbox of a Site (goods-in 4.1). Pending holds Arrivals not yet issued as a GRN and GRNs waiting for
- * their PT, which every GRN does until the PT upload is built (S2-F04-T02); History holds the rest, none yet. Each
+ * The Receive Goods inbox of a Site (goods-in 4.1), newest recorded first, a page at a time (code-house-rules 12.1).
+ * Pending holds Arrivals not yet issued as a GRN and GRNs waiting for their PT, which every GRN does until the PT
+ * upload is built (S2-F04-T02); History holds the rest, none yet. Each
  * unit of the Site in force today comes with whether receiving is available there, naming what is missing, and its
  * locations in force; `covered` answers, for the facts of each Arrival, whether the reader may view it.
  */
@@ -168,7 +177,7 @@ export async function inboxOf(
   context: TransactionContext,
   dependencies: ReadDependencies,
   siteId: string,
-  view: InboxView,
+  query: InboxQuery,
   today: string,
   covered: (facts: readonly RecordFacts[]) => Promise<readonly boolean[]>,
 ): Promise<Omit<Inbox, 'asOf'>> {
@@ -186,11 +195,19 @@ export async function inboxOf(
         .map((each) => ({ id: each.id, code: each.code, name: each.name })),
     });
   }
-  const rows = await context.tx
-    .select()
-    .from(arrival)
-    .where(eq(arrival.siteId, siteId))
-    .orderBy(desc(arrival.arrivedAt), desc(arrival.id));
+  // Every delivery waits for something until its PT and scan-in are built, so History holds none yet (4.1).
+  const limit = Math.min(Number(query.limit ?? INBOX_PAGE_CAP), INBOX_PAGE_CAP);
+  const page =
+    query.view === 'history'
+      ? []
+      : await context.tx
+          .select()
+          .from(arrival)
+          .where(and(eq(arrival.siteId, siteId), query.after === undefined ? undefined : lt(arrival.id, query.after)))
+          .orderBy(desc(arrival.id))
+          .limit(limit + 1);
+  const rows = page.slice(0, limit);
+  const next = page.length > limit ? (rows.at(-1)?.id ?? null) : null;
   const allowed = await covered(rows.map((row) => factsOf(row)));
   const shown = rows.filter((_row, index) => allowed[index] === true);
   const ids = shown.map((row) => row.id);
@@ -231,6 +248,5 @@ export async function inboxOf(
       waitingFor,
     };
   });
-  // Every delivery waits for something until its PT and scan-in are built, so History is empty for now (4.1).
-  return { siteId, view, units, entries: view === 'pending' ? listed : [] };
+  return { siteId, view: query.view, units, entries: listed, next };
 }

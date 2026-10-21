@@ -70,7 +70,7 @@ export class ReceivingController {
     const answer = await this.read(user, 'receiving.read-inbox', async (context, today) => {
       if (!(await siteExists(context, siteId))) return { refused: notFound('organisation.site', siteId) };
       let refusal: CommandRefusal | undefined;
-      const inbox = await this.receiving.inbox(context, siteId, input.query.view, today, async (facts) => {
+      const inbox = await this.receiving.inbox(context, siteId, input.query, today, async (facts) => {
         const checked = await this.access.authoriseEach(
           context,
           { actorId: user.userId, action: 'view', recordType: ARRIVAL_TYPE },

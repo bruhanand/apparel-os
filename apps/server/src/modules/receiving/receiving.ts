@@ -5,12 +5,12 @@ import type {
   CountLineRemoval,
   GrnIssue,
   Inbox,
-  InboxView,
+  InboxQuery,
   InvoiceDraft,
   PhotosDraft,
 } from '@apparel-os/schemas';
 import type { TransactionContext } from '../../kernel/index.js';
-import type { RecordFacts } from '../access/index.js';
+import type { AccessInterface, RecordFacts } from '../access/index.js';
 import type { AuditInterface } from '../audit/index.js';
 import type { ConfigurationInterface } from '../configuration/index.js';
 import type { FilesImportsInterface } from '../files-imports/index.js';
@@ -26,6 +26,7 @@ import { arrivalFacts, arrivalView, inboxOf, peopleOf } from './queries/arrivals
 
 export interface ReceivingDependencies {
   readonly audit: AuditInterface;
+  readonly access: Pick<AccessInterface, 'authorise'>;
   readonly configuration: Pick<ConfigurationInterface, 'checkAvailability'>;
   readonly files: Pick<FilesImportsInterface, 'attach'>;
   readonly numbering: Pick<NumberingInterface, 'liveSeries' | 'seriesLockTarget' | 'allocate'>;
@@ -117,11 +118,11 @@ export class Receiving {
   inbox(
     context: TransactionContext,
     siteId: string,
-    view: InboxView,
+    query: InboxQuery,
     today: string,
     covered: (facts: readonly RecordFacts[]) => Promise<readonly boolean[]>,
   ): Promise<Omit<Inbox, 'asOf'>> {
-    return inboxOf(context, this.dependencies, siteId, view, today, covered);
+    return inboxOf(context, this.dependencies, siteId, query, today, covered);
   }
 }
 

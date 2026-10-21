@@ -522,17 +522,15 @@ describe('issuing the GRN (goods-in 4.5, 10.3; PRD-REC-008, PRD-ACP-001, PRD-INT
       code: 'receiving.no-grn-series',
       missing: [{ kind: 'number-series', numberedKind: 'receiving.grn' }],
     });
-    await api.app
-      .get<CommandRunner>(COMMAND_RUNNER)
-      .run(
-        {
-          commandName: 'test.define-grn-series',
-          organisation,
-          correlationId: uuidv7(),
-          actor: { kind: 'actor', actorId: receiver.id },
-        },
-        (context) => defineSyntheticGrnSeries(context, api.app.get<NumberingInterface>(NUMBERING)),
-      );
+    await api.app.get<CommandRunner>(COMMAND_RUNNER).run(
+      {
+        commandName: 'test.define-grn-series',
+        organisation,
+        correlationId: uuidv7(),
+        actor: { kind: 'actor', actorId: receiver.id },
+      },
+      (context) => defineSyntheticGrnSeries(context, api.app.get<NumberingInterface>(NUMBERING)),
+    );
 
     const key = uuidv7();
     const issued = await post(storeReceiver, `/api/receiving/arrivals/${arrivalId}/grn`, { versionToken }, key);
@@ -606,6 +604,49 @@ describe('issuing the GRN (goods-in 4.5, 10.3; PRD-REC-008, PRD-ACP-001, PRD-INT
     expect(total(held.rows)).toBe(13);
   });
 
+  it('goods-in 12 test 19 PRD-INT-002 every write of an Arrival replays its first answer under its key, and writes once', async () => {
+    const recordKey = uuidv7();
+    const body = arrivalBody(fixture.wholeStore, fixture.storeLocation);
+    const recorded = await post(storeReceiver, '/api/receiving/arrivals', body, recordKey);
+    expect(recorded.status, JSON.stringify(recorded.body)).toBe(200);
+    expect(await post(storeReceiver, '/api/receiving/arrivals', body, recordKey)).toEqual(recorded);
+    const arrivalId = recorded.body.arrivalId as string;
+    const invoiceKey = uuidv7();
+    const invoiceBody = {
+      number: `SYN-INV-REPLAY-${String(randomInt(1_000_000))}`,
+      date: setup.today(),
+      file: await storedFile(storeReceiver),
+    };
+    const invoice = await post(storeReceiver, `/api/receiving/arrivals/${arrivalId}/invoices`, invoiceBody, invoiceKey);
+    expect(invoice.status, JSON.stringify(invoice.body)).toBe(200);
+    expect(await post(storeReceiver, `/api/receiving/arrivals/${arrivalId}/invoices`, invoiceBody, invoiceKey)).toEqual(
+      invoice,
+    );
+    const lineKey = uuidv7();
+    const line = await post(
+      storeReceiver,
+      `/api/receiving/arrivals/${arrivalId}/count-lines`,
+      describedLine('SYN-STYLE-REPLAY', 1, 1),
+      lineKey,
+    );
+    expect(line.status, JSON.stringify(line.body)).toBe(200);
+    expect(
+      await post(
+        storeReceiver,
+        `/api/receiving/arrivals/${arrivalId}/count-lines`,
+        describedLine('SYN-STYLE-REPLAY', 1, 1),
+        lineKey,
+      ),
+    ).toEqual(line);
+    const arrival = await readArrival(storeReceiver, arrivalId);
+    expect(arrival.invoices).toHaveLength(1);
+    expect(arrival.lines).toHaveLength(1);
+    // The same key with another request is a conflict, never a second write (code-house-rules 12.4).
+    const reused = await post(storeReceiver, '/api/receiving/arrivals', { ...body, cartons: 9 }, recordKey);
+    expect(reused.status).toBe(409);
+    expect(errorOf(reused)?.code).toBe('kernel.idempotency-key-reused');
+  });
+
   it('S2-F02-T03 a line whose counted quantity differs from its invoice is not issued until the findings are built', async () => {
     const arrivalId = await recordArrival(storeReceiver, fixture.wholeStore, fixture.storeLocation);
     expect((await recordInvoice(storeReceiver, arrivalId)).status).toBe(200);
@@ -616,6 +657,25 @@ describe('issuing the GRN (goods-in 4.5, 10.3; PRD-REC-008, PRD-ACP-001, PRD-INT
       code: 'receiving.line-differs-from-invoice',
       missing: [{ kind: 'count-line', lineId: (short.body as { lineId: string }).lineId }],
     });
+  });
+});
+
+describe('goods of a product not yet set up (stock-ledger 13.14; RR-553)', () => {
+  it('stock-ledger 13.14 a receiver scoped to the brand alone cannot issue a GRN of goods whose brand stays Unknown until the PT', async () => {
+    const brandReceiver = await enrolled('RCV-BRAND', RECEIVER_AUTHORITY, {
+      kind: 'dimensions',
+      legalEntity: { kind: 'all' },
+      place: { kind: 'all' },
+      brand: { kind: 'selected', members: [fixture.brand.id] },
+    });
+    const arrivalId = await recordArrival(brandReceiver, fixture.wholeStore, fixture.storeLocation);
+    expect((await recordInvoice(brandReceiver, arrivalId)).status).toBe(200);
+    expect((await saveLine(brandReceiver, arrivalId, describedLine('SYN-STYLE-BRAND', 2, 2))).status).toBe(200);
+    const { versionToken } = await readArrival(brandReceiver, arrivalId);
+    const refused = await post(brandReceiver, `/api/receiving/arrivals/${arrivalId}/grn`, { versionToken });
+    expect(refused.status).toBe(403);
+    expect(errorOf(refused)?.code).toBe('access.not-authorised');
+    expect((await readArrival(brandReceiver, arrivalId)).grn).toBeNull();
   });
 });
 
@@ -645,5 +705,15 @@ describe('who sees receipts (goods-in 12 test 20; access-and-approvals 5.3)', ()
       inboxSchema.parse((await get(receiver, `/api/receiving/sites/${fixture.siteId}/inbox?view=history`)).body)
         .entries,
     ).toEqual([]);
+    // The inbox is read a page at a time, newest recorded first (code-house-rules 12.1).
+    const first = inboxSchema.parse(
+      (await get(receiver, `/api/receiving/sites/${fixture.siteId}/inbox?view=pending&limit=1`)).body,
+    );
+    expect(first.entries.map((entry) => entry.arrivalId)).toEqual([other]);
+    expect(first.next).toBe(other);
+    const second = inboxSchema.parse(
+      (await get(receiver, `/api/receiving/sites/${fixture.siteId}/inbox?view=pending&limit=1&after=${other}`)).body,
+    );
+    expect(second.entries.map((entry) => entry.arrivalId)).toEqual([own]);
   });
 });

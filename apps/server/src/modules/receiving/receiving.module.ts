@@ -1,6 +1,6 @@
 import { Inject, Module, type OnModuleInit } from '@nestjs/common';
 import { CommandRunnerModule } from '../../kernel/index.js';
-import { AccessModule } from '../access/index.js';
+import { ACCESS, AccessModule, type AccessInterface } from '../access/index.js';
 import { AUDIT, AuditModule, type AuditInterface } from '../audit/index.js';
 import { CONFIGURATION, type ConfigurationInterface } from '../configuration/index.js';
 import { FILES_IMPORTS, FilesImportsModule, type FilesImportsInterface } from '../files-imports/index.js';
@@ -37,14 +37,15 @@ import { RECEIVING } from './tokens.js';
       provide: RECEIVING,
       useFactory: (
         audit: AuditInterface,
+        access: AccessInterface,
         configuration: ConfigurationInterface,
         files: FilesImportsInterface,
         numbering: NumberingInterface,
         ledger: StockLedgerInterface,
         catalogue: CatalogueInterface,
         organisation: OrganisationInterface,
-      ) => new Receiving({ audit, configuration, files, numbering, ledger, catalogue, organisation }),
-      inject: [AUDIT, CONFIGURATION, FILES_IMPORTS, NUMBERING, STOCK_LEDGER, CATALOGUE, ORGANISATION],
+      ) => new Receiving({ audit, access, configuration, files, numbering, ledger, catalogue, organisation }),
+      inject: [AUDIT, ACCESS, CONFIGURATION, FILES_IMPORTS, NUMBERING, STOCK_LEDGER, CATALOGUE, ORGANISATION],
     },
   ],
   exports: [RECEIVING],

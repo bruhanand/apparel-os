@@ -228,7 +228,22 @@ export type ArrivalRead = z.infer<typeof arrivalReadSchema>;
 export const inboxViewSchema = z.enum(['pending', 'history']);
 export type InboxView = z.infer<typeof inboxViewSchema>;
 
-export const inboxQuerySchema = z.strictObject({ view: inboxViewSchema });
+/**
+ * The most deliveries one page of the inbox holds, a technical cap (code-house-rules 12.1); a longer list is read page
+ * by page with the cursor, the last delivery of the page before.
+ */
+export const INBOX_PAGE_CAP = 100;
+
+export const inboxQuerySchema = z.strictObject({
+  view: inboxViewSchema,
+  after: idSchema.optional(),
+  limit: z
+    .string()
+    .regex(/^[1-9]\d*$/)
+    .refine((limit) => Number(limit) <= INBOX_PAGE_CAP, { message: `At most ${String(INBOX_PAGE_CAP)}` })
+    .optional(),
+});
+export type InboxQuery = z.infer<typeof inboxQuerySchema>;
 export const inboxParamsSchema = z.strictObject({ siteId: idSchema });
 
 /** One delivery in the inbox (goods-in 4.1). */
@@ -263,6 +278,9 @@ export const inboxSchema = z.strictObject({
       locations: z.array(z.strictObject({ id: idSchema, code: z.string(), name: z.string() })),
     }),
   ),
+  /** The deliveries, newest recorded first, a page at a time. */
   entries: z.array(inboxEntrySchema),
+  /** Where the next page starts, null on the last (code-house-rules 12.1). */
+  next: idSchema.nullable(),
 });
 export type Inbox = z.infer<typeof inboxSchema>;

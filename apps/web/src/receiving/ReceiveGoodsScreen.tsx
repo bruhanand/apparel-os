@@ -303,7 +303,14 @@ function SiteInbox({ siteId }: { siteId: string }) {
   const [view, setView] = useState<InboxView>('pending');
   const [open, setOpen] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
-  const query = useQuery(readQuery(api, 'readReceivingInbox', { params: { siteId }, query: { view } }));
+  // The page shown: the first, or the one after a delivery (code-house-rules 12.1).
+  const [after, setAfter] = useState<string | undefined>(undefined);
+  const query = useQuery(
+    readQuery(api, 'readReceivingInbox', {
+      params: { siteId },
+      query: after === undefined ? { view } : { view, after },
+    }),
+  );
   if (open !== null) {
     return (
       <ArrivalView
@@ -355,6 +362,7 @@ function SiteInbox({ siteId }: { siteId: string }) {
             }
             onClick={() => {
               setView(each);
+              setAfter(undefined);
             }}
           >
             {t(`receive.tab.${each}`)}
@@ -370,6 +378,26 @@ function SiteInbox({ siteId }: { siteId: string }) {
               </div>
               <UnitsUnavailable units={inbox.units} />
               <InboxTable inbox={inbox} onOpen={setOpen} />
+              {(inbox.next !== null || after !== undefined) && (
+                <div className="flex flex-wrap gap-2">
+                  {after !== undefined && (
+                    <Button
+                      label="receive.first-page"
+                      onClick={() => {
+                        setAfter(undefined);
+                      }}
+                    />
+                  )}
+                  {inbox.next !== null && (
+                    <Button
+                      label="receive.next-page"
+                      onClick={() => {
+                        setAfter(inbox.next ?? undefined);
+                      }}
+                    />
+                  )}
+                </div>
+              )}
               {recording && (
                 <RecordDrawer
                   title={t('receive.new')}

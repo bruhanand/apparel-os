@@ -3017,6 +3017,8 @@ export const englishIndia = {
   'receive.units': 'Units that cannot receive now',
   'receive.unit.unavailable': 'Receiving is not available at {unit}.',
   'receive.list': 'Deliveries',
+  'receive.next-page': 'Older deliveries',
+  'receive.first-page': 'Newest deliveries',
   'receive.empty.pending.title': 'Nothing to receive',
   'receive.empty.pending.body': 'Deliveries still to count, and GRNs waiting for their PT, are listed here.',
   'receive.empty.history.title': 'No finished delivery yet',
