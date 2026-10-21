@@ -45,7 +45,6 @@ const MARGIN = 'SYNTHETIC margin twelve point five';
 
 const UNKNOWN_TERMS: AgreementTerms = {
   commercialModel: null,
-  defaultModel: null,
   ownershipEvent: null,
   returnRights: { allowed: null, window: null, startsAt: null },
   returnConditions: {
@@ -365,6 +364,42 @@ describe('agreements through the routes (structure-and-masters 5.2; PRD-ACS-008;
     expect(file.restrictedClasses).toEqual(['margin']);
     expect(file.contentHash).toBe(createHash('sha256').update(bytes).digest('hex'));
     expect(Buffer.from(file.contentBase64, 'base64').equals(bytes)).toBe(true);
+  });
+
+  it('DEC-129 POL-01.02 refuses a default model for new bookings in a draft, and no read carries one', async () => {
+    // Every booking takes the agreement's own commercial model (structure-and-masters 5.2; RR-545).
+    const partyId = await newSupplier();
+    const terms = { ...UNKNOWN_TERMS, commercialModel: 'outright', defaultModel: 'consignment' };
+    const created = await post(preparer, '/api/merchandise/agreements', {
+      code: code('AGR'),
+      counterparty: { kind: 'supplier', partyId },
+      terms,
+      margins: null,
+      signedAgreement: [],
+      validFrom: today(),
+    });
+    expect(created.status, JSON.stringify(created.body)).toBe(400);
+    expect(created.body).toMatchObject({ error: { code: 'kernel.invalid-request' } });
+    const record = agreementReadSchema.parse((await get(preparer, `/api/merchandise/agreements/${agreementId}`)).body);
+    const versioned = await post(preparer, `/api/merchandise/agreements/${agreementId}/versions`, {
+      terms,
+      margins: null,
+      signedAgreement: [],
+      validFrom: today(),
+      versionToken: record.record.versionToken,
+    });
+    expect(versioned.status, JSON.stringify(versioned.body)).toBe(400);
+    expect(versioned.body).toMatchObject({ error: { code: 'kernel.invalid-request' } });
+    const supplierId = record.record.counterparty.kind === 'supplier' ? record.record.counterparty.partyId : '';
+    for (const path of [
+      '/api/merchandise/agreements',
+      `/api/merchandise/agreements/${agreementId}`,
+      `/api/merchandise/agreement-terms?partyId=${supplierId}&date=${today()}`,
+    ]) {
+      const read = await get(preparer, path);
+      expect(read.status, path).toBe(200);
+      expect(JSON.stringify(read.body), path).not.toContain('defaultModel');
+    }
   });
 
   it('PRD-SEC-005 refuses a reader without the agreement, or without the margin class it carries', async () => {

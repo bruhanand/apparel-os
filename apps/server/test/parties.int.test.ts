@@ -64,7 +64,6 @@ function recorded(outcome: Outcome): PartyChanged {
 /** Every term Unknown (POL-01.11): nothing is defaulted. */
 const UNKNOWN_TERMS: AgreementTerms = {
   commercialModel: null,
-  defaultModel: null,
   ownershipEvent: null,
   returnRights: { allowed: null, window: null, startsAt: null },
   returnConditions: {
