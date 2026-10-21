@@ -1364,3 +1364,12 @@
 - **Choice.** The first; there is no fixed template. AI reads the document into a draft booking with its lines, and a person reviews and saves it; AI never saves anything by itself (`PRD-SEC-003`, `PRD-SEC-004`). Manual entry stays available. The AI gateway therefore serves bookings in stage 2 too, switched off by default like every capability (`PRD-SEC-017`, `DEC-105`).
 - **Why.** Booking documents come as photos or PDFs in no fixed layout.
 - **Changed.** New `PRD-BKG-015`. `phases.md` stage 2 and `roadmap.md` `S2-F01`, `S2-F05` wording; module-map 9 range; `coverage.md`.
+
+## DEC-132 — A booking takes its brand's Agreement, in the version it was approved under
+
+- **Date:** 21 Oct 2026 · **Decided by:** product owner · **Report item:** RR-543, RR-544; stage 2 grill, round 6 ([stage-2-grill-notes.md](plan/stage-2-grill-notes.md))
+- **Question.** A booking names a supplier and a brand, and each may have an Agreement: whose terms does it take? And when the Agreement gets a new version after the booking is approved, does the booking follow it?
+- **Options.** Brand's Agreement · supplier's Agreement · a choice per booking. Keep the version approved under · follow the newest version.
+- **Choice.** The brand's Agreement; separate supplier terms for bookings are not needed now. A booking's terms are fixed at its approval: it keeps the Agreement version in force when it was approved, and takes a later version only when it is approved again.
+- **Why.** The product owner's answer; approval binds to the exact version of what was approved (`PRD-ACS-007`).
+- **Changed.** PRD "Words used" Agreement and `PRD-BKG-002` reworded. `POL-01.02`, `POL-01.04`, `POL-01.08` and `POL-01.14` reworded (IDs kept). structure-and-masters 5.2, domain-model, module-map 5, `roadmap.md` `S2-F01`. RR-543 and RR-544 closed. Not changed: a supplier's own Agreement and its cash-discount and interest terms (`PRD-PAY-015`).

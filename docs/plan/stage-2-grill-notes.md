@@ -66,6 +66,13 @@ Answers (the product owner accepted each recommendation):
 
 Booking is written up: `DEC-129` (terms only from the Agreement), `DEC-130` (lines, prices, match to the GRN), `DEC-131` (read from a photo or PDF by AI, manual entry open). Two small booking points are open as RR-543 (which Agreement when both the supplier and the brand have one) and RR-544 (which Agreement version a booking follows after a revision).
 
+## Round 6, 21 Oct 2026 (booking)
+
+1. **Which Agreement.** The brand's; separate supplier terms are not needed now.
+2. **A revised Agreement.** A booking's terms are fixed at its approval: it keeps that version and takes a later one only when approved again.
+
+Both written as `DEC-132`; RR-543 and RR-544 closed. Booking is settled.
+
 ## Not settled
 
 - PT making, PT approval, labels and corrections: the owner's own discussion, which the owner will open. Do not raise it.

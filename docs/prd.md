@@ -92,7 +92,7 @@ Business words:
 | Acceptance | Confirmation that goods meet the applicable identity, count, condition, policy and destination checks |
 | Accrual | Recording income, expense, assets or obligations when their applicable recognition event occurs, rather than only when cash moves |
 | Ageing | How long stock has been held, or how long a due has been unpaid |
-| Agreement | The signed commercial terms with a supplier or brand (its MOU), recorded once with the signed copy attached and revised only by a new version. Every booking under it takes its terms |
+| Agreement | The signed commercial terms with a supplier or brand (its MOU), recorded once with the signed copy attached and revised only by a new version. Every booking of a brand takes the terms of that brand's Agreement |
 | Arrival | One delivery of goods reaching a Site, recorded before it is counted. A supplier Arrival is counted once and gives one GRN. Not a batch, which means goods tracked by lot and expiry |
 | AS, Ind AS | Indian Accounting Standards; Ind AS is the framework notified under the applicable company-law rules |
 | BASIC | In the KDPS PT layout, the cost base of a piece before the additions set by the costing profile |
@@ -360,7 +360,7 @@ The product is delivered in six stages. Each stage completes one workflow end to
 ## Booking and buying
 
 - `PRD-BKG-001` Create bookings by brand, season and destination. Each line has a style code and a quantity; colour and size are optional, for orders placed at style level. Lines with colour and size are entered through a size-colour grid.
-- `PRD-BKG-002` Take a booking's terms from the supplier's or brand's Agreement. A booking records no terms of its own and cannot change the Agreement's.
+- `PRD-BKG-002` Take a booking's terms from its brand's Agreement, in the version in force when the booking is approved. A booking records no terms of its own and cannot change the Agreement's; it takes a later version only when it is approved again.
 - `PRD-BKG-003` Give each booking line an indicative cost and an MRP. Show total pieces, indicative cost and MRP values. Indicative booking cost serves only these totals and the open-to-buy check; it never replaces approved receipt cost.
 - `PRD-BKG-004` Control booking approval against the open-to-buy budget by brand and season.
 - `PRD-BKG-005` Track ordered, delivered, outstanding and cancelled quantities separately from invoice discrepancies.

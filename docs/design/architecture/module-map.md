@@ -408,7 +408,7 @@ Where a module has an interface, it lists the operations in words. Names, inputs
 | Maintain masters | Booking, Admin | Brands, categories, size sets, attributes, units, pack conversions with history (`POL-04.03`, `POL-04.04`) | — |
 | Change a tracking profile | Booking, Operations | Effective-dated. A change to piece-tracked takes effect only through a labelling count (`PRD-MER-018`, `POL-04.09`, DEC-054) | Stock exists and no labelling count is planned; as built, a change back to quantity while a Site holds pieces (structure-and-masters 4.6) |
 | Read a party; read the terms in force | `booking`, `receiving`, `stock`, `finance`, `supplier-returns` | The party, and the agreement version in force for a brand or supplier on a date (`PRD-ORG-016`) | — |
-| Maintain an agreement | Booking; approver | Effective-dated versions with history; terms may be revised later (`PRD-ORG-016`, `POL-01.03`). A booking has no terms of its own: it takes the terms in force (`POL-01.04`, `DEC-129`) | A version would overlap another in the same scope (`PRD-MOD-010`) |
+| Maintain an agreement | Booking; approver | Effective-dated versions with history; terms may be revised later (`PRD-ORG-016`, `POL-01.03`). A booking has no terms of its own: it takes its brand's agreement version in force at its approval (`POL-01.04`, `DEC-129`, `DEC-132`) | A version would overlap another in the same scope (`PRD-MOD-010`) |
 
 - Brands, suppliers, agents, ordering parties, invoicing parties and goods movers are kept independently (`PRD-MER-001`).
 - Unknown values are kept. Missing size is distinct from an explicitly supplied Free Size (`PRD-MER-005`).
