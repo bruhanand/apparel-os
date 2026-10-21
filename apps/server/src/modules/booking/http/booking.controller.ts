@@ -30,8 +30,13 @@ import type { Outcome } from '../commands/common.js';
 import { budgetItem } from '../domain/budgets.js';
 import { BOOKING } from '../tokens.js';
 
-/** Finds the facts of the record a route acts on, in its transaction; undefined when it does not exist. */
-type FactsOf = (context: TransactionContext) => Promise<RecordFacts | undefined>;
+/**
+ * Finds the facts of the record a route acts on, in its transaction, or the refusal that names it when it does not
+ * exist (PRD-UXP-003), so a missing record is never answered as anything else.
+ */
+type FactsOf = (
+  context: TransactionContext,
+) => Promise<{ readonly facts: RecordFacts } | { readonly refusal: CommandRefusal }>;
 
 const BUSINESS_DATE_NOT_SET: CommandRefusal = {
   kind: 'unavailable',
@@ -126,8 +131,7 @@ export class BookingController {
       'booking.prepare-open-to-buy-budget',
       user,
       input,
-      () => Promise.resolve({ brandId: input.body.brandId }),
-      undefined,
+      () => Promise.resolve({ facts: { brandId: input.body.brandId } }),
       (context, preparer) => this.booking.prepareBudget(context, preparer, input.body),
     );
   }
@@ -143,8 +147,10 @@ export class BookingController {
       'booking.prepare-open-to-buy-budget-version',
       user,
       input,
-      (context) => this.booking.budgetFacts(context, budgetId),
-      budgetNotFound(budgetId),
+      async (context) => {
+        const facts = await this.booking.budgetFacts(context, budgetId);
+        return facts === undefined ? { refusal: budgetNotFound(budgetId) } : { facts };
+      },
       (context, preparer) => this.booking.prepareBudgetVersion(context, preparer, budgetId, input.body),
     );
   }
@@ -176,15 +182,15 @@ export class BookingController {
     user: SignedInUser,
     route: CommandRoute & { access: { kind: 'action' } },
     factsOf: FactsOf,
-    notFound: CommandRefusal | undefined,
   ): Promise<
     | { readonly kind: 'allowed'; readonly roleAssignmentId: string; readonly facts: RecordFacts }
     | { readonly kind: 'refused'; readonly refusal: CommandRefusal }
   > {
     const date = await context.businessDate();
     if (date.kind === 'not-set') return { kind: 'refused', refusal: BUSINESS_DATE_NOT_SET };
-    const facts = await factsOf(context);
-    if (facts === undefined) return { kind: 'refused', refusal: notFound ?? BUSINESS_DATE_NOT_SET };
+    const found = await factsOf(context);
+    if ('refusal' in found) return { kind: 'refused', refusal: found.refusal };
+    const { facts } = found;
     const { action, recordType } = route.access;
     const authorised = await this.access.authorise(context, { actorId: user.userId, action, recordType, facts });
     if (authorised.kind === 'refused') return authorised;
@@ -197,11 +203,10 @@ export class BookingController {
     user: SignedInUser,
     input: RouteInputOf<R>,
     factsOf: FactsOf,
-    notFound: CommandRefusal | undefined,
     work: (context: TransactionContext, preparer: Preparer) => Promise<Outcome<object>>,
   ) {
     const authoriseReplay: ReplayAuthorisation = async (context) => {
-      const authorised = await this.authoriseIn(context, user, route, factsOf, notFound);
+      const authorised = await this.authoriseIn(context, user, route, factsOf);
       if (authorised.kind === 'allowed') return { kind: 'allowed' };
       return {
         kind: 'refused',
@@ -220,7 +225,7 @@ export class BookingController {
         content: requestContentOf(route, input),
         authoriseReplay,
         work: async (context): Promise<CommandOutcome<JsonValue>> => {
-          const authorised = await this.authoriseIn(context, user, route, factsOf, notFound);
+          const authorised = await this.authoriseIn(context, user, route, factsOf);
           if (authorised.kind === 'refused') {
             return { kind: 'refusal', refusal: authorised.refusal, causedBySecret: false };
           }

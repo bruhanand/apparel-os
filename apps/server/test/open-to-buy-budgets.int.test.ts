@@ -608,6 +608,23 @@ describe('what preparing refuses, naming why (goods-in 3.3; PRD-UXP-003)', () =>
     expect((await get(booking, `/api/booking/open-to-buy-budgets/${uuidv7()}`)).status).toBe(404);
   });
 
+  it('PRD-UXP-003 answers a version of a budget that does not exist as not found, naming the budget', async () => {
+    const missing = uuidv7();
+    const versioned = await post(booking, `/api/booking/open-to-buy-budgets/${missing}/versions`, {
+      amount: SYNTHETIC_AMOUNT,
+      origin: 'synthetic',
+      versionToken: uuidv7(),
+    });
+    expect(versioned.status, JSON.stringify(versioned.body)).toBe(404);
+    expect(versioned.body).toMatchObject({
+      error: {
+        kind: 'not-found',
+        code: 'booking.record-not-found',
+        missing: [{ kind: 'record', recordType: BUDGET, recordId: missing }],
+      },
+    });
+  });
+
   it('code-house-rules 12.14 refuses a value of an origin this environment does not accept, and replays a key once', async () => {
     const testSetup = await post(booking, '/api/booking/open-to-buy-budgets', {
       brandId: otherBrandId,
