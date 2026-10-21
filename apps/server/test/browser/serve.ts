@@ -1380,6 +1380,37 @@ const productsConfirmer = await provisionUser('BROWSER-PRODUCTS-CONFIRMER', 'P-B
   { recordType: 'access.approval_reason', action: 'view' },
 ]);
 
+// The open-to-buy journey's people (open-to-buy.spec.ts; goods-in 3.3, section 11; POL-05.09; S2-F01-T02): a Booking
+// user who prepares a budget for the products journey's SYNTHETIC brand and season, and may check and approve too, so
+// each refusal of their own is for their preparation alone (POL-02.07); Accounts, who records the check from My work;
+// and the Owner, who approves it there. SYNTHETIC grants: who holds each is the product owner's to name (V-01).
+const openToBuyReads = [
+  { recordType: 'booking.open_to_buy_budget', action: 'view' as const },
+  { recordType: 'access.approval_request', action: 'view' as const },
+  { recordType: 'access.approval_reason', action: 'view' as const },
+];
+const openToBuyBooking = await provisionUser('BROWSER-OPEN-TO-BUY-BOOKING', 'P-BKG', [
+  ...openToBuyReads,
+  ...['merchandise.brand', 'merchandise.attribute', 'merchandise.vocabulary_value'].map((recordType) => ({
+    recordType,
+    action: 'view' as const,
+  })),
+  { recordType: 'booking.open_to_buy_budget', action: 'create' },
+  { recordType: 'booking.open_to_buy_budget', action: 'edit' },
+  { recordType: 'booking.open_to_buy_budget', action: 'approve' },
+  { recordType: 'booking.open_to_buy_check', action: 'approve' },
+]);
+const openToBuyAccounts = await provisionUser('BROWSER-OPEN-TO-BUY-ACCOUNTS', 'P-ACC', [
+  ...openToBuyReads,
+  { recordType: 'booking.open_to_buy_check', action: 'view' },
+  { recordType: 'booking.open_to_buy_check', action: 'approve' },
+]);
+const openToBuyOwner = await provisionUser('BROWSER-OPEN-TO-BUY-OWNER', 'P-OWN', [
+  ...openToBuyReads,
+  { recordType: 'booking.open_to_buy_budget', action: 'approve' },
+]);
+const openToBuyReasonId = await writeSyntheticReason(settingsDatabase, 'approve');
+
 // The file intake journey (file-intake.spec.ts; S1-F06-T01), in the posting maps journey's Organisation, where its
 // catalogue, layout and series are recorded above: a Booking user who uploads the SYNTHETIC product file, stages it
 // with the one SYNTHETIC saved layout and mapping, validates and publishes it. Its SYNTHETIC category has no size set,
@@ -2521,6 +2552,17 @@ writeFileSync(
       seasonName: productsSeason.name,
       seasonValueOption: `${productsSeasonValue.code} · ${productsSeasonValue.name}`,
       fitName: productsFit.name,
+    },
+    openToBuy: {
+      organisationCode: settingsCode,
+      booking: credentialsOf(openToBuyBooking),
+      accounts: credentialsOf(openToBuyAccounts),
+      owner: credentialsOf(openToBuyOwner),
+      reasonId: openToBuyReasonId,
+      // How the budget form names the products journey's SYNTHETIC brand, season list and season (budget.option).
+      brandOption: `${productsBrand.code} · ${productsBrand.name}`,
+      seasonListOption: `${productsSeason.code} · ${productsSeason.name}`,
+      seasonOption: `${productsSeasonValue.code} · ${productsSeasonValue.name}`,
     },
     fileIntake: {
       organisationCode: postingCode,

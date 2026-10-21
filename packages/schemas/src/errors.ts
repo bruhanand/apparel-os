@@ -1029,6 +1029,27 @@ export const deviceCodes = declareCodes({
   'pos.change-not-awaiting': 'refused',
 });
 
+/**
+ * `booking`'s codes (goods-in 3.3, 10.3; S2-F01-T02):
+ *
+ * - `booking.record-not-found`: no open-to-buy budget, or no version of one, has that identifier.
+ * - `booking.brand-not-in-force`: the brand has no approved version in force today that does not retire it
+ *   (structure-and-masters 2.5).
+ * - `booking.season-not-in-vocabulary`: the season is not an approved value of its attribute in force today
+ *   (structure-and-masters 4.2; goods-in 3.1).
+ * - `booking.budget-exists`: the brand and season have a budget already; a change is its next version (3.3).
+ * - `booking.version-not-awaiting`: the version is decided already, or a newer version replaced it.
+ * - `booking.budget-not-checked`: the version's approval is refused until Accounts' check is recorded (POL-05.09).
+ */
+export const bookingCodes = declareCodes({
+  'booking.record-not-found': 'not-found',
+  'booking.brand-not-in-force': 'refused',
+  'booking.season-not-in-vocabulary': 'refused',
+  'booking.budget-exists': 'refused',
+  'booking.version-not-awaiting': 'refused',
+  'booking.budget-not-checked': 'refused',
+});
+
 /** Every declared code, of every unit. A unit adds its own here as it declares them (code-house-rules 12.3). */
 export const errorCodes = {
   ...kernelCodes,
@@ -1051,6 +1072,7 @@ export const errorCodes = {
   ...financePeriodCodes,
   ...deviceCodes,
   ...eboImportsCodes,
+  ...bookingCodes,
 } as const;
 export type ErrorCode = keyof typeof errorCodes;
 

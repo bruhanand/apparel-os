@@ -1,6 +1,7 @@
 import { kernelRestoreParticipant, RestoreRegistry } from './kernel/index.js';
 import { accessRestoreParticipant } from './modules/access/index.js';
 import { auditRestoreParticipant } from './modules/audit/index.js';
+import { bookingRestoreParticipant } from './modules/booking/index.js';
 import { configurationRestoreParticipant } from './modules/configuration/index.js';
 import { eboImportsRestoreParticipant } from './modules/ebo-imports/index.js';
 import { exceptionsRestoreParticipant } from './modules/exceptions/index.js';
@@ -37,5 +38,6 @@ export const restoreRegistry = new RestoreRegistry([
   stockLedgerRestoreParticipant,
   posRestoreParticipant,
   eboImportsRestoreParticipant,
+  bookingRestoreParticipant,
   siteLifecycleRestoreParticipant,
 ]);

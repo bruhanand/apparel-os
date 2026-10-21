@@ -2000,6 +2000,30 @@
       "marks": ["append-only"],
       "runtime": ["INSERT", "SELECT"],
       "design": "module-map section 5, 11.1; imports-and-opening-data 4.1, 4.2, 12; access-and-approvals 7.2; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "booking.open_to_buy_budget",
+      "class": "unscoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "goods-in 3.3, 10.1; code-house-rules 7.1, 8.2",
+      "why": "An open-to-buy budget's record type carries its brand, and every route authorises in its command with that fact, as the masters of organisation are (goods-in 3.3; structure-and-masters 6.1; access-and-approvals 5.3, 7.1 step 3); only booking code reads them"
+    },
+    {
+      "table": "booking.open_to_buy_budget_version",
+      "class": "unscoped",
+      "marks": ["versions"],
+      "runtime": ["INSERT", "SELECT", "UPDATE"],
+      "design": "goods-in 3.3, 10.1; code-house-rules 3.3, 7.3, 12.14",
+      "why": "An open-to-buy budget's record type carries its brand, and every route authorises in its command with that fact, as the masters of organisation are (goods-in 3.3; structure-and-masters 6.1; access-and-approvals 5.3, 7.1 step 3); only booking code reads them"
+    },
+    {
+      "table": "booking.open_to_buy_budget_check",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 3.3, 10.1; POL-05.09; code-house-rules 7.1",
+      "why": "An open-to-buy budget's record type carries its brand, and every route authorises in its command with that fact, as the masters of organisation are (goods-in 3.3; structure-and-masters 6.1; access-and-approvals 5.3, 7.1 step 3); only booking code reads them"
     }
   ]
 }

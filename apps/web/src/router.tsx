@@ -11,6 +11,7 @@ import { EmptyState } from './components/StandardStates';
 import { UnavailableState } from './components/UnavailableState';
 import { banner } from './banner';
 import { AuditLogScreen } from './history/AuditLogScreen';
+import { OpenToBuyScreen } from './booking/OpenToBuyScreen';
 import { LedgerScreen } from './finance/LedgerScreen';
 import { PeriodCloseScreen } from './finance/PeriodCloseScreen';
 import { PostingMapsScreen } from './finance/PostingMapsScreen';
@@ -99,6 +100,8 @@ function ScreenPage({ id }: { id: ScreenId }) {
   switch (id) {
     case 'my-work':
       return <MyWorkScreen />;
+    case 'booking.open-to-buy':
+      return <OpenToBuyScreen />;
     case 'setup.users':
       return <UsersScreen />;
     case 'setup.roles':
