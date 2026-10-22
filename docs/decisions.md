@@ -1481,3 +1481,12 @@
 - **Choice.** The first. The seed adds the labelled synthetic GRN series to a finished synthetic Organisation that lacks it; a rerun adds nothing. Everything else of a finished Organisation stays as it is.
 - **Why.** Without it `dev` could never issue a GRN.
 - **Changed.** `AGENTS.md` "Code workspace" `pnpm seed` line; code-house-rules 11.2 as built.
+
+## DEC-144 — The seed gives finished synthetic Organisations the booking and damage-report series and marks the season and size attributes
+
+- **Date:** 22 Oct 2026 · **Decided by:** product owner · **Report items:** RR-562, RR-564, RR-568; `DEC-143`, `DEC-118`
+- **Question.** `DEC-143` lets the seed add only the GRN series to a finished synthetic Organisation. The booking series, the damage-report series and the season and size attributes came after `dev`'s synthetic Organisations finished setup. May the seed add the two series and mark a labelled synthetic season attribute and size attribute, as it does the GRN series?
+- **Options.** Add the two series and mark the two attributes once, only where missing · leave them without, so that on `dev` a person marks the attributes and a second approves, and no booking or damage report can be numbered until a screen sets up a series (RR-449).
+- **Choice.** The first. The seed gives each of its Organisations, finished ones included, the labelled synthetic booking series and damage-report series where it has none, and marks a labelled synthetic list attribute as the season and another as the size list where none is marked in force; a rerun adds nothing. Everything else of a finished Organisation stays as it is.
+- **Why.** Without them `dev` cannot approve a booking, number a damage report, or record budgets and count lines.
+- **Changed.** `AGENTS.md` "Code workspace" `pnpm seed` line; code-house-rules 11.2 as built; structure-and-masters 4.1 and 4.2 as built; goods-in 3.9 and 8.5 (the booking and damage-report numbers); open items RR-562, RR-564 and RR-568 closed.

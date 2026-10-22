@@ -4,9 +4,9 @@ import type { NumberingInterface } from '../../src/modules/numbering/index.js';
 import { syntheticCode } from './synthetic.js';
 
 // The SYNTHETIC booking series (goods-in 3.1, 10.4; numbering-and-audit 3.5, 3.7; RR-449; DEC-118): no screen defines
-// a booking series or its format yet, so the tests and the server of the browser journeys define it here with a format
-// labelled SYNTHETIC. No format is the Organisation's until it chooses one. Never a KDPS value. The local seed does not
-// define it: DEC-143 lets the seed add the GRN series alone to a finished synthetic Organisation.
+// a booking series or its format yet, so the tests, the server of the browser journeys and the local seed, which `dev`
+// runs (DEC-144), define it here with a format labelled SYNTHETIC. No format is the Organisation's until it chooses one.
+// Never a KDPS value.
 
 /** The SYNTHETIC format of booking numbers: `SYN-BKG-` and a five-digit sequence. */
 export const SYNTHETIC_BOOKING_FORMAT = [

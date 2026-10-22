@@ -1,24 +1,45 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Client } from 'pg';
+import type { AttributeMark } from '@apparel-os/schemas';
 import {
   CommandRunner,
   connectionToDatabase,
   createDb,
+  deploymentEnvironmentFromEnvironment,
   listDirectory,
   migrateDatabase,
   migrationSetFolder,
   newCorrelationId,
   PinoLoggerService,
   systemClock,
+  type DeploymentEnvironment,
   type DirectoryEntry,
+  type TransactionContext,
 } from '../../src/kernel/index.js';
-import { runSetupStep, SETUP_IDENTITY } from '../../src/modules/access/index.js';
-import { configurationTimezoneSource } from '../../src/modules/configuration/index.js';
+import { Access, runSetupStep, SETUP_IDENTITY } from '../../src/modules/access/index.js';
+// The code of the role the setup step gives the first Admin, an identifier of its own records (9.11).
+import { FIRST_ADMIN_ROLE } from '../../src/modules/access/domain/first-roles.js';
+import { Audit } from '../../src/modules/audit/index.js';
+import { BOOKING_KIND } from '../../src/modules/booking/index.js';
+// configuration's own rule of which origins an environment accepts, as its interface answers it (code-house-rules
+// 12.14), for the seed's composition, which builds no Configuration (11.2).
+import { originRefusal } from '../../src/modules/configuration/commands/policy-status.js';
+import { configurationTimezoneSource, type ConfigurationInterface } from '../../src/modules/configuration/index.js';
+import { Catalogue } from '../../src/modules/merchandise/catalogue/index.js';
+import { partiesSupplierRoles } from '../../src/modules/merchandise/parties/index.js';
 import { Numbering } from '../../src/modules/numbering/index.js';
 import { GRN_KIND } from '../../src/modules/receiving/index.js';
+import { DAMAGE_REPORT_KIND } from '../../src/modules/stock/documents/index.js';
 import { serviceIdentitiesOf } from '../../src/setup-organisation.js';
 import { jobRegistry } from '../../src/worker.module.js';
+import { defineSyntheticBookingSeries } from '../fixtures/booking-series.js';
+import { defineSyntheticDamageReportSeries } from '../fixtures/damage-report-series.js';
 import { defineSyntheticGrnSeries } from '../fixtures/grn-series.js';
+import {
+  markSyntheticAttribute,
+  SYNTHETIC_MARKED_ATTRIBUTES,
+  syntheticAttributeToMark,
+} from '../fixtures/marked-attributes.js';
 import { isSyntheticCode, SYNTHETIC_ORGANISATIONS, syntheticDatabaseName } from '../fixtures/synthetic.js';
 import { seedRefusal } from './environment.js';
 import {
@@ -46,9 +67,13 @@ import {
 // runs the setup step for each Organisation the directory does not list yet. A finished Organisation, one the
 // directory lists and whose setup record exists, is left as it is, so a second run changes nothing.
 //
-// No screen defines a number series yet (RR-449), so the seed gives each of its Organisations, set up now or before,
-// the SYNTHETIC series `dev` needs as labelled synthetic settings (DEC-118): the GRN series (goods-in 4.8;
-// S2-F02-T02), defined under the `setup` identity only while the Organisation has none, so a rerun changes nothing.
+// No screen defines a number series yet (RR-449), and on `dev` nobody can mark the season and size attributes without a
+// second person to approve it, so the seed gives each of its Organisations, set up now or before, what `dev` needs as
+// labelled synthetic settings (DEC-118), each only where it is missing, so a rerun changes nothing: the GRN series
+// (goods-in 4.8; DEC-143), the booking series and the damage-report series (goods-in 3.9, 8.5; DEC-144), each defined
+// under the `setup` identity; and a SYNTHETIC list attribute marked as the season and another as the size list where
+// none is marked in force (goods-in 3.3, 4.3; DEC-144; fixtures/marked-attributes.ts), each attribute recorded by the
+// first Admin and each marking written under the `setup` identity with the first Admin as its preparer.
 const logger = new PinoLoggerService();
 
 interface Target {
@@ -64,24 +89,49 @@ interface Connections {
   readonly firstUsersFile: string;
 }
 
-/**
- * The SYNTHETIC GRN series of one seed Organisation, when it has none (fixtures/grn-series.ts; DEC-118, RR-449),
- * defined under the Organisation's `setup` identity as the runtime role. Answers whether it defined one.
- */
-async function grnSeriesDefined(target: Target, runtime: string): Promise<'defined' | 'unchanged'> {
+/** Who acts for the seed in one Organisation: its `setup` identity, and its first Admin with their assignment. */
+interface SeedActors {
+  readonly setupIdentityId: string;
+  readonly firstAdmin: { readonly userId: string; readonly roleAssignmentId: string };
+}
+
+/** The `setup` identity and the first Admin of a set-up Organisation, read as its owner (access-and-approvals 9.11). */
+async function seedActors(target: Target): Promise<SeedActors> {
   const owner = new Client({ connectionString: target.connectionString });
   await owner.connect();
-  let setupIdentityId: string | undefined;
   try {
-    const found = await owner.query<{ id: string }>(
+    const identity = await owner.query<{ id: string }>(
       "select id::text as id from access.service_identity where code = $1 and kind = 'internal'",
       [SETUP_IDENTITY],
     );
-    setupIdentityId = found.rows[0]?.id;
+    // The first Admin's assignment of the role the setup step gave them (access-and-approvals 9.11).
+    const admin = await owner.query<{ userId: string; roleAssignmentId: string }>(
+      `select r.first_admin_user_id::text as "userId", a.id::text as "roleAssignmentId"
+         from access.setup_record r
+         join access.role_assignment a on a.app_user_id = r.first_admin_user_id and a.decision = 'Approved'
+         join access.role role on role.id = a.role_id and role.code = $1
+        order by a.id
+        limit 1`,
+      [FIRST_ADMIN_ROLE.code],
+    );
+    const setupIdentityId = identity.rows[0]?.id;
+    const firstAdmin = admin.rows[0];
+    if (setupIdentityId === undefined) throw new Error(`${target.code} has no setup identity`);
+    if (firstAdmin === undefined) throw new Error(`${target.code} has no first Admin with an assignment`);
+    return { setupIdentityId, firstAdmin };
   } finally {
     await owner.end();
   }
-  if (setupIdentityId === undefined) throw new Error(`${target.code} has no setup identity`);
+}
+
+/** Runs one command in a seed Organisation as the runtime role, under an actor, on the system clock. */
+async function runIn<T>(
+  target: Target,
+  runtime: string,
+  commandName: string,
+  actorId: string,
+  work: (context: TransactionContext) => Promise<T>,
+): Promise<T> {
   const connectionTo = connectionToDatabase(runtime);
   if (connectionTo === undefined) throw new Error('The runtime connection cannot be pointed at a database');
   const handle = createDb(connectionTo(target.database), { max: 1 });
@@ -89,19 +139,89 @@ async function grnSeriesDefined(target: Target, runtime: string): Promise<'defin
     const runner = new CommandRunner({ clock: systemClock, timezones: configurationTimezoneSource, logger });
     return await runner.run(
       {
-        commandName: 'seed.define-grn-series',
+        commandName,
         organisation: { organisationCode: target.code, databaseName: target.database, db: handle.db },
         correlationId: newCorrelationId(),
-        actor: { kind: 'actor', actorId: setupIdentityId },
+        actor: { kind: 'actor', actorId },
       },
-      (context) => defineSyntheticGrnSeries(context, new Numbering({ kinds: [GRN_KIND] })),
+      work,
     );
   } finally {
     await handle.close();
   }
 }
 
-async function seed(connections: Connections, targets: readonly Target[]): Promise<void> {
+/** The SYNTHETIC series the seed defines, each through its fixture (DEC-118, DEC-143, DEC-144; RR-449). */
+const SEEDED_SERIES = [
+  { label: 'GRN', define: defineSyntheticGrnSeries },
+  { label: 'booking', define: defineSyntheticBookingSeries },
+  { label: 'damage-report', define: defineSyntheticDamageReportSeries },
+] as const;
+
+/** The marks the seed marks a SYNTHETIC attribute as, each where none is marked in force (DEC-144). */
+const SEEDED_MARKS: readonly AttributeMark[] = ['season', 'size'];
+
+/**
+ * Gives one seed Organisation what `dev` needs and it lacks, as labelled synthetic settings (DEC-118, DEC-143,
+ * DEC-144), and answers what was added: each SYNTHETIC series it has none of, defined under its `setup` identity as the
+ * runtime role in one transaction; then each mark with nothing marked in force, its attribute recorded through the
+ * catalogue's command as the first Admin, then its marking written under the `setup` identity, the first Admin its
+ * preparer: two transactions, since an audit record names its command's actor.
+ */
+async function syntheticSettingsAdded(
+  target: Target,
+  runtime: string,
+  origins: Pick<ConfigurationInterface, 'originRefusal'>,
+): Promise<string[]> {
+  const actors = await seedActors(target);
+  const numbering = new Numbering({ kinds: [GRN_KIND, BOOKING_KIND, DAMAGE_REPORT_KIND] });
+  const added: string[] = [];
+  const series = await runIn(target, runtime, 'seed.define-series', actors.setupIdentityId, async (context) => {
+    const defined: string[] = [];
+    for (const each of SEEDED_SERIES) {
+      if ((await each.define(context, numbering)) === 'defined') {
+        defined.push(`the SYNTHETIC ${each.label} series defined`);
+      }
+    }
+    return defined;
+  });
+  added.push(...series);
+  // The catalogue composed as the application composes it, with `access` for its approval requests (none is asked:
+  // an attribute takes effect when recorded; structure-and-masters 4.1 "As built", RR-467).
+  const audit = new Audit(logger);
+  const catalogue = new Catalogue({
+    audit,
+    access: new Access({ audit, origins }),
+    origins,
+    suppliers: partiesSupplierRoles,
+  });
+  for (const mark of SEEDED_MARKS) {
+    const attributeId = await runIn(target, runtime, 'seed.record-attribute', actors.firstAdmin.userId, (context) =>
+      syntheticAttributeToMark(context, catalogue, actors.firstAdmin, mark),
+    );
+    if (attributeId === undefined) continue;
+    const outcome = await runIn(target, runtime, 'seed.mark-attribute', actors.setupIdentityId, (context) =>
+      markSyntheticAttribute(
+        context,
+        { audit, origins },
+        {
+          mark,
+          attributeId,
+          preparedBy: actors.firstAdmin.userId,
+          writer: { kind: 'service-identity', id: actors.setupIdentityId },
+        },
+      ),
+    );
+    if (outcome === 'marked') added.push(`${SYNTHETIC_MARKED_ATTRIBUTES[mark].code} marked as the ${mark} attribute`);
+  }
+  return added;
+}
+
+async function seed(
+  connections: Connections,
+  targets: readonly Target[],
+  environment: DeploymentEnvironment,
+): Promise<void> {
   const listed = await readDirectoryIfPresent(connections.migration);
   const refusal = directoryRefusal(listed, targets) ?? (await unfinishedRefusal(listed, targets));
   if (refusal !== undefined) throw new Error(`Seed refused, nothing changed: ${refusal}`);
@@ -132,9 +252,13 @@ async function seed(connections: Connections, targets: readonly Target[]): Promi
       );
     }
   }
+  // Which origins this environment accepts: configuration's own rule (code-house-rules 12.14).
+  const origins: Pick<ConfigurationInterface, 'originRefusal'> = {
+    originRefusal: (context, origin) => originRefusal(environment, context, origin),
+  };
   for (const target of targets) {
-    if ((await grnSeriesDefined(target, connections.runtime)) === 'defined') {
-      logger.log(`${target.code} (${target.name}): the SYNTHETIC GRN series defined`, 'Seed');
+    for (const added of await syntheticSettingsAdded(target, connections.runtime, origins)) {
+      logger.log(`${target.code} (${target.name}): ${added}`, 'Seed');
     }
   }
   logger.log(
@@ -254,7 +378,8 @@ if (refusal !== undefined) {
     process.exitCode = 1;
   } else {
     try {
-      await seed({ migration, runtime, firstUsersFile }, targets);
+      // seedRefusal has accepted local or dev, so this reads one of them.
+      await seed({ migration, runtime, firstUsersFile }, targets, deploymentEnvironmentFromEnvironment(process.env));
     } catch (error) {
       logger.error(error, 'Seed');
       process.exitCode = 1;
