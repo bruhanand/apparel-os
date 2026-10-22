@@ -1,4 +1,10 @@
-import { DAMAGE_REPORT_TYPE, type DamagedGoods, type DamageReport, type DamageReportState } from '@apparel-os/schemas';
+import {
+  DAMAGE_REPORT_TYPE,
+  type DamagedGoods,
+  type DamageReport,
+  type DamageReportState,
+  type DamageReversalState,
+} from '@apparel-os/schemas';
 import { asc, eq } from 'drizzle-orm';
 import { CommandDefect, type TransactionContext } from '../../../../kernel/index.js';
 import type { LatestRequest, RecordFacts } from '../../../access/index.js';
@@ -38,6 +44,11 @@ export function stateOf(rounds: readonly RoundRow[], decisions: readonly Decisio
   const latest = rounds.at(-1);
   const decision = decisions.find((each) => each.damageRoundId === latest?.id);
   return decision?.outcome ?? 'Submitted';
+}
+
+/** A reversal's state, from its decision: none yet, it awaits approval (design-language 7; goods-in 8.3). */
+function reversalStateOf(decision: { readonly outcome: 'Approved' | 'Rejected' } | null): DamageReversalState {
+  return decision === null ? 'Awaiting approval' : decision.outcome;
 }
 
 /** The facts of a report the reader may see, which every route on it authorises with (5.3); else undefined. */
@@ -125,6 +136,7 @@ export async function reportView(
         requestId: request?.id ?? null,
         requestState: request?.state ?? null,
         outcome: decision?.outcome ?? null,
+        state: reversalStateOf(decision),
       };
     }),
     versionToken: current.id,

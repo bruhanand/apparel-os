@@ -1,5 +1,6 @@
 import { uuidv7 } from '@apparel-os/domain';
-import { BOOKING_TYPE, bookingTotals, type MissingItem } from '@apparel-os/schemas';
+import { bookingTotals } from '@apparel-os/calculations/booking';
+import { BOOKING_TYPE, type MissingItem } from '@apparel-os/schemas';
 import {
   CommandDefect,
   LOCK_STEP,
@@ -9,7 +10,7 @@ import {
   type TransactionContext,
 } from '../../../kernel/index.js';
 import type { DocumentEffect, EffectDecider, EffectOutcome } from '../../access/index.js';
-import type { AuditChange, AuditInterface } from '../../audit/index.js';
+import type { AuditInterface } from '../../audit/index.js';
 import { OPEN_POLICY_READINESS, type ConfigurationInterface } from '../../configuration/index.js';
 import { brandSupplierLinkedOn, termsInForce } from '../../merchandise/parties/index.js';
 import type { NumberingInterface } from '../../numbering/index.js';
@@ -30,7 +31,7 @@ import {
   type VersionRow,
 } from '../queries/bookings.js';
 import { budgetOf, remainingOf } from '../queries/budgets.js';
-import { budgetLock, refused, today } from './common.js';
+import { budgetLock, refused, today, valueChange } from './common.js';
 
 // What a decision does to a booking version (goods-in 3.2 to 3.4, 10.3, 10.5; module-map 6.2 flow A;
 // access-and-approvals 9.8b; PRD-BKG-002, PRD-BKG-004, PRD-SEC-017; POL-05.02, POL-01.04, POL-02.07, POL-02.09;
@@ -56,14 +57,6 @@ export interface ApprovalDependencies {
 
 /** Agreement margins are never read by a booking's approval: it fixes the version, not its margins (goods-in 3.2). */
 const SHOW_MARGINS = false;
-
-type ValueChange = Extract<AuditChange, { kind: 'value' }>;
-const value = (field: string, before: ValueChange['before'], after: ValueChange['after']): ValueChange => ({
-  kind: 'value',
-  field,
-  before,
-  after,
-});
 
 const refusalOf = (refusal: CommandRefusal): EffectOutcome => ({ kind: 'refusal', refusal });
 
@@ -174,7 +167,7 @@ async function approve(
     ]);
   }
   // Open-to-buy (3.3; POL-05.02): an approved budget for the brand and season, locked with the booking, whose
-  // remainder covers the booking's value at cost (DM-8); otherwise the shortfall is shown.
+  // remainder covers the booking's value at cost (DM-8); otherwise the refusal names the brand and season.
   const valueAtCost = bookingTotals(pricedLines(lines)).booking.cost;
   const season = { brandId: row.brandId, seasonValueId: version.seasonValueId };
   const budget = await budgetOf(context, row.brandId, version.seasonValueId);
@@ -189,7 +182,7 @@ async function approve(
     ]);
   }
   if (valueAtCost > remaining.remaining) {
-    return refused('refused', 'booking.open-to-buy-short', [shortfallItem(season, valueAtCost, remaining.remaining)]);
+    return refused('refused', 'booking.open-to-buy-short', [shortfallItem(season)]);
   }
   // The brand's Agreement version in force on the approval's date, which the booking keeps (3.2; DEC-132).
   const agreement = await termsInForce(context, { brandId: row.brandId }, date, SHOW_MARGINS);
@@ -270,10 +263,10 @@ async function approve(
     record: bookingAuditRecord(row.id, versionId),
     operation: 'approve-booking',
     changes: [
-      value('state', stateOf('submission'), stateOf('approval')),
-      value('agreementVersionId', null, agreement.versionId),
-      value('reserved', null, { budgetId: budget.id, amount: valueAtCost }),
-      ...(allocated === undefined ? [] : [value('number', null, allocated.number)]),
+      valueChange('state', stateOf('submission'), stateOf('approval')),
+      valueChange('agreementVersionId', null, agreement.versionId),
+      valueChange('reserved', null, { budgetId: budget.id, amount: valueAtCost }),
+      ...(allocated === undefined ? [] : [valueChange('number', null, allocated.number)]),
     ],
     source: { kind: 'screen' },
   });
@@ -306,7 +299,7 @@ async function reject(
     scope: { siteId: row.siteId, brandId: row.brandId },
     record: bookingAuditRecord(row.id, versionId),
     operation: 'reject-booking',
-    changes: [value('state', stateOf('submission'), stateOf('rejection'))],
+    changes: [valueChange('state', stateOf('submission'), stateOf('rejection'))],
     source: { kind: 'screen' },
   });
   return { kind: 'success', answer: { bookingId: row.id, versionId } };

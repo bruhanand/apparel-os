@@ -1,5 +1,6 @@
 import type { MissingItem } from '@apparel-os/schemas';
 import { LOCK_STEP, lockTable, type CommandRefusal, type TransactionContext } from '../../../kernel/index.js';
+import type { AuditChange } from '../../audit/index.js';
 
 // What every command of `booking` shares (code-house-rules 8.1, 8.2, 12.3).
 
@@ -15,6 +16,15 @@ export function refused<Answer>(
 ): Outcome<Answer> {
   return { kind: 'refusal', refusal: { kind, code, missing } };
 }
+
+export type ValueChange = Extract<AuditChange, { kind: 'value' }>;
+
+/** A field's value before and after a change, as its audit record keeps it (numbering-and-audit 4.1). */
+export const valueChange = (
+  field: string,
+  before: ValueChange['before'],
+  after: ValueChange['after'],
+): ValueChange => ({ kind: 'value', field, before, after });
 
 /** Today under the Organisation's timezone, or the refusal while it has none (code-house-rules 9). */
 export async function today(context: TransactionContext): Promise<string | CommandRefusal> {

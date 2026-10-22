@@ -16,7 +16,7 @@ import { Card, GrantedButton, ListRead, SubmissionBanner, Th, Toolbar, useGrante
 import { stateIdOf } from '../setup/states';
 import { useTimeZone } from '../shell/session';
 import { BOOKING_READS, BookingForm } from './BookingForm';
-import { OpenToBuyFacts, referenceOf, TermsFacts, TotalsView } from './facts';
+import { OpenToBuyFacts, referenceOf, TermsFacts, TotalsView, valueAtCostOf } from './facts';
 import { useBookingNames } from './names';
 
 // Booking › a booking (goods-in 3.1 to 3.4, section 11; PRD-BKG-001 to PRD-BKG-004, PRD-UXP-003; S2-F01-T03): its
@@ -79,8 +79,11 @@ function LinesView({ booking }: { booking: Booking }) {
   );
 }
 
-/** Attaches a booking document, a photo or PDF stored first (goods-in 3.1; PRD-IMP-002). */
-function DocumentForm({ booking }: { booking: Booking }) {
+/**
+ * Attaches a booking document, a photo or PDF stored first (goods-in 3.1; PRD-IMP-002). Attaching changes the booking,
+ * so it names the version token shown and waits while the booking is read again (code-house-rules 12.7).
+ */
+function DocumentForm({ booking, waiting }: { booking: Booking; waiting: boolean }) {
   const chosen = useChosenFile();
   const storing = useStoreEvidence();
   const submission = useSubmission('attachBookingDocuments', BOOKING_READS);
@@ -97,13 +100,17 @@ function DocumentForm({ booking }: { booking: Booking }) {
       <div>
         <Button
           label="booking.document.add"
-          disabled={chosen.file === null || submission.state.kind === 'pending'}
+          disabled={chosen.file === null || submission.state.kind === 'pending' || waiting}
+          {...(waiting ? { reason: READING } : {})}
           onClick={() => {
             void (async () => {
-              if (chosen.file === null) return;
+              if (chosen.file === null || waiting) return;
               const file = await storing.store(chosen.file);
               if (file === undefined) return;
-              const added = await submission.submit({ params: { bookingId: booking.id }, body: { files: [file] } });
+              const added = await submission.submit({
+                params: { bookingId: booking.id },
+                body: { files: [file], versionToken: booking.versionToken },
+              });
               if (added !== undefined) chosen.clear();
             })();
           }}
@@ -212,13 +219,13 @@ export function BookingView({ bookingId, onBack }: { bookingId: string; onBack: 
               </Card>
               <Card title="booking.documents">
                 <EvidenceList attachmentIds={booking.documents.map((document) => document.attachmentId)} />
-                {draft && mayEdit && <DocumentForm booking={booking} />}
+                {draft && mayEdit && <DocumentForm booking={booking} waiting={reading} />}
               </Card>
               <Card title="booking.terms">
                 <TermsFacts terms={booking.terms} />
               </Card>
               <Card title="booking.open-to-buy">
-                <OpenToBuyFacts remaining={booking.openToBuy} />
+                <OpenToBuyFacts remaining={booking.openToBuy} {...valueAtCostOf(booking)} />
               </Card>
               {booking.approval !== undefined && (
                 <Card title="booking.approval">

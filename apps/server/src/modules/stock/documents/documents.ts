@@ -1,4 +1,10 @@
-import type { DamageDecisionRenewal, DamageReport, DamageReportDraft, DamageReversalDraft } from '@apparel-os/schemas';
+import type {
+  DamageDecisionRenewal,
+  DamagedGoods,
+  DamageReport,
+  DamageReportDraft,
+  DamageReversalDraft,
+} from '@apparel-os/schemas';
 import { DAMAGE_REPORT_TYPE } from '@apparel-os/schemas';
 import type { CommandRefusal, TransactionContext } from '../../../kernel/index.js';
 import type { AccessInterface, LatestRequest, RecordFacts } from '../../access/index.js';
@@ -7,10 +13,11 @@ import type { ConfigurationInterface } from '../../configuration/index.js';
 import type { ExceptionsInterface, ExceptionTypeRegistration } from '../../exceptions/index.js';
 import type { FilesImportsInterface } from '../../files-imports/index.js';
 import type { NumberingInterface } from '../../numbering/index.js';
-import type { StockLedgerInterface } from '../ledger/index.js';
-import { proposeReversal, renewDecision } from './commands/changes.js';
+import { sourceOfLine, type LineSource, type StockLedgerInterface } from '../ledger/index.js';
+import { proposeReversal } from './commands/propose-reversal.js';
+import { renewDecision } from './commands/renew-decision.js';
 import type { Actor } from './commands/common.js';
-import { newReportFacts, reportDamage } from './commands/report.js';
+import { newReportFacts, reportDamage, type ReportOptions } from './commands/report.js';
 import { DAMAGE_EXCEPTION_TYPE, DOCUMENTS_MODULE } from './domain/kinds.js';
 import { damageDecided, reportFacts, reportOfReversal, reportView } from './queries/reports.js';
 
@@ -52,13 +59,23 @@ export const damageExceptionType: ExceptionTypeRegistration = {
 export class StockDocuments {
   constructor(private readonly dependencies: StockDocumentsDependencies) {}
 
+  /**
+   * The source whose line a draft's GRN line is, as the receipt origin the line made names it, which the damage route
+   * passes on as `receiving` names its own GRN (goods-in 8.5); undefined for a product, or a line that made no origin
+   * the reader may see.
+   */
+  async lineSourceOf(context: TransactionContext, goods: DamagedGoods): Promise<LineSource | undefined> {
+    return goods.kind === 'grn-line' ? sourceOfLine(context, goods.grnLineId) : undefined;
+  }
+
   /** The facts a new report of the draft would carry, which its route authorises with (5.3), or why it has none. */
   newReportFacts(
     context: TransactionContext,
     draft: DamageReportDraft,
     today: string,
+    lineSource: LineSource | undefined,
   ): Promise<RecordFacts | CommandRefusal> {
-    return newReportFacts(context, draft, today);
+    return newReportFacts(context, draft, today, lineSource);
   }
 
   /** The facts of a report the reader may see, which every route on it authorises with (5.3); else undefined. */
@@ -66,9 +83,12 @@ export class StockDocuments {
     return reportFacts(context, reportId);
   }
 
-  /** Report damage (goods-in 8.2): the hold at once, the number, the decision's request and the exception. */
-  reportDamage(context: TransactionContext, reporter: Actor, draft: DamageReportDraft, idempotencyKey?: string) {
-    return reportDamage(context, this.dependencies, reporter, draft, idempotencyKey);
+  /**
+   * Report damage (goods-in 8.2): the hold at once, the number, the decision's request and the exception. The caller
+   * names the source whose line a GRN line is (`receiving` its own GRN); a line of another source names no goods.
+   */
+  reportDamage(context: TransactionContext, reporter: Actor, draft: DamageReportDraft, options?: ReportOptions) {
+    return reportDamage(context, this.dependencies, reporter, draft, options);
   }
 
   /** Ask for a report's decision again, on the goods' cost now (goods-in 8.5). */
@@ -97,4 +117,4 @@ export class StockDocuments {
 }
 
 export type StockDocumentsInterface = StockDocuments;
-export type { Actor as DamageActor };
+export type { Actor as DamageActor, ReportOptions as DamageReportOptions };

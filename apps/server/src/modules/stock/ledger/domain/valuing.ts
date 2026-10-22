@@ -7,8 +7,9 @@ import type { Touch } from './working.js';
 // that undo an outflow at the cost it left with (7.5), value held on a dispatch or a supplier-return shipment between
 // pools (7.8), cost established and late cost changes following their goods (7.6, 7.7). Pure: no database, no clock
 // (code-house-rules 2). The items are split by kind under `valuing/`: the common part (`core.ts`), cost established
-// and changed (`cost.ts`), reservations, transfers and supplier returns (`transfer.ts`), sales and customer returns
-// (`sale.ts`), and disposal, counts, reversals and piece corrections (`corrections.ts`).
+// and changed (`cost.ts`), reservations, transfers and supplier returns (`transfer.ts`), a damage hold and a condition
+// change (`damage.ts`, 13.15), sales and customer returns (`sale.ts`), and disposal, counts, reversals and piece
+// corrections (`corrections.ts`).
 
 export type {
   PostShare,

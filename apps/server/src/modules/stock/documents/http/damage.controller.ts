@@ -27,9 +27,6 @@ type FactsOf = (context: TransactionContext, today: string) => Promise<RecordFac
 
 const isRefusal = (facts: RecordFacts | CommandRefusal): facts is CommandRefusal => 'code' in facts;
 
-/** No report with that identifier, or none the reader may see (code-house-rules 6.2). */
-const damageReportNotFound = (reportId: string): CommandRefusal => reportNotFound(reportId);
-
 /** No reversal with that identifier, or none the reader may see. */
 const damageReversalNotFound = (reversalId: string): CommandRefusal => ({
   kind: 'not-found',
@@ -55,20 +52,26 @@ export class DamageController {
 
   @ApiRoute(routes.reportDamage)
   reportDamage(@RouteInput() input: RouteInputOf<typeof routes.reportDamage>, @SignedIn() user: SignedInUser) {
+    // A GRN line's source is the one its receipt origin names, passed on as `receiving` names its own (goods-in 8.5).
+    const lineSource = (context: TransactionContext) => this.documents.lineSourceOf(context, input.body.goods);
     return this.command(
       routes.reportDamage,
       'stock.report-damage',
       user,
       input,
-      (context, today) => this.documents.newReportFacts(context, input.body, today),
-      (context, actor) => this.documents.reportDamage(context, actor, input.body, input.idempotencyKey),
+      async (context, today) => this.documents.newReportFacts(context, input.body, today, await lineSource(context)),
+      async (context, actor) =>
+        this.documents.reportDamage(context, actor, input.body, {
+          lineSource: await lineSource(context),
+          idempotencyKey: input.idempotencyKey,
+        }),
     );
   }
 
   @ApiRoute(routes.readDamageReport)
   readDamageReport(@RouteInput() input: RouteInputOf<typeof routes.readDamageReport>, @SignedIn() user: SignedInUser) {
     const { damageReportId } = input.params;
-    return this.readReport(user, 'stock.read-damage-report', damageReportNotFound(damageReportId), () =>
+    return this.readReport(user, 'stock.read-damage-report', reportNotFound(damageReportId), () =>
       Promise.resolve(damageReportId),
     );
   }
@@ -101,11 +104,13 @@ export class DamageController {
       async (context) => {
         const date = await context.businessDate();
         if (date.kind === 'not-set') return { refused: BUSINESS_DATE_NOT_SET };
-        // A report the reader's scope does not cover is hidden by row-level security, so it carries no fact, which only
-        // all-members scope covers (5.3; PRD-MOD-015); it is then not found. So is a reversal hidden or not there.
+        // A report the reader's scope does not cover is hidden by row-level security, so it has no facts to authorise
+        // with: it is not found, never refused as not authorised (code-house-rules 12.3; PRD-SEC-005). So is a
+        // reversal hidden or not there.
         const damageReportId = await reportIdOf(context);
         if (damageReportId === undefined) return { refused: notFound };
-        const facts = (await this.documents.reportFacts(context, damageReportId)) ?? {};
+        const facts = await this.documents.reportFacts(context, damageReportId);
+        if (facts === undefined) return { refused: notFound };
         const authorised = await this.access.authorise(context, {
           actorId: user.userId,
           action: 'view',
