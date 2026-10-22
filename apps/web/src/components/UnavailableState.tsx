@@ -1,5 +1,6 @@
 import type { MissingItem } from '@apparel-os/schemas';
 import { isMessageId, t } from '../messages/catalogue';
+import { formatPaise } from '../setup/format';
 import { Banner } from './Banner';
 
 /**
@@ -36,10 +37,26 @@ export function missingText(item: MissingItem): string {
   // A setting not set, by its name where the catalogue has one (code-house-rules 12.14; PRD-UXP-003).
   const setting = `setting.name.${item.setting ?? ''}`;
   if (item.kind === 'setting' && isMessageId(setting)) return t('missing.setting.named', { setting: t(setting) });
-  const gate = gateText(item) ?? readinessText(item) ?? importText(item);
+  const gate = gateText(item) ?? readinessText(item) ?? importText(item) ?? bookingText(item);
   if (gate !== undefined) return gate;
   const id = `missing.${item.kind}`;
   return t(isMessageId(id) ? id : 'missing.other');
+}
+
+/**
+ * The text of a booking approval's item (goods-in 3.3; S2-F01-T03): the open-to-buy short of the booking's value at
+ * cost, with the shortfall, the value and what remains, in rupees. Undefined for any other item.
+ */
+function bookingText(item: MissingItem): string | undefined {
+  if (item.kind !== 'open-to-buy-shortfall') return undefined;
+  const amounts = [item.shortfall, item.value, item.remaining].map(Number);
+  if (!amounts.every((amount) => Number.isSafeInteger(amount))) return undefined;
+  const [shortfall = 0, value = 0, remaining = 0] = amounts;
+  return t('missing.open-to-buy-shortfall.named', {
+    shortfall: formatPaise(shortfall),
+    value: formatPaise(value),
+    remaining: formatPaise(remaining),
+  });
 }
 
 /** A policy's number and name, as Policy readiness shows it: "Policy 14 · Opening and cutover". */

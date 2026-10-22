@@ -1,4 +1,4 @@
-import { OPEN_TO_BUY_BUDGET_TYPE, routes, type CommandRoute } from '@apparel-os/schemas';
+import { BOOKING_TYPE, OPEN_TO_BUY_BUDGET_TYPE, routes, type CommandRoute } from '@apparel-os/schemas';
 import { Controller, Inject } from '@nestjs/common';
 import {
   ApiRefusal,
@@ -27,6 +27,7 @@ import {
 } from '../../access/index.js';
 import type { BookingInterface } from '../booking.js';
 import type { Outcome } from '../commands/common.js';
+import { bookingItem } from '../domain/bookings.js';
 import { budgetItem } from '../domain/budgets.js';
 import { BOOKING } from '../tokens.js';
 
@@ -49,6 +50,13 @@ const budgetNotFound = (budgetId: string): CommandRefusal => ({
   kind: 'not-found',
   code: 'booking.record-not-found',
   missing: [budgetItem(budgetId)],
+});
+
+/** A booking that does not exist, or that the reader cannot see, is not found (code-house-rules 6.2). */
+const bookingNotFound = (bookingId: string): CommandRefusal => ({
+  kind: 'not-found',
+  code: 'booking.record-not-found',
+  missing: [bookingItem(bookingId)],
 });
 
 /**
@@ -153,6 +161,114 @@ export class BookingController {
       },
       (context, preparer) => this.booking.prepareBudgetVersion(context, preparer, budgetId, input.body),
     );
+  }
+
+  // Booking › Bookings and the booking form (goods-in 3.1 to 3.4, section 11; S2-F01-T03). A booking carries its
+  // destination Site and brand, so each route authorises in its transaction with the booking's facts; the rows are
+  // scoped besides (code-house-rules 6.2). Only the approval is policy-gated, in `access`'s decision route (10.5).
+
+  @ApiRoute(routes.listBookings)
+  async listBookings(@RouteInput() input: RouteInputOf<typeof routes.listBookings>, @SignedIn() user: SignedInUser) {
+    const answer = await this.read(user, 'booking.list-bookings', async (context) => {
+      const { bookings, next } = await this.booking.listBookings(context, input.query);
+      const checked = await this.access.authoriseEach(
+        context,
+        { actorId: user.userId, action: 'view', recordType: BOOKING_TYPE },
+        bookings.map((each) => ({ siteId: each.destinationSiteId, brandId: each.brandId })),
+      );
+      if (checked.kind === 'refused') return { refused: checked.refusal };
+      return {
+        asOf: context.startedAt.toISOString(),
+        bookings: bookings.filter((_each, index) => checked.each[index]?.kind === 'allowed'),
+        next,
+      };
+    });
+    if ('refused' in answer) throw new ApiRefusal({ ...answer.refused, missing: [...answer.refused.missing] });
+    return answer;
+  }
+
+  @ApiRoute(routes.readBooking)
+  async readBooking(@RouteInput() input: RouteInputOf<typeof routes.readBooking>, @SignedIn() user: SignedInUser) {
+    const { bookingId } = input.params;
+    const answer = await this.read(user, 'booking.read-booking', async (context, today) => {
+      // Authorised with its facts first; one the reader cannot see carries none, which only all-members scope covers
+      // (5.3; PRD-MOD-015).
+      const facts = (await this.booking.bookingFacts(context, bookingId)) ?? {};
+      const authorised = await this.access.authorise(context, {
+        actorId: user.userId,
+        action: 'view',
+        recordType: BOOKING_TYPE,
+        facts,
+      });
+      if (authorised.kind === 'refused') return { refused: authorised.refusal };
+      const booking = await this.booking.readBooking(context, bookingId, today);
+      if (booking === undefined) return { refused: bookingNotFound(bookingId) };
+      return { asOf: context.startedAt.toISOString(), booking };
+    });
+    if ('refused' in answer) throw new ApiRefusal({ ...answer.refused, missing: [...answer.refused.missing] });
+    return answer;
+  }
+
+  @ApiRoute(routes.recordBooking)
+  recordBooking(@RouteInput() input: RouteInputOf<typeof routes.recordBooking>, @SignedIn() user: SignedInUser) {
+    return this.command(
+      routes.recordBooking,
+      'booking.record-booking',
+      user,
+      input,
+      () => Promise.resolve({ facts: { siteId: input.body.destinationSiteId, brandId: input.body.brandId } }),
+      (context, actor) => this.booking.recordBooking(context, actor, input.body),
+    );
+  }
+
+  @ApiRoute(routes.saveBookingDraft)
+  saveBookingDraft(@RouteInput() input: RouteInputOf<typeof routes.saveBookingDraft>, @SignedIn() user: SignedInUser) {
+    const { bookingId } = input.params;
+    return this.command(
+      routes.saveBookingDraft,
+      'booking.save-booking-draft',
+      user,
+      input,
+      this.bookingFactsOf(bookingId),
+      (context, actor) => this.booking.saveDraft(context, actor, bookingId, input.body),
+    );
+  }
+
+  @ApiRoute(routes.attachBookingDocuments)
+  attachBookingDocuments(
+    @RouteInput() input: RouteInputOf<typeof routes.attachBookingDocuments>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    const { bookingId } = input.params;
+    return this.command(
+      routes.attachBookingDocuments,
+      'booking.attach-booking-documents',
+      user,
+      input,
+      this.bookingFactsOf(bookingId),
+      (context, actor) => this.booking.attachDocuments(context, actor, bookingId, input.body),
+    );
+  }
+
+  @ApiRoute(routes.submitBooking)
+  submitBooking(@RouteInput() input: RouteInputOf<typeof routes.submitBooking>, @SignedIn() user: SignedInUser) {
+    const { bookingId } = input.params;
+    return this.command(
+      routes.submitBooking,
+      'booking.submit-booking',
+      user,
+      input,
+      this.bookingFactsOf(bookingId),
+      (context, actor) => this.booking.submitBooking(context, actor, bookingId, input.body),
+    );
+  }
+
+  /** A booking's facts, or not found when the reader cannot see it (PRD-UXP-003). */
+  private bookingFactsOf(bookingId: string): FactsOf {
+    return async (context) => {
+      const facts = await this.booking.bookingFacts(context, bookingId);
+      return facts === undefined ? { refusal: bookingNotFound(bookingId) } : { facts };
+    };
   }
 
   /** A read-only transaction as the signed-in user, under today's business date (code-house-rules 8.1, 9). */

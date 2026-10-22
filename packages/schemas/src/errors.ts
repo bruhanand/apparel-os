@@ -1052,6 +1052,24 @@ export const deviceCodes = declareCodes({
  * - `booking.budget-exists`: the brand and season have a budget already; a change is its next version (3.3).
  * - `booking.version-not-awaiting`: the version is decided already, or a newer version replaced it.
  * - `booking.budget-not-checked`: the version's approval is refused until Accounts' check is recorded (POL-05.09).
+ *
+ * A booking's own (goods-in 3.1 to 3.4, 10.3; S2-F01-T03):
+ *
+ * - `booking.record-not-found` also: no booking has that identifier, or none the reader may see.
+ * - `booking.site-not-in-force`: the destination is not a Site in force today (goods-in 3.1).
+ * - `booking.supplier-not-linked`: the supplier is not linked to the brand, or holds no supplier role, on the booking's
+ *   date (PRD-MER-021).
+ * - `booking.not-draft`: the booking is not a Draft: it awaits approval or is approved (goods-in 3.4, 3.5).
+ * - `booking.no-document`: a booking is submitted only with at least one booking document attached (goods-in 3.1).
+ * - `booking.no-lines`: a booking is submitted only with at least one line (goods-in 3.1).
+ * - `booking.no-agreement-in-force`: the brand has no Agreement version in force on the approval's date; `missing`
+ *   names the brand (goods-in 3.2; DEC-129).
+ * - `booking.open-to-buy-missing`: the brand and season have no approved open-to-buy budget (goods-in 3.3;
+ *   PRD-SEC-017).
+ * - `booking.open-to-buy-short`: the booking's value at cost is more than the remaining open-to-buy; `missing` shows
+ *   the shortfall (goods-in 3.3).
+ * - `booking.no-booking-series`, `booking.booking-series-paused`: no Open booking number series
+ *   (numbering-and-audit 3.2; goods-in 3.1).
  */
 export const bookingCodes = declareCodes({
   'booking.record-not-found': 'not-found',
@@ -1060,6 +1078,16 @@ export const bookingCodes = declareCodes({
   'booking.budget-exists': 'refused',
   'booking.version-not-awaiting': 'refused',
   'booking.budget-not-checked': 'refused',
+  'booking.site-not-in-force': 'refused',
+  'booking.supplier-not-linked': 'refused',
+  'booking.not-draft': 'refused',
+  'booking.no-document': 'refused',
+  'booking.no-lines': 'refused',
+  'booking.no-agreement-in-force': 'refused',
+  'booking.open-to-buy-missing': 'refused',
+  'booking.open-to-buy-short': 'refused',
+  'booking.no-booking-series': 'unavailable',
+  'booking.booking-series-paused': 'unavailable',
 });
 
 /**

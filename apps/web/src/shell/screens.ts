@@ -33,6 +33,9 @@ const view = (recordType: string): ScreenNeed => ({ kind: 'grant', grant: { reco
 /** Every screen of the shell, in sidebar order. */
 export const screens = {
   'my-work': { section: 'home', path: '/my-work', need: { kind: 'none' } },
+  // Booking › Bookings: every booking, recorded by hand from its document, submitted and approved from My work
+  // (goods-in 3.1 to 3.4, section 11; ui-blueprint Booking; S2-F01-T03).
+  'booking.bookings': { section: 'booking', path: '/booking/bookings', need: view('booking.booking') },
   // Booking › Open-to-buy: budgets by brand and season, prepared, checked and approved (goods-in 3.3, section 11;
   // ui-blueprint Booking; S2-F01-T02).
   'booking.open-to-buy': {
@@ -170,8 +173,9 @@ export const personaMenus: Readonly<Record<PersonaId, { home: ScreenId | null; m
   },
   'P-CHA': { home: null, menu: [] },
   // Booking's Setup is "Products · Suppliers and agreements" (ui-blueprint); Products arrives with S1-F03-T02.
-  // Booking › Open-to-buy arrives with S2-F01-T02 (ui-blueprint; goods-in section 11).
-  'P-BKG': { home: null, menu: ['booking.open-to-buy', 'setup.products'] },
+  // Booking › Open-to-buy arrives with S2-F01-T02, Booking › Bookings with S2-F01-T03 (ui-blueprint; goods-in
+  // section 11).
+  'P-BKG': { home: null, menu: ['booking.bookings', 'booking.open-to-buy', 'setup.products'] },
   // Operations' Setup is "Site opening and closure" (ui-blueprint; S1-F04-T02).
   'P-OPS': { home: 'my-work', menu: ['my-work', 'setup.site-opening'] },
   // Warehouse lands on Receive Goods › Inbox (Pending), from S2-F02-T02 (ui-blueprint "Menus by persona").

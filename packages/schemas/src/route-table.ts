@@ -2,6 +2,18 @@ import { z } from 'zod';
 import { errorCodes, type ErrorCode } from './errors.js';
 import { healthResponseSchema } from './health.js';
 import {
+  BOOKING_DRAFT_BODY_LIMIT_BYTES,
+  BOOKING_TYPE,
+  bookingDocumentsAttachedSchema,
+  bookingDocumentsDraftSchema,
+  bookingDraftChangeSchema,
+  bookingDraftSchema,
+  bookingListSchema,
+  bookingPageQuerySchema,
+  bookingReadSchema,
+  bookingSavedSchema,
+  bookingSubmissionSchema,
+  bookingSubmittedSchema,
   OPEN_TO_BUY_BUDGET_TYPE,
   openToBuyBudgetDraftSchema,
   openToBuyBudgetListSchema,
@@ -1024,6 +1036,44 @@ const OPEN_TO_BUY_DECISION_CODES = [
 ] as const satisfies readonly ErrorCode[];
 
 /**
+ * The codes a booking version's approval can answer under Decide's locks (goods-in 3.4, 10.3, 10.5; S2-F01-T03): the
+ * policy gate under policies 5 and 1, the supplier's link, the Agreement in force, open-to-buy and the booking series.
+ * The version and its booking are `OPEN_TO_BUY_DECISION_CODES`' own.
+ */
+const BOOKING_DECISION_CODES = [
+  'configuration.operation-unavailable',
+  'booking.supplier-not-linked',
+  'booking.no-agreement-in-force',
+  'booking.open-to-buy-missing',
+  'booking.open-to-buy-short',
+  'booking.no-booking-series',
+  'booking.booking-series-paused',
+] as const satisfies readonly ErrorCode[];
+
+/**
+ * The codes every change to a booking's Draft can answer (goods-in 3.1, 3.4; S2-F01-T03): the booking not found or no
+ * longer a Draft, and the version token's, which holding the actor's authority answers too when their role changed
+ * under the lock (code-house-rules 8.2, 12.7). Saving a Draft is not policy-gated (DEC-116; goods-in 10.5).
+ */
+const BOOKING_CHANGE_CODES = [
+  ...HISTORY_CODES,
+  'kernel.cross-site-request',
+  'kernel.stale-version',
+  'booking.record-not-found',
+  'booking.not-draft',
+] as const satisfies readonly ErrorCode[];
+
+/** What a Draft's content can answer: the brand, the destination, the supplier's link and the season (3.1). */
+const BOOKING_CONTENT_CODES = [
+  'booking.brand-not-in-force',
+  'booking.site-not-in-force',
+  'booking.supplier-not-linked',
+  'booking.season-not-in-vocabulary',
+  // No attribute is marked as the season (structure-and-masters 4.2 "As built"; RR-550).
+  'merchandise.attribute-not-marked',
+] as const satisfies readonly ErrorCode[];
+
+/**
  * The codes every change to an Arrival before its GRN can answer (goods-in 4.1 to 4.3; S2-F02-T02): the Arrival not
  * found or its GRN issued, and the version token's, which holding the actor's authority answers too when their role
  * changed under the lock (code-house-rules 8.2, 12.7). Recording invoices and photos and the count is not gated
@@ -1657,6 +1707,8 @@ export const routes = {
       ...FINANCE_DECISION_CODES,
       // An open-to-buy budget version's check and approval (goods-in 3.3; POL-05.09; S2-F01-T02).
       ...OPEN_TO_BUY_DECISION_CODES,
+      // A booking version's approval (goods-in 3.4, 10.3; S2-F01-T03).
+      ...BOOKING_DECISION_CODES,
       // Layout, mapping and mapping rule versions (imports-and-opening-data 6.4; S1-F06-T03).
       'files-imports.proposal-not-found',
       'files-imports.proposal-not-open',
@@ -4764,6 +4816,82 @@ export const routes = {
     shows: 'nothing',
     response: openToBuyBudgetPreparedSchema,
     codes: OPEN_TO_BUY_VERSION_CODES,
+  }),
+  // Booking › Bookings and the booking form (goods-in 3.1 to 3.4, section 11; PRD-BKG-001 to PRD-BKG-004; DEC-129,
+  // DEC-130, DEC-132, DEC-136; S2-F01-T03): Booking records a booking as a Draft, attaches its documents and submits
+  // it; a different person approves or rejects it through `access`'s decision route from My work. A booking carries its
+  // destination and brand, so each route authorises in its command with the booking's facts (access-and-approvals
+  // 5.3). Only the approval is policy-gated, under policies 5 and 1 (goods-in 10.5).
+  listBookings: defineRoute({
+    method: 'GET',
+    path: '/api/booking/bookings',
+    query: bookingPageQuerySchema,
+    access: { kind: 'action', action: 'view', recordType: BOOKING_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: bookingListSchema,
+    codes: HISTORY_CODES,
+  }),
+  readBooking: defineRoute({
+    method: 'GET',
+    path: '/api/booking/bookings/{bookingId}',
+    params: z.strictObject({ bookingId: idSchema }),
+    access: { kind: 'action', action: 'view', recordType: BOOKING_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: bookingReadSchema,
+    codes: [...HISTORY_CODES, 'booking.record-not-found'],
+  }),
+  recordBooking: defineRoute({
+    method: 'POST',
+    path: '/api/booking/bookings',
+    access: { kind: 'action', action: 'create', recordType: BOOKING_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: bookingDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    bodyLimitBytes: BOOKING_DRAFT_BODY_LIMIT_BYTES,
+    response: bookingSavedSchema,
+    codes: [...HISTORY_CODES, 'kernel.cross-site-request', ...BOOKING_CONTENT_CODES],
+  }),
+  saveBookingDraft: defineRoute({
+    method: 'POST',
+    path: '/api/booking/bookings/{bookingId}/drafts',
+    params: z.strictObject({ bookingId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: BOOKING_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: bookingDraftChangeSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    bodyLimitBytes: BOOKING_DRAFT_BODY_LIMIT_BYTES,
+    response: bookingSavedSchema,
+    codes: [...BOOKING_CHANGE_CODES, ...BOOKING_CONTENT_CODES],
+  }),
+  attachBookingDocuments: defineRoute({
+    method: 'POST',
+    path: '/api/booking/bookings/{bookingId}/documents',
+    params: z.strictObject({ bookingId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: BOOKING_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: bookingDocumentsDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: bookingDocumentsAttachedSchema,
+    codes: BOOKING_CHANGE_CODES,
+  }),
+  submitBooking: defineRoute({
+    method: 'POST',
+    path: '/api/booking/bookings/{bookingId}/submission',
+    params: z.strictObject({ bookingId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: BOOKING_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: bookingSubmissionSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: bookingSubmittedSchema,
+    codes: [...BOOKING_CHANGE_CODES, 'booking.no-document', 'booking.no-lines'],
   }),
   // Receive Goods (goods-in 4.1 to 4.5, section 11; PRD-REC-001 to PRD-REC-008; DEC-133, DEC-138; S2-F02-T02): the
   // inbox of a Site, the Arrival with its invoices first, the count line by line and the GRN. An Arrival and a GRN carry

@@ -245,6 +245,21 @@ export interface SyntheticWorld {
     readonly seasonOption: string;
   };
   /**
+   * The booking journey (S2-F01-T03), in the receiving Organisation: Booking, who records and submits a booking; the
+   * Owner, who approves it within a SYNTHETIC limit; the approve reason; and how the form names the SYNTHETIC brand,
+   * Site, supplier and season, whose approved SYNTHETIC budget the booking reserves.
+   */
+  readonly booking: {
+    readonly organisationCode: string;
+    readonly booker: EnrolledUser;
+    readonly owner: EnrolledUser;
+    readonly reasonId: string;
+    readonly brandOption: string;
+    readonly siteOption: string;
+    readonly supplierOption: string;
+    readonly seasonOption: string;
+  };
+  /**
    * The file intake journey (S1-F06-T01), in the posting maps journey's Organisation: a Booking user who imports the
    * SYNTHETIC product file the server of the journeys wrote, the saved layout's option as the screen names it, and the
    * style and SKU codes the file holds.

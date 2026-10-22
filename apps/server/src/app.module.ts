@@ -170,7 +170,14 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
           // the approval in the decision's transaction through `access`, which is built with these effects, so it
           // reaches `access` when it runs, never at start (access-and-approvals 9.8b "As built for a document decided
           // in two steps").
-          bookingApprovals({ audit, requests: () => modules.get<AccessInterface>(ACCESS, { strict: false }) }),
+          // A booking version's approval asks the policy gate and draws its number from the booking series through
+          // `numbering` built with every declared kind (goods-in 3.4, 10.5; S2-F01-T03).
+          bookingApprovals({
+            audit,
+            configuration,
+            numbering: composedNumbering(),
+            requests: () => modules.get<AccessInterface>(ACCESS, { strict: false }),
+          }),
         ),
       inject: [AUDIT, LOCATION_IN_USE, CONFIGURATION, BOOK_HELD_STOCK, IMPORT_HANDLERS, ModuleRef],
     },

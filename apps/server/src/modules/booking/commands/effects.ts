@@ -1,5 +1,5 @@
 import { uuidv7 } from '@apparel-os/domain';
-import { OPEN_TO_BUY_APPROVAL, OPEN_TO_BUY_CHECK } from '@apparel-os/schemas';
+import { BOOKING_APPROVAL, OPEN_TO_BUY_APPROVAL, OPEN_TO_BUY_CHECK } from '@apparel-os/schemas';
 import { and, eq, sql } from 'drizzle-orm';
 import { CommandDefect, type LockTarget, type TransactionContext } from '../../../kernel/index.js';
 import type {
@@ -11,8 +11,10 @@ import type {
 } from '../../access/index.js';
 import type { AuditChange, AuditInterface } from '../../audit/index.js';
 import { openToBuyBudgetCheck, openToBuyBudgetVersion } from '../db/schema.js';
+import { bookingApprovalRule } from '../domain/bookings.js';
 import { approvalDocument, bookingApprovalRules, budgetAuditRecord, versionItem } from '../domain/budgets.js';
 import { checkOf, versionRow } from '../queries/budgets.js';
+import { bookingApprovalEffect, type ApprovalDependencies } from './approval.js';
 import { budgetLock, refused } from './common.js';
 
 // What a decision does to an open-to-buy budget version (goods-in 3.3; module-map 6.2 flow A; access-and-approvals
@@ -29,9 +31,11 @@ import { budgetLock, refused } from './common.js';
 // table's trigger stands behind it (migration 0086). Nor may the approval be decided by whoever recorded the check:
 // three different people for each version (DEC-142; access-and-approvals 9.8b).
 
-/** What the effects need: audit, and Request approval of `access`, bound late since `access` is built with them. */
-export interface EffectDependencies {
-  readonly audit: AuditInterface;
+/**
+ * What the effects need: audit, and Request approval of `access`, bound late since `access` is built with them; for a
+ * booking's approval, the policy gate and the booking series (approval.ts; S2-F01-T03).
+ */
+export interface EffectDependencies extends ApprovalDependencies {
   readonly requests: () => Pick<AccessInterface, 'requestApproval'>;
 }
 
@@ -223,10 +227,12 @@ function approvalEffect(dependencies: EffectDependencies): DocumentEffect {
  */
 export function bookingApprovals(dependencies: EffectDependencies): ModuleApprovals {
   return {
-    rules: bookingApprovalRules,
+    rules: [...bookingApprovalRules, bookingApprovalRule],
     effects: new Map<string, DocumentEffect>([
       [OPEN_TO_BUY_CHECK, checkEffect(dependencies)],
       [OPEN_TO_BUY_APPROVAL, approvalEffect(dependencies)],
+      // A booking version's approval (goods-in 3.4; S2-F01-T03).
+      [BOOKING_APPROVAL, bookingApprovalEffect(dependencies)],
     ]),
   };
 }
