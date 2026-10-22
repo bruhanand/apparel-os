@@ -13,7 +13,8 @@ import { bookingLock, bookingRow, type BookingRow } from '../queries/bookings.js
 import { decided, gateRefusal, type ApprovalDependencies } from './approval.js';
 import { refusalOf, refused, today, valueChange as value } from './common.js';
 import { factsOf } from './draft.js';
-import { inForceOf, linkedOf, writeLink } from './receipt-link.js';
+import { inForceOf, linkedOf } from '../queries/receipts.js';
+import { writeLink } from './receipt-link.js';
 
 // What a decision does to a proposal to link late or excess goods into a booking (goods-in 3.7, 4.10, 10.3, 10.5;
 // access-and-approvals 9.8b; PRD-BKG-008; POL-05.08, POL-02.07; RR-577, the product owner, 22 Oct 2026; S2-F02-T04), in

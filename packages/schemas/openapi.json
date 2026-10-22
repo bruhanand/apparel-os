@@ -6267,7 +6267,8 @@
             },
             "x-error-codes": [
               "kernel.idempotency-key-reused",
-              "kernel.request-in-progress"
+              "kernel.request-in-progress",
+              "kernel.stale-version"
             ]
           },
           "422": {

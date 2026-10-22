@@ -213,13 +213,7 @@ export const heldLineDecision = receiving.table('held_line_decision', {
 
 /** Why a GRN line went to Booking for review at its GRN's issue (goods-in 3.7, 4.10). */
 export type ReviewReasonColumn =
-  | 'no-match'
-  | 'ambiguous'
-  | 'other-site'
-  | 'other-supplier'
-  | 'not-approved'
-  | 'late'
-  | 'excess';
+  'no-match' | 'ambiguous' | 'other-site' | 'other-supplier' | 'not-approved' | 'late' | 'excess';
 
 /**
  * The outcome at its GRN's issue of a GRN line of an Arrival against a booking that delivers pieces: linked to the

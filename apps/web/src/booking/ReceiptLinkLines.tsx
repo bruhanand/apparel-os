@@ -46,8 +46,16 @@ export function ReceiptLinkLines({
                 <td className="px-3">{formatDate(line.arrivalDate)}</td>
                 <td className="px-3">
                   <span className="flex flex-wrap gap-2">
-                    {line.late && <span className="rounded-full border border-border px-2 text-caption">{t('booking.receipt-link.late')}</span>}
-                    {line.excess && <span className="rounded-full border border-border px-2 text-caption">{t('booking.receipt-link.excess')}</span>}
+                    {line.late && (
+                      <span className="rounded-full border border-border px-2 text-caption">
+                        {t('booking.receipt-link.late')}
+                      </span>
+                    )}
+                    {line.excess && (
+                      <span className="rounded-full border border-border px-2 text-caption">
+                        {t('booking.receipt-link.excess')}
+                      </span>
+                    )}
                   </span>
                 </td>
                 <td className="px-3">

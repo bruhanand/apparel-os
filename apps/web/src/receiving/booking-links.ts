@@ -16,10 +16,7 @@ export interface CountedGoods {
  * code matches, and the colour and size where the booking line gives them, compared ignoring case and spaces at the
  * ends by the shared `textKey`, so the screen offers only lines the server accepts.
  */
-export function matchingLines(
-  lines: readonly BookingLineStatus[],
-  goods: CountedGoods,
-): readonly BookingLineStatus[] {
+export function matchingLines(lines: readonly BookingLineStatus[], goods: CountedGoods): readonly BookingLineStatus[] {
   const given = (booked: string | null, counted: string | null) =>
     booked === null || (counted !== null && textKey(booked) === textKey(counted));
   return lines.filter(

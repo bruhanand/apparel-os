@@ -40,7 +40,14 @@ import { formatDate, formatList, formatQuantity } from '../setup/format';
 import { Card, GrantedButton, inputClass, ListRead, SubmissionBanner, Th, Toolbar, useGranted } from '../setup/parts';
 import { stateIdOf } from '../setup/states';
 import { useTimeZone } from '../shell/session';
-import { BookingStanding, bookingField, ExpectedGoods, LinkToBooking, useBookings, type Bookings } from './BookingLinks';
+import {
+  BookingStanding,
+  bookingField,
+  ExpectedGoods,
+  LinkToBooking,
+  useBookings,
+  type Bookings,
+} from './BookingLinks';
 import { optionText, unknownText, useMasterNames, useProducts } from './names';
 
 // Receive Goods › an Arrival: its details, its supplier invoices first, its photos, the count line by line and its GRN
@@ -914,7 +921,10 @@ function GrnPrint({
           ['receive.eway-bill-number', arrival.ewayBillNumber ?? t('receive.none')],
           ['receive.cartons', formatQuantity(arrival.cartons)],
           ['receive.arrived-at', formatDateTime(arrival.arrivedAt, timeZone)],
-          ['receive.booking', arrival.bookingId === null ? t('receive.none') : bookingField(bookings, arrival.bookingId)],
+          [
+            'receive.booking',
+            arrival.bookingId === null ? t('receive.none') : bookingField(bookings, arrival.bookingId),
+          ],
           ['receive.grn.counted-by', peopleOf(arrival, grn.countedBy)],
           [
             'receive.grn.entered-by',
@@ -1246,7 +1256,10 @@ export function ArrivalView({
                 />
               </Card>
               {open && arrival.bookingId !== null && (
-                <ExpectedGoods booking={bookings.get(arrival.bookingId)} reading={bookings.reading(arrival.bookingId)} />
+                <ExpectedGoods
+                  booking={bookings.get(arrival.bookingId)}
+                  reading={bookings.reading(arrival.bookingId)}
+                />
               )}
               <Card title="receive.invoices">
                 {arrival.invoices.length === 0 ? (

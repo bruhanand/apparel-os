@@ -4,22 +4,19 @@ import type { TransactionContext } from '../../../kernel/index.js';
 import type { AccessInterface } from '../../access/index.js';
 import type { AuditInterface } from '../../audit/index.js';
 import { bookingReceiptLinkProposal, bookingReceiptLinkProposalLine } from '../db/schema.js';
-import { bookingAuditRecord, bookingItem, bookingVersionItem, lineItem, receiptLinkDocument } from '../domain/bookings.js';
-import { laterLinks } from '../domain/receipts.js';
+import {
+  bookingAuditRecord,
+  bookingItem,
+  bookingVersionItem,
+  lineItem,
+  receiptLinkDocument,
+} from '../domain/bookings.js';
+import { laterLinks, type ReceiptsLater, type ReceiptsLinked } from '../domain/receipts.js';
+import { inForceOf, linkedOf, pendingProposalOf, proposedOf } from '../queries/receipts.js';
 import { gateRefusal, type ApprovalDependencies } from './approval.js';
 import { refusalOf, refused, today, type Outcome } from './common.js';
 import { factsOf } from './draft.js';
-import {
-  heldBooking,
-  inForceOf,
-  linkedOf,
-  pendingProposalOf,
-  proposedOf,
-  writeLink,
-  type Linker,
-  type ReceiptsLater,
-  type ReceiptsLinked,
-} from './receipt-link.js';
+import { heldBooking, writeLink, type Linker } from './receipt-link.js';
 
 /** What the later link needs: audit, Request approval of `access`, and the policy gate (goods-in 10.5). */
 export interface LaterLinkDependencies {

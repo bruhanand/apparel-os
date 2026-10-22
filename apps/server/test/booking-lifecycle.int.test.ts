@@ -328,7 +328,9 @@ async function receive(
     );
   }
   const read = arrivalReadSchema.parse(ok(await get(receiver, `/api/receiving/arrivals/${arrivalId}`))).arrival;
-  const issued = ok(await post(receiver, `/api/receiving/arrivals/${arrivalId}/grn`, { versionToken: read.versionToken }));
+  const issued = ok(
+    await post(receiver, `/api/receiving/arrivals/${arrivalId}/grn`, { versionToken: read.versionToken }),
+  );
   const grn = arrivalReadSchema.parse(ok(await get(receiver, `/api/receiving/arrivals/${arrivalId}`))).arrival.grn;
   const reviewed = (grn?.bookingLinks ?? []).flatMap((each) =>
     each.atIssue?.outcome === 'review' && each.atIssue.lineKey !== null

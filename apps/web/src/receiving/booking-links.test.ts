@@ -60,9 +60,9 @@ const links = (grnLineId: string, overrides: Partial<GrnLineBooking> = {}): GrnL
 describe('the booking lines a GRN line may link to (goods-in 3.7)', () => {
   it('PRD-BKG-008 DEC-130 only lines whose goods the GRN line’s are, ignoring case and spaces, as the server checks', () => {
     const lines = [bookingLine(ID(1), 'S'), bookingLine(ID(2), 'M'), bookingLine(ID(3), null, null)];
-    expect(matchingLines(lines, { styleCode: ' syn-st', colour: 'syn navy ', size: 's' }).map((each) => each.lineKey)).toEqual(
-      [ID(1), ID(3)],
-    );
+    expect(
+      matchingLines(lines, { styleCode: ' syn-st', colour: 'syn navy ', size: 's' }).map((each) => each.lineKey),
+    ).toEqual([ID(1), ID(3)]);
     expect(matchingLines(lines, { styleCode: 'SYN-ST', colour: null, size: 'M' }).map((each) => each.lineKey)).toEqual([
       ID(3),
     ]);
@@ -100,7 +100,10 @@ describe('a GRN line’s standing against bookings (goods-in 4.10)', () => {
       lineKey: ID(1),
     });
     expect(
-      standingOf(line, links(line.id, { atIssue: review, proposal: { bookingId: BOOKING, proposalId: ID(30), lineKey: ID(1) } })),
+      standingOf(
+        line,
+        links(line.id, { atIssue: review, proposal: { bookingId: BOOKING, proposalId: ID(30), lineKey: ID(1) } }),
+      ),
     ).toEqual({ kind: 'proposed', bookingId: BOOKING });
     const link = {
       bookingId: BOOKING,

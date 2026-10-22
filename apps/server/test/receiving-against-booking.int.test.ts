@@ -11,7 +11,12 @@ import {
   type Booking,
 } from '@apparel-os/schemas';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { COMMAND_RUNNER, type CommandRunner, type RoutedOrganisation, OrganisationRouter } from '../src/kernel/index.js';
+import {
+  COMMAND_RUNNER,
+  type CommandRunner,
+  type RoutedOrganisation,
+  OrganisationRouter,
+} from '../src/kernel/index.js';
 import { NUMBERING, type NumberingInterface } from '../src/modules/numbering/index.js';
 import { defineSyntheticBookingSeries } from './fixtures/booking-series.js';
 import { defineSyntheticGrnSeries } from './fixtures/grn-series.js';
@@ -292,7 +297,9 @@ async function received(
     );
   }
   const read = arrivalReadSchema.parse(ok(await get(receiver, `/api/receiving/arrivals/${arrivalId}`))).arrival;
-  const issued = ok(await post(receiver, `/api/receiving/arrivals/${arrivalId}/grn`, { versionToken: read.versionToken }));
+  const issued = ok(
+    await post(receiver, `/api/receiving/arrivals/${arrivalId}/grn`, { versionToken: read.versionToken }),
+  );
   return { grnId: issued.grnId as string, arrival: await readArrival(receiver, arrivalId) };
 }
 
@@ -305,7 +312,10 @@ function bySize(arrival: Arrival) {
   const grn = arrival.grn;
   if (grn === null) throw new Error('no GRN');
   return new Map(
-    grn.lines.map((each) => [each.size ?? each.styleCode ?? '', grn.bookingLinks.find((link) => link.grnLineId === each.id)]),
+    grn.lines.map((each) => [
+      each.size ?? each.styleCode ?? '',
+      grn.bookingLinks.find((link) => link.grnLineId === each.id),
+    ]),
   );
 }
 
@@ -543,7 +553,11 @@ describe('delivered quantities from real GRNs (goods-in 3.6, 3.7; 12 test 5)', (
     }
     expect(outstanding).toEqual([15, 6, 0]);
     expect(
-      (await readBooking(booker, booking.id)).status?.lines.map((each) => [each.size, each.delivered, each.outstanding]),
+      (await readBooking(booker, booking.id)).status?.lines.map((each) => [
+        each.size,
+        each.delivered,
+        each.outstanding,
+      ]),
     ).toEqual([
       [size('S').code, 10, 0],
       [size('M').code, 10, 0],

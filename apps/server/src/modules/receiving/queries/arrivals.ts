@@ -59,7 +59,8 @@ async function bookingLinksOf(
     let issued: GrnLineBooking['atIssue'] = null;
     if (kept !== undefined) {
       if (kept.outcome === 'linked') {
-        if (kept.bookingLineKey === null) throw new CommandDefect(`A linked GRN line names no booking line: ${kept.id}`);
+        if (kept.bookingLineKey === null)
+          throw new CommandDefect(`A linked GRN line names no booking line: ${kept.id}`);
         issued = { outcome: 'linked', bookingId: kept.bookingId, lineKey: kept.bookingLineKey };
       } else {
         if (kept.reason === null) throw new CommandDefect(`A GRN line sent for review names no reason: ${kept.id}`);

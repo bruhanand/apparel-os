@@ -127,15 +127,7 @@ function lineNumberOf(booking: Booking | undefined, lineKey: string): number | u
 }
 
 /** A GRN line's place against bookings, as the GRN's Booking column says it (goods-in 3.7, 4.10). */
-export function BookingStanding({
-  line,
-  grn,
-  bookings,
-}: {
-  line: GrnLine;
-  grn: Grn;
-  bookings: Bookings;
-}) {
+export function BookingStanding({ line, grn, bookings }: { line: GrnLine; grn: Grn; bookings: Bookings }) {
   const standing = standingOf(
     line,
     grn.bookingLinks.find((each) => each.grnLineId === line.id),
@@ -155,7 +147,9 @@ export function BookingStanding({
       );
     }
     case 'linked-unseen':
-      return <span className="text-body-sm">{t('receive.booking.linked', { booking: named(standing.bookingId) })}</span>;
+      return (
+        <span className="text-body-sm">{t('receive.booking.linked', { booking: named(standing.bookingId) })}</span>
+      );
     case 'proposed':
       return (
         <span className="text-body-sm">{t('receive.booking.proposed', { booking: named(standing.bookingId) })}</span>
@@ -265,7 +259,9 @@ export function LinkToBooking({ arrival, grn, reading }: { arrival: Arrival; grn
         >
           <option value="">{t('setup.choose')}</option>
           {arrival.bookingId !== null && (
-            <option value={arrival.bookingId}>{bookingText(booking?.id === arrival.bookingId ? booking : undefined) ?? unknownText()}</option>
+            <option value={arrival.bookingId}>
+              {bookingText(booking?.id === arrival.bookingId ? booking : undefined) ?? unknownText()}
+            </option>
           )}
           {bookings.map((each) => (
             <option key={each.id} value={each.id}>

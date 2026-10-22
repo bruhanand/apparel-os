@@ -5288,6 +5288,8 @@ export const routes = {
     codes: [
       ...HISTORY_CODES,
       'kernel.cross-site-request',
+      // Holding the actor's authority answers it when their role changed under the lock (code-house-rules 8.2).
+      'kernel.stale-version',
       'configuration.operation-unavailable',
       'booking.record-not-found',
       'booking.not-approved',

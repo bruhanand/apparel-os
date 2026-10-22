@@ -96,9 +96,9 @@ describe('a GRN line at its GRN’s issue (goods-in 3.7)', () => {
     const lines = [statusLine(KEY_S, 'S', 10)];
     // The window's last day is still within it; an early arrival is not late (goods-in 4.10).
     for (const arrivalDate of ['2026-10-31', '2026-09-01']) {
-      expect(receiptsAtIssue(inForce(lines), { ...delivery, arrivalDate }, [{ goods: goods('S'), quantity: 1 }])).toEqual(
-        [{ kind: 'link', lineKey: KEY_S }],
-      );
+      expect(
+        receiptsAtIssue(inForce(lines), { ...delivery, arrivalDate }, [{ goods: goods('S'), quantity: 1 }]),
+      ).toEqual([{ kind: 'link', lineKey: KEY_S }]);
     }
     expect(
       receiptsAtIssue(inForce(lines), { ...delivery, arrivalDate: '2026-11-01' }, [{ goods: goods('S'), quantity: 1 }]),
@@ -142,11 +142,11 @@ describe('Booking’s later link (goods-in 3.7; PRD-BKG-008)', () => {
 
   it('PRD-BKG-008 DEC-130 a line not of the version in force, or whose goods are not the line’s, is refused', () => {
     const lines = [statusLine(KEY_S, 'S', 10)];
-    expect(laterLinks(inForce(lines), [{ lineKey: KEY_M, goods: goods('M'), quantity: 1, arrivalDate: '2026-10-20' }])).toEqual(
-      { kind: 'refused', code: 'booking.line-not-found', lineKey: KEY_M },
-    );
-    expect(laterLinks(inForce(lines), [{ lineKey: KEY_S, goods: goods('M'), quantity: 1, arrivalDate: '2026-10-20' }])).toEqual(
-      { kind: 'refused', code: 'booking.goods-not-of-line', lineKey: KEY_S },
-    );
+    expect(
+      laterLinks(inForce(lines), [{ lineKey: KEY_M, goods: goods('M'), quantity: 1, arrivalDate: '2026-10-20' }]),
+    ).toEqual({ kind: 'refused', code: 'booking.line-not-found', lineKey: KEY_M });
+    expect(
+      laterLinks(inForce(lines), [{ lineKey: KEY_S, goods: goods('M'), quantity: 1, arrivalDate: '2026-10-20' }]),
+    ).toEqual({ kind: 'refused', code: 'booking.goods-not-of-line', lineKey: KEY_S });
   });
 });

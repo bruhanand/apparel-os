@@ -28,12 +28,79 @@ export interface Delivery {
  * destination; the version in force names another supplier; the booking has no approved version; or it arrived after
  * the window or beyond the line's outstanding, which needs approval (POL-05.08).
  */
-export type ReviewReason = 'no-match' | 'ambiguous' | 'other-site' | 'other-supplier' | 'not-approved' | 'late' | 'excess';
+export type ReviewReason =
+  'no-match' | 'ambiguous' | 'other-site' | 'other-supplier' | 'not-approved' | 'late' | 'excess';
 
 /** What one GRN line's issue answers: linked to the booking line, or sent for review, naming the line it matches. */
 export type AtIssue =
   | { readonly kind: 'link'; readonly lineKey: string }
   | { readonly kind: 'review'; readonly reason: ReviewReason; readonly lineKey: string | null };
+
+/** The GRN a link names: the GRN, and the Site where its goods were counted (`receiving`'s). */
+export interface GrnRef {
+  readonly grnId: string;
+  readonly siteId: string;
+}
+
+/** The counted lines of a GRN at its issue, against the booking its Arrival names (goods-in 3.7). */
+export interface ReceiptsAtIssue {
+  readonly bookingId: string;
+  readonly grn: GrnRef;
+  /** The Arrival's supplier and arrival date, with the GRN's Site. */
+  readonly delivery: Delivery;
+  readonly receipts: readonly {
+    readonly grnLineId: string;
+    /** What the line counted, or none for unidentified goods, which match no line. */
+    readonly goods: ReceivedGoods | null;
+    /** The pieces counted on it that are delivered: received in any condition, never those recorded as not received. */
+    readonly quantity: number;
+  }[];
+}
+
+/** A GRN line sent to Booking for review at its GRN's issue, with why (goods-in 3.7). */
+export interface ForReview {
+  readonly kind: 'review';
+  readonly grnLineId: string;
+  readonly reason: ReviewReason;
+  /** The booking line a late or excess line matches; none otherwise. */
+  readonly lineKey: string | null;
+}
+
+/** What a GRN line's issue will do, read before the caller's later locks (goods-in 3.7; code-house-rules 8.2). */
+export type PlannedAtIssue =
+  { readonly kind: 'link'; readonly grnLineId: string; readonly lineKey: string } | ForReview;
+
+/** What a GRN line's issue did (goods-in 3.7): linked to the booking line, or sent to Booking for review. */
+export type ReceiptAtIssue =
+  | { readonly kind: 'linked'; readonly grnLineId: string; readonly lineKey: string; readonly linkId: string }
+  | ForReview;
+
+/** GRN lines Booking links later to the lines of the booking named (goods-in 3.7, 4.10; PRD-BKG-008). */
+export interface ReceiptsLater {
+  readonly bookingId: string;
+  readonly grn: GrnRef & { readonly grnNumber: string };
+  readonly receipts: readonly (LaterReceipt & { readonly grnLineId: string })[];
+}
+
+/** What the later link answers: the lines linked now, and the proposal of the late or excess ones, or none. */
+export interface ReceiptsLinked {
+  readonly linked: readonly { readonly grnLineId: string; readonly linkId: string; readonly lineKey: string }[];
+  readonly proposal: {
+    readonly proposalId: string;
+    readonly requestId: string;
+    readonly grnLineIds: readonly string[];
+  } | null;
+}
+
+/** A booking goods may be received against, as `receiving` checks it when an Arrival names it (goods-in 3.7, 4.2). */
+export interface ReceivableBooking {
+  readonly bookingId: string;
+  readonly number: string | null;
+  readonly siteId: string;
+  readonly brandId: string;
+  /** The supplier of the approved version in force; none while the booking has no approved version. */
+  readonly supplierPartyId: string | null;
+}
 
 /** Whether goods arriving on a date are late, and pieces beyond what is left outstanding are excess (POL-05.08). */
 function acceptance(windowTo: string, arrivalDate: string, quantity: number, left: number) {
@@ -78,13 +145,17 @@ export function receiptsAtIssue(
 /** A GRN line Booking links later to the booking line it names (goods-in 3.7; PRD-BKG-008). */
 export interface LaterReceipt {
   readonly lineKey: string;
+  /** The goods the GRN line counted, or the product Booking named for unidentified goods. */
   readonly goods: ReceivedGoods;
+  /** The pieces delivered, as at issue. */
   readonly quantity: number;
+  /** The business date the goods arrived on (goods-in 4.2). */
   readonly arrivalDate: string;
 }
 
 /** What Booking's later link of each line takes: a link now, or a different person's approval first (POL-05.08). */
-export type Later = { readonly kind: 'link' } | { readonly kind: 'approval'; readonly late: boolean; readonly excess: boolean };
+export type Later =
+  { readonly kind: 'link' } | { readonly kind: 'approval'; readonly late: boolean; readonly excess: boolean };
 
 /**
  * Booking's later link of GRN lines to the lines of the version in force it names, in their order (goods-in 3.7, 4.10;

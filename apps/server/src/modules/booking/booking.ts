@@ -29,16 +29,19 @@ import { recordBooking } from './commands/record-booking.js';
 import { saveDraft } from './commands/save-draft.js';
 import { submitBooking } from './commands/submit-booking.js';
 import { prepareBudget, prepareBudgetVersion } from './commands/budgets.js';
-import { linkReceiptsAtIssue, receiptsAtIssue } from './commands/link-receipt-at-issue.js';
+import { linkReceiptsAtIssue } from './commands/link-receipt-at-issue.js';
 import { linkReceiptsLater } from './commands/link-receipt-later.js';
 import { proposeCancellation } from './commands/propose-cancellation.js';
 import { proposeExtension } from './commands/propose-extension.js';
-import type { Linker, ReceivableBooking, ReceiptsAtIssue, ReceiptsLater } from './commands/receipt-link.js';
+import type { Linker } from './commands/receipt-link.js';
+import type { PlannedAtIssue, ReceivableBooking, ReceiptsAtIssue, ReceiptsLater } from './domain/receipts.js';
 import { recordConfirmation } from './commands/record-confirmation.js';
 import { recordIssue } from './commands/record-issue.js';
 import { bookingLock, bookingPage, bookingRow, bookingView, receivableBookingOf } from './queries/bookings.js';
 import { statusOfBooking } from './queries/lifecycle.js';
 import { receiptsOfGrnLines, type GrnLineReceipt } from './queries/receipt-links.js';
+import { planAtIssue } from './queries/receipts.js';
+import { refusalOf, today, type Outcome } from './commands/common.js';
 import { budgetOf, budgetPage, budgetRow, budgetRows, budgetViews, remainingOf } from './queries/budgets.js';
 
 export interface BookingDependencies {
@@ -219,8 +222,14 @@ export class Booking {
    * why. `receiving` asks it before its later locks, holding the booking's lock at step 1, then links them with
    * linkReceiptsAtIssue once every lock is held (code-house-rules 8.2).
    */
-  receiptsAtIssue(context: TransactionContext, issue: ReceiptsAtIssue) {
-    return receiptsAtIssue(context, issue);
+  async receiptsAtIssue(
+    context: TransactionContext,
+    issue: ReceiptsAtIssue,
+  ): Promise<Outcome<readonly PlannedAtIssue[]>> {
+    const date = await today(context);
+    if (typeof date !== 'string') return refusalOf(date);
+    const plan = await planAtIssue(context, issue, date);
+    return plan.kind === 'planned' ? { kind: 'success', answer: plan.outcomes } : plan;
   }
 
   /**
