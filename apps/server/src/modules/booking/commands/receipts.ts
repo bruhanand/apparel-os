@@ -7,7 +7,7 @@ import { bookingAuditRecord, bookingItem, lineItem } from '../domain/bookings.js
 import { matchReceipt, type ReceivedGoods } from '../domain/lifecycle.js';
 import { bookingRow, type BookingRow } from '../queries/bookings.js';
 import { approvalInForce, statusOfBooking } from '../queries/lifecycle.js';
-import { factsOf } from './bookings.js';
+import { factsOf } from './draft.js';
 import { refused, today, type Outcome } from './common.js';
 
 // The receipt link (goods-in 3.6, 3.7, 3.10, 10.2, 10.3; PRD-BKG-006 to PRD-BKG-008; DEC-130; S2-F01-T04): a GRN line

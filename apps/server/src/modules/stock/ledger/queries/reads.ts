@@ -121,3 +121,23 @@ export async function originOfSourceLine(
   if (row?.brandId == null) return undefined;
   return { receiptOriginId: row.id, skuId: row.skuId, brandId: row.brandId };
 }
+
+/** The source whose line made a receipt origin: its module and record type (13.2, 13.6). */
+export interface LineSource {
+  readonly module: string;
+  readonly recordType: string;
+}
+
+/**
+ * The source a line belongs to, as the receipt origin it made names it (13.6; 13.15; goods-in 8.5): so a route that
+ * names goods by a line alone, such as a damage report's GRN line, passes on whose line it is as a calling module
+ * would, and `originOfSourceLine` reads its origin. Read under the reader's actor; undefined when the line made no
+ * origin the reader may see.
+ */
+export async function sourceOfLine(context: TransactionContext, lineId: string): Promise<LineSource | undefined> {
+  const [row] = await context.tx
+    .select({ module: receiptOrigin.sourceModule, recordType: receiptOrigin.sourceRecordType })
+    .from(receiptOrigin)
+    .where(and(eq(receiptOrigin.sourceLineId, lineId), isNull(receiptOrigin.parentOriginId)));
+  return row;
+}

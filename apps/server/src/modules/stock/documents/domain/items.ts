@@ -19,35 +19,40 @@ export function damageHoldItem(lineId: string, at: Place, goods: NamedGoods, rea
   };
 }
 
-/** The reason a confirmation's quarantine records (6.1; PRD-DMG-006). */
-const QUARANTINE_REASON = 'Confirmed damage';
+/**
+ * The reason a confirmation's quarantine records (6.1; PRD-DMG-006): a code, which a screen names from the message
+ * catalogue, never stored text (code-house-rules 12.13; stock-ledger 13.15).
+ */
+export const DAMAGE_CONFIRMED_REASON = 'stock.damage-confirmed';
 
 /**
  * A confirmation (goods-in 8.3; 6.1, 2.3): the report's damage hold ends by its own event, `damage-confirmed`; the goods
  * take the damaged condition where they are; and a quarantine holds them, released only by an approved decision, never
- * by time (PRD-DMG-006). The condition change is the item the decision's value is on (DM-8).
+ * by time (PRD-DMG-006). The decision's value is on the condition change (DM-8): `valuedLineId` names its line.
  */
 export function confirmationItems(
   lines: () => string,
   at: Place,
   goods: NamedGoods,
   holdId: string,
-): { readonly items: LedgerItem[]; readonly valueOf: number } {
+): { readonly items: LedgerItem[]; readonly valuedLineId: string } {
+  const release = lines();
+  const conditionChange = lines();
   return {
     items: [
-      { kind: 'release-hold', lineId: lines(), holdId, event: 'damage-confirmed' },
-      { kind: 'condition-change', lineId: lines(), at, from: 'good', to: 'damaged', goods },
+      { kind: 'release-hold', lineId: release, holdId, event: 'damage-confirmed' },
+      { kind: 'condition-change', lineId: conditionChange, at, from: 'good', to: 'damaged', goods },
       {
         kind: 'place-hold',
         lineId: lines(),
         holdKind: 'quarantine',
-        reason: QUARANTINE_REASON,
+        reason: DAMAGE_CONFIRMED_REASON,
         at,
         condition: 'damaged',
         goods: [goods],
       },
     ],
-    valueOf: 1,
+    valuedLineId: conditionChange,
   };
 }
 
@@ -59,7 +64,8 @@ export function rejectionItems(lineId: string, holdId: string): LedgerItem[] {
 /**
  * A reversal of a confirmation (goods-in 8.3; PRD-STK-017; 13.15): the quarantine ends by an approved decision, the
  * condition change is reversed by a linked movement, and the damage hold is placed again, so the goods have their
- * earlier condition and holds. The reversal is the item the decision's value is on.
+ * earlier condition and holds. The decision's value is on the reversal, `valuedLineId`; the restored round's request is
+ * on the damage hold placed again, `restoredHoldLineId`.
  */
 export function reversalItems(
   lines: () => string,
@@ -67,13 +73,17 @@ export function reversalItems(
   goods: NamedGoods,
   confirmation: { readonly movementId: string; readonly quarantineHoldId: string },
   reason: string,
-): { readonly items: LedgerItem[]; readonly valueOf: number } {
+): { readonly items: LedgerItem[]; readonly valuedLineId: string; readonly restoredHoldLineId: string } {
+  const release = lines();
+  const reversal = lines();
+  const restoredHold = lines();
   return {
     items: [
-      { kind: 'release-hold', lineId: lines(), holdId: confirmation.quarantineHoldId, event: 'approved-decision' },
-      { kind: 'reversal', lineId: lines(), movementId: confirmation.movementId, at, goods },
-      damageHoldItem(lines(), at, goods, reason),
+      { kind: 'release-hold', lineId: release, holdId: confirmation.quarantineHoldId, event: 'approved-decision' },
+      { kind: 'reversal', lineId: reversal, movementId: confirmation.movementId, at, goods },
+      damageHoldItem(restoredHold, at, goods, reason),
     ],
-    valueOf: 1,
+    valuedLineId: reversal,
+    restoredHoldLineId: restoredHold,
   };
 }

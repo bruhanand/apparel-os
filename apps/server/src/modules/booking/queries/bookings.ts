@@ -1,6 +1,6 @@
+import { bookingTotals } from '@apparel-os/calculations/booking';
 import { paise } from '@apparel-os/domain';
 import {
-  bookingTotals,
   type Booking,
   type BookingPageQuery,
   type BookingSummary,

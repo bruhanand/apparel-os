@@ -109,20 +109,10 @@ export function preparersOf(
 }
 
 /**
- * The shortfall of an approval refused for open-to-buy (goods-in 3.3): the booking's value at cost, the remaining
- * amount and what is short, in whole paise as decimal text (code-house-rules 12.3), with the brand and season.
+ * The item of an approval refused for open-to-buy (goods-in 3.3, 3.9): the brand and season whose remainder is short of
+ * the booking's value at cost, by identifier only (code-house-rules 12.3). The screen shows the amounts from the
+ * booking's read, its value at cost, and the remaining open-to-buy it reads with it.
  */
-export function shortfallItem(
-  of: { readonly brandId: string; readonly seasonValueId: string },
-  value: number,
-  remaining: number,
-): MissingItem {
-  return {
-    kind: 'open-to-buy-shortfall',
-    brandId: of.brandId,
-    seasonValueId: of.seasonValueId,
-    value: String(value),
-    remaining: String(remaining),
-    shortfall: String(value - remaining),
-  };
+export function shortfallItem(of: { readonly brandId: string; readonly seasonValueId: string }): MissingItem {
+  return { kind: 'open-to-buy-shortfall', brandId: of.brandId, seasonValueId: of.seasonValueId };
 }

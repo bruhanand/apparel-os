@@ -22,14 +22,8 @@ import {
 import { amendmentDocument, bookingItem, lineItem } from '../domain/bookings.js';
 import { changesOf, lockBooking, type BookingRow } from '../queries/bookings.js';
 import { approvalInForce, confirmationOf, issueOf, statusOfBooking } from '../queries/lifecycle.js';
-import {
-  attachSupplierFiles,
-  audited,
-  factsOf,
-  recordChange,
-  type Actor,
-  type BookingCommandDependencies,
-} from './bookings.js';
+import { audited, factsOf, recordChange, type Actor, type BookingCommandDependencies } from './draft.js';
+import { attachSupplierFiles } from './supplier-files.js';
 import { refused, today, type Outcome } from './common.js';
 
 // The lifecycle of an approved booking that Booking records or proposes (goods-in 3.4, 3.5, 3.8, 3.10; PRD-BKG-013;

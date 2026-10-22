@@ -23,7 +23,11 @@ import type { AuditInterface } from '../audit/index.js';
 import type { ConfigurationInterface } from '../configuration/index.js';
 import type { FilesImportsInterface } from '../files-imports/index.js';
 import type { CatalogueInterface } from '../merchandise/catalogue/index.js';
-import { attachDocuments, factsOf, recordBooking, saveDraft, submitBooking, type Actor } from './commands/bookings.js';
+import { attachDocuments } from './commands/attach-documents.js';
+import { factsOf, type Actor } from './commands/draft.js';
+import { recordBooking } from './commands/record-booking.js';
+import { saveDraft } from './commands/save-draft.js';
+import { submitBooking } from './commands/submit-booking.js';
 import { prepareBudget, prepareBudgetVersion } from './commands/budgets.js';
 import { proposeCancellation, proposeExtension, recordConfirmation, recordIssue } from './commands/lifecycle.js';
 import {

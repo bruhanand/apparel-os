@@ -113,15 +113,20 @@ export interface DocumentEffect {
    */
   precheck?(context: TransactionContext, versionId: string): Promise<CommandRefusal | undefined>;
   /**
-   * Whether an approval posts the document through the stock ledger in the decision's transaction, verifying and
-   * using the decision under its locks as any posting does (access-and-approvals 9.7, 9.8b; stock-ledger 13.1;
-   * S2-F08-T01): Decide then writes the decision first, under a savepoint, so Verify under lock and Record use find it,
-   * and rolls the decision back with the effect when the effect refuses, so nothing of either is written.
+   * When Decide writes an approval's decision, against the effect (access-and-approvals 9.8b): `after-effect`, the
+   * default, once the effect has rechecked its record and taken effect, so a refusal leaves nothing written;
+   * `before-effect` for an effect that posts the document through the stock ledger in the decision's transaction,
+   * verifying and using the decision under its locks as any posting does (9.7; stock-ledger 13.1; S2-F08-T01): the
+   * decision is written first, under a savepoint, so Verify under lock and Record use find it, and is rolled back with
+   * the effect when the effect refuses, so nothing of either is written.
    */
-  readonly postsWithDecision?: boolean;
+  readonly decisionWritten?: DecisionWritten;
   approve(context: TransactionContext, decider: EffectDecider, versionId: string): Promise<EffectOutcome>;
   reject(context: TransactionContext, decider: EffectDecider, versionId: string): Promise<EffectOutcome>;
 }
+
+/** When Decide writes an approval's decision, against its effect (access-and-approvals 9.8b). */
+export type DecisionWritten = 'after-effect' | 'before-effect';
 
 /** The approver making a decision take effect, the assignment relied on and the decision (access-and-approvals 9.5). */
 export interface EffectDecider {

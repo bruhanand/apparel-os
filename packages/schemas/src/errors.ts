@@ -1067,8 +1067,9 @@ export const deviceCodes = declareCodes({
  *   names the brand (goods-in 3.2; DEC-129).
  * - `booking.open-to-buy-missing`: the brand and season have no approved open-to-buy budget (goods-in 3.3;
  *   PRD-SEC-017).
- * - `booking.open-to-buy-short`: the booking's value at cost is more than the remaining open-to-buy; `missing` shows
- *   the shortfall (goods-in 3.3).
+ * - `booking.open-to-buy-short`: the booking's value at cost is more than the remaining open-to-buy; `missing` names
+ *   the brand and season, and the screen shows the amounts from the booking's and the budget's reads (goods-in 3.3,
+ *   3.9).
  * - `booking.no-booking-series`, `booking.booking-series-paused`: no Open booking number series
  *   (numbering-and-audit 3.2; goods-in 3.1).
  *

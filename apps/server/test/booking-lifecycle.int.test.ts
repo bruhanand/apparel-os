@@ -231,7 +231,10 @@ async function approvedBooking(
   );
   const bookingId = made.bookingId as string;
   const attached = ok(
-    await post(booker, `/api/booking/bookings/${bookingId}/documents`, { files: [await storedFile(booker)] }),
+    await post(booker, `/api/booking/bookings/${bookingId}/documents`, {
+      files: [await storedFile(booker)],
+      versionToken: made.versionToken,
+    }),
   );
   const sent = ok(
     await post(booker, `/api/booking/bookings/${bookingId}/submission`, { versionToken: attached.versionToken }),

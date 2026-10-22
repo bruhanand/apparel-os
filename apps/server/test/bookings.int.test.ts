@@ -257,7 +257,10 @@ async function submitted(
   const made = ok(await post(booker, '/api/booking/bookings', draftBody(lines, overrides)));
   const bookingId = made.bookingId as string;
   const attached = ok(
-    await post(booker, `/api/booking/bookings/${bookingId}/documents`, { files: [await storedFile(booker)] }),
+    await post(booker, `/api/booking/bookings/${bookingId}/documents`, {
+      files: [await storedFile(booker)],
+      versionToken: made.versionToken,
+    }),
   );
   const sent = ok(
     await post(booker, `/api/booking/bookings/${bookingId}/submission`, { versionToken: attached.versionToken }),
@@ -616,6 +619,20 @@ describe('recording a booking (goods-in 3.1, 3.2; PRD-BKG-001 to PRD-BKG-003)', 
     ]);
     expect(booking.versions.map((each) => each.versionNumber)).toEqual([1, 2]);
   });
+
+  it('PRD-BKG-001 DEC-130 a Draft holds up to 10,000 lines, the scale of a PT file (12 test 21); one more is refused', async () => {
+    // 10,000 lines of one piece at 500.00 and MRP 999.00 each, over 50 styles (worked by hand).
+    const lines = Array.from({ length: 10_000 }, (_each, index) =>
+      line(`SYN-CAP-${String(index % 50)}`, 1, { colour: `SYN-C${String(index % 7)}`, size: String(index) }),
+    );
+    const made = ok(await post(booker, '/api/booking/bookings', draftBody(lines)));
+    const booking = await readBooking(booker, made.bookingId as string);
+    expect(booking.version.lines).toHaveLength(10_000);
+    expect(booking.version.lines.at(-1)).toMatchObject({ lineNumber: 10_000, size: '9999' });
+    expect(booking.version.totals).toEqual({ pieces: 10_000, cost: 500_000_000, mrp: 999_000_000 });
+    const tooMany = await post(booker, '/api/booking/bookings', draftBody([...lines, line('SYN-CAP-X', 1)]));
+    expect(errorOf(tooMany)?.code).toBe('kernel.invalid-request');
+  });
 });
 
 describe('submitting and approving a booking (goods-in 3.3, 3.4, 10.3, 10.5; 12 test 4)', () => {
@@ -629,7 +646,14 @@ describe('submitting and approving a booking (goods-in 3.3, 3.4, 10.3, 10.5; 12 
     });
     expect(errorOf(bare)).toMatchObject({ code: 'booking.no-document', missing: [{ recordId: bookingId }] });
     const document = await storedFile(booker);
-    const attached = ok(await post(booker, `/api/booking/bookings/${bookingId}/documents`, { files: [document] }));
+    // Attaching changes the booking, so it names the version token it read, as every change does (code-house-rules
+    // 12.7): without one it fails the route's schema, and a stale one is refused.
+    const documents = `/api/booking/bookings/${bookingId}/documents`;
+    expect(errorOf(await post(booker, documents, { files: [document] }))?.code).toBe('kernel.invalid-request');
+    expect(errorOf(await post(booker, documents, { files: [document], versionToken: uuidv7() }))?.code).toBe(
+      'kernel.stale-version',
+    );
+    const attached = ok(await post(booker, documents, { files: [document], versionToken: made.versionToken }));
     // Attaching changed the booking, so the older token is stale (code-house-rules 12.7).
     expect(
       errorOf(await post(booker, `/api/booking/bookings/${bookingId}/submission`, { versionToken: made.versionToken }))
@@ -688,10 +712,18 @@ describe('submitting and approving a booking (goods-in 3.3, 3.4, 10.3, 10.5; 12 
     // A budget smaller than the booking's value at cost: 10 pieces at 500.00 is 5,000.00 against 10.00; the shortfall
     // is shown.
     const budgetId = await approvedBudget(season(0), SYNTHETIC_SMALL_BUDGET);
-    expect(errorOf(await decide(owner, first.requestId, first.versionId))).toMatchObject({
-      code: 'booking.open-to-buy-short',
-      missing: [{ kind: 'open-to-buy-shortfall', value: '500000', remaining: '1000', shortfall: '499000' }],
-    });
+    const short = errorOf(await decide(owner, first.requestId, first.versionId));
+    expect(short?.code).toBe('booking.open-to-buy-short');
+    // The refusal names the brand and season by identifier only (code-house-rules 12.3); the screen shows the
+    // amounts from the booking's read, its value at cost, and the budget's, what remains (goods-in 3.9).
+    expect(short?.missing).toEqual([
+      { kind: 'open-to-buy-shortfall', brandId: fixture.brand.id, seasonValueId: seasons[0] },
+    ]);
+    const shown = await readBooking(owner, first.bookingId);
+    expect([shown.version.totals.cost, shown.openToBuy]).toMatchObject([
+      500_000,
+      { kind: 'approved', approved: SYNTHETIC_SMALL_BUDGET, reserved: 0, remaining: SYNTHETIC_SMALL_BUDGET },
+    ]);
     // A limit below the booking's value at cost (POL-02.09): the approver is refused before any effect.
     expect(errorOf(await decide(lowApprover, first.requestId, first.versionId))?.code).toBe(
       'access.above-approval-limit',
@@ -748,7 +780,10 @@ describe('submitting and approving a booking (goods-in 3.3, 3.4, 10.3, 10.5; 12 
     expect(errorOf(await decide(owner, first.requestId, first.versionId))?.code).toBe('access.approval-not-open');
     expect(
       errorOf(
-        await post(booker, `/api/booking/bookings/${first.bookingId}/documents`, { files: [await storedFile(booker)] }),
+        await post(booker, `/api/booking/bookings/${first.bookingId}/documents`, {
+          files: [await storedFile(booker)],
+          versionToken: booking.versionToken,
+        }),
       )?.code,
     ).toBe('booking.not-draft');
     const list = bookingListSchema.parse(ok(await get(owner, '/api/booking/bookings?state=Approved')));
@@ -764,8 +799,10 @@ describe('submitting and approving a booking (goods-in 3.3, 3.4, 10.3, 10.5; 12 
     const later = await submitted([line('SYN-ST-7', 300)]);
     expect(errorOf(await decide(owner, later.requestId, later.versionId))).toMatchObject({
       code: 'booking.open-to-buy-short',
-      missing: [{ value: '15000000', remaining: '9500000', shortfall: '5500000' }],
+      missing: [{ kind: 'open-to-buy-shortfall', brandId: fixture.brand.id, seasonValueId: seasons[0] }],
     });
+    const shown = await readBooking(owner, later.bookingId);
+    expect([shown.version.totals.cost, shown.openToBuy]).toMatchObject([15_000_000, { remaining: 9_500_000 }]);
   });
 
   it('PRD-INT-003 goods-in 10.3 two approvals at once never reserve the same remaining open-to-buy', async () => {

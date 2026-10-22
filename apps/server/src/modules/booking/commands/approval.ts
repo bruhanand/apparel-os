@@ -9,7 +9,7 @@ import {
   type TransactionContext,
 } from '../../../kernel/index.js';
 import type { DocumentEffect, EffectDecider, EffectOutcome } from '../../access/index.js';
-import type { AuditChange, AuditInterface } from '../../audit/index.js';
+import type { AuditInterface } from '../../audit/index.js';
 import { OPEN_POLICY_READINESS, type ConfigurationInterface } from '../../configuration/index.js';
 import { brandSupplierLinkedOn, termsInForce } from '../../merchandise/parties/index.js';
 import type { NumberingInterface } from '../../numbering/index.js';
@@ -38,7 +38,7 @@ import {
 } from '../queries/bookings.js';
 import { budgetOf, remainingOf } from '../queries/budgets.js';
 import { cancelledOf, reservedByBudget, statusLines, statusOfBooking } from '../queries/lifecycle.js';
-import { budgetLock, refused, today } from './common.js';
+import { budgetLock, refused, today, valueChange as value } from './common.js';
 
 // What a decision does to a booking version (goods-in 3.2 to 3.5, 10.3, 10.5; module-map 6.2 flow A;
 // access-and-approvals 9.8b; PRD-BKG-002, PRD-BKG-004, PRD-SEC-017; POL-05.02, POL-05.03, POL-01.04, POL-02.07,
@@ -69,14 +69,6 @@ export interface ApprovalDependencies {
 
 /** Agreement margins are never read by a booking's approval: it fixes the version, not its margins (goods-in 3.2). */
 const SHOW_MARGINS = false;
-
-type ValueChange = Extract<AuditChange, { kind: 'value' }>;
-const value = (field: string, before: ValueChange['before'], after: ValueChange['after']): ValueChange => ({
-  kind: 'value',
-  field,
-  before,
-  after,
-});
 
 const refusalOf = (refusal: CommandRefusal): EffectOutcome => ({ kind: 'refusal', refusal });
 
@@ -227,9 +219,7 @@ async function approve(
     ]);
   }
   if (more > 0 && more > remaining.remaining) {
-    return refused('refused', 'booking.open-to-buy-short', [
-      shortfallItem(season, committed, remaining.remaining + already),
-    ]);
+    return refused('refused', 'booking.open-to-buy-short', [shortfallItem(season)]);
   }
   // The brand's Agreement version in force on the approval's date, which the booking keeps (3.2; DEC-132).
   const agreement = await termsInForce(context, { brandId: row.brandId }, date, SHOW_MARGINS);

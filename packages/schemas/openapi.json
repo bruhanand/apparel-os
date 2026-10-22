@@ -657,10 +657,16 @@
                       ],
                       "additionalProperties": false
                     }
+                  },
+                  "versionToken": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
                   }
                 },
                 "required": [
-                  "files"
+                  "files",
+                  "versionToken"
                 ],
                 "additionalProperties": false
               }
@@ -11985,7 +11991,7 @@
                     "additionalProperties": false
                   },
                   "lines": {
-                    "maxItems": 1000,
+                    "maxItems": 10000,
                     "type": "array",
                     "items": {
                       "type": "object",
@@ -48792,7 +48798,7 @@
                           },
                           "lineKeys": {
                             "minItems": 1,
-                            "maxItems": 1000,
+                            "maxItems": 10000,
                             "type": "array",
                             "items": {
                               "type": "string",
@@ -49050,7 +49056,7 @@
                     "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
                   },
                   "lines": {
-                    "maxItems": 1000,
+                    "maxItems": 10000,
                     "type": "array",
                     "items": {
                       "type": "object",
@@ -60816,6 +60822,14 @@
                                     "type": "null"
                                   }
                                 ]
+                              },
+                              "state": {
+                                "type": "string",
+                                "enum": [
+                                  "Awaiting approval",
+                                  "Approved",
+                                  "Rejected"
+                                ]
                               }
                             },
                             "required": [
@@ -60826,7 +60840,8 @@
                               "proposedAt",
                               "requestId",
                               "requestState",
-                              "outcome"
+                              "outcome",
+                              "state"
                             ],
                             "additionalProperties": false
                           }
@@ -61299,6 +61314,14 @@
                                     "type": "null"
                                   }
                                 ]
+                              },
+                              "state": {
+                                "type": "string",
+                                "enum": [
+                                  "Awaiting approval",
+                                  "Approved",
+                                  "Rejected"
+                                ]
                               }
                             },
                             "required": [
@@ -61309,7 +61332,8 @@
                               "proposedAt",
                               "requestId",
                               "requestState",
-                              "outcome"
+                              "outcome",
+                              "state"
                             ],
                             "additionalProperties": false
                           }
@@ -84176,7 +84200,7 @@
                     "additionalProperties": false
                   },
                   "lines": {
-                    "maxItems": 1000,
+                    "maxItems": 10000,
                     "type": "array",
                     "items": {
                       "type": "object",
