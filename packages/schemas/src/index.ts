@@ -563,3 +563,6 @@ export * from './receiving.js';
 
 // `stock` · documents' damage reports (goods-in 8; S2-F08-T01).
 export * from './damage.js';
+
+// `merchandise` · PT: a PT file uploaded for a GRN (goods-in 5; S2-F04-T02).
+export * from './pt.js';

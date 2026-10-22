@@ -4,6 +4,8 @@ import type { AuditInterface } from '../audit/index.js';
 import type { PolicyEvidence } from '../configuration/index.js';
 import { attach, type Attached, type AttachRequest } from './commands/attach.js';
 import type { AttachedRecordReaders } from './contracts/record-readers.js';
+import { handlerBatch, type HandlerBatch } from './queries/handler-batch.js';
+import { blankTemplate, type TemplateList } from './queries/template.js';
 
 /**
  * The files-imports module's interface to other modules (module-map 4.7; imports-and-opening-data 13.1). Only Attach
@@ -17,6 +19,25 @@ export interface FilesImportsInterface {
    * facts. Never edits an attachment (PRD-MOD-011).
    */
   attach(context: TransactionContext, request: AttachRequest): Promise<Attached>;
+  /**
+   * A batch as the module whose handler fills it reads it, for its own preview of the file: state, version, facts,
+   * subject, documents as its handler is given them and the kept report's issues; undefined when the reader may not see
+   * it (13.2 "As built" with S2-F04-T02). The caller authorises the reader with the batch's facts.
+   */
+  handlerBatch(context: TransactionContext, batchId: string): Promise<HandlerBatch | undefined>;
+  /**
+   * The blank template of a Confirmed layout version whose Confirmed mapping fills the target, with the lists its
+   * values must be on, as XLSX (goods-in section 11; S2-F04-T02); undefined when there is no such version.
+   */
+  blankTemplate(
+    context: TransactionContext,
+    request: {
+      readonly layoutVersionId: string;
+      readonly target: string;
+      readonly listsSheet: string;
+      readonly lists: readonly TemplateList[];
+    },
+  ): Promise<{ readonly fileName: string; readonly bytes: Buffer } | undefined>;
 }
 
 /**
@@ -44,5 +65,21 @@ export class FilesImports implements FilesImportsInterface {
 
   attach(context: TransactionContext, request: AttachRequest): Promise<Attached> {
     return attach(context, this.audit, request, this.readers);
+  }
+
+  handlerBatch(context: TransactionContext, batchId: string): Promise<HandlerBatch | undefined> {
+    return handlerBatch(context, batchId);
+  }
+
+  blankTemplate(
+    context: TransactionContext,
+    request: {
+      readonly layoutVersionId: string;
+      readonly target: string;
+      readonly listsSheet: string;
+      readonly lists: readonly TemplateList[];
+    },
+  ) {
+    return blankTemplate(context, request);
   }
 }

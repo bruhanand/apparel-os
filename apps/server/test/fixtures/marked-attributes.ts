@@ -19,6 +19,12 @@ import { syntheticCode, syntheticName } from './synthetic.js';
 // the same way (product owner, 22 Oct 2026, DEC-144), so a budget's season and a count line's size can be named on
 // `dev` without first giving anyone the catalogue's rights. Never a KDPS value, never a default.
 
+/**
+ * The marks the seed marks (DEC-144): the season and the size. The PT template's other lists, marked since S2-F04-T02
+ * (structure-and-masters 4.2 "As built"; RR-582), are not seeded: DEC-144 names only these two.
+ */
+export type SeededMark = Extract<AttributeMark, 'season' | 'size'>;
+
 interface SyntheticLabel {
   readonly code: string;
   readonly name: string;
@@ -29,7 +35,7 @@ interface SyntheticLabel {
  * (DEC-144): a few, enough for a budget's season and a count line's size on `dev`. None is a default.
  */
 export const SYNTHETIC_MARKED_ATTRIBUTES: Readonly<
-  Record<AttributeMark, SyntheticLabel & { readonly values: readonly SyntheticLabel[] }>
+  Record<SeededMark, SyntheticLabel & { readonly values: readonly SyntheticLabel[] }>
 > = {
   season: {
     code: syntheticCode('SEASON'),
@@ -61,7 +67,7 @@ export async function syntheticAttributeToMark(
   context: TransactionContext,
   catalogue: Pick<CatalogueInterface, 'prepareAttribute'>,
   preparer: Preparer,
-  mark: AttributeMark,
+  mark: SeededMark,
 ): Promise<string | undefined> {
   if (await markedInForce(context, mark)) return undefined;
   const { code, name } = SYNTHETIC_MARKED_ATTRIBUTES[mark];
@@ -141,7 +147,7 @@ export async function markSyntheticAttribute(
 }
 
 export interface ValuesInput {
-  readonly mark: AttributeMark;
+  readonly mark: SeededMark;
   /** The values' proposer, a person (structure-and-masters 4.2): the one who recorded their attribute. */
   readonly proposedBy: string;
   /**

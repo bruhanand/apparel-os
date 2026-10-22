@@ -66,6 +66,7 @@ import {
   type SupplierRoles,
 } from './modules/merchandise/catalogue/index.js';
 import { PartiesModule, partiesApprovals, partiesSupplierRoles } from './modules/merchandise/parties/index.js';
+import { PtModule, ptApprovals } from './modules/merchandise/pt/index.js';
 import {
   LOCATION_IN_USE,
   OrganisationModule,
@@ -206,6 +207,9 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
           // A held line's decision, taking excess, wrong or unidentified goods in or leaving them held, which asks the
           // policy gate under the held line's lock (goods-in 4.6, 10.5; S2-F02-T03).
           receivingApprovals({ audit, services: () => ({ configuration }) }),
+          // A PT revision's approval on its total proposed acquisition cost, requested when a PT file is submitted
+          // (goods-in 5.6, 6.1; S2-F04-T02); its decision's effect comes with S2-F06-T01.
+          ptApprovals(),
         ),
       inject: [AUDIT, LOCATION_IN_USE, CONFIGURATION, BOOK_HELD_STOCK, IMPORT_HANDLERS, ModuleRef],
     },
@@ -314,6 +318,8 @@ export class ModuleApprovalsModule {}
     ReceivingModule,
     // Damage reports (module-map section 5; goods-in 8; S2-F08-T01).
     StockDocumentsModule,
+    // PT files uploaded for a GRN, as drafts a different person approves (module-map section 5; goods-in 5; S2-F04-T02).
+    PtModule,
   ],
 })
 export class AppModule {}

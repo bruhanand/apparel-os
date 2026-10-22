@@ -2,6 +2,16 @@ import { z } from 'zod';
 import { errorCodes, type ErrorCode } from './errors.js';
 import { healthResponseSchema } from './health.js';
 import {
+  grnPtReadSchema,
+  PT_TYPE,
+  ptPreviewQuerySchema,
+  ptPreviewSchema,
+  ptTemplateQuerySchema,
+  ptTemplateSchema,
+  ptWithdrawalSchema,
+  ptWithdrawnSchema,
+} from './pt.js';
+import {
   BOOKING_DRAFT_BODY_LIMIT_BYTES,
   BOOKING_TYPE,
   bookingAmendmentProposedSchema,
@@ -2274,6 +2284,11 @@ export const routes = {
       'files-imports.file-store-not-configured',
       // An opening batch for a unit whose cutover is complete (imports-and-opening-data 10.1; PRD-LIF-011; S1-F13-T03).
       'files-imports.cutover-complete',
+      // A batch about one record, such as the GRN a PT file is for (13.1, 13.2; S2-F04-T02).
+      'files-imports.subject-required',
+      'files-imports.subject-not-taken',
+      'files-imports.subject-not-found',
+      'files-imports.subject-refused',
     ],
   }),
   readImportBatch: defineRoute({
@@ -5302,6 +5317,65 @@ export const routes = {
       'receiving.booking-not-of-arrival',
       'receiving.nothing-received',
       'receiving.product-not-named',
+    ],
+  }),
+  // A PT file uploaded for a GRN (goods-in 5, section 11; DEC-134, DEC-135, DEC-137, DEC-138, DEC-140; S2-F04-T02): the
+  // file is handed in, staged, validated, submitted and published through the import routes, as a transaction batch
+  // about the GRN whose handler is `merchandise` · PT (imports-and-opening-data 4.1, 13.1, 13.2); these read the GRN's
+  // PT, preview a file, withdraw a draft and give the blank template. A PT carries every scope fact of its GRN, so each
+  // route authorises in its command with the GRN's facts (access-and-approvals 5.3).
+  readGrnPt: defineRoute({
+    method: 'GET',
+    path: '/api/merchandise/pt/grns/{grnId}',
+    params: z.strictObject({ grnId: idSchema }),
+    access: { kind: 'action', action: 'view', recordType: PT_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: grnPtReadSchema,
+    codes: [...HISTORY_CODES, 'merchandise.record-not-found'],
+  }),
+  previewPtUpload: defineRoute({
+    method: 'GET',
+    path: '/api/merchandise/pt/uploads/{batchId}/preview',
+    params: z.strictObject({ batchId: idSchema }),
+    query: ptPreviewQuerySchema,
+    access: { kind: 'action', action: 'view', recordType: PT_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: ptPreviewSchema,
+    codes: [...HISTORY_CODES, 'merchandise.record-not-found'],
+  }),
+  withdrawPtRevision: defineRoute({
+    method: 'POST',
+    path: '/api/merchandise/pt/revisions/{revisionId}/withdraw',
+    params: z.strictObject({ revisionId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: PT_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: ptWithdrawalSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: ptWithdrawnSchema,
+    codes: [
+      ...HISTORY_CODES,
+      'kernel.cross-site-request',
+      'kernel.stale-version',
+      'merchandise.record-not-found',
+      'merchandise.pt-not-a-draft',
+    ],
+  }),
+  downloadPtTemplate: defineRoute({
+    method: 'GET',
+    path: '/api/merchandise/pt/grns/{grnId}/template',
+    params: z.strictObject({ grnId: idSchema }),
+    query: ptTemplateQuerySchema,
+    access: { kind: 'action', action: 'create', recordType: PT_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: ptTemplateSchema,
+    codes: [
+      ...HISTORY_CODES,
+      'merchandise.record-not-found',
+      'files-imports.layout-not-found',
+      // A list of the template not marked yet (structure-and-masters 4.2 "As built"; S2-F04-T02).
+      'merchandise.attribute-not-marked',
     ],
   }),
   // Damage reports (goods-in 8, section 11; PRD-DMG-001 to PRD-DMG-006, PRD-STK-017; S2-F08-T01): anyone authorised at

@@ -1,0 +1,209 @@
+import { z } from 'zod';
+import { approvalRequestStateSchema } from './approvals.js';
+import { idSchema, paiseSchema } from './common.js';
+import { missingItemSchema } from './errors.js';
+import { importBatchStateSchema, issueSeveritySchema } from './imports.js';
+import { fieldClassSchema } from './roles.js';
+
+// `merchandise` · PT, the upload of a PT file for a GRN (goods-in 5.1 to 5.8, section 11; DEC-134, DEC-135, DEC-137,
+// DEC-138, DEC-140; S2-F04-T02): the GRN's PT with its mark and revisions, the preview of an uploaded file, the
+// withdrawal of a draft and the blank template. No list, value, layout or amount is set here: the Organisation
+// records its own (AGENTS.md "Never invent a value").
+
+const asOf = z.iso.datetime({ offset: true });
+
+/** The record type of a PT, scoped by its GRN's place, legal entity and brand (access-and-approvals 5.3). */
+export const PT_TYPE = 'merchandise.pt';
+/**
+ * The action type of a PT revision's approval: by a different person, within a limit on its total proposed acquisition
+ * cost, P RATE times QTY (goods-in 6.1; PRD-ACS-015, PRD-REC-017, POL-02.09).
+ */
+export const PT_APPROVAL = 'merchandise.pt.approve';
+/** The import target a PT file is uploaded to, a transaction batch for one GRN (goods-in 5; imports 4.1, 13.2). */
+export const PT_IMPORT_TARGET = 'merchandise.pt';
+
+/** An amount of cost or margin a reader may not see: its class instead of its value (access-and-approvals 6). */
+const maskedSchema = z.strictObject({ kind: z.literal('masked'), fieldClass: fieldClassSchema });
+export const maskablePaiseSchema = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('amount'), paise: paiseSchema }),
+  maskedSchema,
+]);
+export type MaskablePaise = z.infer<typeof maskablePaiseSchema>;
+export const maskableMarginSchema = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('margin'), value: z.string().regex(/^-?\d+\.\d{2}$/) }),
+  maskedSchema,
+]);
+
+/** The totals of a PT (goods-in 5.7): pieces, and the sums of MRP, BASIC and P RATE times QTY. */
+export const ptTotalsSchema = z.strictObject({
+  rows: z.number().int().nonnegative(),
+  pieces: z.number().int().nonnegative(),
+  mrpPaise: paiseSchema,
+  basicPaise: maskablePaiseSchema,
+  /** The total proposed acquisition cost the approval is judged on (goods-in 6.1). */
+  costPaise: maskablePaiseSchema,
+});
+
+/** A GRN's "PT attached" mark (goods-in 5.8): set by a PT revision, or not, with its latest change. */
+const markChangeSchema = z.strictObject({
+  ptRevisionId: idSchema,
+  reason: z.enum(['pt-submitted', 'pt-withdrawn', 'pt-rejected', 'pt-reversed']),
+  changedBy: idSchema,
+  occurredAt: asOf,
+});
+export const ptMarkSchema = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('not-set'), lastChange: markChangeSchema.optional() }),
+  z.strictObject({ kind: z.literal('set'), ptRevisionId: idSchema, lastChange: markChangeSchema }),
+]);
+
+/** A revision's state (design-language 7): Awaiting approval, Withdrawn, then, with S2-F06-T01, its decision. */
+export const ptRevisionStateSchema = z.enum(['Awaiting approval', 'Withdrawn', 'Approved', 'Rejected']);
+export type PtRevisionState = z.infer<typeof ptRevisionStateSchema>;
+
+/** One PT file submitted for the GRN, as its GRN's screen lists it (goods-in 5.7). */
+export const ptRevisionSummarySchema = z.strictObject({
+  revisionId: idSchema,
+  revisionNumber: z.number().int().positive(),
+  state: ptRevisionStateSchema,
+  batchId: idSchema,
+  uploadedBy: idSchema,
+  submittedAt: asOf,
+  totals: ptTotalsSchema,
+  newProducts: z.number().int().nonnegative(),
+  repeatedBarcodes: z.number().int().nonnegative(),
+  differences: z.number().int().nonnegative(),
+  request: z.strictObject({ id: idSchema, state: approvalRequestStateSchema }).optional(),
+  withdrawn: z.strictObject({ by: idSchema, at: asOf }).optional(),
+});
+export type PtRevisionSummary = z.infer<typeof ptRevisionSummarySchema>;
+
+/**
+ * The PT of a GRN as its screen reads it (goods-in 5.1, 5.7, 5.8, section 11): the GRN, its mark, whether a file can be
+ * uploaded now and, where not, what blocks it, and the PT with its revisions, newest first, and its version token.
+ */
+export const grnPtReadSchema = z.strictObject({
+  asOf,
+  grn: z.strictObject({ grnId: idSchema, number: z.string() }),
+  mark: ptMarkSchema,
+  upload: z.discriminatedUnion('kind', [
+    z.strictObject({ kind: z.literal('ready') }),
+    z.strictObject({ kind: z.literal('blocked'), code: z.string(), missing: z.array(missingItemSchema) }),
+  ]),
+  pt: z
+    .strictObject({ ptId: idSchema, versionToken: idSchema, revisions: z.array(ptRevisionSummarySchema) })
+    .nullable(),
+  /** The names of the people named, an unknown one left out (PRD-MOD-015). */
+  people: z.array(z.strictObject({ userId: idSchema, name: z.string() })),
+});
+export type GrnPtRead = z.infer<typeof grnPtReadSchema>;
+
+/** The largest page of a preview's rows: a technical cap the builders set (code-house-rules 12.1 "Reads"). */
+export const PT_PREVIEW_PAGE_CAP = 200;
+
+export const ptPreviewQuerySchema = z.strictObject({
+  /** The last row number of the page before. */
+  after: z
+    .string()
+    .regex(/^[1-9]\d*$/)
+    .optional(),
+  limit: z
+    .string()
+    .regex(/^[1-9]\d*$/)
+    .optional(),
+});
+
+/** One issue of the batch's validation report, as the PT screen lists it by row and column (goods-in 5.6). */
+export const ptIssueSchema = z.strictObject({
+  /** The issue and its class, which marking a Warning seen names (imports-and-opening-data 8.2). */
+  issueId: idSchema,
+  class: z.string(),
+  code: z.string(),
+  severity: issueSeveritySchema,
+  /** The sheet an issue about a sheet names, such as the template's lists sheet, which is not imported (8.1). */
+  sheet: z.string().optional(),
+  rowNumber: z.number().int().positive().optional(),
+  column: z.string().optional(),
+  field: z.string().optional(),
+  missing: z.array(missingItemSchema),
+  /** Who marked a Warning seen; Submit counts only the submitter's own mark (imports-and-opening-data 8 "As built"). */
+  seenBy: idSchema.optional(),
+});
+
+/** One row of the file as the preview shows it (goods-in 5.6 step 3). */
+export const ptPreviewRowSchema = z.strictObject({
+  rowNumber: z.number().int().positive(),
+  styleCode: z.string(),
+  size: z.string(),
+  colour: z.string(),
+  barcode: z.string(),
+  quantity: z.number().int().positive(),
+  mrpPaise: paiseSchema,
+  basicPaise: maskablePaiseSchema,
+  pRatePaise: maskablePaiseSchema,
+  margin: maskableMarginSchema,
+  product: z.enum(['existing', 'proposed']),
+  repeated: z.boolean(),
+});
+
+/**
+ * The preview of an uploaded PT file (goods-in 5.6): the batch as it stands; its validation report's issues, every
+ * problem by row and column; and, once the file passes every check, what submitting it makes: the rows a page at a
+ * time, the totals, the GRN's styles and sizes it covers, the new products it proposes, the repeated barcodes and the
+ * differences from existing products.
+ */
+export const ptPreviewSchema = z.strictObject({
+  asOf,
+  batchId: idSchema,
+  batchCode: z.string(),
+  batchVersionId: idSchema,
+  batchState: importBatchStateSchema,
+  submitted: z.boolean(),
+  grnId: idSchema,
+  issues: z.array(ptIssueSchema),
+  draft: z
+    .strictObject({
+      totals: ptTotalsSchema,
+      coverage: z.array(
+        z.strictObject({ styleCode: z.string(), size: z.string().nullable(), quantity: z.number().int().positive() }),
+      ),
+      newProducts: z.array(
+        z.strictObject({
+          styleCode: z.string(),
+          colour: z.string(),
+          size: z.string(),
+          newStyle: z.boolean(),
+          rowNumbers: z.array(z.number().int().positive()),
+        }),
+      ),
+      repeatedBarcodes: z.array(
+        z.strictObject({ barcode: z.string(), rowNumbers: z.array(z.number().int().positive()) }),
+      ),
+      differences: z.array(
+        z.strictObject({
+          rowNumber: z.number().int().positive(),
+          field: z.string(),
+          file: z.string(),
+          product: z.string().nullable(),
+        }),
+      ),
+      rows: z.array(ptPreviewRowSchema),
+      next: z.number().int().positive().nullable(),
+    })
+    .nullable(),
+});
+export type PtPreview = z.infer<typeof ptPreviewSchema>;
+
+/** Withdraw a draft PT revision (goods-in 5.7): the PT's version token, as its GRN's screen read it (12.7). */
+export const ptWithdrawalSchema = z.strictObject({ versionToken: idSchema });
+export const ptWithdrawnSchema = z.strictObject({ ptId: idSchema, revisionId: idSchema, withdrawalId: idSchema });
+
+/**
+ * The blank template of a Confirmed layout version, and the name of its lists sheet in the screen's words, apart from
+ * the template's sheet (code-house-rules 12.13): at most 31 characters, none of those a sheet name may not hold.
+ */
+export const ptTemplateQuerySchema = z.strictObject({
+  layoutVersionId: idSchema,
+  listsSheet: z.string().regex(/^[^[\]:*?/\\]{1,31}$/),
+});
+/** The blank template of a layout version, with the lists its values must be on (goods-in section 11). */
+export const ptTemplateSchema = z.strictObject({ fileName: z.string(), contentBase64: z.base64() });

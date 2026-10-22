@@ -16,3 +16,7 @@ Feature: [Stage 2 first version](../../spec.md)
 ## Done when
 
 A recount corrects custody with the original kept; the recounter cannot approve their own; a recount is refused while the mark is set; every check passes.
+
+## Notes
+
+- The mark is built in S2-F04-T02 (goods-in 5.8): `receiving.grn_pt_mark`, set and cleared through `receiving`'s `setPtMark` and `clearPtMark` under the GRN's row lock (`ptMarkLock`), and read by `ptMark`. This ticket builds only the recount's refusal while it is set.

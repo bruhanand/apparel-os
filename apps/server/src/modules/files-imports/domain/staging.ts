@@ -81,30 +81,32 @@ export interface StagingContext {
 
 export { normalisedName };
 
-/** The columns found at a sheet's header row, by normalised name. */
+/** The columns found at a sheet's header row, by normalised name, and where its header and data start. */
 interface Found {
   readonly sheet: GridSheet;
   readonly columns: ReadonlyMap<string, number>;
+  readonly headerRow: number;
+  readonly dataStartRow: number;
+}
+
+interface Missing {
+  readonly kind: string;
+  readonly [field: string]: string;
 }
 
 /**
- * Whether a file matches a layout version's structure (6.5, 6.6; PRD-IMP-004): its sheet, every required column at
- * its header row, and no labelled column the layout does not know (A-4). The reason names what does not match.
+ * One sheet's header at one row against the layout (6.5, 6.6): the columns it names, and what it lacks, every required
+ * column first, then each labelled column the layout does not know (A-4).
  */
-export function compatibility(grid: Grid, layout: LayoutStructure): Found | Refused {
-  const wanted = normalisedName(layout.sheet);
-  const sheet = grid.sheets.find((each) => normalisedName(each.name) === wanted);
-  if (sheet === undefined) {
-    return {
-      kind: 'refused',
-      code: 'files-imports.layout-not-matched',
-      missing: [{ kind: 'layout-sheet', sheet: layout.sheet }],
-    };
-  }
-  const header = sheet.rows.find((row) => row.number === layout.headerRow);
+function headerAt(
+  sheet: GridSheet,
+  row: number,
+  layout: LayoutStructure,
+): { readonly columns: Map<string, number>; readonly missing: Missing[] } {
+  const header = sheet.rows.find((each) => each.number === row);
   const columns = new Map<string, number>();
   const known = new Set(layout.columns.map((column) => normalisedName(column.name)));
-  const missing: { kind: string; [field: string]: string }[] = [];
+  const missing: Missing[] = [];
   for (const cell of header?.cells ?? []) {
     const name = cellText(cell);
     if (name === '') continue;
@@ -116,8 +118,47 @@ export function compatibility(grid: Grid, layout: LayoutStructure): Found | Refu
       missing.unshift({ kind: 'layout-column', column: column.name });
     }
   }
-  if (missing.length > 0) return { kind: 'refused', code: 'files-imports.layout-not-matched', missing };
-  return { sheet, columns };
+  return { columns, missing };
+}
+
+/**
+ * Whether a file matches a layout version's structure (6.5, 6.6; PRD-IMP-004): its sheet, every required column at
+ * its header row, and no labelled column the layout does not know (A-4). The reason names what does not match.
+ *
+ * As built with S2-F04-T02 (goods-in 5.2): a layout naming `headerRows` finds its header on the first of them that
+ * matches, the data starting as far below it as `dataStartRow` is below `headerRow`; one marked `sheetByHeader` finds
+ * the one sheet that matches, whatever its name, and refuses a file where several do, naming them. When nothing
+ * matches, the reason is what the closest header lacks: the fewest missing columns, the first row and sheet on a tie.
+ */
+export function compatibility(grid: Grid, layout: LayoutStructure): Found | Refused {
+  const refused = (missing: readonly Missing[]): Refused => ({
+    kind: 'refused',
+    code: 'files-imports.layout-not-matched',
+    missing,
+  });
+  const wanted = normalisedName(layout.sheet);
+  const sheets =
+    layout.sheetByHeader === true
+      ? grid.sheets
+      : grid.sheets.filter((each) => normalisedName(each.name) === wanted).slice(0, 1);
+  if (sheets.length === 0) return refused([{ kind: 'layout-sheet', sheet: layout.sheet }]);
+  const rows = layout.headerRows ?? [layout.headerRow];
+  const below = layout.dataStartRow - layout.headerRow;
+  const found: Found[] = [];
+  let closest: readonly Missing[] | undefined;
+  for (const sheet of sheets) {
+    for (const row of rows) {
+      const { columns, missing } = headerAt(sheet, row, layout);
+      if (missing.length === 0) {
+        found.push({ sheet, columns, headerRow: row, dataStartRow: row + below });
+        break;
+      }
+      if (closest === undefined || missing.length < closest.length) closest = missing;
+    }
+  }
+  if (found.length > 1) return refused(found.map((each) => ({ kind: 'layout-sheet-matched', sheet: each.sheet.name })));
+  const [only] = found;
+  return only ?? refused(closest ?? []);
 }
 
 function cellText(cell: GridCell): string {
@@ -273,16 +314,26 @@ function otherRole(reader: RowReader, layout: LayoutStructure): RowRole {
   return filled.length === 1 && filled[0]?.type === 'text' ? 'note' : 'filler';
 }
 
+/**
+ * How staging groups data rows into documents: by the layout's reference column (7.1); or, for a batch about one record
+ * (a GRN's PT file; S2-F04-T02), every data row into one document, whose reference the batch's start gives it, the
+ * reference column then only marking which rows are data (6.6).
+ */
+export interface StagingOptions {
+  readonly oneDocument?: boolean;
+}
+
 /** Stages a grid with one layout version and one mapping version, or refuses when the file does not match it. */
 export function stage(
   grid: Grid,
   layout: LayoutStructure,
   mapping: MappingFields,
   context: StagingContext,
+  options: StagingOptions = {},
 ): Staged | Refused {
   const found = compatibility(grid, layout);
   if ('kind' in found) return found;
-  const { sheet, columns } = found;
+  const { sheet, columns, headerRow, dataStartRow } = found;
   const notes = new Set(
     grid.notes.flatMap((note: GridNote) => (note.sheet === sheet.name && note.ref !== undefined ? [note.ref] : [])),
   );
@@ -293,11 +344,11 @@ export function stage(
   const others: StagedRowDraft[] = [];
   for (const row of sheet.rows) {
     const base = { sheet: sheet.name, rowNumber: row.number, hidden: row.hidden, cells: keep(row) };
-    if (row.number === layout.headerRow) {
+    if (row.number === headerRow) {
       others.push({ ...base, role: 'header', values: {} });
       continue;
     }
-    if (row.number < layout.dataStartRow) {
+    if (row.number < dataStartRow) {
       others.push({ ...base, role: 'ignored', values: {} });
       continue;
     }
@@ -310,9 +361,10 @@ export function stage(
     const values: Record<string, StagedValue> = {};
     for (const [field, source] of Object.entries(mapping.fields))
       values[field] = fieldValue(reader, field, source, context);
-    const rows = documents.get(reference.text) ?? [];
+    const key = options.oneDocument === true ? '' : reference.text;
+    const rows = documents.get(key) ?? [];
     rows.push({ ...base, role: 'data', values });
-    documents.set(reference.text, rows);
+    documents.set(key, rows);
   }
   const sheets = grid.sheets.map((each) => ({
     name: each.name,

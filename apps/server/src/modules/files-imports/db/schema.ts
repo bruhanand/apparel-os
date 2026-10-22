@@ -169,6 +169,9 @@ export const importBatch = filesImports.table('import_batch', {
   /** The supplier or brand the file comes from, whose mapping rules apply (6.3). */
   sourceSupplierId: uuid('source_supplier_id'),
   sourceBrandId: uuid('source_brand_id'),
+  /** The record the batch is about, where its handler names one, such as a PT file's GRN (13.1; 0103). */
+  subjectRecordType: text('subject_record_type'),
+  subjectRecordId: uuid('subject_record_id'),
 });
 
 /** A document inside a batch: the unit of publishing (2). */

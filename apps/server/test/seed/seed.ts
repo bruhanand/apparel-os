@@ -1,6 +1,5 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Client } from 'pg';
-import type { AttributeMark } from '@apparel-os/schemas';
 import {
   CommandRunner,
   connectionToDatabase,
@@ -40,6 +39,7 @@ import {
   markSyntheticAttribute,
   SYNTHETIC_MARKED_ATTRIBUTES,
   syntheticAttributeToMark,
+  type SeededMark,
 } from '../fixtures/marked-attributes.js';
 import { isSyntheticCode, SYNTHETIC_ORGANISATIONS, syntheticDatabaseName } from '../fixtures/synthetic.js';
 import { seedRefusal } from './environment.js';
@@ -161,7 +161,7 @@ const SEEDED_SERIES = [
 ] as const;
 
 /** The marks the seed marks a SYNTHETIC attribute as, each where none is marked in force (DEC-144). */
-const SEEDED_MARKS: readonly AttributeMark[] = ['season', 'size'];
+const SEEDED_MARKS: readonly SeededMark[] = ['season', 'size'];
 
 /**
  * Gives one seed Organisation what `dev` needs and it lacks, as labelled synthetic settings (DEC-118, DEC-143,

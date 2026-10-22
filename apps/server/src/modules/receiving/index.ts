@@ -10,5 +10,9 @@ export type { EffectServices as HeldLineEffectServices } from './commands/held-l
 export { receivingExceptionTypes } from './exception-types.js';
 export { BOOKING_REVIEW_EXCEPTION_TYPE } from './domain/kinds.js';
 export type { GoodPiecesPart, PtBasis, ReceiptProblem, ReceiptProblemsQuery } from './queries/held-lines.js';
+// The GRN's "PT attached" mark, which `merchandise` · PT sets and clears (goods-in 5.8; S2-F04-T02).
+export type { PtMarkChange } from './commands/pt-mark.js';
+export type { GrnForPt, PtMark, PtMarkChangeView } from './queries/pt-mark.js';
+export type { Actor as ReceivingActor } from './commands/common.js';
 export { grnIssued, heldLineDecided } from './events.js';
 export { receivingRestoreParticipant } from './restore-participant.js';

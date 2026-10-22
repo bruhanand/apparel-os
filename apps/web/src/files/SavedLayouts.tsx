@@ -1,6 +1,8 @@
 import {
+  importKindSchema,
   layoutStructureSchema,
   mappingFieldsSchema,
+  type ImportKind,
   type ImportLayoutList,
   type LayoutStructure,
   type MappingFields,
@@ -95,6 +97,8 @@ export function ProposeLayoutForm({
   const [code, setCode] = useState('');
   const [source, setSource] = useState('');
   const [documentType, setDocumentType] = useState('');
+  // The kind of batch the layout serves (6.1): the template of a PT file is a transaction layout (S2-F04-T02).
+  const [kind, setKind] = useState<ImportKind>('create');
   const [text, setText] = useState(JSON.stringify(start, null, 2));
   const [tried, setTried] = useState(false);
   const structure = parsed<LayoutStructure>(text, layoutStructureSchema);
@@ -111,7 +115,7 @@ export function ProposeLayoutForm({
         void (async () => {
           const done = await submission.submit({
             body: {
-              layout: layoutId === undefined ? { code, source, documentType, kinds: ['create'] } : { layoutId },
+              layout: layoutId === undefined ? { code, source, documentType, kinds: [kind] } : { layoutId },
               structure,
             },
           });
@@ -131,6 +135,23 @@ export function ProposeLayoutForm({
             value={documentType}
             onChange={setDocumentType}
           />
+          <label className="flex flex-col gap-1" htmlFor={`${formId}-kind`}>
+            <span className="text-body-sm font-semibold">{t('intake.layout.kind')}</span>
+            <select
+              id={`${formId}-kind`}
+              className={inputClass}
+              value={kind}
+              onChange={(event) => {
+                setKind(importKindSchema.parse(event.target.value));
+              }}
+            >
+              {importKindSchema.options.map((each) => (
+                <option key={each} value={each}>
+                  {each}
+                </option>
+              ))}
+            </select>
+          </label>
         </>
       )}
       <JsonField

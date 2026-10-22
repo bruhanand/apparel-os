@@ -24,6 +24,7 @@ import * as booksTables from '../src/modules/finance/books/db/schema.js';
 import * as posTables from '../src/modules/pos/db/schema.js';
 import * as eboImportsTables from '../src/modules/ebo-imports/db/schema.js';
 import * as receivingTables from '../src/modules/receiving/db/schema.js';
+import * as ptTables from '../src/modules/merchandise/pt/db/schema.js';
 import { HARNESS_MIGRATIONS } from './harness/stock/harness.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { connect } from './support/postgres.js';
@@ -109,6 +110,12 @@ const SYSTEM_SCHEMAS = "('pg_catalog', 'information_schema')";
  * yet; a later stage adds its own schemas here.
  */
 const INDEX_CHECKED_SCHEMAS: readonly string[] = ['booking', 'receiving'];
+/**
+ * The tables of a part added since, in a schema stage 1 also used: `merchandise` · PT's (S2-F04-T02), whose schema
+ * holds the catalogue's and the parties' stage 1 tables (RR-560).
+ */
+const INDEX_CHECKED_TABLES =
+  "'merchandise.pt', 'merchandise.pt_revision', 'merchandise.pt_revision_withdrawal', 'merchandise.pt_coverage', 'merchandise.pt_proposed_sku', 'merchandise.pt_row'";
 
 /** A third-party schema, such as pg-boss's, listed as one entry (code-house-rules 3.2, 10.4). */
 interface ThirdPartyEntry {
@@ -219,14 +226,15 @@ describe.each(['directory', 'organisation'] as const)('the %s set and its regist
          from pg_catalog.pg_constraint k
          join pg_catalog.pg_class c on c.oid = k.conrelid
          join pg_catalog.pg_namespace n on n.oid = c.relnamespace
-         where k.contype = 'f' and n.nspname in ${schemas}
+         where k.contype = 'f'
+           and (n.nspname in ${schemas} or n.nspname || '.' || c.relname in (${INDEX_CHECKED_TABLES}))
          union
          select c.oid, n.nspname || '.' || c.relname, array[a.attnum]::int2[]
          from pg_catalog.pg_policy p
          join pg_catalog.pg_class c on c.oid = p.polrelid
          join pg_catalog.pg_namespace n on n.oid = c.relnamespace
          join pg_catalog.pg_attribute a on a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped
-         where n.nspname in ${schemas}
+         where (n.nspname in ${schemas} or n.nspname || '.' || c.relname in (${INDEX_CHECKED_TABLES}))
            and pg_catalog.pg_get_expr(p.polqual, p.polrelid) ~ ('\\m' || a.attname || '\\M')
            and a.attname <> 'id'
        )
@@ -766,6 +774,8 @@ describe('the references inside receiving (code-house-rules 3.2; S2-F02-T02)', (
       // A GRN line's outcome against the booking its Arrival names, at the GRN's issue (goods-in 4.10; S2-F02-T04).
       'grn_line_booking (grn_id) grn',
       'grn_line_booking (grn_line_id) grn_line',
+      // The GRN's "PT attached" mark (goods-in 5.8; S2-F04-T02).
+      'grn_pt_mark (grn_id) grn',
       // A held line, its versions and its decision (goods-in 4.6, 4.9; S2-F02-T03).
       'held_line (grn_id) grn',
       'held_line (grn_line_id) grn_line',
@@ -773,6 +783,12 @@ describe('the references inside receiving (code-house-rules 3.2; S2-F02-T02)', (
       'held_line_decision (held_line_version_id) held_line_version',
       'held_line_version (held_line_id) held_line',
     ]);
+  });
+});
+
+describe('the Drizzle definitions of merchandise · PT (code-house-rules 3.4, 10.4; S2-F04-T02)', () => {
+  it.each(Object.entries(ptTables))('code-house-rules 3.4 %s matches its migrated table', async (_name, table) => {
+    await expectDefinitionMatches(world.organisations[0].database, table);
   });
 });
 
@@ -789,9 +805,13 @@ async function expectDefinitionMatches(database: string, table: Parameters<typeo
   const config = getTableConfig(table);
   const columns = await read<{ column_name: string; data_type: string; is_nullable: string }>(
     database,
-    // An array column is `ARRAY` here; its element type is the udt name after the leading underscore.
+    // An array column is `ARRAY` here; its element type is the udt name after the leading underscore. A numeric column
+    // with a precision shows it, as Drizzle does (a PT row's MARGIN, S2-F04-T02).
     `select column_name,
-            case when data_type = 'ARRAY' then substr(udt_name, 2) || '[]' else data_type end as data_type,
+            case when data_type = 'ARRAY' then substr(udt_name, 2) || '[]'
+                 when data_type = 'numeric' and numeric_precision is not null
+                   then 'numeric(' || numeric_precision || ', ' || numeric_scale || ')'
+                 else data_type end as data_type,
             is_nullable
      from information_schema.columns
      where table_schema = '${config.schema ?? ''}' and table_name = '${config.name}' order by column_name`,

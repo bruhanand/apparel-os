@@ -327,3 +327,80 @@ describe('stage: every row the reader read (S1-F06-T04)', () => {
     );
   });
 });
+
+describe('stage: a header found by its names, and one document for a batch about one record (S2-F04-T02)', () => {
+  // goods-in 5.2: the PT template's header is found by its column names on row 1 or row 2, since a work tab has a
+  // subtotal row above it and a copy saved as values does not; its sheet's name is each preparer's own.
+  const searched: LayoutStructure = {
+    ...layout,
+    sheet: 'SYNTHETIC PT',
+    headerRows: [1, 2],
+    sheetByHeader: true,
+  };
+  const header = (row: number) => ({
+    number: row,
+    hidden: false,
+    cells: [
+      text(1, `A${String(row)}`, 'Style'),
+      text(2, `B${String(row)}`, 'SKU'),
+      text(3, `C${String(row)}`, 'Units'),
+    ],
+  });
+  const line = (row: number, style: string) => ({
+    number: row,
+    hidden: false,
+    cells: [text(1, `A${String(row)}`, style), text(2, `B${String(row)}`, `SYN-SKU-${String(row)}`)],
+  });
+
+  it('PRD-IMP-004 finds the header on row 2 below a subtotal row, the data starting the same distance below it', () => {
+    const worked = sheetGrid(
+      [{ number: 1, hidden: false, cells: [number(3, 'C1', 12)] }, header(2), line(3, 'SYN-ST-1'), line(4, 'SYN-ST-1')],
+      'SYNTHETIC preparer tab',
+    );
+    const result = staged(stage(worked, searched, mapping, context));
+    expect(result.others.map((row) => [row.rowNumber, row.role])).toEqual([
+      [1, 'ignored'],
+      [2, 'header'],
+    ]);
+    expect(result.documents.flatMap((document) => document.rows.map((row) => row.rowNumber))).toEqual([3, 4]);
+  });
+
+  it('PRD-IMP-004 finds the header on row 1 of a copy saved as values', () => {
+    const copy = sheetGrid([header(1), line(2, 'SYN-ST-1')], 'Sheet1');
+    const result = staged(stage(copy, searched, mapping, context));
+    expect(result.others.map((row) => [row.rowNumber, row.role])).toEqual([[1, 'header']]);
+    expect(result.documents.flatMap((document) => document.rows.map((row) => row.rowNumber))).toEqual([2]);
+    expect(result.sheets).toEqual([{ name: 'Sheet1', position: 1, state: 'visible', rows: 2, imported: true }]);
+  });
+
+  it('PRD-IMP-004 finds the one sheet whose header holds the columns, and refuses a file where several do', () => {
+    const lists = { name: 'SYNTHETIC Lists', position: 1, state: 'visible' as const, rows: [line(1, 'SYN-LIST')] };
+    const pt = { name: 'SYNTHETIC PT tab', position: 2, state: 'visible' as const, rows: [header(1), line(2, 'S1')] };
+    const one = staged(stage({ notes: [], sheets: [lists, pt] }, searched, mapping, context));
+    expect(one.sheets.find((sheet) => sheet.imported)?.name).toBe('SYNTHETIC PT tab');
+    const twice = { ...pt, name: 'SYNTHETIC second tab', position: 3 };
+    expect(stage({ notes: [], sheets: [lists, pt, twice] }, searched, mapping, context)).toEqual({
+      kind: 'refused',
+      code: 'files-imports.layout-not-matched',
+      missing: [
+        { kind: 'layout-sheet-matched', sheet: 'SYNTHETIC PT tab' },
+        { kind: 'layout-sheet-matched', sheet: 'SYNTHETIC second tab' },
+      ],
+    });
+  });
+
+  it('PRD-IMP-004 names what the closest sheet lacks when no sheet holds the columns', () => {
+    const partial = sheetGrid([{ number: 1, hidden: false, cells: [text(1, 'A1', 'Style')] }], 'SYNTHETIC tab');
+    expect(stage(partial, searched, mapping, context)).toEqual({
+      kind: 'refused',
+      code: 'files-imports.layout-not-matched',
+      missing: [{ kind: 'layout-column', column: 'SKU' }],
+    });
+  });
+
+  it('PRD-IMP-012 puts every data row of a batch about one record into one document, whatever its reference says', () => {
+    const file = sheetGrid([header(1), line(2, 'SYN-ST-1'), line(3, 'SYN-ST-2'), line(4, 'SYN-ST-1')], 'Sheet1');
+    const result = staged(stage(file, searched, mapping, context, { oneDocument: true }));
+    expect(result.documents.map((document) => document.rows.map((row) => row.rowNumber))).toEqual([[2, 3, 4]]);
+  });
+});

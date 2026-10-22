@@ -49,6 +49,7 @@ import {
   type Bookings,
 } from './BookingLinks';
 import { optionText, unknownText, useMasterNames, useProducts } from './names';
+import { PtFile } from './PtFile';
 
 // Receive Goods › an Arrival: its details, its supplier invoices first, its photos, the count line by line and its GRN
 // (goods-in 4.2 to 4.5, section 11; PRD-REC-003 to PRD-REC-008; DEC-133, DEC-138; S2-F02-T02). The count is saved as
@@ -1304,6 +1305,7 @@ export function ArrivalView({
                   bookings={bookings}
                 />
               )}
+              {arrival.grn !== null && <PtFile grnId={arrival.grn.id} />}
             </div>
           );
         }}

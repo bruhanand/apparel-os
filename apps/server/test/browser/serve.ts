@@ -125,6 +125,8 @@ import { GRN_KIND, receivingExceptionTypes } from '../../src/modules/receiving/i
 import { receivingApprovalRules } from '../../src/modules/receiving/domain/kinds.js';
 import { BOOKING_KIND, overdueExceptionType } from '../../src/modules/booking/index.js';
 import { defineSyntheticGrnSeries } from '../fixtures/grn-series.js';
+import { syntheticPtFileName, syntheticPtWorkbook, type SyntheticPtRow } from '../fixtures/pt.js';
+import { ptWorld } from '../support/pt.js';
 import { defineSyntheticBookingSeries } from '../fixtures/booking-series.js';
 import {
   BOOKING_POLICY_CHECKS,
@@ -2422,10 +2424,12 @@ const heldWorld = await receivingFixture(receivingStructure, receivingDatabase, 
 // The receive-against-booking journey's world (receive-against-booking.spec.ts; S2-F02-T04), its own so its booking,
 // deliveries and links change no other journey's lists.
 const againstWorld = await receivingFixture(receivingStructure, receivingDatabase, 'JOURNEY-RAB');
+// The PT file journey's world (pt-upload.spec.ts; S2-F04-T02), its own so its GRN and PT change no other journey's lists.
+const ptReceivingWorld = await receivingFixture(receivingStructure, receivingDatabase, 'JOURNEY-PTF');
 // Policies 4 and 10 validated on the values the modules report, the receiving worlds', and on the readiness journey's
 // SYNTHETIC value of policy 4, which the application registers for every Organisation.
 await receivingGateOpen(receivingStructure, receivingDatabase, [readinessValuesCheck]);
-for (const each of [receivingWorld, storeStaffWorld, damageWorld, heldWorld, againstWorld]) {
+for (const each of [receivingWorld, storeStaffWorld, damageWorld, heldWorld, againstWorld, ptReceivingWorld]) {
   await receivingGranted(
     receivingStructure,
     receivingDatabase,
@@ -2894,6 +2898,92 @@ if (againstRouting.kind !== 'done') throw new Error(`The review rule was refused
     if (decided.kind !== 'success') throw new Error(`An exception rule was not approved: ${decided.refusal.code}`);
   }
 }
+// The PT file journey (pt-upload.spec.ts; goods-in 5, section 11; S2-F04-T02), in the receiving Organisation, in a
+// world of its own: the master sheet's lists as SYNTHETIC vocabularies, each value confirmed by a different person and
+// each list marked as the Organisation's, the season being the booking journey's marked one; the Sub category list as
+// categories; the PT template's SYNTHETIC layout and mapping, Confirmed by a different person (support/pt.ts); the
+// import batch series with a SYNTHETIC format (RR-449); and Warehouse (P-WHS), also assigned to make PTs and granted
+// the cost and margin field classes, who counts, issues the GRN and uploads its PT file. Two SYNTHETIC files of the
+// GRN's style and size: one refused, its MARGIN wrong and its QTY one short of the count, and one that passes. Who
+// makes PTs, the lists and the template are the product owner's: SYNTHETIC here.
+const ptLists = await ptWorld(receivingStructure, receivingDatabase, 'JOURNEY-PTF', {
+  proposer: receivingStructure.preparer.id,
+  confirmer: receivingStructure.approver.id,
+});
+const ptMaker = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-PT-MAKER',
+  enrolled: true,
+  personas: ['P-WHS'],
+});
+await grantSynthetic(
+  receivingDatabase,
+  { kind: 'user', id: ptMaker.id },
+  [
+    ...RECEIVER_AUTHORITY,
+    ...RECEIVING_LISTS,
+    { recordType: 'files_imports.import_batch', action: 'view' },
+    { recordType: 'files_imports.import_batch', action: 'create' },
+    { recordType: 'files_imports.import_batch', action: 'edit' },
+    { recordType: 'merchandise.pt', action: 'view' },
+    { recordType: 'merchandise.pt', action: 'create' },
+    { recordType: 'merchandise.pt', action: 'edit' },
+    { recordType: 'access.approval_request', action: 'view' },
+  ],
+  {
+    fieldClasses: [
+      { fieldClass: 'cost', access: 'view' },
+      { fieldClass: 'margin', access: 'view' },
+    ],
+  },
+);
+await fixtureRunner.run(
+  {
+    commandName: 'test-syn-pt.fixture',
+    organisation: receivingRouted.organisation,
+    correlationId: newCorrelationId(),
+    actor: { kind: 'actor', actorId: ptMaker.id },
+  },
+  (context) => defineSyntheticImportBatchSeries(context, new Numbering({ kinds: [IMPORT_BATCH_KIND] })),
+);
+const ptStyle = syntheticCode(`JOURNEY-PTF-STYLE-${randomBytes(3).toString('hex').toUpperCase()}`);
+const ptSize = ptReceivingWorld.sizes.values[0]?.code ?? '';
+/** A row of the GRN's brand, style and size, one piece at MRP 1,999.00 and P RATE 945.00: MARGIN 52.73, by hand. */
+const ptRowOf = (barcode: string, values: SyntheticPtRow = {}): SyntheticPtRow => ({
+  SEASON: ptLists.season.values.SPRING?.code,
+  BRAND: ptReceivingWorld.brand.code,
+  COLOR: ptLists.colour.values.NAVY?.code,
+  GENDER: ptLists.gender.values.MALE?.code,
+  'SUB CATEGORY': ptLists.categories.CASUAL?.code,
+  TYPE: ptLists.type.values.TOP?.code,
+  ITEM: ptLists.item.values.TSHIRT?.code,
+  FIT: ptLists.fit.values.SLIM?.code,
+  SIZE: ptSize,
+  BARCODE: barcode,
+  DESIGN: ptStyle,
+  HSN: 61091000,
+  QTY: 1,
+  MRP: 1999,
+  BASIC: 700,
+  'P RATE': 945,
+  'INPUT TAX': ptLists.gstRate.values['GST-5']?.code,
+  'OUTPUT TAX': ptLists.gstRate.values['GST-18']?.code,
+  NAG: 1,
+  MARGIN: 52.73,
+  ...values,
+});
+const ptRefusedFile = join(dirname(worldFile), syntheticPtFileName('journey-pt-refused'));
+writeFileSync(
+  ptRefusedFile,
+  await syntheticPtWorkbook({ rows: [ptRowOf('8900000000011', { MARGIN: 50 })], marker: 'JOURNEY-PT-REFUSED' }),
+);
+const ptGoodFile = join(dirname(worldFile), syntheticPtFileName('journey-pt'));
+writeFileSync(
+  ptGoodFile,
+  await syntheticPtWorkbook({
+    rows: [ptRowOf('8900000000011'), ptRowOf('8900000000028')],
+    marker: 'JOURNEY-PT-GOOD',
+  }),
+);
 // The setup's people approved the exception rules above, so its connections end only now.
 await receivingStructure.close();
 await receivingRouter.close();
@@ -3419,6 +3509,14 @@ writeFileSync(
       options: againstWorld.options,
       bookingNumber: againstBookingNumber,
       styleCode: againstStyle,
+    },
+    ptUpload: {
+      organisationCode: receivingCode,
+      maker: credentialsOf(ptMaker),
+      options: ptReceivingWorld.options,
+      styleCode: ptStyle,
+      refusedFile: ptRefusedFile,
+      goodFile: ptGoodFile,
     },
     openToBuy: {
       organisationCode: settingsCode,

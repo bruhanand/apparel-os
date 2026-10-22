@@ -11,6 +11,7 @@ import { filesImportsRestoreParticipant } from './modules/files-imports/index.js
 import { inboxRestoreParticipant } from './modules/inbox/index.js';
 import { catalogueRestoreParticipant } from './modules/merchandise/catalogue/index.js';
 import { partiesRestoreParticipant } from './modules/merchandise/parties/index.js';
+import { ptRestoreParticipant } from './modules/merchandise/pt/index.js';
 import { numberingRestoreParticipant } from './modules/numbering/index.js';
 import { organisationRestoreParticipant } from './modules/organisation/index.js';
 import { posRestoreParticipant } from './modules/pos/index.js';
@@ -42,6 +43,7 @@ export const restoreRegistry = new RestoreRegistry([
   eboImportsRestoreParticipant,
   bookingRestoreParticipant,
   receivingRestoreParticipant,
+  ptRestoreParticipant,
   stockDocumentsRestoreParticipant,
   siteLifecycleRestoreParticipant,
 ]);

@@ -275,6 +275,19 @@ export interface SyntheticWorld {
     readonly bookingNumber: string;
     readonly styleCode: string;
   };
+  /**
+   * The PT file journey (S2-F04-T02), in the receiving Organisation, in a world of its own: Warehouse (P-WHS), also
+   * assigned to make PTs, who counts, issues the GRN and uploads its PT file; the GRN's style code; and two SYNTHETIC
+   * PT files of that style and the world's first size: one the check refuses, one it passes.
+   */
+  readonly ptUpload: {
+    readonly organisationCode: string;
+    readonly maker: EnrolledUser;
+    readonly options: ReceivingOptions;
+    readonly styleCode: string;
+    readonly refusedFile: string;
+    readonly goodFile: string;
+  };
   readonly openToBuy: {
     readonly organisationCode: string;
     readonly booking: EnrolledUser;
