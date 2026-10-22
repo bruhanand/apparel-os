@@ -2690,10 +2690,12 @@ await fixtureRunner.run(
   (context) => defineSyntheticBookingSeries(context, new Numbering({ kinds: [BOOKING_KIND] })),
 );
 // The receive-against-booking journey's people (receive-against-booking.spec.ts; goods-in 4.10; S2-F02-T04): Warehouse
-// (P-WHS), who receives against the booking and so sees bookings; Booking (P-BKG), who records the booking the journey
-// receives against (below, once the server listens), reviews the GRN's lines and proposes the excess into the booking,
-// and owns the review follow-up at the world's Site; and the Owner (P-OWN), who approved the booking within a SYNTHETIC
-// limit and approves the excess from My work. SYNTHETIC grants and limit: who holds them is the product owner's.
+// (P-WHS), who receives against the booking and so sees bookings; Booking (P-BKG), who reviews the GRN's lines,
+// proposes the excess into the booking and owns the review follow-up at the world's Site; and the Owner (P-OWN), who
+// approves the excess from My work, with no limit since it has no value. Two more, who record and approve the booking
+// the journey receives against through the API once the server listens (below), the Owner within a SYNTHETIC limit, so
+// the journey's people sign in with authenticator codes nobody used. SYNTHETIC grants and limit: who holds them is the
+// product owner's.
 const againstReceiver = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
   label: 'BROWSER-RAB-RECEIVER',
   enrolled: true,
@@ -2724,16 +2726,43 @@ const againstOwner = await writeSyntheticUser(receivingDatabase, receivingCode, 
   enrolled: true,
   personas: ['P-OWN'],
 });
-const againstOwnerAssignment = await grantSynthetic(receivingDatabase, { kind: 'user', id: againstOwner.id }, [
+await grantSynthetic(receivingDatabase, { kind: 'user', id: againstOwner.id }, [
   ...BOOKING_LISTS,
   { recordType: 'booking.booking', action: 'view' },
   { recordType: 'booking.booking', action: 'approve' },
   { recordType: 'access.approval_reason', action: 'view' },
 ]);
+const againstFixtureBooker = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-RAB-FIXTURE-BOOKING',
+  enrolled: true,
+  personas: ['P-BKG'],
+});
+await grantSynthetic(receivingDatabase, { kind: 'user', id: againstFixtureBooker.id }, [
+  ...BOOKING_LISTS,
+  { recordType: 'booking.booking', action: 'view' },
+  { recordType: 'booking.booking', action: 'create' },
+  { recordType: 'booking.booking', action: 'edit' },
+  { recordType: 'files_imports.stored_file', action: 'create' },
+]);
+const againstFixtureOwner = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-RAB-FIXTURE-OWNER',
+  enrolled: true,
+  personas: ['P-OWN'],
+});
+const againstFixtureOwnerAssignment = await grantSynthetic(
+  receivingDatabase,
+  { kind: 'user', id: againstFixtureOwner.id },
+  [
+    ...BOOKING_LISTS,
+    { recordType: 'booking.booking', action: 'view' },
+    { recordType: 'booking.booking', action: 'approve' },
+    { recordType: 'access.approval_reason', action: 'view' },
+  ],
+);
 await bookingLimitApproved(
   receivingStructure,
   receivingDatabase,
-  { userId: againstOwner.id, roleAssignmentId: againstOwnerAssignment.assignmentId },
+  { userId: againstFixtureOwner.id, roleAssignmentId: againstFixtureOwnerAssignment.assignmentId },
   100_000_000,
 );
 // And for the damage journey: the reporter's lists of masters; an approve reason; the exception-code series and the damage-report series with SYNTHETIC
@@ -3084,7 +3113,7 @@ const app = await startAccessApp(
 }
 
 // The booking the receive-against-booking journey receives against (S2-F02-T04): recorded with its document and
-// submitted by its Booking user, and approved by its Owner, through the API once the server listens, as the booking
+// submitted by the fixture's Booking user, and approved by the fixture's Owner, through the API once the server listens, as the booking
 // journey proves on screen (booking.spec.ts): two pieces of one style and size, so a delivery of three is excess
 // (POL-05.08). Each authenticator code is for a step not used before: sign-in one step back, the decision now, both
 // within the step either side of now the server accepts (access-and-approvals 3.1). Every value is SYNTHETIC.
@@ -3115,7 +3144,7 @@ const againstBookingNumber = await (async (): Promise<string> => {
     if (answer.status !== 200) throw new Error(`The booking fixture was refused at ${path}: ${await answer.text()}`);
     return (await answer.json()) as Record<string, string>;
   };
-  const booker = await signIn(againstBooker);
+  const booker = await signIn(againstFixtureBooker);
   const stored = await call(booker, STORE_FILE_PATH, syntheticPdfUpload('BOOKING', 'JOURNEY-RAB'));
   const made = await call(booker, '/api/booking/bookings', {
     brandId: againstWorld.brand.id,
@@ -3146,12 +3175,12 @@ const againstBookingNumber = await (async (): Promise<string> => {
   const submitted = await call(booker, `/api/booking/bookings/${bookingId}/submission`, {
     versionToken: attached.versionToken,
   });
-  const owner = await signIn(againstOwner);
+  const owner = await signIn(againstFixtureOwner);
   await call(owner, `/api/access/approval-requests/${submitted.requestId ?? ''}/decision`, {
     versionId: submitted.versionId,
     outcome: 'approve',
     reason: { kind: 'listed', reasonId: bookingReasonId },
-    totpCode: codeFor(againstOwner.factorSecret ?? Buffer.alloc(0)),
+    totpCode: codeFor(againstFixtureOwner.factorSecret ?? Buffer.alloc(0)),
   });
   const read = await fetch(`${app.baseUrl}/api/booking/bookings/${bookingId}`, { headers: { cookie: owner } });
   const number = ((await read.json()) as { booking: { number?: string } }).booking.number;
