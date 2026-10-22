@@ -50,8 +50,18 @@ describe('the product of each PT row (goods-in 5.5)', () => {
   it('PRD-MER-007 finds the product by its barcode, and by brand, style, colour and size where the barcode is new', () => {
     const found = productsOf([row(3), row(4, { barcode: '999' })], facts);
     expect(found.rows).toEqual([
-      { rowNumber: 3, product: { kind: 'existing', skuId: id(1), barcodeMapped: true }, repeated: false, differences: [] },
-      { rowNumber: 4, product: { kind: 'existing', skuId: id(1), barcodeMapped: false }, repeated: false, differences: [] },
+      {
+        rowNumber: 3,
+        product: { kind: 'existing', skuId: id(1), barcodeMapped: true },
+        repeated: false,
+        differences: [],
+      },
+      {
+        rowNumber: 4,
+        product: { kind: 'existing', skuId: id(1), barcodeMapped: false },
+        repeated: false,
+        differences: [],
+      },
     ]);
     expect(found.proposals).toEqual([]);
   });
@@ -66,8 +76,22 @@ describe('the product of each PT row (goods-in 5.5)', () => {
       facts,
     );
     expect(found.proposals).toEqual([
-      { key: 'SYN-NEW|SYN NAVY|M', styleCode: 'SYN-NEW', existingStyleId: null, colour: { code: 'SYN NAVY', valueId: id(31) }, sizeCode: 'M', rowNumbers: [3, 4] },
-      { key: 'SYN-OLD|SYN NAVY|XL', styleCode: 'SYN-OLD', existingStyleId: HSN_STYLE, colour: { code: 'SYN NAVY', valueId: id(31) }, sizeCode: 'XL', rowNumbers: [5] },
+      {
+        key: 'SYN-NEW|SYN NAVY|M',
+        styleCode: 'SYN-NEW',
+        existingStyleId: null,
+        colour: { code: 'SYN NAVY', valueId: id(31) },
+        sizeCode: 'M',
+        rowNumbers: [3, 4],
+      },
+      {
+        key: 'SYN-OLD|SYN NAVY|XL',
+        styleCode: 'SYN-OLD',
+        existingStyleId: HSN_STYLE,
+        colour: { code: 'SYN NAVY', valueId: id(31) },
+        sizeCode: 'XL',
+        rowNumbers: [5],
+      },
     ]);
     expect(found.rows.map((each) => each.product)).toEqual([
       { kind: 'proposed', key: 'SYN-NEW|SYN NAVY|M' },

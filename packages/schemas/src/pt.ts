@@ -119,6 +119,8 @@ export const ptIssueSchema = z.strictObject({
   class: z.string(),
   code: z.string(),
   severity: issueSeveritySchema,
+  /** The sheet an issue about a sheet names, such as the template's lists sheet, which is not imported (8.1). */
+  sheet: z.string().optional(),
   rowNumber: z.number().int().positive().optional(),
   column: z.string().optional(),
   field: z.string().optional(),

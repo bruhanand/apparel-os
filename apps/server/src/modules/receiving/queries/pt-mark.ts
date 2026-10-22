@@ -45,7 +45,9 @@ export async function ptMarkOf(context: TransactionContext, grnId: string): Prom
     occurredAt: row.occurredAt.toISOString(),
     businessDate: row.businessDate,
   };
-  return row.change === 'set' ? { kind: 'set', ptRevisionId: row.ptRevisionId, lastChange } : { kind: 'not-set', lastChange };
+  return row.change === 'set'
+    ? { kind: 'set', ptRevisionId: row.ptRevisionId, lastChange }
+    : { kind: 'not-set', lastChange };
 }
 
 /** A GRN as `merchandise` · PT names it: its number, Arrival and scope facts (goods-in 5.7). */
@@ -56,11 +58,11 @@ export interface GrnForPt {
   readonly brandId: string;
   readonly facts: RecordFacts &
     AuditScope & {
-    readonly siteId: string;
-    readonly businessUnitId: string;
-    readonly legalEntityId: string;
-    readonly brandId: string;
-  };
+      readonly siteId: string;
+      readonly businessUnitId: string;
+      readonly legalEntityId: string;
+      readonly brandId: string;
+    };
 }
 
 /** The GRN, as the reader may see it, or undefined. */
@@ -72,6 +74,12 @@ export async function grnForPt(context: TransactionContext, grnId: string): Prom
     number: row.number,
     arrivalId: row.arrivalId,
     brandId: row.brandId,
-    facts: { ...factsOf(row), siteId: row.siteId, businessUnitId: row.businessUnitId, legalEntityId: row.legalEntityId, brandId: row.brandId },
+    facts: {
+      ...factsOf(row),
+      siteId: row.siteId,
+      businessUnitId: row.businessUnitId,
+      legalEntityId: row.legalEntityId,
+      brandId: row.brandId,
+    },
   };
 }

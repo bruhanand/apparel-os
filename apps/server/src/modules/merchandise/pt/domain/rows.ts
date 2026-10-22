@@ -200,7 +200,8 @@ export function checkRow(input: PtRowInput, lists: PtLists): { issues: PtIssue[]
     issue('nag', 'merchandise.pt-nag-not-qty');
   }
   const marginText = value('margin');
-  const margin = mrpPaise === undefined || pRatePaise === undefined || above ? undefined : marginOf(mrpPaise, pRatePaise);
+  const margin =
+    mrpPaise === undefined || pRatePaise === undefined || above ? undefined : marginOf(mrpPaise, pRatePaise);
   if (marginText !== undefined && margin !== undefined && hundredthsOf(marginText) !== hundredthsOf(margin)) {
     issue('margin', 'merchandise.pt-margin-disagrees');
   }

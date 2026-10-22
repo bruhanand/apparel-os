@@ -93,11 +93,18 @@ export async function brandProductsOn(
         categoryId: row.category_id,
         hsn: row.hsn,
         attributes: new Map(
-          values.rows.filter((each) => each.version_id === row.version_id).map((each) => [each.attribute_id, each.value_id]),
+          values.rows
+            .filter((each) => each.version_id === row.version_id)
+            .map((each) => [each.attribute_id, each.value_id]),
         ),
       });
     }
-    const ofStyles = await context.tx.execute<{ id: string; style_code: string; size: string | null; colour: string | null }>(
+    const ofStyles = await context.tx.execute<{
+      id: string;
+      style_code: string;
+      size: string | null;
+      colour: string | null;
+    }>(
       sql`
       select k.id::text as id, s.code as style_code, k.size, iv.vocabulary_value_id::text as colour
       from merchandise.sku k

@@ -16,8 +16,8 @@ export interface TemplateList {
 // structure nobody confirmed would hand out an unapproved layout (6.4). Its columns are the layout's, those it ignores
 // left out; its lists sheet is named as the screen asks, in its own words, apart from the template's sheet, and each
 // list as the column its field is read from by the mapping, so no word of the server's own is written in the file
-// (code-house-rules 12.13); a field the mapping does not read from one column has no list. A layout holds no data, so reading it needs no scope (14). The
-// file's name says the layout's code and version.
+// (code-house-rules 12.13); a field the mapping does not read from one column has no list. A layout holds no data, so
+// reading it needs no scope (14). The file's name says the layout's code and version.
 
 export async function blankTemplate(
   context: TransactionContext,
@@ -43,7 +43,8 @@ export async function blankTemplate(
     .limit(1);
   if (found === undefined) return undefined;
   const structure = parsedOrDefect(layoutStructureSchema, found.structure, 'layout version');
-  if (normalisedName(request.listsSheet).toLowerCase() === normalisedName(structure.sheet).toLowerCase()) return undefined;
+  if (normalisedName(request.listsSheet).toLowerCase() === normalisedName(structure.sheet).toLowerCase())
+    return undefined;
   const { fields } = parsedOrDefect(mappingFieldsSchema, found.fields, 'mapping version');
   const lists = request.lists.flatMap((list) => {
     const source = fields[list.field];

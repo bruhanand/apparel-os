@@ -10,12 +10,7 @@ import {
 } from '../../../../kernel/index.js';
 import type { AccessInterface } from '../../../access/index.js';
 import type { AuditInterface } from '../../../audit/index.js';
-import type {
-  HandlerDocument,
-  HandlerPublished,
-  ImportPublisher,
-  ImportSource,
-} from '../../../files-imports/index.js';
+import type { HandlerDocument, HandlerPublished, ImportPublisher, ImportSource } from '../../../files-imports/index.js';
 import type { ReceivingInterface } from '../../../receiving/index.js';
 import { pt, ptCoverage, ptProposedSku, ptRevision, ptRow } from '../db/schema.js';
 import type { PtRowDetail } from '../domain/detail.js';
@@ -40,7 +35,11 @@ export interface SubmitDependencies {
 }
 
 /** The PT's identity row as a lock target: every submit and withdrawal of it locks it at step 1 (8.2). */
-export const ptLock = (ptId: string): LockTarget => ({ table: lockTable('merchandise', 'pt'), id: ptId, mode: 'exclusive' });
+export const ptLock = (ptId: string): LockTarget => ({
+  table: lockTable('merchandise', 'pt'),
+  id: ptId,
+  mode: 'exclusive',
+});
 
 /** The rows Publish locks with the batch at step 1 (imports-and-opening-data 13.2): the GRN's row and the PT's. */
 export async function submitLockTargets(
@@ -92,7 +91,9 @@ export async function submitPt(
   const existing = await ptOfGrn(context, draft.grn.grnId);
   const ptId = existing?.id ?? uuidv7();
   if (existing === undefined) {
-    await context.tx.insert(pt).values({ id: ptId, grnId: draft.grn.grnId, ...facts, createdByUserId: publisher.userId });
+    await context.tx
+      .insert(pt)
+      .values({ id: ptId, grnId: draft.grn.grnId, ...facts, createdByUserId: publisher.userId });
   }
   const [last] = await context.tx
     .select({ revisionNumber: ptRevision.revisionNumber })

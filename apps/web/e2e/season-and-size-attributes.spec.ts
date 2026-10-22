@@ -23,7 +23,7 @@ async function openAttributes(page: Page): Promise<void> {
     .click();
   await expect(page.getByRole('heading', { level: 1, name: 'Vocabularies' })).toBeVisible();
   await page.getByRole('tab', { name: 'Attributes', exact: true }).click();
-  await expect(page.getByRole('heading', { level: 3, name: 'Season and size attributes' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 3, name: 'Marked attributes' })).toBeVisible();
 }
 
 test('RR-556 POL-02.07 an Admin marks the size attribute; their own approval is refused; the Owner approves it from My work', async ({
@@ -76,7 +76,7 @@ test('RR-556 POL-02.07 an Admin marks the size attribute; their own approval is 
         .getByRole('navigation', { name: 'Main menu' })
         .getByRole('link', { name: /^My work/ })
         .click();
-      const title = 'Season or size attribute change';
+      const title = 'Marked attribute change';
       await expect(async () => {
         await owner.getByRole('button', { name: 'Refresh' }).click();
         await expect(owner.getByRole('listitem').filter({ hasText: title })).toHaveCount(1, { timeout: 1_000 });

@@ -1,4 +1,10 @@
-import { GRN_TYPE, HELD_LINE_TYPE, DAMAGE_REPORT_TYPE, markedAttributeSetting, type MissingItem } from '@apparel-os/schemas';
+import {
+  GRN_TYPE,
+  HELD_LINE_TYPE,
+  DAMAGE_REPORT_TYPE,
+  markedAttributeSetting,
+  type MissingItem,
+} from '@apparel-os/schemas';
 import type { CommandRefusal, TransactionContext } from '../../../../kernel/index.js';
 import { knownValue, type HandlerDocument, type HandlerRow } from '../../../files-imports/index.js';
 import type { GrnForPt, PtBasis, PtMark, ReceivingInterface } from '../../../receiving/index.js';
@@ -159,17 +165,28 @@ export async function ptPlanOf(
   const grnId = document.subject?.recordId;
   const grn = grnId === undefined ? undefined : await receiving.grnForPt(context, grnId);
   if (grnId === undefined || grn === undefined) {
-    return { kind: 'issues', issues: [{ code: 'merchandise.record-not-found', missing: [recordItem(GRN_TYPE, grnId ?? '')] }] };
+    return {
+      kind: 'issues',
+      issues: [{ code: 'merchandise.record-not-found', missing: [recordItem(GRN_TYPE, grnId ?? '')] }],
+    };
   }
   const basis = await receiving.ptBasis(context, grnId);
   if (basis === undefined) {
-    return { kind: 'issues', issues: [{ code: 'merchandise.record-not-found', missing: [recordItem(GRN_TYPE, grnId)] }] };
+    return {
+      kind: 'issues',
+      issues: [{ code: 'merchandise.record-not-found', missing: [recordItem(GRN_TYPE, grnId)] }],
+    };
   }
   const blocked = blockOf(basis, await receiving.ptMark(context, grnId));
   if (blocked !== undefined) return { kind: 'issues', issues: [{ code: blocked.code, missing: blocked.missing }] };
   const date = await context.businessDate();
   if (date.kind === 'not-set') {
-    return { kind: 'issues', issues: [{ code: 'access.business-date-not-set', missing: [{ kind: 'setting', setting: 'configuration.timezone' }] }] };
+    return {
+      kind: 'issues',
+      issues: [
+        { code: 'access.business-date-not-set', missing: [{ kind: 'setting', setting: 'configuration.timezone' }] },
+      ],
+    };
   }
   const listed = await listsOf(context, grn.brandId, date.date);
   if (listed.kind === 'refused') {
@@ -199,7 +216,8 @@ export async function ptPlanOf(
   }));
   const match = matchGrn(matched, goods);
   issues.push(...match.issues);
-  if (document.rows.length === 0) issues.push({ code: 'merchandise.pt-file-refused', missing: [{ kind: 'pt-rows', rows: '0' }] });
+  if (document.rows.length === 0)
+    issues.push({ code: 'merchandise.pt-file-refused', missing: [{ kind: 'pt-rows', rows: '0' }] });
   if (issues.length > 0 || checked.length !== document.rows.length) return { kind: 'issues', issues };
 
   const { brandId } = grn;
@@ -267,7 +285,10 @@ export async function ptPlanOf(
     costPaise += row.pRatePaise * row.quantity;
   }
   if (![pieces, mrpPaise, basicPaise, costPaise].every(Number.isSafeInteger)) {
-    return { kind: 'issues', issues: [{ code: 'merchandise.pt-file-refused', missing: [{ kind: 'pt-totals', reason: 'too-large' }] }] };
+    return {
+      kind: 'issues',
+      issues: [{ code: 'merchandise.pt-file-refused', missing: [{ kind: 'pt-totals', reason: 'too-large' }] }],
+    };
   }
   return {
     kind: 'draft',

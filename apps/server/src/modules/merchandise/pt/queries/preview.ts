@@ -39,6 +39,7 @@ export async function ptPreviewOf(
       class: issue.class,
       code: issue.code,
       severity: issue.severity,
+      ...(issue.sheet === undefined ? {} : { sheet: issue.sheet }),
       ...(issue.rowNumber === undefined ? {} : { rowNumber: issue.rowNumber }),
       ...(issue.column === undefined ? {} : { column: issue.column }),
       ...(issue.field === undefined ? {} : { field: issue.field }),
@@ -95,7 +96,9 @@ export async function ptPreviewOf(
         mrpPaise: paise(checked.mrpPaise),
         basicPaise: shownPaise(checked.basicPaise, 'cost', masked),
         pRatePaise: shownPaise(checked.pRatePaise, 'cost', masked),
-        margin: masked.has('margin') ? { kind: 'masked', fieldClass: 'margin' } : { kind: 'margin', value: checked.margin },
+        margin: masked.has('margin')
+          ? { kind: 'masked', fieldClass: 'margin' }
+          : { kind: 'margin', value: checked.margin },
         product: finding.product.kind,
         repeated: finding.repeated,
       })),

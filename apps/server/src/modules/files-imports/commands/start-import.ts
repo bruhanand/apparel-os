@@ -161,7 +161,11 @@ async function authorityOf(
   }
   const { recordType } = handler.subject;
   if (body.subject === undefined) {
-    return { kind: 'refused', code: 'files-imports.subject-required', missing: [{ kind: 'import-subject', recordType }] };
+    return {
+      kind: 'refused',
+      code: 'files-imports.subject-required',
+      missing: [{ kind: 'import-subject', recordType }],
+    };
   }
   const read = await handler.subject.read(context, body.subject.recordId);
   if (read === undefined) {

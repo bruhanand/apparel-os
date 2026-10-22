@@ -1,6 +1,8 @@
 import type { MissingItem } from '@apparel-os/schemas';
 import { isMessageId, t } from '../messages/catalogue';
+import { formatQuantity } from '../setup/format';
 import { Banner } from './Banner';
+import { codeText } from './StandardStates';
 
 /**
  * The text of one missing item, by its kind (code-house-rules 12.3 "What is missing"). A missing permission names its
@@ -124,6 +126,11 @@ function importText(item: MissingItem): string | undefined {
   if (item.kind === 'number-series' && isMessageId(series)) return t(series);
   if (item.kind === 'layout-sheet' && item.sheet !== undefined)
     return t('missing.layout-sheet.named', { sheet: item.sheet });
+  // A sheet not imported, by the rows it holds (imports-and-opening-data 8.1; S2-F04-T02).
+  const rows = Number(item.rows);
+  if (item.kind === 'sheet-rows' && Number.isInteger(rows) && rows >= 0) {
+    return t('missing.sheet-rows.named', { count: rows });
+  }
   if (item.kind === 'layout-column' && item.column !== undefined) {
     return t('missing.layout-column.named', { column: item.column });
   }
@@ -131,7 +138,31 @@ function importText(item: MissingItem): string | undefined {
   if (item.kind === 'import-batch' && item.code !== undefined && item.state !== undefined) {
     return t('missing.import-batch.named', { code: item.code, state: item.state });
   }
-  return intakeText(item);
+  return ptText(item) ?? intakeText(item);
+}
+
+/** What a refusal of a PT file names (goods-in 5.1, 5.4, 5.6; imports-and-opening-data 13.1; S2-F04-T02). */
+function ptText(item: MissingItem): string | undefined {
+  // The reason the PT's handler refuses a file for its GRN, as its own refusal says it.
+  if (item.kind === 'import-subject' && item.reason !== undefined) {
+    return t('missing.import-subject.reason', { reason: codeText(item.reason) });
+  }
+  const issue = `issue.${item.code ?? ''}`;
+  if (item.kind === 'pt-issue' && item.code !== undefined) {
+    return t('missing.pt-issue.named', { problem: isMessageId(issue) ? t(issue) : codeText(item.code) });
+  }
+  if (item.kind === 'layout-sheet-matched' && item.sheet !== undefined) {
+    return t('missing.layout-sheet-matched.named', { sheet: item.sheet });
+  }
+  if (item.kind === 'pt-style-size' && item.styleCode !== undefined) {
+    const named = { style: item.styleCode, size: item.size ?? '' };
+    const file = item.fileQuantity === undefined ? undefined : formatQuantity(Number(item.fileQuantity));
+    const grn = item.grnQuantity === undefined ? undefined : formatQuantity(Number(item.grnQuantity));
+    if (file !== undefined && grn !== undefined) return t('missing.pt-style-size.both', { ...named, file, grn });
+    if (file !== undefined) return t('missing.pt-style-size.file', { ...named, file });
+    if (grn !== undefined) return t('missing.pt-style-size.grn', { ...named, grn });
+  }
+  return undefined;
 }
 
 /** What an intake refusal names (imports-and-opening-data 9.3, 11; PRD-UXP-003; S1-F06-T02). */

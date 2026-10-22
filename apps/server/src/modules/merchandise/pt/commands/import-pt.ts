@@ -9,7 +9,7 @@ import { submitLockTargets, submitPt, type SubmitDependencies } from './submit-p
 // The PT import handler of `merchandise` · PT (goods-in 5, 10.1; imports-and-opening-data 4.1, 13.2 and its "As
 // built" with S2-F04-T02; module-map 4.7 "Register an import handler"; DEC-134 to DEC-138, DEC-140). A transaction
 // batch about one GRN (its subject): Start an import refuses a file for a GRN whose held lines wait for their decision
-// or that has a PT already (5.1), and takes the batch's place from the GRN; every data row of the file is one
+// or that has a PT already (5.1), and takes the batch's place from the GRN; every data row of the file is in one
 // document. The preview runs every check of 5.3 and the match of 5.4, even beside a value the file leaves Unknown, so
 // every problem is listed at once by row and column (5.6; PRD-IMP-007), and finds each row's product (5.5). The review
 // is the preparer's submission: the draft PT it publishes asks its own approval of a different person (PRD-REC-017).

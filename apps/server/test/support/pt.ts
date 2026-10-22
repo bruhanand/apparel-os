@@ -1,6 +1,11 @@
 import type { AttributeMark } from '@apparel-os/schemas';
 import { syntheticCode, syntheticName } from '../fixtures/synthetic.js';
-import { SYNTHETIC_PT_LAYOUT, SYNTHETIC_PT_LAYOUT_CODE, SYNTHETIC_PT_MAPPING, SYNTHETIC_PT_MAPPING_CODE } from '../fixtures/pt.js';
+import {
+  SYNTHETIC_PT_LAYOUT,
+  SYNTHETIC_PT_LAYOUT_CODE,
+  SYNTHETIC_PT_MAPPING,
+  SYNTHETIC_PT_MAPPING_CODE,
+} from '../fixtures/pt.js';
 import { writeSyntheticLayout } from './imports.js';
 import { writeSyntheticMarking } from './marked-attributes.js';
 import { decided, type StructureSetup } from './organisation.js';
@@ -66,20 +71,26 @@ export async function ptWorld(
     if (confirmed?.valueId === undefined) throw new Error(`${code} was not confirmed`);
     return { id: confirmed.valueId, code };
   };
+  // The attribute marked already, as another journey's season may be, takes the values; otherwise a new list attribute,
+  // which is then marked (as receivingFixture does with the size list).
   const list = async (mark: AttributeMark, names: readonly string[]): Promise<SyntheticList> => {
-    const attributeId = ok(
-      await setup.asPreparerDo((c, p) =>
-        setup.catalogue.prepareAttribute(c, p, {
-          code: syntheticCode(`${label}-${mark.toUpperCase()}`),
-          valueKind: 'list',
-          name: syntheticName(`${label} ${mark}`),
-          validFrom: today,
-        }),
-      ),
-    ).recordId;
+    const marked = await setup.run(setup.preparer.id, (c) => setup.catalogue.markedAttributeAt(c, mark));
+    const attributeId =
+      marked.kind === 'set'
+        ? marked.attributeId
+        : ok(
+            await setup.asPreparerDo((c, p) =>
+              setup.catalogue.prepareAttribute(c, p, {
+                code: syntheticCode(`${label}-${mark.toUpperCase()}`),
+                valueKind: 'list',
+                name: syntheticName(`${label} ${mark}`),
+                validFrom: today,
+              }),
+            ),
+          ).recordId;
     const values: Record<string, { id: string; code: string }> = {};
     for (const name of names) values[name] = await value(attributeId, syntheticCode(`${label}-${name}`));
-    await writeSyntheticMarking(database, mark, attributeId, setup.preparer.id);
+    if (marked.kind !== 'set') await writeSyntheticMarking(database, mark, attributeId, setup.preparer.id);
     return { attributeId, values };
   };
   const season = await list('season', ['SPRING']);

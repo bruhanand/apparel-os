@@ -29,6 +29,8 @@ export interface HandlerBatch {
     readonly class: string;
     readonly severity: IssueSeverity;
     readonly code: string;
+    /** The sheet an issue about a sheet names, such as one not imported (8.1). */
+    readonly sheet?: string;
     readonly rowNumber?: number;
     readonly column?: string;
     readonly field?: string;
@@ -61,6 +63,7 @@ export async function handlerBatch(context: TransactionContext, batchId: string)
       class: issue.class,
       severity: issue.severity,
       code: issue.code,
+      ...(issue.sheet === null ? {} : { sheet: issue.sheet }),
       ...(issue.rowNumber === null ? {} : { rowNumber: issue.rowNumber }),
       ...(issue.columnLetters === null ? {} : { column: issue.columnLetters }),
       ...(issue.field === null ? {} : { field: issue.field }),

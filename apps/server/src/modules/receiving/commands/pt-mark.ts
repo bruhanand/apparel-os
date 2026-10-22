@@ -137,4 +137,3 @@ export async function clearPtMark(
   }
   return written(context, audit, actor, row, { ...change, kind: 'cleared', number: now.changeNumber + 1 });
 }
-

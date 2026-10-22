@@ -569,7 +569,12 @@ beforeAll(async () => {
     { recordType: 'access.approval_reason', action: 'view' },
   ]);
   await unknownOnlyLimit(bookingApprover);
-  for (const type of ['receiving.shortage', 'receiving.excess', 'receiving.wrong-goods', 'receiving.unidentified-goods']) {
+  for (const type of [
+    'receiving.shortage',
+    'receiving.excess',
+    'receiving.wrong-goods',
+    'receiving.unidentified-goods',
+  ]) {
     await route(type, bookingApprover);
   }
 }, 600_000);

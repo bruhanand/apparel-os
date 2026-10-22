@@ -110,8 +110,7 @@ export function productsOf(
       (sku) => sameStyleAndSize(sku.skuId) && sku.colourValueId === row.colour.valueId,
     );
     const byBarcode = named.filter(sameStyleAndSize);
-    const skuId =
-      byIdentity.length === 1 ? byIdentity[0]?.skuId : byBarcode.length === 1 ? byBarcode[0] : undefined;
+    const skuId = byIdentity.length === 1 ? byIdentity[0]?.skuId : byBarcode.length === 1 ? byBarcode[0] : undefined;
     const product: RowProduct =
       skuId === undefined
         ? { kind: 'proposed', key: proposalKey(row) }
@@ -156,7 +155,11 @@ function differencesOf(row: ProductRow, product: RowProduct, facts: ProductFacts
     differences.push({ field: 'colour', file: row.colour.code, product: code(sku.colourValueId) });
   }
   if (style !== undefined && style.categoryId !== row.categoryId) {
-    differences.push({ field: 'subCategory', file: facts.codes.get(row.categoryId) ?? '', product: code(style.categoryId) });
+    differences.push({
+      field: 'subCategory',
+      file: facts.codes.get(row.categoryId) ?? '',
+      product: code(style.categoryId),
+    });
   }
   if (style?.hsn !== null && style?.hsn !== undefined && style.hsn !== row.hsn) {
     differences.push({ field: 'hsn', file: row.hsn, product: style.hsn });

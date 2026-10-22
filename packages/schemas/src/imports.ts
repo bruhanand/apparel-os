@@ -148,7 +148,10 @@ export const layoutStructureSchema = z
       issues.addIssue({ code: 'custom', message: 'Data starts below the header', path: ['dataStartRow'] });
     }
     const rows = value.headerRows;
-    if (rows !== undefined && (rows[0] !== value.headerRow || rows.some((row, at) => at > 0 && row <= (rows[at - 1] ?? 0)))) {
+    if (
+      rows !== undefined &&
+      (rows[0] !== value.headerRow || rows.some((row, at) => at > 0 && row <= (rows[at - 1] ?? 0)))
+    ) {
       issues.addIssue({
         code: 'custom',
         message: 'The header rows start with the header row and go down',

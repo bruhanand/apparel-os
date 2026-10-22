@@ -8,8 +8,6 @@ import { z } from 'zod';
 export const ptRowDetailSchema = z.strictObject({
   shape: z.literal('pt-row-detail/1'),
   origins: z.record(z.string(), z.enum(['supplied', 'calculated', 'mapped', 'entered'])),
-  differences: z.array(
-    z.strictObject({ field: z.string(), file: z.string(), product: z.string().nullable() }),
-  ),
+  differences: z.array(z.strictObject({ field: z.string(), file: z.string(), product: z.string().nullable() })),
 });
 export type PtRowDetail = z.infer<typeof ptRowDetailSchema>;

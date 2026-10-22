@@ -4,3 +4,4 @@ export { PT } from './tokens.js';
 export { Pt } from './pt.js';
 export type { PtDependencies, PtInterface } from './pt.js';
 export { ptApprovals } from './domain/kinds.js';
+export { ptRestoreParticipant } from './restore-participant.js';

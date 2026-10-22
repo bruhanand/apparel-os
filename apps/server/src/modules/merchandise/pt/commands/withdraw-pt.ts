@@ -77,7 +77,11 @@ export async function withdrawPt(
   }
   const notADraft: Outcome<never> = {
     kind: 'refusal',
-    refusal: { kind: 'refused', code: 'merchandise.pt-not-a-draft', missing: [recordItem(PT_REVISION_TYPE, revisionId)] },
+    refusal: {
+      kind: 'refused',
+      code: 'merchandise.pt-not-a-draft',
+      missing: [recordItem(PT_REVISION_TYPE, revisionId)],
+    },
   };
   if (token !== revisionId) return notADraft;
   const by = { userId: actor.userId, roleAssignmentId: actor.roleAssignmentId };
