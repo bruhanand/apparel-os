@@ -33,6 +33,11 @@ import {
   countLineSavedSchema,
   grnIssueSchema,
   grnIssuedSchema,
+  HELD_LINE_TYPE,
+  heldLineParamsSchema,
+  heldLineProductDraftSchema,
+  heldLineProductNamedSchema,
+  heldLineReadSchema,
   inboxParamsSchema,
   inboxQuerySchema,
   inboxSchema,
@@ -1098,13 +1103,17 @@ const RECEIVING_CHANGE_CODES = [
   'receiving.grn-issued',
 ] as const satisfies readonly ErrorCode[];
 
-/** The codes of issuing a GRN (goods-in 4.5, 10.3; S2-F02-T02), with the stock ledger's refusals of its receipt counts. */
+/**
+ * The codes of issuing a GRN (goods-in 4.5, 4.9, 10.3; S2-F02-T02, S2-F02-T03), with the stock ledger's refusals of its
+ * receipt counts and holds, the damage reports' gate and series, and the exceptions' series and routing of the
+ * follow-ups the findings raise (access-and-approvals 12.1).
+ */
 const GRN_ISSUE_CODES = [
   ...RECEIVING_CHANGE_CODES,
   'configuration.operation-unavailable',
   'receiving.invoice-required',
   'receiving.no-lines',
-  'receiving.line-differs-from-invoice',
+  'receiving.extra-not-recorded',
   'receiving.batch-required',
   'receiving.batch-not-tracked',
   'receiving.sku-not-of-line',
@@ -1112,8 +1121,28 @@ const GRN_ISSUE_CODES = [
   'receiving.grn-series-paused',
   'stock.invalid-item',
   'stock.place-invalid',
+  'stock.plan-stale',
+  'stock.not-in-custody',
+  'stock.rule-not-set',
   'stock.count-freeze-active',
   'stock.blocked',
+  'stock.no-damage-report-series',
+  'stock.damage-report-series-paused',
+  'exceptions.no-exception-code-series',
+  'exceptions.exception-code-series-paused',
+  'exceptions.exception-code-series-exhausted',
+  'exceptions.no-routing',
+] as const satisfies readonly ErrorCode[];
+
+/**
+ * The codes of a held line's decision (goods-in 4.6, 10.3; S2-F02-T03): the policy gate, the held line not found or
+ * decided already, and unidentified goods taken in before their product is named.
+ */
+const HELD_LINE_DECISION_CODES = [
+  'configuration.operation-unavailable',
+  'receiving.record-not-found',
+  'receiving.held-line-decided',
+  'receiving.product-not-named',
 ] as const satisfies readonly ErrorCode[];
 
 /**
@@ -1767,6 +1796,8 @@ export const routes = {
       ...BOOKING_DECISION_CODES,
       // A damage report's decision and a reversal's approval (goods-in 8.3; S2-F08-T01).
       ...DAMAGE_DECISION_CODES,
+      // A held line's decision (goods-in 4.6; S2-F02-T03).
+      ...HELD_LINE_DECISION_CODES,
       // Layout, mapping and mapping rule versions (imports-and-opening-data 6.4; S1-F06-T03).
       'files-imports.proposal-not-found',
       'files-imports.proposal-not-open',
@@ -5067,6 +5098,43 @@ export const routes = {
     shows: 'nothing',
     response: grnIssuedSchema,
     codes: GRN_ISSUE_CODES,
+  }),
+  // A held line (goods-in 4.6, section 11; PRD-REC-013, POL-17.02, POL-17.11; S2-F02-T03): read with its GRN line for
+  // its decision's panel in My work, and the product of unidentified goods named by Booking before they are taken in.
+  // The decision itself is made through the approval panel (access-and-approvals 9.5). A held line carries every scope
+  // fact, so each route authorises in its command with the Arrival's facts (access-and-approvals 5.3).
+  readHeldLine: defineRoute({
+    method: 'GET',
+    path: '/api/receiving/held-lines/{heldLineId}',
+    params: heldLineParamsSchema,
+    access: { kind: 'action', action: 'view', recordType: ARRIVAL_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: heldLineReadSchema,
+    codes: [...HISTORY_CODES, 'receiving.record-not-found'],
+  }),
+  nameHeldLineProduct: defineRoute({
+    method: 'POST',
+    path: '/api/receiving/held-lines/{heldLineId}/product',
+    params: heldLineParamsSchema,
+    access: { kind: 'action', action: 'edit', recordType: HELD_LINE_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: heldLineProductDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: heldLineProductNamedSchema,
+    codes: [
+      ...HISTORY_CODES,
+      'kernel.cross-site-request',
+      'kernel.stale-version',
+      // No attribute is marked as the size list (structure-and-masters 4.2 "As built"; RR-556).
+      'merchandise.attribute-not-marked',
+      'receiving.record-not-found',
+      'receiving.held-line-decided',
+      'receiving.not-unidentified',
+      'receiving.size-not-on-list',
+      'receiving.sku-not-of-line',
+    ],
   }),
   // Damage reports (goods-in 8, section 11; PRD-DMG-001 to PRD-DMG-006, PRD-STK-017; S2-F08-T01): anyone authorised at
   // a Site reports damage on goods there, held at once; the decision is made in My work through the approval panel

@@ -446,10 +446,18 @@ const bookingRecordTypes = [
  * photos and saves its count; view reads it with its GRN; create on the GRN issues it, with no approval (goods-in
  * 4.5), and view on the GRN reads its history. **Design choice**; who holds them is the product owner's to name
  * (V-01).
+ *
+ * A held line (goods-in 4.6, 4.9; S2-F02-T03), the excess, wrong or unidentified goods of a GRN line received and
+ * held, belongs to the GRN's place, legal entity and brand, so it carries every scope fact: an assignment's place and
+ * brand scope names the Booking approvers by Site and brand (POL-17.11). Edit names the product of unidentified goods;
+ * approve decides it, taking the goods in or leaving them held, within the approver's limit on its cost (DM-8,
+ * DEC-105). It is read with its Arrival, under view on `receiving.arrival`, so it declares no view of its own.
+ * **Design choice**; who holds them is the product owner's to name (V-01).
  */
 const receivingRecordTypes = [
   declare('receiving.arrival', ['view', 'create', 'edit'], ALL),
   declare('receiving.grn', ['view', 'create'], ALL),
+  declare('receiving.held_line', ['edit', 'approve'], ALL),
 ] as const;
 
 /**

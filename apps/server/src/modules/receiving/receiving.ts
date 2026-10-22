@@ -4,6 +4,8 @@ import type {
   CountLineDraft,
   CountLineRemoval,
   GrnIssue,
+  HeldLineProductDraft,
+  HeldLineRead,
   Inbox,
   InboxQuery,
   InvoiceDraft,
@@ -13,31 +15,54 @@ import type { TransactionContext } from '../../kernel/index.js';
 import type { AccessInterface, RecordFacts } from '../access/index.js';
 import type { AuditInterface } from '../audit/index.js';
 import type { ConfigurationInterface } from '../configuration/index.js';
+import type { ExceptionsInterface } from '../exceptions/index.js';
 import type { FilesImportsInterface } from '../files-imports/index.js';
 import type { NumberingInterface } from '../numbering/index.js';
 import { unitReadiness } from '../organisation/index.js';
+import type { StockDocumentsInterface } from '../stock/documents/index.js';
 import type { StockLedgerInterface } from '../stock/ledger/index.js';
 import { attachPhotos, recordArrival, recordInvoice } from './commands/arrival.js';
-import { arrivalRow, type Actor } from './commands/common.js';
+import { arrivalRow, entriesOf, type Actor } from './commands/common.js';
 import { removeCountLine, saveCountLine } from './commands/count.js';
+import { nameHeldLineProduct } from './commands/held-lines.js';
 import { issueGrn } from './commands/issue.js';
+import { currentLines } from './domain/lines.js';
 import { arrivalFacts, arrivalView, inboxOf, peopleOf } from './queries/arrivals.js';
+import {
+  heldLineFacts,
+  heldLineView,
+  ptBasisOf,
+  receiptProblems,
+  type PtBasis,
+  type ReceiptProblemsQuery,
+  type Requests,
+} from './queries/held-lines.js';
 
 export interface ReceivingDependencies {
   readonly audit: AuditInterface;
-  readonly access: Pick<AccessInterface, 'authorise'>;
+  readonly access: Pick<AccessInterface, 'authorise' | 'requestApproval' | 'requestLockTargets'>;
   readonly configuration: Pick<ConfigurationInterface, 'checkAvailability'>;
   readonly files: Pick<FilesImportsInterface, 'attach'>;
   readonly numbering: Pick<NumberingInterface, 'liveSeries' | 'seriesLockTarget' | 'allocate'>;
   readonly ledger: StockLedgerInterface;
+  readonly exceptions: Pick<ExceptionsInterface, 'codeSeriesTarget' | 'raise'>;
+  /** `stock` · documents, which raises the damage reports at the count (goods-in 10.2). */
+  readonly documents: Pick<
+    StockDocumentsInterface,
+    'countDamageReady' | 'countDamageHold' | 'recordCountDamage' | 'damageOfGrnLines'
+  >;
 }
 
+/** What issuing a GRN needs besides create on the GRN itself (goods-in 4.9, 8.5). */
+export type IssueNeed = 'damage-report';
+
 /**
- * `receiving`'s interface (module-map section 5; goods-in 10.1): in its first piece the Receive Goods inbox, the
- * Arrival with its invoices and photos, the count and the issue of a GRN whose lines match their invoice quantities
- * (goods-in 4.1 to 4.5; S2-F02-T02). Every operation joins the caller's transaction through its context
- * (code-house-rules 8.1); the caller has authorised it. The services it acts through are handed to it; the masters of
- * `organisation` and `merchandise` it reads through their interfaces' read functions, as stage 1 modules do.
+ * `receiving`'s interface (module-map section 5; goods-in 10.1): the Receive Goods inbox, the Arrival with its invoices
+ * and photos, the count with its findings, the issue of a GRN with its holds, damage reports and follow-ups, the held
+ * lines Booking decides, and what other modules read of a GRN (goods-in 4.1 to 4.6, 4.9, 5.1, 5.4, 9.3; S2-F02-T02,
+ * S2-F02-T03). Every operation joins the caller's transaction through its context (code-house-rules 8.1); the caller
+ * has authorised it. The services it acts through are handed to it; the masters of `organisation` and `merchandise` it
+ * reads through their interfaces' read functions, as stage 1 modules do.
  */
 export class Receiving {
   constructor(private readonly dependencies: ReceivingDependencies) {}
@@ -96,20 +121,72 @@ export class Receiving {
   }
 
   /**
+   * What issuing the Arrival's GRN needs besides create on the GRN (goods-in 4.9, 8.5): create on damage reports while
+   * the count holds damage, since the issuer reports it. Read before any lock, for the route to authorise and hold: a
+   * line saved after this read changes the Arrival's version, so the command refuses the issue as stale under the lock
+   * (code-house-rules 12.7), and the count it issues is the one read here.
+   */
+  async issueAlsoNeeds(context: TransactionContext, arrivalId: string): Promise<readonly IssueNeed[]> {
+    const row = await arrivalRow(context, arrivalId);
+    if (row === undefined) return [];
+    const lines = currentLines(await entriesOf(context, row.id));
+    return lines.some((line) => line.entry.damage !== null) ? ['damage-report'] : [];
+  }
+
+  /** The facts of a held line the reader may see, which its routes authorise with (5.3); else undefined. */
+  heldLineFacts(context: TransactionContext, heldLineId: string): Promise<RecordFacts | undefined> {
+    return heldLineFacts(context, heldLineId);
+  }
+
+  /** Names the product of unidentified goods held at the count, before they are taken in (goods-in 4.6). */
+  nameHeldLineProduct(context: TransactionContext, actor: Actor, heldLineId: string, draft: HeldLineProductDraft) {
+    return nameHeldLineProduct(context, this.dependencies, actor, heldLineId, draft);
+  }
+
+  /**
    * One Arrival as the reader may see it, or undefined; `named` gives the names of the people it names, from
-   * `access` (access-and-approvals 12.2), an unknown one left out.
+   * `access` (access-and-approvals 12.2), an unknown one left out; `requests` the latest request of each held line's
+   * version.
    */
   async readArrival(
     context: TransactionContext,
     arrivalId: string,
     today: string,
     named: (userIds: readonly string[]) => Promise<ReadonlyMap<string, string>>,
+    requests: Requests,
   ): Promise<Arrival | undefined> {
     const row = await arrivalRow(context, arrivalId);
     if (row === undefined) return undefined;
-    const arrival = await arrivalView(context, this.dependencies, row, today);
+    const arrival = await arrivalView(context, this.dependencies, row, today, requests);
     const names = await named(peopleOf(arrival));
     return { ...arrival, people: [...names].map(([userId, name]) => ({ userId, name })) };
+  }
+
+  /** A held line with its GRN line, as its decision's panel shows it (goods-in 4.6), or undefined. */
+  async readHeldLine(
+    context: TransactionContext,
+    heldLineId: string,
+    named: (userIds: readonly string[]) => Promise<ReadonlyMap<string, string>>,
+    requests: Requests,
+  ): Promise<Omit<HeldLineRead, 'asOf'> | undefined> {
+    const view = await heldLineView(context, heldLineId, requests);
+    if (view === undefined) return undefined;
+    const decidedBy = view.line.heldLine?.decision?.decidedBy;
+    const names = await named([...view.line.countedBy, ...(decidedBy === undefined ? [] : [decidedBy])]);
+    return { ...view, people: [...names].map(([userId, name]) => ({ userId, name })) };
+  }
+
+  /**
+   * What `merchandise` · PT reads of a GRN before its PT (goods-in 5.1, 5.4): whether every held line and every damage
+   * report on its lines is decided, and its good pieces per style and size. Undefined when the reader may not see it.
+   */
+  ptBasis(context: TransactionContext, grnId: string): Promise<PtBasis | undefined> {
+    return ptBasisOf(context, grnId, (lineIds) => this.dependencies.documents.damageOfGrnLines(context, lineIds));
+  }
+
+  /** The receipt problems read model of the stage 2 report (goods-in 9.3), as the reader may see it. */
+  receiptProblems(context: TransactionContext, query: ReceiptProblemsQuery, requests: Requests) {
+    return receiptProblems(context, query, requests);
   }
 
   /** The Receive Goods inbox of a Site (goods-in 4.1), or undefined when no Site has the identifier. */
@@ -120,7 +197,9 @@ export class Receiving {
     today: string,
     covered: (facts: readonly RecordFacts[]) => Promise<readonly boolean[]>,
   ): Promise<Omit<Inbox, 'asOf'> | undefined> {
-    return inboxOf(context, this.dependencies, siteId, query, today, covered);
+    return inboxOf(context, this.dependencies, siteId, query, today, covered, (lineIds) =>
+      this.dependencies.documents.damageOfGrnLines(context, lineIds),
+    );
   }
 }
 

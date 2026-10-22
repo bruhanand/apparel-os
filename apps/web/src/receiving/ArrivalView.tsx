@@ -1,12 +1,20 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   ARRIVAL_TYPE,
+  DAMAGE_CAPS,
   DAMAGE_REPORT_TYPE,
   GRN_TYPE,
+  HELD_LINE_TYPE,
   RECEIVING_CAPS,
+  damageablePiecesOf,
+  extraPiecesOf,
+  extraPiecesSchema,
+  lineFindings,
+  lineGoodsSchema,
   type Arrival,
   type CountLine,
   type EvidenceFile,
+  type GrnLine,
   type Inbox,
 } from '@apparel-os/schemas';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -25,8 +33,8 @@ import { describedBy, FormField } from '../forms/FormField';
 import { AsOf } from '../history/AsOf';
 import { formatDateTime } from '../history/format';
 import { useMarkedAttribute } from '../merchandise/marked';
-import { ReportDamage } from '../stock/DamageReport';
-import { t } from '../messages/catalogue';
+import { DamageReportView, ReportDamage } from '../stock/DamageReport';
+import { t, type MessageId } from '../messages/catalogue';
 import { useBusinessToday } from '../setup/business-date';
 import { formatDate, formatList, formatQuantity } from '../setup/format';
 import { Card, GrantedButton, inputClass, ListRead, SubmissionBanner, Th, Toolbar, useGranted } from '../setup/parts';
@@ -256,48 +264,82 @@ const pieces = z
   .refine((text) => Number(text) <= RECEIVING_CAPS.pieces, { message: 'receive.pieces.invalid' })
   .transform((text) => Number(text));
 
+/** Whole pieces, or none given. */
+const optionalPieces = z
+  .string()
+  .regex(/^\d{0,7}$/, { message: 'receive.pieces.invalid' })
+  .transform((text) => (text === '' ? null : Number(text)));
+
 const lineFormSchema = z
   .object({
-    styleCode: z.string().trim().min(1),
+    goods: lineGoodsSchema,
+    styleCode: z.string(),
     colour: z.string(),
     sizeValueId: z.string(),
     skuId: z.string(),
+    description: z.string(),
     batchCode: z.string(),
     expiryDate: z.string(),
-    invoiceQuantity: pieces,
+    invoiceQuantity: optionalPieces,
     countedQuantity: pieces,
+    extra: z.enum(['', 'received', 'not-received']),
+    damageQuantity: optionalPieces,
+    damageDescription: z.string(),
   })
-  .refine((line) => line.invoiceQuantity > 0 || line.countedQuantity > 0, {
-    message: 'receive.pieces.none',
-    path: ['countedQuantity'],
-  })
-  .refine((line) => (line.batchCode.trim() === '') === (line.expiryDate === ''), {
-    message: 'receive.batch.both',
-    path: ['expiryDate'],
+  .superRefine((line, context) => {
+    const issue = (path: string, message: MessageId) => {
+      context.addIssue({ code: 'custom', path: [path], message });
+    };
+    const invoiceQuantity = line.goods === 'on-invoice' ? (line.invoiceQuantity ?? 0) : 0;
+    if (line.goods === 'unidentified') {
+      if (line.description.trim() === '') issue('description', 'receive.description.required');
+    } else if (line.styleCode.trim() === '') issue('styleCode', 'receive.style-code.required');
+    if (line.goods === 'on-invoice' && invoiceQuantity === 0) issue('invoiceQuantity', 'receive.invoice-quantity.none');
+    if (line.goods !== 'on-invoice' && line.countedQuantity === 0) issue('countedQuantity', 'receive.pieces.none');
+    const counted = { goods: line.goods, invoiceQuantity, countedQuantity: line.countedQuantity };
+    if (extraPiecesOf(counted) > 0 && line.extra === '') issue('extra', 'receive.extra.required');
+    if ((line.damageQuantity === null) !== (line.damageDescription.trim() === '')) {
+      issue('damageDescription', 'receive.damage.both');
+    }
+    if (
+      line.damageQuantity !== null &&
+      (line.damageQuantity < 1 || line.damageQuantity > damageablePiecesOf(counted))
+    ) {
+      issue('damageQuantity', 'receive.damage.too-many');
+    }
+    if ((line.batchCode.trim() === '') !== (line.expiryDate === '')) issue('expiryDate', 'receive.batch.both');
   });
 type LineFormInput = z.input<typeof lineFormSchema>;
 type LineFormOutput = z.output<typeof lineFormSchema>;
 
 function lineDefaults(line: CountLine | undefined): LineFormInput {
   return {
+    goods: line?.goods ?? 'on-invoice',
     styleCode: line?.styleCode ?? '',
     colour: line?.colour ?? '',
     sizeValueId: line?.size?.valueId ?? '',
     skuId: line?.skuId ?? '',
+    description: line?.description ?? '',
     batchCode: line?.batch?.code ?? '',
     expiryDate: line?.batch?.expiryDate ?? '',
     invoiceQuantity: line === undefined ? '' : String(line.invoiceQuantity),
     countedQuantity: line === undefined ? '' : String(line.countedQuantity),
+    extra: line?.extra ?? '',
+    damageQuantity: line?.damage === null || line === undefined ? '' : String(line.damage.quantity),
+    damageDescription: line?.damage?.description ?? '',
   };
 }
 
 /**
- * One line of the count, by style code as the invoice writes it, colour as it names it and size from the size list,
- * the values of the attribute the Organisation marks as its size list (RR-556), with the invoice and counted
- * quantities (goods-in 4.3; DEC-138). A missing colour or size stays missing
- * (PRD-MER-005). The product is one of the Arrival's brand with the line's style code, when one is set up; its batch
- * and expiry are asked for where its tracking profile at the Site requires them (PRD-MER-011), and the GRN waits for
- * them. Editing a line names the version shown (code-house-rules 12.7).
+ * One line of the count (goods-in 4.3, 4.4; DEC-138): what it counts, goods on the invoice, wrong goods (a product the
+ * invoice does not list) or unidentified goods (matching no product, described by what they look like); by style code
+ * as the invoice writes it, colour as it names it and size from the size list, the values of the attribute the
+ * Organisation marks as its size list (RR-556), with the invoice and counted quantities. A missing colour or size stays
+ * missing (PRD-MER-005). The product is one of the Arrival's brand with the line's style code, when one is set up, and
+ * wrong goods always name theirs; its batch and expiry are asked for where its tracking profile at the Site requires
+ * them (PRD-MER-011). Extra pieces, beyond the invoice or not on it at all, are recorded as received and held or as not
+ * received; damaged pieces on the invoice with what is wrong and a photo, reported when the GRN is issued. Editing a
+ * line names the version shown (code-house-rules 12.7).
  */
 function LineForm({
   arrival,
@@ -324,17 +366,26 @@ function LineForm({
     defaultValues: lineDefaults(editing),
   });
   const submission = useSubmission('saveCountLine', ARRIVAL_READS);
+  const chosen = useChosenFile();
+  const storing = useStoreEvidence();
   const errors = form.formState.errors;
   const attributeId = sizeList.kind === 'set' ? sizeList.attributeId : undefined;
+  const goods = form.watch('goods');
   const skus = products.of(arrival.brandId, form.watch('styleCode'));
   const skuId = form.watch('skuId');
-  const named = skus.some((sku) => sku.id === skuId);
+  const named = goods !== 'unidentified' && skus.some((sku) => sku.id === skuId);
   const tracking = useQuery({
     ...readQuery(api, 'readSkuAsOf', { params: { recordId: skuId }, query: { date: today, siteId: arrival.siteId } }),
     enabled: named && maySeeSkus,
   });
   const batchRequired = named && tracking.data?.sku.tracking?.batchExpiryRequired === true;
   const sizes = (values.data?.records ?? []).filter((each) => each.attributeId === attributeId);
+  const counted = Number(form.watch('countedQuantity'));
+  const invoiced = goods === 'on-invoice' ? Number(form.watch('invoiceQuantity')) : 0;
+  const hasExtra =
+    Number.isInteger(counted) &&
+    Number.isInteger(invoiced) &&
+    extraPiecesOf({ goods, invoiceQuantity: invoiced, countedQuantity: counted }) > 0;
   const formId = editing === undefined ? 'receive-line-form' : `receive-line-form-${editing.lineId}`;
   const field = (name: string) => `${formId}-${name}`;
   return (
@@ -347,18 +398,31 @@ function LineForm({
         void form.handleSubmit(async (entered) => {
           // A change names the line's version shown: it waits while the Arrival is read again (12.7).
           if (editing !== undefined && reading.now()) return;
+          let photo = editing?.damage?.photo ?? null;
+          if (entered.damageQuantity !== null && chosen.file !== null) {
+            photo = (await storing.store(chosen.file)) ?? null;
+            if (photo === null) return;
+          }
+          const identified = entered.goods !== 'unidentified';
           const saved = await submission.submit({
             params: { arrivalId: arrival.id },
             body: {
               ...(editing === undefined
                 ? {}
                 : { line: { lineId: editing.lineId, versionToken: editing.versionToken } }),
-              styleCode: entered.styleCode,
-              colour: entered.colour.trim() === '' ? null : entered.colour,
-              sizeValueId: entered.sizeValueId === '' ? null : entered.sizeValueId,
+              goods: entered.goods,
+              styleCode: identified ? entered.styleCode : null,
+              colour: identified && entered.colour.trim() !== '' ? entered.colour : null,
+              sizeValueId: identified && entered.sizeValueId !== '' ? entered.sizeValueId : null,
               skuId: named ? entered.skuId : null,
-              invoiceQuantity: entered.invoiceQuantity,
+              description: identified ? null : entered.description,
+              invoiceQuantity: entered.goods === 'on-invoice' ? (entered.invoiceQuantity ?? 0) : 0,
               countedQuantity: entered.countedQuantity,
+              extra: hasExtra && entered.extra !== '' ? entered.extra : null,
+              damage:
+                entered.goods === 'on-invoice' && entered.damageQuantity !== null
+                  ? { quantity: entered.damageQuantity, description: entered.damageDescription, photo }
+                  : null,
               batch:
                 batchRequired && entered.batchCode.trim() !== ''
                   ? { code: entered.batchCode, expiryDate: entered.expiryDate }
@@ -367,81 +431,137 @@ function LineForm({
           });
           if (saved !== undefined) {
             form.reset(lineDefaults(undefined));
+            chosen.clear();
             onDone();
           }
         })(event);
       }}
     >
+      {storing.banner}
       <SubmissionBanner state={submission.state} done="receive.line-saved" />
       <div className="grid gap-3 sm:grid-cols-2">
-        <FormField id={field('style')} label="receive.style-code" required error={errors.styleCode}>
-          <input
-            id={field('style')}
-            maxLength={RECEIVING_CAPS.codeText}
-            className={inputClass}
-            {...describedBy(field('style'), { invalid: errors.styleCode !== undefined, help: false })}
-            {...form.register('styleCode')}
-          />
-        </FormField>
-        <FormField id={field('colour')} label="receive.colour" help="receive.colour.help">
-          <input
-            id={field('colour')}
-            maxLength={RECEIVING_CAPS.codeText}
-            className={inputClass}
-            {...describedBy(field('colour'), { invalid: false, help: true })}
-            {...form.register('colour')}
-          />
-        </FormField>
-        <FormField id={field('size')} label="receive.size" help="receive.size.help">
+        <FormField id={field('goods')} label="receive.goods" required help="receive.goods.help">
           <select
-            id={field('size')}
+            id={field('goods')}
             className={inputClass}
-            {...describedBy(field('size'), { invalid: false, help: true })}
-            {...form.register('sizeValueId')}
+            {...describedBy(field('goods'), { invalid: false, help: true })}
+            {...form.register('goods')}
           >
-            <option value="">{t('receive.no-size')}</option>
-            {sizes.map((each) => (
-              <option key={each.id} value={each.id}>
-                {optionText(each)}
-              </option>
-            ))}
-          </select>
-          {sizeList.kind === 'not-set' && (
-            <p role="status" className="m-0 text-body-sm text-text-2">
-              {t('receive.size.not-marked')}
-            </p>
-          )}
-        </FormField>
-        <FormField id={field('product')} label="receive.product" help="receive.product.help">
-          <select
-            id={field('product')}
-            className={inputClass}
-            {...describedBy(field('product'), { invalid: false, help: true })}
-            {...form.register('skuId')}
-          >
-            <option value="">{t('receive.no-product')}</option>
-            {skus.map((sku) => (
-              <option key={sku.id} value={sku.id}>
-                {sku.code}
+            {lineGoodsSchema.options.map((each) => (
+              <option key={each} value={each}>
+                {t(`receive.goods.${each}`)}
               </option>
             ))}
           </select>
         </FormField>
-        <FormField
-          id={field('invoice')}
-          label="receive.invoice-quantity"
-          required
-          error={errors.invoiceQuantity}
-          message={errors.invoiceQuantity === undefined ? undefined : 'receive.pieces.invalid'}
-        >
-          <input
+        {goods === 'unidentified' ? (
+          <FormField
+            id={field('description')}
+            label="receive.description"
+            required
+            error={errors.description}
+            message={errors.description === undefined ? undefined : 'receive.description.required'}
+            help="receive.description.help"
+          >
+            <input
+              id={field('description')}
+              maxLength={RECEIVING_CAPS.longText}
+              className={inputClass}
+              {...describedBy(field('description'), { invalid: errors.description !== undefined, help: true })}
+              {...form.register('description')}
+            />
+          </FormField>
+        ) : (
+          <>
+            <FormField
+              id={field('style')}
+              label="receive.style-code"
+              required
+              error={errors.styleCode}
+              message={errors.styleCode === undefined ? undefined : 'receive.style-code.required'}
+            >
+              <input
+                id={field('style')}
+                maxLength={RECEIVING_CAPS.codeText}
+                className={inputClass}
+                {...describedBy(field('style'), { invalid: errors.styleCode !== undefined, help: false })}
+                {...form.register('styleCode')}
+              />
+            </FormField>
+            <FormField id={field('colour')} label="receive.colour" help="receive.colour.help">
+              <input
+                id={field('colour')}
+                maxLength={RECEIVING_CAPS.codeText}
+                className={inputClass}
+                {...describedBy(field('colour'), { invalid: false, help: true })}
+                {...form.register('colour')}
+              />
+            </FormField>
+            <FormField id={field('size')} label="receive.size" help="receive.size.help">
+              <select
+                id={field('size')}
+                className={inputClass}
+                {...describedBy(field('size'), { invalid: false, help: true })}
+                {...form.register('sizeValueId')}
+              >
+                <option value="">{t('receive.no-size')}</option>
+                {sizes.map((each) => (
+                  <option key={each.id} value={each.id}>
+                    {optionText(each)}
+                  </option>
+                ))}
+              </select>
+              {sizeList.kind === 'not-set' && (
+                <p role="status" className="m-0 text-body-sm text-text-2">
+                  {t('receive.size.not-marked')}
+                </p>
+              )}
+            </FormField>
+            <FormField
+              id={field('product')}
+              label="receive.product"
+              required={goods === 'wrong'}
+              help={goods === 'wrong' ? 'receive.product.wrong-help' : 'receive.product.help'}
+            >
+              <select
+                id={field('product')}
+                className={inputClass}
+                {...describedBy(field('product'), { invalid: false, help: true })}
+                {...form.register('skuId')}
+              >
+                <option value="">{t('receive.no-product')}</option>
+                {skus.map((sku) => (
+                  <option key={sku.id} value={sku.id}>
+                    {sku.code}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+          </>
+        )}
+        {goods === 'on-invoice' && (
+          <FormField
             id={field('invoice')}
-            inputMode="numeric"
-            className={inputClass}
-            {...describedBy(field('invoice'), { invalid: errors.invoiceQuantity !== undefined, help: false })}
-            {...form.register('invoiceQuantity')}
-          />
-        </FormField>
+            label="receive.invoice-quantity"
+            required
+            error={errors.invoiceQuantity}
+            message={
+              errors.invoiceQuantity === undefined
+                ? undefined
+                : errors.invoiceQuantity.message === 'receive.invoice-quantity.none'
+                  ? 'receive.invoice-quantity.none'
+                  : 'receive.pieces.invalid'
+            }
+          >
+            <input
+              id={field('invoice')}
+              inputMode="numeric"
+              className={inputClass}
+              {...describedBy(field('invoice'), { invalid: errors.invoiceQuantity !== undefined, help: false })}
+              {...form.register('invoiceQuantity')}
+            />
+          </FormField>
+        )}
         <FormField
           id={field('counted')}
           label="receive.counted-quantity"
@@ -463,6 +583,30 @@ function LineForm({
             {...form.register('countedQuantity')}
           />
         </FormField>
+        {hasExtra && (
+          <FormField
+            id={field('extra')}
+            label="receive.extra"
+            required
+            error={errors.extra}
+            message={errors.extra === undefined ? undefined : 'receive.extra.required'}
+            help="receive.extra.help"
+          >
+            <select
+              id={field('extra')}
+              className={inputClass}
+              {...describedBy(field('extra'), { invalid: errors.extra !== undefined, help: true })}
+              {...form.register('extra')}
+            >
+              <option value="">{t('receive.extra.choose')}</option>
+              {extraPiecesSchema.options.map((each) => (
+                <option key={each} value={each}>
+                  {t(`receive.extra.${each}`)}
+                </option>
+              ))}
+            </select>
+          </FormField>
+        )}
         {batchRequired && (
           <>
             <FormField id={field('batch')} label="receive.batch-code" help="receive.batch.help">
@@ -490,7 +634,51 @@ function LineForm({
             </FormField>
           </>
         )}
+        {goods === 'on-invoice' && (
+          <>
+            <FormField
+              id={field('damage')}
+              label="receive.damage-quantity"
+              error={errors.damageQuantity}
+              message={errors.damageQuantity === undefined ? undefined : 'receive.damage.too-many'}
+              help="receive.damage-quantity.help"
+            >
+              <input
+                id={field('damage')}
+                inputMode="numeric"
+                className={inputClass}
+                {...describedBy(field('damage'), { invalid: errors.damageQuantity !== undefined, help: true })}
+                {...form.register('damageQuantity')}
+              />
+            </FormField>
+            <FormField
+              id={field('damage-description')}
+              label="receive.damage-description"
+              error={errors.damageDescription}
+              message={errors.damageDescription === undefined ? undefined : 'receive.damage.both'}
+            >
+              <input
+                id={field('damage-description')}
+                maxLength={DAMAGE_CAPS.text}
+                className={inputClass}
+                {...describedBy(field('damage-description'), {
+                  invalid: errors.damageDescription !== undefined,
+                  help: false,
+                })}
+                {...form.register('damageDescription')}
+              />
+            </FormField>
+          </>
+        )}
       </div>
+      {goods === 'on-invoice' && (
+        <EvidencePicker
+          id={field('damage-photo')}
+          label="receive.damage-photo"
+          resetKey={chosen.resetKey}
+          onChange={chosen.choose}
+        />
+      )}
       <div className="flex flex-wrap gap-2">
         <Button
           type="submit"
@@ -502,6 +690,38 @@ function LineForm({
         {editing !== undefined && <Button label="action.cancel" onClick={onDone} />}
       </div>
     </form>
+  );
+}
+
+/**
+ * A line's findings as chips, kept apart since they can coexist (design-language 7 "Rules"; goods-in 4.4; PRD-REC-006):
+ * short, excess, wrong, unidentified, damaged, and the extra pieces not received. None when there are none.
+ */
+function FindingChips({
+  line,
+}: {
+  line: Pick<CountLine, 'goods' | 'invoiceQuantity' | 'countedQuantity' | 'extra'> & {
+    readonly damaged: number;
+  };
+}) {
+  const findings = lineFindings({ ...line, damagedQuantity: line.damaged === 0 ? null : line.damaged });
+  const chips: string[] = [];
+  if (findings.shortage > 0) chips.push(t('receive.finding.short', { count: findings.shortage }));
+  if (findings.extra > 0) {
+    const kind = line.goods === 'on-invoice' ? 'excess' : line.goods;
+    chips.push(t(`receive.finding.${kind}`, { count: findings.extra }));
+    if (line.extra === 'not-received') chips.push(t('receive.finding.not-received', { count: findings.extra }));
+  }
+  if (findings.damaged > 0) chips.push(t('receive.finding.damaged', { count: findings.damaged }));
+  if (chips.length === 0) return <span>{t('receive.none')}</span>;
+  return (
+    <span className="flex flex-wrap gap-1">
+      {chips.map((chip) => (
+        <span key={chip} className="rounded-full border border-border px-2 text-caption">
+          {chip}
+        </span>
+      ))}
+    </span>
   );
 }
 
@@ -518,6 +738,7 @@ function CountTable({ arrival, open, reading }: { arrival: Arrival; open: boolea
         <table className="w-full border-collapse text-body" aria-label={t('receive.lines')}>
           <thead>
             <tr>
+              <Th label="receive.goods" />
               <Th label="receive.style-code" />
               <Th label="receive.colour" />
               <Th label="receive.size" />
@@ -525,6 +746,7 @@ function CountTable({ arrival, open, reading }: { arrival: Arrival; open: boolea
               <Th label="receive.batch" />
               <Th label="receive.invoice-quantity" />
               <Th label="receive.counted-quantity" />
+              <Th label="receive.findings" />
               <Th label="receive.counted-by" />
               {open && mayEdit && <Th label="receive.line-actions" />}
             </tr>
@@ -532,13 +754,17 @@ function CountTable({ arrival, open, reading }: { arrival: Arrival; open: boolea
           <tbody>
             {arrival.lines.map((line) => (
               <tr key={line.lineId} className="h-10 border-t border-border">
-                <Cell text={line.styleCode} />
+                <Cell text={t(`receive.goods.${line.goods}`)} />
+                <Cell text={line.styleCode ?? line.description ?? undefined} />
                 <Cell text={line.colour ?? t('receive.none')} />
                 <Cell text={line.size?.code ?? t('receive.none')} />
                 <Cell text={line.skuId === null ? t('receive.none') : products.skuText(line.skuId)} />
                 <Cell text={batchText(line.batch)} />
                 <Cell text={formatQuantity(line.invoiceQuantity)} numeric />
                 <Cell text={formatQuantity(line.countedQuantity)} numeric />
+                <td className="px-3">
+                  <FindingChips line={{ ...line, damaged: line.damage?.quantity ?? 0 }} />
+                </td>
                 <Cell text={peopleOf(arrival, line.countedBy)} />
                 {open && mayEdit && (
                   <td className="px-3">
@@ -634,7 +860,17 @@ function IssueGrn({ arrival, reading }: { arrival: Arrival; reading: Reading }) 
 }
 
 /** The GRN as printed: its header and lines, quantities only, never a price, tax or value (goods-in 4.5). */
-function GrnPrint({ arrival, unit, location }: { arrival: Arrival; unit: string; location: string }) {
+function GrnPrint({
+  arrival,
+  unit,
+  location,
+  reading,
+}: {
+  arrival: Arrival;
+  unit: string;
+  location: string;
+  reading: Reading;
+}) {
   const timeZone = useTimeZone();
   const names = useMasterNames();
   const products = useProducts();
@@ -690,6 +926,7 @@ function GrnPrint({ arrival, unit, location }: { arrival: Arrival; unit: string;
           <thead>
             <tr>
               <Th label="receive.line-number" />
+              <Th label="receive.goods" />
               <Th label="receive.style-code" />
               <Th label="receive.colour" />
               <Th label="receive.size" />
@@ -697,6 +934,9 @@ function GrnPrint({ arrival, unit, location }: { arrival: Arrival; unit: string;
               <Th label="receive.batch" />
               <Th label="receive.invoice-quantity" />
               <Th label="receive.counted-quantity" />
+              <Th label="receive.received" />
+              <Th label="receive.findings" />
+              <Th label="receive.held" />
               {mayReportDamage && <Th label="receive.damage" />}
             </tr>
           </thead>
@@ -704,13 +944,32 @@ function GrnPrint({ arrival, unit, location }: { arrival: Arrival; unit: string;
             {grn.lines.map((line) => (
               <tr key={line.id} className="h-10 border-t border-border">
                 <Cell text={formatQuantity(line.lineNumber)} numeric />
-                <Cell text={line.styleCode} />
+                <Cell text={t(`receive.goods.${line.goods}`)} />
+                <Cell text={line.styleCode ?? line.description ?? undefined} />
                 <Cell text={line.colour ?? t('receive.none')} />
                 <Cell text={line.size ?? t('receive.none')} />
                 <Cell text={line.skuId === null ? t('receive.none') : products.skuText(line.skuId)} />
                 <Cell text={batchText(line.batch)} />
                 <Cell text={formatQuantity(line.invoiceQuantity)} numeric />
                 <Cell text={formatQuantity(line.countedQuantity)} numeric />
+                <Cell text={formatQuantity(line.findings.received)} numeric />
+                <td className="px-3">
+                  <FindingChips line={{ ...line, damaged: line.findings.damaged }} />
+                </td>
+                <td className="px-3">
+                  {line.heldLine === null ? (
+                    t('receive.none')
+                  ) : (
+                    <span className="flex flex-wrap items-center gap-2">
+                      <StatusBadge state={stateIdOf(line.heldLine.state)} />
+                      {line.heldLine.named !== null && (
+                        <span className="text-caption">
+                          {t('receive.held.named', { product: namedText(line.heldLine.named) })}
+                        </span>
+                      )}
+                    </span>
+                  )}
+                </td>
                 {mayReportDamage && (
                   <td className="px-3">
                     <Button
@@ -730,8 +989,159 @@ function GrnPrint({ arrival, unit, location }: { arrival: Arrival; unit: string;
       {damageLine !== null && (
         <ReportDamage key={damageLine} grnLineId={damageLine} locationId={arrival.receivingLocationId} />
       )}
+      <CountDamage lines={grn.lines} />
+      <NameProducts lines={grn.lines} reading={reading} />
       <p className="m-0 text-caption text-text-2">{t('receive.grn.note')}</p>
     </section>
+  );
+}
+
+/** The product named for unidentified goods, as one text: style code, colour and size where given. */
+function namedText(named: NonNullable<NonNullable<GrnLine['heldLine']>['named']>): string {
+  return formatList([
+    named.styleCode,
+    ...(named.colour === null ? [] : [named.colour]),
+    ...(named.size === null ? [] : [named.size.code]),
+  ]);
+}
+
+/** The damage reports the count raised, each with its state and decision, read on request (goods-in 8.5). */
+function CountDamage({ lines }: { lines: readonly GrnLine[] }) {
+  const reported = lines.flatMap((line) => (line.damage === null ? [] : [{ line, damage: line.damage }]));
+  if (reported.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-2">
+      <h4 className="m-0 text-body font-semibold">{t('receive.count-damage')}</h4>
+      {reported.map(({ line, damage }) => (
+        <div key={line.id} className="flex flex-col gap-1">
+          <p className="m-0 text-body-sm">
+            {t('receive.count-damage.line', {
+              line: formatQuantity(line.lineNumber),
+              count: damage.quantity,
+              description: damage.description,
+            })}
+          </p>
+          <DamageReportView reportId={damage.damageReportId} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Naming the product of unidentified goods held at the count, for whoever holds edit on held lines (goods-in 4.6):
+ * Booking names it, then a different Booking approver takes the goods in from My work. Each form names the held line's
+ * version shown (code-house-rules 12.7).
+ */
+function NameProducts({ lines, reading }: { lines: readonly GrnLine[]; reading: Reading }) {
+  const mayName = useGranted(HELD_LINE_TYPE, 'edit');
+  const waiting = lines.filter((line) => line.heldLine?.kind === 'unidentified' && line.heldLine.decision === null);
+  if (!mayName || waiting.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-3">
+      <h4 className="m-0 text-body font-semibold">{t('receive.name-product')}</h4>
+      <p className="m-0 text-body-sm text-text-2">{t('receive.name-product.intro')}</p>
+      {waiting.map((line) => (
+        <NameProduct key={line.heldLine?.versionToken} line={line} reading={reading} />
+      ))}
+    </div>
+  );
+}
+
+const nameFormSchema = z.object({
+  styleCode: z.string().trim().min(1, { message: 'receive.style-code.required' }),
+  colour: z.string(),
+  sizeValueId: z.string(),
+});
+type NameForm = z.input<typeof nameFormSchema>;
+
+/** One unidentified held line's naming; it names the version shown, so waits while the Arrival is read again (12.7). */
+function NameProduct({ line, reading }: { line: GrnLine; reading: Reading }) {
+  const sizeList = useMarkedAttribute('size');
+  const values = useQuery({
+    ...readQuery(api, 'listVocabularyValues', { query: {} }),
+    enabled: useGranted('merchandise.vocabulary_value', 'view'),
+  });
+  const form = useForm<NameForm>({
+    resolver: zodResolver(nameFormSchema),
+    mode: 'onBlur',
+    defaultValues: { styleCode: '', colour: '', sizeValueId: '' },
+  });
+  const submission = useSubmission('nameHeldLineProduct', ARRIVAL_READS);
+  const errors = form.formState.errors;
+  const held = line.heldLine;
+  if (held === null) return null;
+  const attributeId = sizeList.kind === 'set' ? sizeList.attributeId : undefined;
+  const sizes = (values.data?.records ?? []).filter((each) => each.attributeId === attributeId);
+  const id = (name: string) => `name-${held.id}-${name}`;
+  return (
+    <form
+      aria-label={t('receive.name-product.of', { description: line.description ?? unknownText() })}
+      noValidate
+      className="flex flex-col gap-3 rounded-card border border-border bg-raised p-3"
+      onSubmit={(event) => {
+        void form.handleSubmit(async (entered) => {
+          if (reading.now()) return;
+          await submission.submit({
+            params: { heldLineId: held.id },
+            body: {
+              versionToken: held.versionToken,
+              styleCode: entered.styleCode,
+              colour: entered.colour.trim() === '' ? null : entered.colour,
+              sizeValueId: entered.sizeValueId === '' ? null : entered.sizeValueId,
+              skuId: null,
+            },
+          });
+        })(event);
+      }}
+    >
+      <p className="m-0 text-body-sm font-semibold">{line.description ?? unknownText()}</p>
+      <SubmissionBanner state={submission.state} done="receive.product-named" />
+      <div className="grid gap-3 sm:grid-cols-3">
+        <FormField
+          id={id('style')}
+          label="receive.style-code"
+          required
+          error={errors.styleCode}
+          message={errors.styleCode === undefined ? undefined : 'receive.style-code.required'}
+        >
+          <input
+            id={id('style')}
+            maxLength={RECEIVING_CAPS.codeText}
+            className={inputClass}
+            {...describedBy(id('style'), { invalid: errors.styleCode !== undefined, help: false })}
+            {...form.register('styleCode')}
+          />
+        </FormField>
+        <FormField id={id('colour')} label="receive.colour">
+          <input
+            id={id('colour')}
+            maxLength={RECEIVING_CAPS.codeText}
+            className={inputClass}
+            {...form.register('colour')}
+          />
+        </FormField>
+        <FormField id={id('size')} label="receive.size">
+          <select id={id('size')} className={inputClass} {...form.register('sizeValueId')}>
+            <option value="">{t('receive.no-size')}</option>
+            {sizes.map((each) => (
+              <option key={each.id} value={each.id}>
+                {optionText(each)}
+              </option>
+            ))}
+          </select>
+        </FormField>
+      </div>
+      <div>
+        <Button
+          type="submit"
+          variant="primary"
+          label="receive.name-product.send"
+          disabled={submission.state.kind === 'pending' || reading.shown}
+          {...(reading.shown ? { reason: READING } : {})}
+        />
+      </div>
+    </form>
   );
 }
 
@@ -843,7 +1253,7 @@ export function ArrivalView({
               {open ? (
                 <IssueGrn arrival={arrival} reading={reading} />
               ) : (
-                <GrnPrint arrival={arrival} unit={unitText} location={locationText} />
+                <GrnPrint arrival={arrival} unit={unitText} location={locationText} reading={reading} />
               )}
             </div>
           );

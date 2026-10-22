@@ -170,8 +170,17 @@ export async function planRequest(
    * request may name them, as PT approval records their coverage and cost (goods-in 6.3 steps 4 and 5).
    */
   const madeInRequest = new Map<string, { at: UnitFacts; receiving: UnitFacts; sku: SkuFacts }>();
+  /**
+   * The origins a receipt count of this request makes, by the identifier the caller gave (13.16): later items of the
+   * request may name their goods, as a GRN's holds do (goods-in 4.5). New rows no other command can be writing, so
+   * nothing of them is read or locked (14.3 "Missing rows"); their SKU balance the count already names.
+   */
+  const countedInRequest = new Map<string, { unit: UnitFacts; brandId: string | null }>();
+  /** The line of the count that names each such origin, which a refusal of an identifier already written names. */
+  const countedLines = new Map<string, string>();
 
   const shared = (originId: string) => {
+    if (countedInRequest.has(originId)) return;
     if (!originIds.has(originId)) originIds.set(originId, 'shared');
   };
   const unitOf = async (lineId: string, siteId: string, businessUnitId: string): Promise<UnitFacts> => {
@@ -244,6 +253,17 @@ export async function planRequest(
    * read, so it is locked shared at step 2, and only its balances under that row are read under the locks.
    */
   const unknownOriginAt = async (lineId: string, unit: UnitFacts, originId: string) => {
+    const counted = countedInRequest.get(originId);
+    if (counted !== undefined) {
+      // Counted earlier in the request (13.16): of Unknown SKU only if the count named none, of the brand it named.
+      if (counted.brandId === null) {
+        throw new StockRefused(
+          refusalOf('invalid-item', lineId, [{ kind: 'receipt-origin', receiptOriginId: originId }]),
+        );
+      }
+      unknownBalanceOf(unit, counted.brandId);
+      return;
+    }
     const [origin] = await context.tx
       .select({ skuId: receiptOrigin.skuId, brandId: receiptOrigin.brandId })
       .from(receiptOrigin)
@@ -558,6 +578,17 @@ export async function planRequest(
         const unit = await place(item.lineId, item.to.siteId, item.to.businessUnitId, item.to.locationId);
         if (!Number.isInteger(item.quantity) || item.quantity <= 0)
           throw new StockRefused(refusalOf('invalid-item', item.lineId, [{ kind: 'quantity' }]));
+        if (item.kind === 'receipt-count' && item.receiptOriginId !== undefined) {
+          // The origin the caller names is a new one, named by one count of the request only (13.16).
+          const named = item.receiptOriginId;
+          if (countedInRequest.has(named) || madeInRequest.has(named) || originIds.has(named)) {
+            throw new StockRefused(
+              refusalOf('invalid-item', item.lineId, [{ kind: 'receipt-origin', receiptOriginId: named }]),
+            );
+          }
+          countedInRequest.set(named, { unit, brandId: item.skuId === null ? item.brandId : null });
+          countedLines.set(named, item.lineId);
+        }
         if (item.skuId === null) {
           // Goods of a product not yet set up (13.14; GI-1): their SKU balance is of the brand they are counted under,
           // which they must name before anything is locked (RR-555); the Recheck checks their identity as described.
@@ -943,6 +974,19 @@ export async function planRequest(
     }
   };
   for (const item of request.items) await planItem(item);
+
+  // A counted origin's identifier is the caller's (13.16): one already written is no new origin.
+  if (countedLines.size > 0) {
+    const [taken] = await context.tx
+      .select({ id: receiptOrigin.id })
+      .from(receiptOrigin)
+      .where(inArray(receiptOrigin.id, [...countedLines.keys()]));
+    if (taken !== undefined) {
+      throw new StockRefused(
+        refusalOf('invalid-item', countedLines.get(taken.id), [{ kind: 'receipt-origin', receiptOriginId: taken.id }]),
+      );
+    }
+  }
 
   // Plan staleness (13.1): every origin with stock of an unnamed quantity-tracked SKU at the unit is locked shared.
   const originsSeen = new Map<string, Set<string>>();

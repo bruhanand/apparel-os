@@ -182,19 +182,22 @@ export const valueChange = (
 ): ValueChange => ({ kind: 'value', field, before, after });
 
 /**
- * The audit record of a change to an Arrival or its GRN, made on the screen by the actor and scoped as the Arrival is
- * (numbering-and-audit 4.1; PRD-MOD-006): the record changed, the operation and the fields changed.
+ * The audit record of a change to an Arrival, its GRN or a held line, made on the screen by the actor, or by a decision
+ * with its reason, and scoped as the Arrival is (numbering-and-audit 4.1, 4.2; PRD-MOD-006): the record changed, the
+ * operation and the fields changed.
  */
 export async function audited(
   context: TransactionContext,
   audit: AuditInterface,
   actor: Actor,
-  row: ArrivalRow,
+  row: Scoped,
   change: {
     readonly record: { readonly type: string; readonly id: string; readonly versionId?: string };
     readonly operation: string;
     readonly changes: readonly ValueChange[];
     readonly idempotencyKey?: string;
+    readonly approval?: { readonly decisionId: string };
+    readonly reason?: string;
   },
 ): Promise<void> {
   await audit.record(context, {
@@ -206,5 +209,7 @@ export async function audited(
     changes: change.changes,
     source: { kind: 'screen' },
     ...(change.idempotencyKey === undefined ? {} : { idempotencyKey: change.idempotencyKey }),
+    ...(change.approval === undefined ? {} : { approval: change.approval }),
+    ...(change.reason === undefined ? {} : { reason: change.reason }),
   });
 }

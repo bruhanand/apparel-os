@@ -41,16 +41,18 @@ function custodyLocation(row: BalanceState): string {
 }
 
 /**
- * Whether the goods a receipt count names pair a SKU and an identity as described wrongly (13.14): goods of Unknown SKU
- * need one, with a style code and no empty text; a SKU is the goods' identity and takes none (14.2). The item's type
- * holds the pairing (`CountedGoods`); the ledger still checks every request it is given, as the design says.
+ * Whether the goods a receipt count names pair a SKU and an identity as described wrongly (13.14, 13.16): goods of a
+ * product not yet set up need an identity as described, with a style code and no empty text; unidentified goods have
+ * none (`described` null); a SKU is the goods' identity and takes none (14.2). The item's type holds the pairing
+ * (`CountedGoods`); the ledger still checks every request it is given, as the design says.
  */
 function describedIdentityRefused(goods: {
   readonly skuId: string | null;
-  readonly described?: DescribedIdentity | undefined;
+  readonly described?: DescribedIdentity | null | undefined;
 }): boolean {
   const { described } = goods;
   if (goods.skuId !== null) return described !== undefined;
+  if (described === null) return false;
   return (
     described === undefined ||
     described.styleCode.trim() === '' ||
@@ -1053,10 +1055,16 @@ export class Working {
     if (describedIdentityRefused(item)) refuse('invalid-item', item.lineId, [{ kind: 'described-identity' }]);
     if (countedBrandRefused(item)) refuse('invalid-item', item.lineId, [{ kind: 'brand' }]);
     if (item.skuId === null) {
-      if (item.condition !== 'good')
+      // Goods of a product not yet set up are in good condition, not quarantined (13.14); unidentified goods, with no
+      // identity at all, in the unidentified condition, quarantined in the same request (13.16; goods-in 4.4).
+      if (item.condition !== (item.described === null ? 'unidentified' : 'good'))
         refuse('invalid-item', item.lineId, [{ kind: 'condition', condition: item.condition }]);
       if (item.pieceCodes !== undefined) refuse('invalid-item', item.lineId, [{ kind: 'piece-codes' }]);
       if (item.batch !== undefined) refuse('invalid-item', item.lineId, [{ kind: 'batch' }]);
+    }
+    // An origin the caller names is new and made by this count alone (13.16): Plan refused one already written.
+    if (item.receiptOriginId !== undefined && this.origins.has(item.receiptOriginId)) {
+      refuse('invalid-item', item.lineId, [{ kind: 'receipt-origin', receiptOriginId: item.receiptOriginId }]);
     }
     const movement = this.newMovement(
       'receipt-count',
@@ -1073,6 +1081,7 @@ export class Working {
       owner: item.owner,
       ...(item.batch === undefined ? {} : { batch: item.batch }),
       ...(item.skuId === null ? { described: item.described, brandId: item.brandId } : {}),
+      ...(item.receiptOriginId === undefined ? {} : { originId: item.receiptOriginId }),
     });
     return { kind: 'unknown' };
   }
@@ -1161,9 +1170,11 @@ export class Working {
       readonly pieceCodes?: readonly string[];
       readonly owner: Owner;
       readonly batch?: { readonly code: string; readonly expiryDate: string };
-      readonly described?: DescribedIdentity;
+      readonly described?: DescribedIdentity | null;
       /** For goods of a product not yet set up, the brand they are counted under (14.1; RR-555). */
       readonly brandId?: string;
+      /** The new origin's identifier the caller made, so later items of the request name it (13.16). */
+      readonly originId?: string;
     },
   ): { origin: OriginState; balance: BalanceState; pieces: PieceState[] } {
     const sku =
@@ -1177,7 +1188,7 @@ export class Working {
     }
     const unit = this.unit(to.siteId, to.businessUnitId);
     const origin: OriginState = {
-      id: this.newId(),
+      id: counted.originId ?? this.newId(),
       isNew: true,
       originKind,
       skuId: counted.skuId,

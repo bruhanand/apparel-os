@@ -1,18 +1,30 @@
 import { z } from 'zod';
+import { approvalRequestStateSchema } from './approvals.js';
 import { businessDateSchema, idSchema } from './common.js';
+import { DAMAGE_CAPS } from './damage.js';
 import { evidenceFileSchema, evidenceListSchema } from './files.js';
 import { missingItemSchema } from './errors.js';
 
-// `receiving`'s Arrival, count and GRN (goods-in 4.1 to 4.5, 10.1, 10.3, section 11; PRD-REC-001 to PRD-REC-005,
-// PRD-REC-007, PRD-REC-008; DEC-133, DEC-138; S2-F02-T02). The receiver records the Arrival at the Site where the goods
-// are, its invoices first, counts line by line against the invoice and issues the GRN, which holds quantities and never
-// values. In this first piece a GRN is issued only when every line's counted quantity equals its invoice quantity; the
-// findings at the count come with S2-F02-T03.
+// `receiving`'s Arrival, count and GRN (goods-in 4.1 to 4.6, 4.9, 10.1, 10.3, section 11; PRD-REC-001 to PRD-REC-008,
+// PRD-REC-012, PRD-REC-013; DEC-133, DEC-138; S2-F02-T02, S2-F02-T03). The receiver records the Arrival at the Site
+// where the goods are, its invoices first, counts line by line against the invoice, with shortage, excess, wrong,
+// unidentified and damage kept apart, and issues the GRN, which holds quantities and never values. A Booking approver
+// then takes each held line in or leaves it held.
 
 /** The record type of an Arrival, its invoices and its count; it carries the place, legal entity and brand (5.3). */
 export const ARRIVAL_TYPE = 'receiving.arrival';
 /** The record type of a GRN and its lines. Create on it issues a GRN (goods-in 4.5). */
 export const GRN_TYPE = 'receiving.grn';
+/**
+ * The record type of a held line, the excess, wrong or unidentified goods of a GRN line received and held (goods-in
+ * 4.6): edit names the product of unidentified goods; approve decides it, taking the goods in or leaving them held.
+ */
+export const HELD_LINE_TYPE = 'receiving.held_line';
+/**
+ * The action type of a held line's decision (goods-in 4.6; PRD-REC-013, POL-17.02, POL-17.11): approve takes the goods
+ * in, reject leaves them held. Decided by a Booking approver, never by whoever received them.
+ */
+export const HELD_LINE_DECISION = 'receiving.held_line.decision';
 
 const instantSchema = z.iso.datetime({ offset: true });
 
@@ -88,14 +100,105 @@ export const photosAttachedSchema = z.strictObject({ attachmentIds: z.array(idSc
 export type PhotosAttached = z.infer<typeof photosAttachedSchema>;
 
 /**
- * One line of the count, by style, colour and size as the invoice lists the goods (goods-in 4.3; DEC-138): a new line,
- * or the next version of a line, naming the line and its latest version (code-house-rules 12.7).
+ * What a count line counts (goods-in 4.4): goods the invoice lists, of a product set up or not yet set up
+ * (`on-invoice`); wrong goods, a known product the invoice does not list (`wrong`); or unidentified goods, not on the
+ * invoice and matching no product, with no identity at all (`unidentified`). A missing PT alone never makes goods wrong
+ * (PRD-REC-012).
+ */
+export const lineGoodsSchema = z.enum(['on-invoice', 'wrong', 'unidentified']);
+export type LineGoods = z.infer<typeof lineGoodsSchema>;
+
+/**
+ * What the receiver records of a line's extra pieces (goods-in 4.4): counted beyond the invoice quantity, or every piece
+ * of goods not on the invoice. Received, they stay at the Site and are held; not received, they are not kept and no
+ * custody is created, the finding staying on the GRN as a record.
+ */
+export const extraPiecesSchema = z.enum(['received', 'not-received']);
+export type ExtraPieces = z.infer<typeof extraPiecesSchema>;
+
+/** The kind of a held line (goods-in 4.6): excess under an excess hold, wrong or unidentified goods in quarantine. */
+export const heldKindSchema = z.enum(['excess', 'wrong', 'unidentified']);
+export type HeldKind = z.infer<typeof heldKindSchema>;
+
+/** What a line's findings are worked out from: what the count records of it. */
+export interface CountedLine {
+  readonly goods: LineGoods;
+  readonly invoiceQuantity: number;
+  readonly countedQuantity: number;
+  readonly extra: ExtraPieces | null;
+  readonly damagedQuantity: number | null;
+}
+
+/**
+ * A line's findings at the count (goods-in 4.4, 4.9; PRD-REC-006), kept apart since they can coexist: the shortage,
+ * pieces on the invoice not counted, never held; the extra pieces; the pieces received into custody (PRD-REC-008); the
+ * held part Booking decides, the extra pieces when received; and the pieces found damaged, which never lower the
+ * counted quantity. Pure, shared by the server and the count screen.
+ */
+export interface LineFindings {
+  readonly shortage: number;
+  readonly extra: number;
+  readonly received: number;
+  readonly held: { readonly kind: HeldKind; readonly quantity: number } | null;
+  readonly damaged: number;
+}
+
+/** The extra pieces of a line: counted beyond the invoice, or every piece of goods not on it (goods-in 4.4). */
+export function extraPiecesOf(line: Pick<CountedLine, 'goods' | 'invoiceQuantity' | 'countedQuantity'>): number {
+  return line.goods === 'on-invoice' ? Math.max(0, line.countedQuantity - line.invoiceQuantity) : line.countedQuantity;
+}
+
+/**
+ * The most pieces damage at the count may name (goods-in 4.9): pieces on the invoice, counted and in good condition,
+ * held apart from any excess, since a damage confirmation takes free units and an excess hold ends only by the PT route
+ * (stock-ledger 6.1, 13.15); none for wrong or unidentified goods, held wrong or unidentified, which the ledger never
+ * confirms as damaged (stock-ledger 2.3).
+ */
+export function damageablePiecesOf(line: Pick<CountedLine, 'goods' | 'invoiceQuantity' | 'countedQuantity'>): number {
+  return line.goods === 'on-invoice' ? Math.min(line.invoiceQuantity, line.countedQuantity) : 0;
+}
+
+export function lineFindings(line: CountedLine): LineFindings {
+  const extra = extraPiecesOf(line);
+  const keepsExtra = extra > 0 && line.extra === 'received';
+  return {
+    shortage: line.goods === 'on-invoice' ? Math.max(0, line.invoiceQuantity - line.countedQuantity) : 0,
+    extra,
+    received: line.countedQuantity - (keepsExtra ? 0 : extra),
+    held: keepsExtra ? { kind: line.goods === 'on-invoice' ? 'excess' : line.goods, quantity: extra } : null,
+    damaged: line.damagedQuantity ?? 0,
+  };
+}
+
+const damageTextSchema = z
+  .string()
+  .max(DAMAGE_CAPS.text)
+  .regex(/\S/, { message: 'Needs a character that is not a space' });
+
+/** The damage the count finds on a line (goods-in 4.4; PRD-DMG-001): how many pieces, what is wrong, one photo or none. */
+export const countDamageSchema = z.strictObject({
+  quantity: z.int().min(1).max(RECEIVING_CAPS.pieces),
+  description: damageTextSchema,
+  /** A photo of the damage, stored first (S1-F06-T05); attached to the damage report when the GRN is issued. */
+  photo: evidenceFileSchema.nullable(),
+});
+export type CountDamage = z.infer<typeof countDamageSchema>;
+
+/**
+ * One line of the count, by style, colour and size as the invoice lists the goods (goods-in 4.3, 4.4; DEC-138): a new
+ * line, or the next version of a line, naming the line and its latest version (code-house-rules 12.7). Goods on the
+ * invoice name their style code and are on the invoice; wrong goods name their style code and their product, and are
+ * not on it; unidentified goods name nothing but what they look like, and are not on it either. Extra pieces are
+ * recorded as received or not received exactly when the line has some; damage only on pieces on the invoice, at most
+ * those counted. **Design choice** of the shape (goods-in 4.9).
  */
 export const countLineDraftSchema = z
   .strictObject({
     line: z.strictObject({ lineId: idSchema, versionToken: idSchema }).optional(),
-    styleCode: text(RECEIVING_CAPS.codeText),
-    /** As the invoice names it; null when it names none (DEC-138). */
+    goods: lineGoodsSchema,
+    /** As the invoice writes it, or the goods' tag for wrong goods; null for unidentified goods. */
+    styleCode: text(RECEIVING_CAPS.codeText).nullable(),
+    /** As the invoice names it; null when it names none (DEC-138), and for unidentified goods. */
     colour: text(RECEIVING_CAPS.codeText).nullable(),
     /**
      * A value of the attribute the Organisation marks as its size list (structure-and-masters 4.2 "As built"; goods-in
@@ -103,16 +206,47 @@ export const countLineDraftSchema = z
      * (PRD-MER-005).
      */
     sizeValueId: idSchema.nullable(),
-    /** The product, when the style, colour and size name one already set up; null otherwise (goods-in 4.3). */
+    /**
+     * The product, when the style, colour and size name one already set up; null otherwise (goods-in 4.3). Wrong goods
+     * always name theirs.
+     */
     skuId: idSchema.nullable(),
+    /** For unidentified goods only: what they look like, since nothing else tells them apart (goods-in 4.9). */
+    description: text(RECEIVING_CAPS.longText).nullable(),
     invoiceQuantity: piecesSchema,
     countedQuantity: piecesSchema,
+    /** What happens to the line's extra pieces, exactly when it has some (goods-in 4.4). */
+    extra: extraPiecesSchema.nullable(),
+    damage: countDamageSchema.nullable(),
     /** Only for a product whose tracking profile requires them (PRD-MER-011). */
     batch: z.strictObject({ code: text(RECEIVING_CAPS.codeText), expiryDate: businessDateSchema }).nullable(),
   })
-  .refine((line) => line.invoiceQuantity > 0 || line.countedQuantity > 0, {
-    message: 'A line has pieces on the invoice or counted',
-    path: ['countedQuantity'],
+  .superRefine((line, context) => {
+    const issue = (path: string, message: string) => {
+      context.addIssue({ code: 'custom', path: [path], message });
+    };
+    if (line.goods === 'unidentified') {
+      for (const field of ['styleCode', 'colour', 'sizeValueId', 'skuId', 'batch'] as const) {
+        if (line[field] !== null) issue(field, 'Unidentified goods carry no identity');
+      }
+      if (line.description === null) issue('description', 'Say what the unidentified goods look like');
+    } else {
+      if (line.styleCode === null) issue('styleCode', 'A line names its style code');
+      if (line.description !== null) issue('description', 'Only unidentified goods are described');
+    }
+    if (line.goods === 'wrong' && line.skuId === null) issue('skuId', 'Wrong goods name their product');
+    if (line.goods === 'on-invoice') {
+      if (line.invoiceQuantity === 0) issue('invoiceQuantity', 'Goods on the invoice have pieces on it');
+    } else {
+      if (line.invoiceQuantity !== 0) issue('invoiceQuantity', 'Goods not on the invoice have none on it');
+      if (line.countedQuantity === 0) issue('countedQuantity', 'Goods not on the invoice are counted');
+    }
+    const extra = extraPiecesOf(line);
+    if (extra > 0 && line.extra === null) issue('extra', 'Say whether the extra pieces are received');
+    if (extra === 0 && line.extra !== null) issue('extra', 'The line has no extra pieces');
+    if (line.damage !== null && line.damage.quantity > damageablePiecesOf(line)) {
+      issue('damage', 'Damage at the count is of pieces on the invoice that were counted');
+    }
   });
 export type CountLineDraft = z.infer<typeof countLineDraftSchema>;
 
@@ -148,12 +282,17 @@ export const receivingAvailabilitySchema = z.strictObject({
 });
 export type ReceivingAvailability = z.infer<typeof receivingAvailabilitySchema>;
 
-/** One line of the count as it stands, with its latest version (goods-in 4.3). */
+/** One line of the count as it stands, with its latest version (goods-in 4.3, 4.4). */
 export const countLineSchema = z.strictObject({
   lineId: idSchema,
   versionToken: idSchema,
-  styleCode: z.string(),
+  goods: lineGoodsSchema,
+  /** Null for unidentified goods, which carry no identity (goods-in 4.4). */
+  styleCode: z.string().nullable(),
   colour: z.string().nullable(),
+  description: z.string().nullable(),
+  extra: extraPiecesSchema.nullable(),
+  damage: countDamageSchema.nullable(),
   /** The size, with the version of the size list's marking it was read under (code-house-rules 7.3; RR-556). */
   size: z
     .strictObject({ attributeId: idSchema, valueId: idSchema, markedAttributeVersionId: idSchema, code: z.string() })
@@ -182,7 +321,77 @@ export const arrivalInvoiceSchema = z.strictObject({
 });
 export type ArrivalInvoice = z.infer<typeof arrivalInvoiceSchema>;
 
-/** The GRN, as printed: quantities only, never a price, tax or value (goods-in 4.5). */
+/**
+ * Where a held line stands (design-language 7): Awaiting approval while its decision waits in My work; Accepted once
+ * Booking takes it in; Held once Booking leaves it held, until a supplier return (stage 3).
+ */
+export const heldLineStateSchema = z.enum(['Awaiting approval', 'Accepted', 'Held']);
+export type HeldLineState = z.infer<typeof heldLineStateSchema>;
+
+/** The product Booking names for unidentified goods before taking them in (goods-in 4.6), as a count line names one. */
+export const namedProductSchema = z.strictObject({
+  styleCode: z.string(),
+  colour: z.string().nullable(),
+  size: z
+    .strictObject({ attributeId: idSchema, valueId: idSchema, markedAttributeVersionId: idSchema, code: z.string() })
+    .nullable(),
+  skuId: idSchema.nullable(),
+});
+export type NamedProduct = z.infer<typeof namedProductSchema>;
+
+/** A held line as a reader of its Arrival sees it (goods-in 4.6, 4.9). */
+export const heldLineSchema = z.strictObject({
+  id: idSchema,
+  kind: heldKindSchema,
+  quantity: z.int().min(1),
+  state: heldLineStateSchema,
+  /** Its latest version, which naming the product names and its decision binds to (code-house-rules 12.7). */
+  versionToken: idSchema,
+  /** The product named for unidentified goods, or null while none is (goods-in 4.6). */
+  named: namedProductSchema.nullable(),
+  /** The decision's latest request and its state, where the reader may see it. */
+  requestId: idSchema.nullable(),
+  requestState: approvalRequestStateSchema.nullable(),
+  decision: z
+    .strictObject({
+      outcome: z.enum(['taken-in', 'left-held']),
+      decidedBy: idSchema,
+      decidedAt: instantSchema,
+    })
+    .nullable(),
+});
+export type HeldLine = z.infer<typeof heldLineSchema>;
+
+/** One line of a GRN, as its count line stood at issue, with its findings and its held part (goods-in 4.4 to 4.6). */
+export const grnLineSchema = z.strictObject({
+  /** The line's identifier, which a damage report on its goods names (goods-in 8.2; S2-F08-T01). */
+  id: idSchema,
+  lineNumber: z.int().min(1),
+  goods: lineGoodsSchema,
+  styleCode: z.string().nullable(),
+  colour: z.string().nullable(),
+  size: z.string().nullable(),
+  skuId: idSchema.nullable(),
+  description: z.string().nullable(),
+  invoiceQuantity: piecesSchema,
+  countedQuantity: piecesSchema,
+  extra: extraPiecesSchema.nullable(),
+  /** Shortage, extra, received and damaged pieces, worked out by `lineFindings` (goods-in 4.4). */
+  findings: z.strictObject({
+    shortage: piecesSchema,
+    extra: piecesSchema,
+    received: piecesSchema,
+    damaged: piecesSchema,
+  }),
+  /** The damage the count found: what is wrong and the damage report it raised (goods-in 4.5, 8.5). */
+  damage: z.strictObject({ quantity: z.int().min(1), description: z.string(), damageReportId: idSchema }).nullable(),
+  heldLine: heldLineSchema.nullable(),
+  batch: z.strictObject({ code: z.string(), expiryDate: businessDateSchema }).nullable(),
+  countedBy: z.array(idSchema),
+});
+export type GrnLine = z.infer<typeof grnLineSchema>;
+
+/** The GRN, as printed: quantities and findings only, never a price, tax or value (goods-in 4.5). */
 export const grnSchema = z.strictObject({
   id: idSchema,
   number: z.string(),
@@ -192,23 +401,44 @@ export const grnSchema = z.strictObject({
   enteredBy: idSchema,
   /** Who counted it: everyone who saved a line (goods-in 4.3). */
   countedBy: z.array(idSchema),
-  lines: z.array(
-    z.strictObject({
-      /** The line's identifier, which a damage report on its goods names (goods-in 8.2; S2-F08-T01). */
-      id: idSchema,
-      lineNumber: z.int().min(1),
-      styleCode: z.string(),
-      colour: z.string().nullable(),
-      size: z.string().nullable(),
-      skuId: idSchema.nullable(),
-      invoiceQuantity: piecesSchema,
-      countedQuantity: piecesSchema,
-      batch: z.strictObject({ code: z.string(), expiryDate: businessDateSchema }).nullable(),
-      countedBy: z.array(idSchema),
-    }),
-  ),
+  lines: z.array(grnLineSchema),
 });
 export type Grn = z.infer<typeof grnSchema>;
+
+/**
+ * Naming the product of unidentified goods before they are taken in (goods-in 4.6): by style code, colour and size
+ * from the size list, as a count line names its goods, and the product where one is set up; naming the held line's
+ * latest version (code-house-rules 12.7). The decision is asked again on the version it makes.
+ */
+export const heldLineProductDraftSchema = z.strictObject({
+  versionToken: idSchema,
+  styleCode: text(RECEIVING_CAPS.codeText),
+  colour: text(RECEIVING_CAPS.codeText).nullable(),
+  sizeValueId: idSchema.nullable(),
+  skuId: idSchema.nullable(),
+});
+export type HeldLineProductDraft = z.infer<typeof heldLineProductDraftSchema>;
+
+export const heldLineProductNamedSchema = z.strictObject({ versionToken: idSchema, requestId: idSchema });
+export type HeldLineProductNamed = z.infer<typeof heldLineProductNamedSchema>;
+
+export const heldLineParamsSchema = z.strictObject({ heldLineId: idSchema });
+
+/**
+ * A held line with the GRN line it holds and where it is, as its decision's panel in My work shows it (goods-in 4.6,
+ * section 11): read with view on the Arrival.
+ */
+export const heldLineReadSchema = z.strictObject({
+  asOf: instantSchema,
+  arrivalId: idSchema,
+  grnNumber: z.string(),
+  supplierPartyId: idSchema,
+  brandId: idSchema,
+  businessUnitId: idSchema,
+  line: grnLineSchema,
+  people: z.array(z.strictObject({ userId: idSchema, name: z.string() })),
+});
+export type HeldLineRead = z.infer<typeof heldLineReadSchema>;
 
 /** An Arrival as the Arrival and Count screens show it (goods-in 4.2 to 4.5). */
 export const arrivalSchema = z.strictObject({
@@ -278,8 +508,11 @@ export const inboxEntrySchema = z.strictObject({
   lines: z.int().min(0),
   countedPieces: z.int().min(0),
   grn: z.strictObject({ id: idSchema, number: z.string(), issuedAt: instantSchema }).nullable(),
-  /** What the delivery waits for next (goods-in 4.1): its invoice, its count, its GRN, or its PT. */
-  waitingFor: z.enum(['invoice', 'count', 'grn', 'pt']),
+  /**
+   * What the delivery waits for next (goods-in 4.1): its invoice, its count, its GRN, the decisions of its held lines
+   * and damage reported at the count, or its PT.
+   */
+  waitingFor: z.enum(['invoice', 'count', 'grn', 'held-lines', 'pt']),
 });
 export type InboxEntry = z.infer<typeof inboxEntrySchema>;
 

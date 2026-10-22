@@ -11,9 +11,10 @@ import { and, asc, desc, eq, inArray, lt } from 'drizzle-orm';
 import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
 import type { RecordFacts } from '../../access/index.js';
 import { siteExists, structureOn } from '../../organisation/index.js';
-import { batchOf } from '../db/columns.js';
-import { arrival, arrivalInvoice, arrivalPhoto, grn, grnLine } from '../db/schema.js';
+import type { GrnLineDamage } from '../../stock/documents/index.js';
+import { arrival, arrivalInvoice, arrivalPhoto, grn, grnLine, heldLine, heldLineDecision } from '../db/schema.js';
 import { currentLines, grnBlockers } from '../domain/lines.js';
+import { grnLineViews, linesOfGrn, type Requests } from './held-lines.js';
 import { arrivalRow, entriesByArrival, entriesOf, factsOf, newestChange, type ArrivalRow } from '../commands/common.js';
 import { receivingMissing, type AvailabilityDependencies } from './availability.js';
 
@@ -23,15 +24,10 @@ import { receivingMissing, type AvailabilityDependencies } from './availability.
 
 const instant = (at: Date) => at.toISOString();
 
-/** The GRN as printed: quantities only, never a value (goods-in 4.5). */
-async function grnView(context: TransactionContext, arrivalId: string): Promise<Grn | null> {
+/** The GRN as printed: quantities and findings only, never a value (goods-in 4.5). */
+async function grnView(context: TransactionContext, arrivalId: string, requests: Requests): Promise<Grn | null> {
   const [row] = await context.tx.select().from(grn).where(eq(grn.arrivalId, arrivalId));
   if (row === undefined) return null;
-  const lines = await context.tx
-    .select()
-    .from(grnLine)
-    .where(eq(grnLine.grnId, row.id))
-    .orderBy(asc(grnLine.lineNumber));
   return {
     id: row.id,
     number: row.number,
@@ -39,18 +35,7 @@ async function grnView(context: TransactionContext, arrivalId: string): Promise<
     businessDate: row.businessDate,
     enteredBy: row.issuedByUserId,
     countedBy: row.countedByUserIds,
-    lines: lines.map((line) => ({
-      id: line.id,
-      lineNumber: line.lineNumber,
-      styleCode: line.styleCode,
-      colour: line.colour,
-      size: line.sizeCode,
-      skuId: line.skuId,
-      invoiceQuantity: line.invoiceQuantity,
-      countedQuantity: line.countedQuantity,
-      batch: batchOf(line),
-      countedBy: line.countedByUserIds,
-    })),
+    lines: await grnLineViews(context, await linesOfGrn(context, row.id), requests),
   };
 }
 
@@ -62,13 +47,14 @@ export async function arrivalFacts(context: TransactionContext, arrivalId: strin
 
 /**
  * One Arrival with its invoices, photos, count and GRN, and what blocks issuing its GRN while it is In progress: the
- * gate at its unit, an invoice, a line, or a line whose counted quantity differs from its invoice quantity.
+ * gate at its unit, an invoice, a line, or a line whose extra pieces are not recorded as received or not.
  */
 export async function arrivalView(
   context: TransactionContext,
   dependencies: AvailabilityDependencies,
   row: ArrivalRow,
   today: string,
+  requests: Requests,
 ): Promise<Arrival> {
   const invoices = await context.tx
     .select()
@@ -81,7 +67,7 @@ export async function arrivalView(
     .where(eq(arrivalPhoto.arrivalId, row.id))
     .orderBy(asc(arrivalPhoto.recordedAt), asc(arrivalPhoto.id));
   const lines = currentLines(await entriesOf(context, row.id));
-  const issued = await grnView(context, row.id);
+  const issued = await grnView(context, row.id, requests);
   // Recording the Arrival records its first change in the same transaction (commands/arrival.ts).
   const newest = await newestChange(context, row.id);
   if (newest === undefined) throw new CommandDefect('An Arrival has no change recorded');
@@ -130,8 +116,12 @@ export async function arrivalView(
     lines: lines.map((line) => ({
       lineId: line.lineId,
       versionToken: line.entry.id,
+      goods: line.entry.goods,
       styleCode: line.entry.styleCode,
       colour: line.entry.colour,
+      description: line.entry.description,
+      extra: line.entry.extra,
+      damage: line.entry.damage,
       size: line.entry.size,
       skuId: line.entry.skuId,
       invoiceQuantity: line.entry.invoiceQuantity,
@@ -159,10 +149,11 @@ export function peopleOf(arrival: Arrival): string[] {
 
 /**
  * The Receive Goods inbox of a Site (goods-in 4.1), newest recorded first, a page at a time (code-house-rules 12.1);
- * undefined when no Site has the identifier. Pending holds Arrivals not yet issued as a GRN and GRNs waiting for their
- * PT, which every GRN does until the PT upload is built (S2-F04-T02); History holds the rest, none yet. Each unit of
- * the Site in force today comes with whether receiving is available there, naming what is missing, and its locations
- * in force; `covered` answers, for the facts of each Arrival, whether the reader may view it.
+ * undefined when no Site has the identifier. Pending holds Arrivals not yet issued as a GRN, GRNs with held lines or
+ * damage reported at the count not yet decided, and GRNs waiting for their PT, which every GRN does until the PT upload
+ * is built (S2-F04-T02); History holds the rest, none yet. Each unit of the Site in force today comes with whether
+ * receiving is available there, naming what is missing, and its locations in force; `covered` answers, for the facts
+ * of each Arrival, whether the reader may view it; `damage` where the damage reports on GRN lines stand.
  */
 export async function inboxOf(
   context: TransactionContext,
@@ -171,6 +162,7 @@ export async function inboxOf(
   query: InboxQuery,
   today: string,
   covered: (facts: readonly RecordFacts[]) => Promise<readonly boolean[]>,
+  damage: (grnLineIds: readonly string[]) => Promise<readonly GrnLineDamage[]>,
 ): Promise<Omit<Inbox, 'asOf'> | undefined> {
   if (!(await siteExists(context, siteId))) return undefined;
   const structure = await structureOn(context, today);
@@ -219,12 +211,25 @@ export async function inboxOf(
           .select({ id: grn.id, arrivalId: grn.arrivalId, number: grn.number, issuedAt: grn.issuedAt })
           .from(grn)
           .where(inArray(grn.arrivalId, ids));
+  const waiting = await grnsWaiting(
+    context,
+    grns.map((each) => each.id),
+    damage,
+  );
   const listed: InboxEntry[] = shown.map((row) => {
     const numbers = invoices.filter((each) => each.arrivalId === row.id).map((each) => each.number);
     const lines = currentLines(entries.get(row.id) ?? []);
     const issued = grns.find((each) => each.arrivalId === row.id);
     const waitingFor: InboxEntry['waitingFor'] =
-      issued !== undefined ? 'pt' : numbers.length === 0 ? 'invoice' : lines.length === 0 ? 'count' : 'grn';
+      issued !== undefined
+        ? waiting.has(issued.id)
+          ? 'held-lines'
+          : 'pt'
+        : numbers.length === 0
+          ? 'invoice'
+          : lines.length === 0
+            ? 'count'
+            : 'grn';
     return {
       arrivalId: row.id,
       state: issued === undefined ? 'In progress' : 'Issued',
@@ -240,4 +245,33 @@ export async function inboxOf(
     };
   });
   return { siteId, view: query.view, units, entries: listed, next };
+}
+
+/**
+ * The GRNs of those given with a held line or a damage report on a line still waiting for its decision (goods-in 4.1,
+ * 4.6): their PT waits for those decisions (5.1).
+ */
+async function grnsWaiting(
+  context: TransactionContext,
+  grnIds: readonly string[],
+  damage: (grnLineIds: readonly string[]) => Promise<readonly GrnLineDamage[]>,
+): Promise<ReadonlySet<string>> {
+  const waiting = new Set<string>();
+  if (grnIds.length === 0) return waiting;
+  const held = await context.tx
+    .select({ grnId: heldLine.grnId, decided: heldLineDecision.id })
+    .from(heldLine)
+    .leftJoin(heldLineDecision, eq(heldLineDecision.heldLineId, heldLine.id))
+    .where(inArray(heldLine.grnId, [...grnIds]));
+  for (const row of held) if (row.decided === null) waiting.add(row.grnId);
+  const lines = await context.tx
+    .select({ id: grnLine.id, grnId: grnLine.grnId })
+    .from(grnLine)
+    .where(inArray(grnLine.grnId, [...grnIds]));
+  for (const report of await damage(lines.map((line) => line.id))) {
+    if (report.state !== 'Submitted') continue;
+    const line = lines.find((each) => each.id === report.grnLineId);
+    if (line !== undefined) waiting.add(line.grnId);
+  }
+  return waiting;
 }

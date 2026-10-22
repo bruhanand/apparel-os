@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { known, paise, uuidv7 } from '@apparel-os/domain';
 import {
   DAMAGE_DECISION,
+  HELD_LINE_DECISION,
   fieldClassSchema,
   permissionRegistry,
   setupRequestSchema,
@@ -114,7 +115,8 @@ import {
   writeTestDocument,
 } from '../support/exceptions.js';
 import { createSyntheticOrganisations } from '../support/organisations.js';
-import { GRN_KIND } from '../../src/modules/receiving/index.js';
+import { GRN_KIND, receivingExceptionTypes } from '../../src/modules/receiving/index.js';
+import { receivingApprovalRules } from '../../src/modules/receiving/domain/kinds.js';
 import { BOOKING_KIND } from '../../src/modules/booking/index.js';
 import { defineSyntheticGrnSeries } from '../fixtures/grn-series.js';
 import { defineSyntheticBookingSeries } from '../fixtures/booking-series.js';
@@ -2408,10 +2410,13 @@ const storeStaffWorld = await receivingFixture(receivingStructure, receivingData
 // The damage journey's world (damage-reports.spec.ts; S2-F08-T01), its own so its deliveries and reports change no
 // other journey's lists.
 const damageWorld = await receivingFixture(receivingStructure, receivingDatabase, 'JOURNEY-DMG');
+// The held-line journey's world (held-lines.spec.ts; S2-F02-T03), its own so its deliveries and decisions change no
+// other journey's lists.
+const heldWorld = await receivingFixture(receivingStructure, receivingDatabase, 'JOURNEY-HLD');
 // Policies 4 and 10 validated on the values the modules report, the receiving worlds', and on the readiness journey's
 // SYNTHETIC value of policy 4, which the application registers for every Organisation.
 await receivingGateOpen(receivingStructure, receivingDatabase, [readinessValuesCheck]);
-for (const each of [receivingWorld, storeStaffWorld, damageWorld]) {
+for (const each of [receivingWorld, storeStaffWorld, damageWorld, heldWorld]) {
   await receivingGranted(
     receivingStructure,
     receivingDatabase,
@@ -2525,6 +2530,55 @@ const damageDecider = await grantSynthetic(
   );
   if (decided.kind !== 'success') throw new Error(`The damage limit was not approved: ${decided.refusal.code}`);
 }
+// The held-line journey (held-lines.spec.ts; goods-in 4.4 to 4.6, section 11; S2-F02-T03): Warehouse (P-WHS), who
+// counts excess on the world's Site, records it received and held and issues the GRN; and a Booking approver (P-BKG)
+// named for the Site and brand by role (POL-17.11), who takes the excess in from My work within an individual SYNTHETIC
+// limit on the decision covering an Unknown cost, prepared and approved through `access`'s commands by the setup's two
+// people (access-and-approvals 9.2). Policy 17 is Signed and validated above, for the damage journey. Who receives,
+// who decides and the limit are the product owner's: SYNTHETIC here.
+const heldReceiver = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-HELD-RECEIVER',
+  enrolled: true,
+  personas: ['P-WHS'],
+});
+await grantSynthetic(receivingDatabase, { kind: 'user', id: heldReceiver.id }, RECEIVER_AUTHORITY);
+const heldApprover = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-HELD-APPROVER',
+  enrolled: true,
+  personas: ['P-BKG'],
+});
+const heldDecider = await grantSynthetic(receivingDatabase, { kind: 'user', id: heldApprover.id }, [
+  { recordType: 'receiving.arrival', action: 'view' },
+  { recordType: 'receiving.held_line', action: 'approve' },
+  { recordType: 'access.approval_request', action: 'view' },
+  { recordType: 'access.approval_reason', action: 'view' },
+]);
+{
+  const limitAccess = receivingStructure.accessWith({ rules: receivingApprovalRules, effects: new Map() });
+  const preparer = receivingStructure.preparer;
+  const preparing = await grantSynthetic(receivingDatabase, { kind: 'user', id: preparer.id }, LIMIT_ADMIN_AUTHORITY);
+  const prepared = await receivingStructure.run(preparer.id, (context) =>
+    limitAccess.prepareApprovalLimit(
+      context,
+      { userId: preparer.id, roleAssignmentId: preparing.assignmentId },
+      {
+        actionType: HELD_LINE_DECISION,
+        holder: { kind: 'individual', userId: heldApprover.id, roleAssignmentId: heldDecider.assignmentId },
+        limit: { kind: 'none' },
+        coversUnknown: true,
+        origin: 'synthetic',
+        validFrom: receivingStructure.today(),
+      },
+    ),
+  );
+  if (prepared.kind !== 'success') throw new Error(`The held-line limit was refused: ${prepared.refusal.code}`);
+  const decided = await receivingStructure.decideThrough(
+    limitAccess,
+    prepared.answer.requestId,
+    prepared.answer.limitId,
+  );
+  if (decided.kind !== 'success') throw new Error(`The held-line limit was not approved: ${decided.refusal.code}`);
+}
 const receivingRouter = new OrganisationRouter(
   { directoryConnectionString: databaseUrl(world.directory, 'runtime'), poolMax: 2 },
   fixtureLog.logger,
@@ -2622,6 +2676,8 @@ await fixtureRunner.run(
 // approved here as a fixture (code-house-rules 11.2), as the other journeys' rules are. The routing is the product
 // owner's: SYNTHETIC here.
 await grantSynthetic(receivingDatabase, { kind: 'user', id: damageReporter.id }, RECEIVING_LISTS);
+await grantSynthetic(receivingDatabase, { kind: 'user', id: heldReceiver.id }, RECEIVING_LISTS);
+await grantSynthetic(receivingDatabase, { kind: 'user', id: heldApprover.id }, RECEIVING_LISTS);
 const damageReasonId = await writeSyntheticReason(receivingDatabase, 'approve');
 const damageRouting = await fixtureRunner.run(
   {
@@ -2656,12 +2712,44 @@ const damageRouting = await fixtureRunner.run(
   },
 );
 if (damageRouting.kind !== 'done') throw new Error(`The damage rule was refused: ${damageRouting.refusal.code}`);
+// The held-line journey's excess routed at its world's Site to the Booking approver by a SYNTHETIC rule, approved here
+// as a fixture as the damage rule is (code-house-rules 11.2). The routing is the product owner's: SYNTHETIC here.
+const heldRouting = await fixtureRunner.run(
+  {
+    commandName: 'test-syn-held-lines.fixture',
+    organisation: receivingRouted.organisation,
+    correlationId: newCorrelationId(),
+    actor: { kind: 'actor', actorId: damageOperations.id },
+  },
+  (context) =>
+    new Exceptions({
+      numbering: new Numbering({ kinds: [EXCEPTION_CODE_KIND] }),
+      inbox: new Inbox(),
+      audit: new Audit(fixtureLog.logger),
+      types: [damageExceptionType, ...receivingExceptionTypes],
+    }).prepareRouting(
+      context,
+      { userId: damageOperations.id, roleAssignmentId: damageDecider.assignmentId },
+      {
+        typeCode: 'receiving.excess',
+        siteId: heldWorld.siteId,
+        owner: { kind: 'user', userId: heldApprover.id },
+        dueRule: { format: 'elapsed-minutes-v1', minutes: 60 },
+        escalation: { kind: 'user', userId: heldApprover.id },
+        validFrom: new Date().toISOString().slice(0, 10),
+        origin: 'synthetic',
+      },
+    ),
+);
+if (heldRouting.kind !== 'done') throw new Error(`The excess rule was refused: ${heldRouting.refusal.code}`);
 {
   const owner = await connect(receivingDatabase, 'migration');
   try {
-    await owner.query(`update exceptions.exception_routing_version set decision = 'Approved' where id = $1`, [
-      damageRouting.value.versionId,
-    ]);
+    for (const versionId of [damageRouting.value.versionId, heldRouting.value.versionId]) {
+      await owner.query(`update exceptions.exception_routing_version set decision = 'Approved' where id = $1`, [
+        versionId,
+      ]);
+    }
   } finally {
     await owner.end();
   }
@@ -2832,8 +2920,8 @@ const app = await startAccessApp(
     webApp,
     counterApp,
     fileStoreEnvironment: fileStore.environment,
-    // And the damage exception the application registers (S2-F08-T01).
-    exceptionTypes: [syntheticMismatch, damageExceptionType],
+    // And the damage exception and receiving's follow-ups the application registers (S2-F08-T01, S2-F02-T03).
+    exceptionTypes: [syntheticMismatch, damageExceptionType, ...receivingExceptionTypes],
     // The approval limits journey's test-only valued action type (S1-F05-T01; code-house-rules 11.4).
     extraRecordTypes: [limitsBookingType, bulkBookingType],
     extraApprovalRules: [limitsBookingRule, bulkBookingRule],
@@ -3095,6 +3183,13 @@ writeFileSync(
       operations: credentialsOf(damageOperations),
       reasonId: damageReasonId,
       options: damageWorld.options,
+    },
+    heldLines: {
+      organisationCode: receivingCode,
+      receiver: credentialsOf(heldReceiver),
+      approver: credentialsOf(heldApprover),
+      reasonId: damageReasonId,
+      options: heldWorld.options,
     },
     openToBuy: {
       organisationCode: settingsCode,

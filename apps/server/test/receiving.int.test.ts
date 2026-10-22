@@ -188,7 +188,11 @@ function describedLine(styleCode: string, invoice: number, counted: number, size
     styleCode,
     colour: 'SYNTHETIC NAVY',
     sizeValueId: value === undefined ? null : value.id,
+    goods: 'on-invoice',
     skuId: null,
+    description: null,
+    extra: null,
+    damage: null,
     invoiceQuantity: invoice,
     countedQuantity: counted,
     batch: null,
@@ -572,7 +576,11 @@ describe('the count (goods-in 4.3; DEC-138, PRD-MER-005, PRD-MER-011)', () => {
           markedAttributeVersionId: sizeMarking,
           code: fixture.sizes.values[0]?.code,
         },
+        goods: 'on-invoice',
         skuId: null,
+        description: null,
+        extra: null,
+        damage: null,
         invoiceQuantity: 4,
         countedQuantity: 4,
         countedBy: [storeReceiver.id, receiver.id],
@@ -600,8 +608,10 @@ describe('one line per style, colour and size (goods-in 4.3)', () => {
     });
     // Another size is another line, and the line itself is saved again over its own version.
     expect((await saveLine(storeReceiver, arrivalId, describedLine('SYN-STYLE-ONCE', 1, 1, 1))).status).toBe(200);
+    // Counted beyond the invoice now, so its extra piece is recorded as received or not (goods-in 4.4).
     const resaved = await saveLine(storeReceiver, arrivalId, {
       ...describedLine('SYN-STYLE-ONCE', 2, 3),
+      extra: 'received',
       line: { lineId, versionToken: lineVersionToken },
     });
     expect(resaved.status, JSON.stringify(resaved.body)).toBe(200);
@@ -619,7 +629,11 @@ describe('issuing the GRN (goods-in 4.5, 10.3; PRD-REC-008, PRD-ACP-001, PRD-INT
       styleCode: fixture.batchSku.styleCode,
       colour: null,
       sizeValueId: null,
+      goods: 'on-invoice',
       skuId: fixture.batchSku.id,
+      description: null,
+      extra: null,
+      damage: null,
       invoiceQuantity: 5,
       countedQuantity: 5,
       batch: null,
@@ -636,7 +650,11 @@ describe('issuing the GRN (goods-in 4.5, 10.3; PRD-REC-008, PRD-ACP-001, PRD-INT
       styleCode: fixture.batchSku.styleCode,
       colour: null,
       sizeValueId: null,
+      goods: 'on-invoice',
       skuId: fixture.batchSku.id,
+      description: null,
+      extra: null,
+      damage: null,
       invoiceQuantity: 5,
       countedQuantity: 5,
       batch: { code: 'SYN-BATCH-1', expiryDate: setup.day(90) },
@@ -819,18 +837,6 @@ describe('issuing the GRN (goods-in 4.5, 10.3; PRD-REC-008, PRD-ACP-001, PRD-INT
     const reused = await post(storeReceiver, '/api/receiving/arrivals', { ...body, cartons: 9 }, recordKey);
     expect(reused.status).toBe(409);
     expect(errorOf(reused)?.code).toBe('kernel.idempotency-key-reused');
-  });
-
-  it('PRD-REC-008 a GRN with a line whose counted quantity differs from its invoice quantity is refused, naming the line', async () => {
-    const arrivalId = await recordArrival(storeReceiver, fixture.wholeStore, fixture.storeLocation);
-    expect((await recordInvoice(storeReceiver, arrivalId)).status).toBe(200);
-    const short = await saveLine(storeReceiver, arrivalId, describedLine('SYN-STYLE-SHORT', 10, 8));
-    const { versionToken } = await readArrival(storeReceiver, arrivalId);
-    const refused = await post(storeReceiver, `/api/receiving/arrivals/${arrivalId}/grn`, { versionToken });
-    expect(errorOf(refused)).toMatchObject({
-      code: 'receiving.line-differs-from-invoice',
-      missing: [{ kind: 'count-line', lineId: (short.body as { lineId: string }).lineId }],
-    });
   });
 });
 

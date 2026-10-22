@@ -1,4 +1,4 @@
-import { ARRIVAL_TYPE, routes, type CommandRoute } from '@apparel-os/schemas';
+import { ARRIVAL_TYPE, DAMAGE_REPORT_TYPE, HELD_LINE_TYPE, routes, type CommandRoute } from '@apparel-os/schemas';
 import { Controller, Inject } from '@nestjs/common';
 import {
   ApiRefusal,
@@ -17,13 +17,29 @@ import {
   type RouteInputOf,
   type TransactionContext,
 } from '../../../kernel/index.js';
-import { ACCESS, SignedIn, type AccessInterface, type RecordFacts, type SignedInUser } from '../../access/index.js';
+import {
+  ACCESS,
+  SignedIn,
+  type AccessInterface,
+  type HeldNeed,
+  type RecordFacts,
+  type SignedInUser,
+} from '../../access/index.js';
 import { BUSINESS_DATE_NOT_SET, recordNotFound, unitNotAtSite, type Actor, type Outcome } from '../commands/common.js';
+import type { IssueNeed } from '../receiving.js';
 import type { ReceivingInterface } from '../receiving.js';
 import { RECEIVING } from '../tokens.js';
 
 /** Finds the facts of the record a route acts on, in its transaction; undefined when it does not exist. */
 type FactsOf = (context: TransactionContext, today: string) => Promise<RecordFacts | undefined>;
+
+/** The further permissions a command relies on besides its route's, on the same record's facts (RR-444). */
+type AlsoNeeds = (context: TransactionContext) => Promise<readonly { action: 'create'; recordType: string }[]>;
+
+/** The record type and action each further need of issuing a GRN is held on (goods-in 4.9, 8.5). */
+const ISSUE_NEEDS: Readonly<Record<IssueNeed, { action: 'create'; recordType: string }>> = {
+  'damage-report': { action: 'create', recordType: DAMAGE_REPORT_TYPE },
+};
 
 /**
  * Receive Goods (goods-in 4.1 to 4.5, section 11; module-map section 5; code-house-rules 12.1; S2-F02-T02). An Arrival
@@ -89,6 +105,7 @@ export class ReceivingController {
         arrivalId,
         today,
         async (userIds) => (await this.access.partyNames(context, userIds, [])).users,
+        (versionIds) => this.access.approvalRequestsOf(context, versionIds),
       );
       if (arrival === undefined) return { refused: recordNotFound(ARRIVAL_TYPE, arrivalId) };
       return { asOf: context.startedAt.toISOString(), arrival };
@@ -152,8 +169,58 @@ export class ReceivingController {
   @ApiRoute(routes.issueGrn)
   issueGrn(@RouteInput() input: RouteInputOf<typeof routes.issueGrn>, @SignedIn() user: SignedInUser) {
     const { arrivalId } = input.params;
-    return this.onArrival(routes.issueGrn, 'receiving.issue-grn', user, input, (c, actor) =>
-      this.receiving.issueGrn(c, actor, arrivalId, input.body, input.idempotencyKey),
+    // Whoever issues a GRN whose count found damage reports it, so holds create on damage reports too (goods-in 8.5).
+    return this.onArrival(
+      routes.issueGrn,
+      'receiving.issue-grn',
+      user,
+      input,
+      (c, actor) => this.receiving.issueGrn(c, actor, arrivalId, input.body, input.idempotencyKey),
+      async (context) => (await this.receiving.issueAlsoNeeds(context, arrivalId)).map((need) => ISSUE_NEEDS[need]),
+    );
+  }
+
+  @ApiRoute(routes.readHeldLine)
+  async readHeldLine(@RouteInput() input: RouteInputOf<typeof routes.readHeldLine>, @SignedIn() user: SignedInUser) {
+    const { heldLineId } = input.params;
+    const answer = await this.read(user, 'receiving.read-held-line', async (context) => {
+      // A held line the reader's scope does not cover is hidden by row-level security, so it carries no fact, which
+      // only all-members scope covers (5.3; PRD-MOD-015); it is then not found.
+      const facts = (await this.receiving.heldLineFacts(context, heldLineId)) ?? {};
+      const authorised = await this.access.authorise(context, {
+        actorId: user.userId,
+        action: 'view',
+        recordType: ARRIVAL_TYPE,
+        facts,
+      });
+      if (authorised.kind === 'refused') return { refused: authorised.refusal };
+      const held = await this.receiving.readHeldLine(
+        context,
+        heldLineId,
+        async (userIds) => (await this.access.partyNames(context, userIds, [])).users,
+        (versionIds) => this.access.approvalRequestsOf(context, versionIds),
+      );
+      if (held === undefined) return { refused: recordNotFound(HELD_LINE_TYPE, heldLineId) };
+      return { asOf: context.startedAt.toISOString(), ...held };
+    });
+    if ('refused' in answer) throw new ApiRefusal({ ...answer.refused, missing: [...answer.refused.missing] });
+    return answer;
+  }
+
+  @ApiRoute(routes.nameHeldLineProduct)
+  nameHeldLineProduct(
+    @RouteInput() input: RouteInputOf<typeof routes.nameHeldLineProduct>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    const { heldLineId } = input.params;
+    return this.command(
+      routes.nameHeldLineProduct,
+      'receiving.name-held-line-product',
+      user,
+      input,
+      (context) => this.receiving.heldLineFacts(context, heldLineId),
+      recordNotFound(HELD_LINE_TYPE, heldLineId),
+      (context, actor) => this.receiving.nameHeldLineProduct(context, actor, heldLineId, input.body),
     );
   }
 
@@ -164,6 +231,7 @@ export class ReceivingController {
     user: SignedInUser,
     input: RouteInputOf<R> & { readonly params: { readonly arrivalId: string } },
     work: (context: TransactionContext, actor: Actor) => Promise<Outcome<object>>,
+    alsoNeeds?: AlsoNeeds,
   ) {
     const { arrivalId } = input.params;
     return this.command(
@@ -174,6 +242,7 @@ export class ReceivingController {
       (context) => this.receiving.arrivalFacts(context, arrivalId),
       recordNotFound(ARRIVAL_TYPE, arrivalId),
       work,
+      alsoNeeds,
     );
   }
 
@@ -198,15 +267,24 @@ export class ReceivingController {
     );
   }
 
-  /** Authorise in the transaction with the record's facts, before any lock (7.1 step 3). */
+  /**
+   * Authorise in the transaction with the record's facts, before any lock (7.1 step 3): the route's permission, and
+   * each further one the command relies on, on the same facts.
+   */
   private async authoriseIn(
     context: TransactionContext,
     user: SignedInUser,
     route: CommandRoute & { access: { kind: 'action' } },
     factsOf: FactsOf,
     notFoundRefusal: CommandRefusal,
+    alsoNeeds?: AlsoNeeds,
   ): Promise<
-    | { readonly kind: 'allowed'; readonly roleAssignmentId: string; readonly facts: RecordFacts }
+    | {
+        readonly kind: 'allowed';
+        readonly roleAssignmentId: string;
+        readonly facts: RecordFacts;
+        readonly further: readonly HeldNeed[];
+      }
     | { readonly kind: 'refused'; readonly refusal: CommandRefusal }
   > {
     const date = await context.businessDate();
@@ -216,7 +294,13 @@ export class ReceivingController {
     const { action, recordType } = route.access;
     const authorised = await this.access.authorise(context, { actorId: user.userId, action, recordType, facts });
     if (authorised.kind === 'refused') return authorised;
-    return { kind: 'allowed', roleAssignmentId: authorised.roleAssignmentId, facts };
+    const further: HeldNeed[] = [];
+    for (const need of (await alsoNeeds?.(context)) ?? []) {
+      const also = await this.access.authorise(context, { actorId: user.userId, ...need, facts });
+      if (also.kind === 'refused') return also;
+      further.push({ roleAssignmentId: also.roleAssignmentId, need: { ...need, facts } });
+    }
+    return { kind: 'allowed', roleAssignmentId: authorised.roleAssignmentId, facts, further };
   }
 
   private async command<R extends CommandRoute & { access: { kind: 'action' } }>(
@@ -227,9 +311,10 @@ export class ReceivingController {
     factsOf: FactsOf,
     notFoundRefusal: CommandRefusal,
     work: (context: TransactionContext, actor: Actor) => Promise<Outcome<object>>,
+    alsoNeeds?: AlsoNeeds,
   ) {
     const authoriseReplay: ReplayAuthorisation = async (context) => {
-      const authorised = await this.authoriseIn(context, user, route, factsOf, notFoundRefusal);
+      const authorised = await this.authoriseIn(context, user, route, factsOf, notFoundRefusal, alsoNeeds);
       if (authorised.kind === 'allowed') return { kind: 'allowed' };
       return {
         kind: 'refused',
@@ -248,7 +333,7 @@ export class ReceivingController {
         content: requestContentOf(route, input),
         authoriseReplay,
         work: async (context): Promise<CommandOutcome<JsonValue>> => {
-          const authorised = await this.authoriseIn(context, user, route, factsOf, notFoundRefusal);
+          const authorised = await this.authoriseIn(context, user, route, factsOf, notFoundRefusal, alsoNeeds);
           if (authorised.kind === 'refused') {
             return { kind: 'refusal', refusal: authorised.refusal, causedBySecret: false };
           }
@@ -260,6 +345,8 @@ export class ReceivingController {
             { kind: 'user', id: user.userId },
             authorised.roleAssignmentId,
             { action, recordType, facts: authorised.facts },
+            [],
+            authorised.further,
           );
           if (held !== undefined) return { kind: 'refusal', refusal: held, causedBySecret: false };
           const outcome = await work(context, { userId: user.userId, roleAssignmentId: authorised.roleAssignmentId });

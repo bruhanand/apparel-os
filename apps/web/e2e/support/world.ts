@@ -247,6 +247,18 @@ export interface SyntheticWorld {
     readonly reasonId: string;
     readonly options: ReceivingOptions;
   };
+  /**
+   * The held-line journey (S2-F02-T03), in the receiving Organisation, in a world of its own: Warehouse (P-WHS), who
+   * counts excess and issues the GRN, a Booking approver (P-BKG), who takes it in from My work, the approve reason in
+   * force, and how the screens name the world's records.
+   */
+  readonly heldLines: {
+    readonly organisationCode: string;
+    readonly receiver: EnrolledUser;
+    readonly approver: EnrolledUser;
+    readonly reasonId: string;
+    readonly options: ReceivingOptions;
+  };
   readonly openToBuy: {
     readonly organisationCode: string;
     readonly booking: EnrolledUser;

@@ -2,7 +2,7 @@ import type { MissingItem } from '@apparel-os/schemas';
 import { CommandDefect, type CommandRefusal, type TransactionContext } from '../../../kernel/index.js';
 import { OPEN_POLICY_READINESS, type ConfigurationInterface } from '../../configuration/index.js';
 import { mappingOn } from '../../organisation/index.js';
-import { RECEIVING_OPERATIONS } from '../domain/gate.js';
+import { HELD_LINE_DECISIONS, RECEIVE_OPERATIONS } from '../domain/gate.js';
 
 // Whether receiving is available at a business unit now (goods-in 4.1, 10.5; access-and-approvals 7.1 step 2;
 // PRD-SEC-017, PRD-LIF-001, PRD-LIF-002, POL-10.08; S2-F02-T02): Available for both receiving operations at the unit,
@@ -28,7 +28,7 @@ export async function receivingMissing(
     seen.add(key);
     missing.push(item);
   };
-  for (const operation of RECEIVING_OPERATIONS) {
+  for (const operation of RECEIVE_OPERATIONS) {
     const answer = await dependencies.configuration.checkAvailability(context, operation.code, place);
     if (answer === undefined) throw new CommandDefect(`${operation.code} is not declared`);
     for (const item of answer.missing) add(item);
@@ -45,4 +45,19 @@ export async function receivingMissing(
 export function receivingUnavailable(missing: readonly MissingItem[]): CommandRefusal | undefined {
   if (missing.length === 0) return undefined;
   return { kind: 'unavailable', code: 'configuration.operation-unavailable', missing, next: OPEN_POLICY_READINESS };
+}
+
+/**
+ * Whether a held line's decision is available at its place now (goods-in 4.6, 10.5; PRD-SEC-017): Available for the
+ * held-line decisions at the Site and unit, which needs receiving's capability and policy 17 Signed and validated.
+ * Asked for either outcome, as a damage report's decision is (goods-in 8.5).
+ */
+export async function heldLineDecisionUnavailable(
+  context: TransactionContext,
+  dependencies: AvailabilityDependencies,
+  place: { readonly siteId: string; readonly businessUnitId: string },
+): Promise<CommandRefusal | undefined> {
+  const answer = await dependencies.configuration.checkAvailability(context, HELD_LINE_DECISIONS.code, place);
+  if (answer === undefined) throw new CommandDefect(`${HELD_LINE_DECISIONS.code} is not declared`);
+  return receivingUnavailable(answer.missing);
 }

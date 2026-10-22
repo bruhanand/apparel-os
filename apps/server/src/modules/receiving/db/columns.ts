@@ -1,4 +1,4 @@
-import type { Batch, CountEntryFacts, Size } from '../domain/lines.js';
+import type { Batch, CountEntryFacts, LineDamage, Size } from '../domain/lines.js';
 import type { countEntry } from './schema.js';
 
 // The count's values as `receiving`'s tables keep them (goods-in 4.3; S2-F02-T02): a size as its attribute, value, code
@@ -55,6 +55,35 @@ export function batchColumns(batch: Batch | null): BatchColumns {
   return { batchCode: batch?.code ?? null, expiryDate: batch?.expiryDate ?? null };
 }
 
+interface DamageColumns {
+  readonly damagedQuantity: number | null;
+  readonly damageDescription: string | null;
+  readonly damagePhotoStoredFileId: string | null;
+  readonly damagePhotoFileReceiptId: string | null;
+}
+
+/** The damage the count found, as its row keeps it, or none (`count_entry_damage`, migration 0096). */
+export function damageOf(row: DamageColumns): LineDamage | null {
+  if (row.damagedQuantity === null || row.damageDescription === null) return null;
+  return {
+    quantity: row.damagedQuantity,
+    description: row.damageDescription,
+    photo:
+      row.damagePhotoStoredFileId === null || row.damagePhotoFileReceiptId === null
+        ? null
+        : { storedFileId: row.damagePhotoStoredFileId, fileReceiptId: row.damagePhotoFileReceiptId },
+  };
+}
+
+export function damageColumns(damage: LineDamage | null): DamageColumns {
+  return {
+    damagedQuantity: damage?.quantity ?? null,
+    damageDescription: damage?.description ?? null,
+    damagePhotoStoredFileId: damage?.photo?.storedFileId ?? null,
+    damagePhotoFileReceiptId: damage?.photo?.fileReceiptId ?? null,
+  };
+}
+
 /** A count entry's row as the domain reads it. */
 export function entryFacts(row: typeof countEntry.$inferSelect): CountEntryFacts {
   return {
@@ -62,12 +91,16 @@ export function entryFacts(row: typeof countEntry.$inferSelect): CountEntryFacts
     lineId: row.lineId,
     replacesEntryId: row.replacesEntryId,
     removed: row.removed,
+    goods: row.goods,
     styleCode: row.styleCode,
     colour: row.colour,
     size: sizeOf(row),
     skuId: row.skuId,
+    description: row.description,
     invoiceQuantity: row.invoiceQuantity,
     countedQuantity: row.countedQuantity,
+    extra: row.extra,
+    damage: damageOf(row),
     batch: batchOf(row),
     enteredByUserId: row.enteredByUserId,
     recordedAt: row.recordedAt,

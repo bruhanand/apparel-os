@@ -1,9 +1,15 @@
-import type { MissingItem } from '@apparel-os/schemas';
+import { HELD_LINE_DECISION, HELD_LINE_TYPE, type MissingItem } from '@apparel-os/schemas';
+import type { ApprovalRule } from '../../access/index.js';
 import type { NumberedKind } from '../../numbering/index.js';
 import type { CallerRegistration } from '../../stock/ledger/index.js';
 
 // What `receiving` declares to the modules below it at start (module-map section 3, rule 6): the GRN number kind it
-// numbers (numbering-and-audit 3.1; goods-in 10.4) and its registration as a stock caller (stock-ledger 13.2).
+// numbers (numbering-and-audit 3.1; goods-in 10.4), its registration as a stock caller (stock-ledger 13.2), the
+// approval rule of a held line's decision (access-and-approvals 8) and the exception types the findings raise
+// (access-and-approvals 12.1).
+
+/** The module `receiving`'s records, postings, approvals and exceptions name. */
+export const RECEIVING_MODULE = 'receiving';
 
 /**
  * The GRN number (goods-in 4.5, 10.4): one series for the Organisation, not restarted each financial year, whose years
@@ -27,11 +33,45 @@ export const MISSING_GRN_SERIES: MissingItem = { kind: 'number-series', numbered
 export const GRN_SOURCE_TYPE = 'grn';
 
 /**
- * `receiving` as a stock caller (stock-ledger 13.2): a GRN posts receipt counts, with no import kind. Holds, the
- * identity route and acceptance come with the tickets that need them (S2-F02-T03, S2-F07-T01).
+ * `receiving` as a stock caller (stock-ledger 13.2, 13.16): a GRN posts receipt counts and, in the same request, the
+ * holds of what its count found: excess under an excess hold, wrong and unidentified goods in quarantine, damage under
+ * a damage hold (goods-in 4.5, 4.9; S2-F02-T03); no import kind. Acceptance comes with the scan-in (S2-F07-T01).
  */
 export const receivingStockCaller: CallerRegistration = {
-  module: 'receiving',
+  module: RECEIVING_MODULE,
   synthetic: false,
-  recordTypes: [{ recordType: GRN_SOURCE_TYPE, itemKinds: ['receipt-count'], importKinds: ['none'] }],
+  recordTypes: [{ recordType: GRN_SOURCE_TYPE, itemKinds: ['receipt-count', 'place-hold'], importKinds: ['none'] }],
 };
+
+/**
+ * The approval rule of a held line's decision (goods-in 4.6; access-and-approvals 8; domain-model 5): a Booking
+ * approver, a different authorised person from whoever counted the goods and issued the GRN (PRD-REC-013, POL-02.07),
+ * takes them in (approve) or leaves them held (reject), on their cost, Unknown before their PT, so deciding needs
+ * explicit authority over Unknown value (DM-8, DEC-105; PRD-ACS-016). Who holds it is set by roles, by Site and brand
+ * (POL-17.11), never here. Its evidence carries no restricted class.
+ */
+export const receivingApprovalRules: readonly ApprovalRule[] = [
+  {
+    actionType: HELD_LINE_DECISION,
+    module: RECEIVING_MODULE,
+    recordType: HELD_LINE_TYPE,
+    independent: true,
+    value: 'cost',
+    freeTextReason: false,
+    decisionEvidenceClasses: [],
+    synthetic: false,
+  },
+];
+
+/**
+ * The exception types the findings at the count raise to Booking in My work (goods-in 2, 4.5; access-and-approvals
+ * 12.1; PRD-EXC-001): a GRN's shortage, of the category shortage, linking to the GRN; and each held line, excess of the
+ * category excess, wrong and unidentified goods of the category mismatch, linking to the held line. Their owner is
+ * whoever the routing of each type at the Site names (POL-02.16), never set here.
+ */
+export const SHORTAGE_EXCEPTION_TYPE = 'receiving.shortage';
+export const HELD_LINE_EXCEPTION_TYPES = {
+  excess: 'receiving.excess',
+  wrong: 'receiving.wrong-goods',
+  unidentified: 'receiving.unidentified-goods',
+} as const;

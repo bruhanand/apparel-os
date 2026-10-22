@@ -115,15 +115,17 @@ export interface IdentityPart {
 }
 
 /**
- * What a receipt count counts (stock-ledger 13.14): goods of a SKU, with no identity as described, whose brand is the
- * SKU's; or goods of a product not yet set up, their SKU null, Unknown, with their identity as described and the brand
+ * What a receipt count counts (stock-ledger 13.14, 13.16): goods of a SKU, with no identity as described, whose brand is
+ * the SKU's; goods of a product not yet set up, their SKU null, Unknown, with their identity as described and the brand
  * they are counted under, counted in good condition and not quarantined (stock-ledger 2.2, 14.1; PRD-DMG-005; GI-1,
- * RR-555). Receiving names its Arrival's brand, so a person scoped to that brand sees the goods before PT approval
- * names their SKU.
+ * RR-555); or unidentified goods, their SKU and identity both Unknown, `described` null, under the brand they are
+ * counted under, in the unidentified condition, which their quarantine in the same request holds (goods-in 4.4;
+ * PRD-REC-012, POL-17.02; S2-F02-T03). Receiving names its Arrival's brand, so a person scoped to that brand sees the
+ * goods before PT approval names their SKU.
  */
 export type CountedGoods =
   | { readonly skuId: string; readonly described?: undefined; readonly brandId?: undefined }
-  | { readonly skuId: null; readonly described: DescribedIdentity; readonly brandId: string };
+  | { readonly skuId: null; readonly described: DescribedIdentity | null; readonly brandId: string };
 
 /**
  * Whether the goods a receipt count names give their brand wrongly (13.14, 14.1; RR-555): goods of Unknown SKU name the
@@ -143,6 +145,12 @@ export type LedgerItem =
   | ({
       readonly kind: 'receipt-count';
       readonly lineId: string;
+      /**
+       * The identifier of the receipt origin the count makes, a UUIDv7 the caller makes (PRD-MOD-008), so later items
+       * of the same request can name its goods, as a GRN's holds do (stock-ledger 13.16; goods-in 4.5); the ledger
+       * makes one when it is left out.
+       */
+      readonly receiptOriginId?: string;
       readonly quantity: number;
       readonly to: Place;
       readonly condition: Condition;

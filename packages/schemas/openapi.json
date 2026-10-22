@@ -2019,6 +2019,7 @@
               "merchandise.record-not-found",
               "organisation.record-not-found",
               "pos.change-not-found",
+              "receiving.record-not-found",
               "site-lifecycle.record-not-found",
               "site-lifecycle.unit-not-found",
               "stock.record-not-found"
@@ -2114,6 +2115,8 @@
               "organisation.version-overlaps",
               "organisation.whole-store-unit-exists",
               "pos.format-code-taken",
+              "receiving.held-line-decided",
+              "receiving.product-not-named",
               "site-lifecycle.activity-already-granted",
               "site-lifecycle.check-failed",
               "site-lifecycle.site-already-ready",
@@ -5954,9 +5957,16 @@
               "access.business-date-not-set",
               "access.not-authorised",
               "configuration.operation-unavailable",
+              "exceptions.exception-code-series-exhausted",
+              "exceptions.exception-code-series-paused",
+              "exceptions.no-exception-code-series",
+              "exceptions.no-routing",
               "kernel.recovery-hold",
               "receiving.grn-series-paused",
-              "receiving.no-grn-series"
+              "receiving.no-grn-series",
+              "stock.damage-report-series-paused",
+              "stock.no-damage-report-series",
+              "stock.rule-not-set"
             ]
           },
           "404": {
@@ -5999,15 +6009,17 @@
             "x-error-codes": [
               "receiving.batch-not-tracked",
               "receiving.batch-required",
+              "receiving.extra-not-recorded",
               "receiving.grn-issued",
               "receiving.invoice-required",
-              "receiving.line-differs-from-invoice",
               "receiving.no-lines",
               "receiving.sku-not-of-line",
               "stock.blocked",
               "stock.count-freeze-active",
               "stock.invalid-item",
-              "stock.place-invalid"
+              "stock.not-in-custody",
+              "stock.place-invalid",
+              "stock.plan-stale"
             ]
           },
           "500": {
@@ -35931,6 +35943,250 @@
         }
       }
     },
+    "/api/receiving/held-lines/{heldLineId}/product": {
+      "post": {
+        "operationId": "nameHeldLineProduct",
+        "x-access": {
+          "kind": "action",
+          "action": "edit",
+          "recordType": "receiving.held_line",
+          "authorisedIn": "command"
+        },
+        "parameters": [
+          {
+            "name": "heldLineId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "versionToken": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    }
+                  },
+                  "required": [
+                    "versionToken",
+                    "requestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.cross-site-request",
+              "kernel.idempotency-key-required",
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.business-date-not-set",
+              "access.not-authorised",
+              "kernel.recovery-hold",
+              "merchandise.attribute-not-marked"
+            ]
+          },
+          "404": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "receiving.record-not-found"
+            ]
+          },
+          "409": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.idempotency-key-reused",
+              "kernel.request-in-progress",
+              "kernel.stale-version"
+            ]
+          },
+          "422": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "receiving.held-line-decided",
+              "receiving.not-unidentified",
+              "receiving.size-not-on-list",
+              "receiving.sku-not-of-line"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed",
+              "kernel.outcome-unknown"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "versionToken": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                  },
+                  "styleCode": {
+                    "type": "string",
+                    "maxLength": 60,
+                    "pattern": "\\S"
+                  },
+                  "colour": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 60,
+                        "pattern": "\\S"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "sizeValueId": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "skuId": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "versionToken",
+                  "styleCode",
+                  "colour",
+                  "sizeValueId",
+                  "skuId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/kernel/live": {
       "get": {
         "operationId": "openLiveUpdates",
@@ -53455,13 +53711,99 @@
                                 "format": "uuid",
                                 "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
                               },
+                              "goods": {
+                                "type": "string",
+                                "enum": [
+                                  "on-invoice",
+                                  "wrong",
+                                  "unidentified"
+                                ]
+                              },
                               "styleCode": {
-                                "type": "string"
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
                               },
                               "colour": {
                                 "type": [
                                   "string",
                                   "null"
+                                ]
+                              },
+                              "description": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "extra": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "received",
+                                      "not-received"
+                                    ]
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "damage": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "quantity": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "maximum": 1000000
+                                      },
+                                      "description": {
+                                        "type": "string",
+                                        "maxLength": 500,
+                                        "pattern": "\\S"
+                                      },
+                                      "photo": {
+                                        "anyOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "storedFileId": {
+                                                "type": "string",
+                                                "format": "uuid",
+                                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                              },
+                                              "fileReceiptId": {
+                                                "type": "string",
+                                                "format": "uuid",
+                                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                              }
+                                            },
+                                            "required": [
+                                              "storedFileId",
+                                              "fileReceiptId"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "quantity",
+                                      "description",
+                                      "photo"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
                                 ]
                               },
                               "size": {
@@ -53565,8 +53907,12 @@
                             "required": [
                               "lineId",
                               "versionToken",
+                              "goods",
                               "styleCode",
                               "colour",
+                              "description",
+                              "extra",
+                              "damage",
                               "size",
                               "skuId",
                               "invoiceQuantity",
@@ -53629,8 +53975,19 @@
                                         "minimum": 1,
                                         "maximum": 9007199254740991
                                       },
+                                      "goods": {
+                                        "type": "string",
+                                        "enum": [
+                                          "on-invoice",
+                                          "wrong",
+                                          "unidentified"
+                                        ]
+                                      },
                                       "styleCode": {
-                                        "type": "string"
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ]
                                       },
                                       "colour": {
                                         "type": [
@@ -53656,6 +54013,12 @@
                                           }
                                         ]
                                       },
+                                      "description": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ]
+                                      },
                                       "invoiceQuantity": {
                                         "type": "integer",
                                         "minimum": 0,
@@ -53665,6 +54028,279 @@
                                         "type": "integer",
                                         "minimum": 0,
                                         "maximum": 1000000
+                                      },
+                                      "extra": {
+                                        "anyOf": [
+                                          {
+                                            "type": "string",
+                                            "enum": [
+                                              "received",
+                                              "not-received"
+                                            ]
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
+                                      },
+                                      "findings": {
+                                        "type": "object",
+                                        "properties": {
+                                          "shortage": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 1000000
+                                          },
+                                          "extra": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 1000000
+                                          },
+                                          "received": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 1000000
+                                          },
+                                          "damaged": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 1000000
+                                          }
+                                        },
+                                        "required": [
+                                          "shortage",
+                                          "extra",
+                                          "received",
+                                          "damaged"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      "damage": {
+                                        "anyOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "quantity": {
+                                                "type": "integer",
+                                                "minimum": 1,
+                                                "maximum": 9007199254740991
+                                              },
+                                              "description": {
+                                                "type": "string"
+                                              },
+                                              "damageReportId": {
+                                                "type": "string",
+                                                "format": "uuid",
+                                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                              }
+                                            },
+                                            "required": [
+                                              "quantity",
+                                              "description",
+                                              "damageReportId"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
+                                      },
+                                      "heldLine": {
+                                        "anyOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "id": {
+                                                "type": "string",
+                                                "format": "uuid",
+                                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                              },
+                                              "kind": {
+                                                "type": "string",
+                                                "enum": [
+                                                  "excess",
+                                                  "wrong",
+                                                  "unidentified"
+                                                ]
+                                              },
+                                              "quantity": {
+                                                "type": "integer",
+                                                "minimum": 1,
+                                                "maximum": 9007199254740991
+                                              },
+                                              "state": {
+                                                "type": "string",
+                                                "enum": [
+                                                  "Awaiting approval",
+                                                  "Accepted",
+                                                  "Held"
+                                                ]
+                                              },
+                                              "versionToken": {
+                                                "type": "string",
+                                                "format": "uuid",
+                                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                              },
+                                              "named": {
+                                                "anyOf": [
+                                                  {
+                                                    "type": "object",
+                                                    "properties": {
+                                                      "styleCode": {
+                                                        "type": "string"
+                                                      },
+                                                      "colour": {
+                                                        "type": [
+                                                          "string",
+                                                          "null"
+                                                        ]
+                                                      },
+                                                      "size": {
+                                                        "anyOf": [
+                                                          {
+                                                            "type": "object",
+                                                            "properties": {
+                                                              "attributeId": {
+                                                                "type": "string",
+                                                                "format": "uuid",
+                                                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                                              },
+                                                              "valueId": {
+                                                                "type": "string",
+                                                                "format": "uuid",
+                                                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                                              },
+                                                              "markedAttributeVersionId": {
+                                                                "type": "string",
+                                                                "format": "uuid",
+                                                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                                              },
+                                                              "code": {
+                                                                "type": "string"
+                                                              }
+                                                            },
+                                                            "required": [
+                                                              "attributeId",
+                                                              "valueId",
+                                                              "markedAttributeVersionId",
+                                                              "code"
+                                                            ],
+                                                            "additionalProperties": false
+                                                          },
+                                                          {
+                                                            "type": "null"
+                                                          }
+                                                        ]
+                                                      },
+                                                      "skuId": {
+                                                        "anyOf": [
+                                                          {
+                                                            "type": "string",
+                                                            "format": "uuid",
+                                                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                                          },
+                                                          {
+                                                            "type": "null"
+                                                          }
+                                                        ]
+                                                      }
+                                                    },
+                                                    "required": [
+                                                      "styleCode",
+                                                      "colour",
+                                                      "size",
+                                                      "skuId"
+                                                    ],
+                                                    "additionalProperties": false
+                                                  },
+                                                  {
+                                                    "type": "null"
+                                                  }
+                                                ]
+                                              },
+                                              "requestId": {
+                                                "anyOf": [
+                                                  {
+                                                    "type": "string",
+                                                    "format": "uuid",
+                                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                                  },
+                                                  {
+                                                    "type": "null"
+                                                  }
+                                                ]
+                                              },
+                                              "requestState": {
+                                                "anyOf": [
+                                                  {
+                                                    "type": "string",
+                                                    "enum": [
+                                                      "Awaiting approval",
+                                                      "Approved",
+                                                      "Rejected",
+                                                      "Superseded",
+                                                      "Withdrawn"
+                                                    ]
+                                                  },
+                                                  {
+                                                    "type": "null"
+                                                  }
+                                                ]
+                                              },
+                                              "decision": {
+                                                "anyOf": [
+                                                  {
+                                                    "type": "object",
+                                                    "properties": {
+                                                      "outcome": {
+                                                        "type": "string",
+                                                        "enum": [
+                                                          "taken-in",
+                                                          "left-held"
+                                                        ]
+                                                      },
+                                                      "decidedBy": {
+                                                        "type": "string",
+                                                        "format": "uuid",
+                                                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                                      },
+                                                      "decidedAt": {
+                                                        "type": "string",
+                                                        "format": "date-time",
+                                                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                                      }
+                                                    },
+                                                    "required": [
+                                                      "outcome",
+                                                      "decidedBy",
+                                                      "decidedAt"
+                                                    ],
+                                                    "additionalProperties": false
+                                                  },
+                                                  {
+                                                    "type": "null"
+                                                  }
+                                                ]
+                                              }
+                                            },
+                                            "required": [
+                                              "id",
+                                              "kind",
+                                              "quantity",
+                                              "state",
+                                              "versionToken",
+                                              "named",
+                                              "requestId",
+                                              "requestState",
+                                              "decision"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
                                       },
                                       "batch": {
                                         "anyOf": [
@@ -53703,12 +54339,18 @@
                                     "required": [
                                       "id",
                                       "lineNumber",
+                                      "goods",
                                       "styleCode",
                                       "colour",
                                       "size",
                                       "skuId",
+                                      "description",
                                       "invoiceQuantity",
                                       "countedQuantity",
+                                      "extra",
+                                      "findings",
+                                      "damage",
+                                      "heldLine",
                                       "batch",
                                       "countedBy"
                                     ],
@@ -61465,6 +62107,578 @@
             },
             "x-error-codes": [
               "organisation.record-not-found"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
+          }
+        }
+      }
+    },
+    "/api/receiving/held-lines/{heldLineId}": {
+      "get": {
+        "operationId": "readHeldLine",
+        "x-access": {
+          "kind": "action",
+          "action": "view",
+          "recordType": "receiving.arrival",
+          "authorisedIn": "command"
+        },
+        "parameters": [
+          {
+            "name": "heldLineId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "asOf": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "arrivalId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    },
+                    "grnNumber": {
+                      "type": "string"
+                    },
+                    "supplierPartyId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    },
+                    "brandId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    },
+                    "businessUnitId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    },
+                    "line": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                        },
+                        "lineNumber": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "goods": {
+                          "type": "string",
+                          "enum": [
+                            "on-invoice",
+                            "wrong",
+                            "unidentified"
+                          ]
+                        },
+                        "styleCode": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "colour": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "size": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "skuId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "description": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "invoiceQuantity": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 1000000
+                        },
+                        "countedQuantity": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 1000000
+                        },
+                        "extra": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "received",
+                                "not-received"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "findings": {
+                          "type": "object",
+                          "properties": {
+                            "shortage": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 1000000
+                            },
+                            "extra": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 1000000
+                            },
+                            "received": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 1000000
+                            },
+                            "damaged": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 1000000
+                            }
+                          },
+                          "required": [
+                            "shortage",
+                            "extra",
+                            "received",
+                            "damaged"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "damage": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "quantity": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 9007199254740991
+                                },
+                                "description": {
+                                  "type": "string"
+                                },
+                                "damageReportId": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                }
+                              },
+                              "required": [
+                                "quantity",
+                                "description",
+                                "damageReportId"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "heldLine": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                },
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "excess",
+                                    "wrong",
+                                    "unidentified"
+                                  ]
+                                },
+                                "quantity": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 9007199254740991
+                                },
+                                "state": {
+                                  "type": "string",
+                                  "enum": [
+                                    "Awaiting approval",
+                                    "Accepted",
+                                    "Held"
+                                  ]
+                                },
+                                "versionToken": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                },
+                                "named": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "styleCode": {
+                                          "type": "string"
+                                        },
+                                        "colour": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        },
+                                        "size": {
+                                          "anyOf": [
+                                            {
+                                              "type": "object",
+                                              "properties": {
+                                                "attributeId": {
+                                                  "type": "string",
+                                                  "format": "uuid",
+                                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                                },
+                                                "valueId": {
+                                                  "type": "string",
+                                                  "format": "uuid",
+                                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                                },
+                                                "markedAttributeVersionId": {
+                                                  "type": "string",
+                                                  "format": "uuid",
+                                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                                },
+                                                "code": {
+                                                  "type": "string"
+                                                }
+                                              },
+                                              "required": [
+                                                "attributeId",
+                                                "valueId",
+                                                "markedAttributeVersionId",
+                                                "code"
+                                              ],
+                                              "additionalProperties": false
+                                            },
+                                            {
+                                              "type": "null"
+                                            }
+                                          ]
+                                        },
+                                        "skuId": {
+                                          "anyOf": [
+                                            {
+                                              "type": "string",
+                                              "format": "uuid",
+                                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                            },
+                                            {
+                                              "type": "null"
+                                            }
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "styleCode",
+                                        "colour",
+                                        "size",
+                                        "skuId"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "requestId": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "format": "uuid",
+                                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "requestState": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "Awaiting approval",
+                                        "Approved",
+                                        "Rejected",
+                                        "Superseded",
+                                        "Withdrawn"
+                                      ]
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "decision": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "outcome": {
+                                          "type": "string",
+                                          "enum": [
+                                            "taken-in",
+                                            "left-held"
+                                          ]
+                                        },
+                                        "decidedBy": {
+                                          "type": "string",
+                                          "format": "uuid",
+                                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                        },
+                                        "decidedAt": {
+                                          "type": "string",
+                                          "format": "date-time",
+                                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                        }
+                                      },
+                                      "required": [
+                                        "outcome",
+                                        "decidedBy",
+                                        "decidedAt"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "kind",
+                                "quantity",
+                                "state",
+                                "versionToken",
+                                "named",
+                                "requestId",
+                                "requestState",
+                                "decision"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "batch": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "code": {
+                                  "type": "string"
+                                },
+                                "expiryDate": {
+                                  "type": "string",
+                                  "format": "date",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                }
+                              },
+                              "required": [
+                                "code",
+                                "expiryDate"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "countedBy": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "lineNumber",
+                        "goods",
+                        "styleCode",
+                        "colour",
+                        "size",
+                        "skuId",
+                        "description",
+                        "invoiceQuantity",
+                        "countedQuantity",
+                        "extra",
+                        "findings",
+                        "damage",
+                        "heldLine",
+                        "batch",
+                        "countedBy"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "people": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "userId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "userId",
+                          "name"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "asOf",
+                    "arrivalId",
+                    "grnNumber",
+                    "supplierPartyId",
+                    "brandId",
+                    "businessUnitId",
+                    "line",
+                    "people"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.business-date-not-set",
+              "access.not-authorised"
+            ]
+          },
+          "404": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "receiving.record-not-found"
             ]
           },
           "500": {
@@ -69538,6 +70752,7 @@
                               "invoice",
                               "count",
                               "grn",
+                              "held-lines",
                               "pt"
                             ]
                           }
@@ -83090,10 +84305,25 @@
                     ],
                     "additionalProperties": false
                   },
-                  "styleCode": {
+                  "goods": {
                     "type": "string",
-                    "maxLength": 60,
-                    "pattern": "\\S"
+                    "enum": [
+                      "on-invoice",
+                      "wrong",
+                      "unidentified"
+                    ]
+                  },
+                  "styleCode": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 60,
+                        "pattern": "\\S"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   },
                   "colour": {
                     "anyOf": [
@@ -83131,6 +84361,18 @@
                       }
                     ]
                   },
+                  "description": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 200,
+                        "pattern": "\\S"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "invoiceQuantity": {
                     "type": "integer",
                     "minimum": 0,
@@ -83140,6 +84382,75 @@
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 1000000
+                  },
+                  "extra": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "received",
+                          "not-received"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "damage": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "quantity": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 1000000
+                          },
+                          "description": {
+                            "type": "string",
+                            "maxLength": 500,
+                            "pattern": "\\S"
+                          },
+                          "photo": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "storedFileId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                  },
+                                  "fileReceiptId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                  }
+                                },
+                                "required": [
+                                  "storedFileId",
+                                  "fileReceiptId"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "quantity",
+                          "description",
+                          "photo"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   },
                   "batch": {
                     "anyOf": [
@@ -83170,12 +84481,16 @@
                   }
                 },
                 "required": [
+                  "goods",
                   "styleCode",
                   "colour",
                   "sizeValueId",
                   "skuId",
+                  "description",
                   "invoiceQuantity",
                   "countedQuantity",
+                  "extra",
+                  "damage",
                   "batch"
                 ],
                 "additionalProperties": false

@@ -14,6 +14,8 @@ import {
   DAMAGE_REVERSAL_APPROVAL,
   FINANCIAL_YEAR_CHANGE_APPROVAL,
   FINANCIAL_YEAR_CHANGE_TYPE,
+  HELD_LINE_DECISION,
+  ARRIVAL_TYPE,
   LAYOUT_CONFIRMATION,
   MAPPING_CONFIRMATION,
   MARKED_ATTRIBUTE_CHANGE,
@@ -34,7 +36,7 @@ import { PersonaChip } from '../shell/AppShell';
 import { useSession, useTimeZone } from '../shell/session';
 import { limitHolderText, limitText, permissionText, scopeText } from '../setup/describe';
 import { formatText } from '../setup/format-parts';
-import { formatDate, formatPaise } from '../setup/format';
+import { formatDate, formatList, formatPaise, formatQuantity } from '../setup/format';
 import { stateIdOf } from '../setup/states';
 import { MasterFacts } from '../organisation/MasterFacts';
 import { formatDateTime } from '../history/format';
@@ -576,6 +578,41 @@ function DamageFacts({ view, reversal }: { view: ApprovalRequestView; reversal: 
   );
 }
 
+/**
+ * A held line, for its decision (goods-in 4.6, section 11; S2-F02-T03): the GRN and its line as counted, with what the
+ * count found, how many pieces are held and how, and the product Booking named for unidentified goods. Read with view
+ * on the Arrival, within the reader's scope.
+ */
+function HeldLineFacts({ view }: { view: ApprovalRequestView }) {
+  const query = useQuery({
+    ...readQuery(api, 'readHeldLine', { params: { heldLineId: view.document.recordId } }),
+    enabled: useViewable(ARRIVAL_TYPE),
+  });
+  const read = query.data;
+  const held = read?.line.heldLine;
+  if (read === undefined || held === undefined || held === null) return null;
+  const { line } = read;
+  const counted = formatList(
+    line.countedBy.map((userId) => read.people.find((each) => each.userId === userId)?.name ?? t('receive.unknown')),
+  );
+  const identity = (parts: readonly (string | null | undefined)[]) =>
+    formatList(parts.filter((part): part is string => part !== null && part !== undefined));
+  return (
+    <Facts>
+      <Fact label="held.grn">{read.grnNumber}</Fact>
+      <Fact label="held.kind">{t(`held.kind.${held.kind}`)}</Fact>
+      <Fact label="held.quantity">{formatQuantity(held.quantity)}</Fact>
+      <Fact label="held.line">{identity([line.styleCode ?? line.description, line.colour, line.size])}</Fact>
+      <Fact label="receive.invoice-quantity">{formatQuantity(line.invoiceQuantity)}</Fact>
+      <Fact label="receive.counted-quantity">{formatQuantity(line.countedQuantity)}</Fact>
+      {held.named !== null && (
+        <Fact label="held.named">{identity([held.named.styleCode, held.named.colour, held.named.size?.code])}</Fact>
+      )}
+      <Fact label="held.counted-by">{counted}</Fact>
+    </Facts>
+  );
+}
+
 /** The facts of the request's version, by its action type; nothing where the reader may not read them. */
 export function DocumentFacts({ view }: { view: ApprovalRequestView }) {
   switch (view.actionType) {
@@ -622,6 +659,9 @@ export function DocumentFacts({ view }: { view: ApprovalRequestView }) {
       return <DamageFacts view={view} reversal={false} />;
     case DAMAGE_REVERSAL_APPROVAL:
       return <DamageFacts view={view} reversal />;
+    // A held line's decision (goods-in 4.6; S2-F02-T03).
+    case HELD_LINE_DECISION:
+      return <HeldLineFacts view={view} />;
     // The season or size attribute (structure-and-masters 4.2 "As built"; RR-550, RR-556).
     case MARKED_ATTRIBUTE_CHANGE:
       return <MarkedAttributeFacts view={view} />;
