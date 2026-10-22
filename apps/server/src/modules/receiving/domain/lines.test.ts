@@ -14,12 +14,16 @@ function entry(id: string, lineId: string, replaces: string | null, overrides: P
     lineId,
     replacesEntryId: replaces,
     removed: false,
+    goods: 'on-invoice',
     styleCode: 'SYN-STYLE',
     colour: null,
     size: null,
     skuId: null,
+    description: null,
     invoiceQuantity: 3,
     countedQuantity: 3,
+    extra: null,
+    damage: null,
     batch: null,
     enteredByUserId: ANNA,
     recordedAt: new Date(Date.UTC(2026, 9, 21, 10, 0, tick)),
@@ -56,16 +60,22 @@ describe('the count as it stands (goods-in 4.3)', () => {
 });
 
 describe('what stops a GRN (goods-in 4.5; DEC-133)', () => {
-  it('DEC-133 no invoice, then no line, then a line that differs from its invoice, each named', () => {
+  it('DEC-133 no invoice, then no line, then a line whose extra pieces are not recorded, each named', () => {
     const clean = currentLines([entry('l1', 'l1', null)]);
     expect(grnBlockers(0, clean)).toEqual({ code: 'receiving.invoice-required', missing: [{ kind: 'invoice' }] });
     expect(grnBlockers(1, [])).toEqual({ code: 'receiving.no-lines', missing: [{ kind: 'count-line' }] });
+    // A shortage, and excess recorded as received or not, stop nothing: they are findings (goods-in 4.4; S2-F02-T03).
     const short = currentLines([entry('l2', 'l2', null, { invoiceQuantity: 10, countedQuantity: 8 })]);
-    expect(grnBlockers(1, [...clean, ...short])).toEqual({
-      code: 'receiving.line-differs-from-invoice',
-      missing: [{ kind: 'count-line', lineId: 'l2' }],
+    const excess = currentLines([
+      entry('l3', 'l3', null, { styleCode: 'SYN-X', invoiceQuantity: 2, countedQuantity: 3, extra: 'received' }),
+    ]);
+    expect(grnBlockers(1, [...clean, ...short, ...excess])).toBeUndefined();
+    // A line saved before the findings were built may have extra pieces with nothing recorded of them.
+    const unrecorded = currentLines([entry('l4', 'l4', null, { invoiceQuantity: 2, countedQuantity: 5 })]);
+    expect(grnBlockers(1, [...clean, ...unrecorded])).toEqual({
+      code: 'receiving.extra-not-recorded',
+      missing: [{ kind: 'count-line', lineId: 'l4' }],
     });
-    expect(grnBlockers(2, clean)).toBeUndefined();
   });
 });
 
@@ -90,6 +100,10 @@ describe('one line per style, colour and size (goods-in 4.3)', () => {
     expect(lineCounting(lines, { styleCode: 'SYN-STYLE', colour: 'SYNTHETIC NAVY', size: SIZE_L })).toBeUndefined();
     expect(lineCounting(lines, { styleCode: 'SYN-STYLE', colour: 'SYNTHETIC NAVY', size: null })).toBeUndefined();
     expect(lineCounting(lines, { styleCode: 'SYN-STYLE', colour: null, size: SIZE_M })).toBeUndefined();
+  });
+
+  it('PRD-REC-006 unidentified goods carry no style code, so no line counts them already (goods-in 4.9)', () => {
+    expect(lineCounting(lines, { styleCode: null, colour: null, size: null })).toBeUndefined();
   });
 
   it('PRD-REC-005 a line saved again is not its own repeat, and a removed line counts nothing', () => {

@@ -7,10 +7,12 @@ import type { ConfigurationInterface } from '../../configuration/index.js';
 import type { ExceptionsInterface, ExceptionTypeRegistration } from '../../exceptions/index.js';
 import type { FilesImportsInterface } from '../../files-imports/index.js';
 import type { NumberingInterface } from '../../numbering/index.js';
-import type { StockLedgerInterface } from '../ledger/index.js';
+import type { LedgerItem, NamedGoods, Place, StockLedgerInterface } from '../ledger/index.js';
 import { proposeReversal, renewDecision } from './commands/changes.js';
 import type { Actor } from './commands/common.js';
+import { countDamageHold, countDamageReady, recordCountDamage } from './commands/count-damage.js';
 import { newReportFacts, reportDamage } from './commands/report.js';
+import { damageOfGrnLines, type GrnLineDamage } from './queries/grn-lines.js';
 import { DAMAGE_EXCEPTION_TYPE, DOCUMENTS_MODULE } from './domain/kinds.js';
 import { damageDecided, reportFacts, reportOfReversal, reportView } from './queries/reports.js';
 
@@ -47,7 +49,8 @@ export const damageExceptionType: ExceptionTypeRegistration = {
  * transaction and commits or rolls back with it. It takes its locks from step 2 on, the ledger's at steps 2 to 6 and the
  * damage-report and exception-code series at step 8 (stock-ledger 10.3), so the caller calls it before taking any lock
  * above step 1 of its own, as the damage route does; the lock helper refuses a step taken twice (code-house-rules 8.2).
- * Damage at the count, whose hold joins the GRN's own ledger request, is wired by S2-F02-T03.
+ * Damage at the count, whose hold is an item of the GRN's own ledger request, takes the three steps of
+ * `countDamageReady`, `countDamageHold` and `recordCountDamage` instead (goods-in 4.9, 8.5; S2-F02-T03).
  */
 export class StockDocuments {
   constructor(private readonly dependencies: StockDocumentsDependencies) {}
@@ -69,6 +72,36 @@ export class StockDocuments {
   /** Report damage (goods-in 8.2): the hold at once, the number, the decision's request and the exception. */
   reportDamage(context: TransactionContext, reporter: Actor, draft: DamageReportDraft, idempotencyKey?: string) {
     return reportDamage(context, this.dependencies, reporter, draft, idempotencyKey);
+  }
+
+  /**
+   * Damage the count finds, step 1 (goods-in 4.9, 8.5; S2-F02-T03): before the GRN takes any lock, whether damage
+   * reports are available at the unit, and the series the GRN holds at step 8 with its own.
+   */
+  countDamageReady(context: TransactionContext, place: { readonly siteId: string; readonly businessUnitId: string }) {
+    return countDamageReady(context, this.dependencies, place);
+  }
+
+  /** Damage the count finds, step 2: a damaged line's damage hold, an item of the GRN's own ledger request. */
+  countDamageHold(lineId: string, at: Place, goods: NamedGoods, description: string): LedgerItem {
+    return countDamageHold(lineId, at, goods, description);
+  }
+
+  /** Damage the count finds, step 3: once the GRN's request is written, each line's report on its hold. */
+  recordCountDamage(
+    context: TransactionContext,
+    reporter: Actor,
+    input: Parameters<typeof recordCountDamage>[3],
+  ): ReturnType<typeof recordCountDamage> {
+    return recordCountDamage(context, this.dependencies, reporter, input);
+  }
+
+  /**
+   * Where the damage reports on GRN lines stand, whatever the reader may see of them (goods-in 4.9, 5.1): each report's
+   * quantity and state, through a narrowly authorised read (DEC-117).
+   */
+  damageOfGrnLines(context: TransactionContext, grnLineIds: readonly string[]): Promise<readonly GrnLineDamage[]> {
+    return damageOfGrnLines(context, grnLineIds);
   }
 
   /** Ask for a report's decision again, on the goods' cost now (goods-in 8.5). */

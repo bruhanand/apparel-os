@@ -1,8 +1,8 @@
-import type { MissingItem } from '@apparel-os/schemas';
+import { extraPiecesOf, type EvidenceFile, type ExtraPieces, type LineGoods, type MissingItem } from '@apparel-os/schemas';
 import { textKey } from './text.js';
 
-// The count as it stands (goods-in 4.3, 4.5; S2-F02-T02): each line is the chain of its saved entries, the newest the
-// one in force, and who counted it everyone who saved one, from their sign-ins. Pure: no database, no clock
+// The count as it stands (goods-in 4.3 to 4.5; S2-F02-T02, S2-F02-T03): each line is the chain of its saved entries, the
+// newest the one in force, and who counted it everyone who saved one, from their sign-ins. Pure: no database, no clock
 // (code-house-rules 2).
 
 /**
@@ -23,11 +23,21 @@ export interface Batch {
   readonly expiryDate: string;
 }
 
-/** What a line counts: the style code and colour as the invoice writes them, and the size; each may be missing. */
-export interface LineGoods {
-  readonly styleCode: string;
+/**
+ * What a line counts: the style code and colour as the invoice writes them, and the size; each may be missing, and
+ * unidentified goods have none of them (goods-in 4.4).
+ */
+export interface LineIdentity {
+  readonly styleCode: string | null;
   readonly colour: string | null;
   readonly size: Pick<Size, 'valueId'> | null;
+}
+
+/** The damage the count found on a line: how many pieces, what is wrong and its photo, stored, not yet attached. */
+export interface LineDamage {
+  readonly quantity: number;
+  readonly description: string;
+  readonly photo: EvidenceFile | null;
 }
 
 /** One saved entry of a count line, as `receiving` keeps it. */
@@ -36,12 +46,18 @@ export interface CountEntryFacts {
   readonly lineId: string;
   readonly replacesEntryId: string | null;
   readonly removed: boolean;
-  readonly styleCode: string;
+  readonly goods: LineGoods;
+  readonly styleCode: string | null;
   readonly colour: string | null;
   readonly size: Size | null;
   readonly skuId: string | null;
+  /** What unidentified goods look like; none for other goods (goods-in 4.4). */
+  readonly description: string | null;
   readonly invoiceQuantity: number;
   readonly countedQuantity: number;
+  /** What happens to the line's extra pieces, when it has some (goods-in 4.4). */
+  readonly extra: ExtraPieces | null;
+  readonly damage: LineDamage | null;
   readonly batch: Batch | null;
   readonly enteredByUserId: string;
   readonly recordedAt: Date;
@@ -95,18 +111,22 @@ function chainOf(entries: readonly CountEntryFacts[], first: CountEntryFacts): C
 /**
  * The line in force that counts the same style, colour and size already, other than the line being saved, or
  * undefined: one line per style, colour and size (goods-in 4.3). The style code and colour compare ignoring case and
- * spaces at the ends; a missing colour or size matches only another missing one (PRD-MER-005).
+ * spaces at the ends; a missing colour or size matches only another missing one (PRD-MER-005). Unidentified goods
+ * carry no style code, so no line counts them already: each is told apart by what it looks like (goods-in 4.9).
  */
 export function lineCounting(
   lines: readonly CurrentLine[],
-  goods: LineGoods,
+  goods: LineIdentity,
   exceptLineId?: string,
 ): CurrentLine | undefined {
+  const { styleCode } = goods;
+  if (styleCode === null) return undefined;
   const colourKey = (colour: string | null) => (colour === null ? null : textKey(colour));
   return lines.find(
     ({ lineId, entry }) =>
       lineId !== exceptLineId &&
-      textKey(entry.styleCode) === textKey(goods.styleCode) &&
+      entry.styleCode !== null &&
+      textKey(entry.styleCode) === textKey(styleCode) &&
       colourKey(entry.colour) === colourKey(goods.colour) &&
       (entry.size?.valueId ?? null) === (goods.size?.valueId ?? null),
   );
@@ -117,8 +137,9 @@ export const lineItem = (lineId: string): MissingItem => ({ kind: 'count-line', 
 
 /**
  * What stops a GRN being issued from the count as it stands, before anything is read under the ledger's locks
- * (goods-in 4.5; DEC-133): no invoice; no line; a line whose counted quantity differs from its invoice quantity, since
- * the findings at the count come with S2-F02-T03. Each names the lines concerned.
+ * (goods-in 4.5; DEC-133): no invoice; no line; a line with extra pieces the count does not record as received or not
+ * received, which only a line saved before the findings were built can be, since saving a line now asks for it
+ * (goods-in 4.4, 4.9). Each names the lines concerned.
  */
 export function grnBlockers(
   invoices: number,
@@ -126,9 +147,9 @@ export function grnBlockers(
 ): { readonly code: string; readonly missing: readonly MissingItem[] } | undefined {
   if (invoices === 0) return { code: 'receiving.invoice-required', missing: [{ kind: 'invoice' }] };
   if (lines.length === 0) return { code: 'receiving.no-lines', missing: [{ kind: 'count-line' }] };
-  const differing = lines.filter((line) => line.entry.countedQuantity !== line.entry.invoiceQuantity);
-  if (differing.length > 0) {
-    return { code: 'receiving.line-differs-from-invoice', missing: differing.map((line) => lineItem(line.lineId)) };
+  const unrecorded = lines.filter((line) => extraPiecesOf(line.entry) > 0 && line.entry.extra === null);
+  if (unrecorded.length > 0) {
+    return { code: 'receiving.extra-not-recorded', missing: unrecorded.map((line) => lineItem(line.lineId)) };
   }
   return undefined;
 }

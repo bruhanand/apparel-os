@@ -1112,12 +1112,15 @@ export const bookingCodes = declareCodes({
  * - `receiving.sku-not-of-line`: the product named is not in force at the Site today, is of another brand, or of
  *   another style code than the line's (goods-in 4.3).
  * - `receiving.no-lines`: a GRN with no counted line is not issued (goods-in 4.5).
- * - `receiving.line-differs-from-invoice`: a line's counted quantity differs from its invoice quantity; the findings
- *   at the count are not built yet (S2-F02-T03), so such a GRN is not issued.
+ * - `receiving.extra-not-recorded`: a line has extra pieces the count does not record as received or not received
+ *   (goods-in 4.4); the line is saved again saying which (S2-F02-T03).
  * - `receiving.batch-required`: the product's tracking profile requires a batch and expiry the line lacks
  *   (PRD-MER-011).
  * - `receiving.batch-not-tracked`: the line gives a batch its product's profile does not track, or has no product.
  * - `receiving.no-grn-series`, `receiving.grn-series-paused`: no Open GRN number series (numbering-and-audit 3.2).
+ * - `receiving.held-line-decided`: the held line is decided already; a decision is made once (goods-in 4.6).
+ * - `receiving.not-unidentified`: only unidentified goods are named a product before they are taken in (4.6).
+ * - `receiving.product-not-named`: unidentified goods are taken in only once Booking names their product (4.6).
  */
 export const receivingCodes = declareCodes({
   'receiving.record-not-found': 'not-found',
@@ -1134,11 +1137,14 @@ export const receivingCodes = declareCodes({
   'receiving.line-repeated': 'refused',
   'receiving.sku-not-of-line': 'refused',
   'receiving.no-lines': 'refused',
-  'receiving.line-differs-from-invoice': 'refused',
+  'receiving.extra-not-recorded': 'refused',
   'receiving.batch-required': 'refused',
   'receiving.batch-not-tracked': 'refused',
   'receiving.no-grn-series': 'unavailable',
   'receiving.grn-series-paused': 'unavailable',
+  'receiving.held-line-decided': 'refused',
+  'receiving.not-unidentified': 'refused',
+  'receiving.product-not-named': 'refused',
 });
 
 /**

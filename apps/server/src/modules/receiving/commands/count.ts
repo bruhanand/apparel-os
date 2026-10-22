@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm';
 import type { TransactionContext } from '../../../kernel/index.js';
 import type { AuditInterface } from '../../audit/index.js';
 import { markedAttributeAt, skuOn, vocabularyOn } from '../../merchandise/catalogue/index.js';
-import { batchColumns, sizeColumns } from '../db/columns.js';
+import { batchColumns, damageColumns, sizeColumns } from '../db/columns.js';
 import { arrivalInvoice, countEntry } from '../db/schema.js';
 import { currentLines, lineCounting, lineItem, newestEntry, type CountEntryFacts, type Size } from '../domain/lines.js';
 import { textKey, trimmed } from '../domain/text.js';
@@ -24,12 +24,14 @@ import {
   type Outcome,
 } from './common.js';
 
-// Save the count as it goes, line by line, and resume it (goods-in 4.3; PRD-REC-005; DEC-133, DEC-138; S2-F02-T02).
-// The count starts only once the Arrival holds an invoice (DEC-133), and only while an attribute is marked as the
-// Organisation's size list (structure-and-masters 4.2 "As built"; RR-556). A line is the style code as the invoice
-// writes it, the colour as the invoice names it, the size from the size list and the product when one is named, with the invoice
-// and counted quantities; each save is a new entry of the line naming the one it replaces, so two people saving over
-// the same version never both succeed (code-house-rules 12.7), and who saved each is kept, from their sign-ins.
+// Save the count as it goes, line by line, and resume it (goods-in 4.3, 4.4; PRD-REC-005, PRD-REC-006; DEC-133, DEC-138;
+// S2-F02-T02, S2-F02-T03). The count starts only once the Arrival holds an invoice (DEC-133), and only while an
+// attribute is marked as the Organisation's size list (structure-and-masters 4.2 "As built"; RR-556). A line says what
+// it counts: goods on the invoice, wrong goods or unidentified goods; it is the style code as the invoice writes it,
+// the colour as the invoice names it, the size from the size list and the product when one is named, or, for
+// unidentified goods, what they look like; with the invoice and counted quantities, what happens to its extra pieces
+// and the damage found. Each save is a new entry of the line naming the one it replaces, so two people saving over the
+// same version never both succeed (code-house-rules 12.7), and who saved each is kept, from their sign-ins.
 
 export interface CountDependencies {
   readonly audit: AuditInterface;
@@ -52,16 +54,27 @@ function lineInForce(
   return { kind: 'found', entry: newest };
 }
 
-/** The entry's audited fields. */
+/** The entry's audited fields; a damage photo by its stored file. */
 function fieldsOf(entry: NewEntry) {
   return {
     removed: entry.removed,
+    goods: entry.goods,
     styleCode: entry.styleCode,
     colour: entry.colour,
     size: entry.size?.code ?? null,
     skuId: entry.skuId,
+    description: entry.description,
     invoiceQuantity: entry.invoiceQuantity,
     countedQuantity: entry.countedQuantity,
+    extra: entry.extra,
+    damage:
+      entry.damage === null
+        ? null
+        : {
+            quantity: entry.damage.quantity,
+            description: entry.damage.description,
+            photoStoredFileId: entry.damage.photo?.storedFileId ?? null,
+          },
     batch: entry.batch === null ? null : { ...entry.batch },
   };
 }
@@ -75,11 +88,12 @@ async function writeEntry(
   entry: NewEntry,
   replaced: CountEntryFacts | undefined,
 ): Promise<CountLineSaved> {
-  const { size, batch, ...rest } = entry;
+  const { size, batch, damage, ...rest } = entry;
   await context.tx.insert(countEntry).values({
     ...rest,
     ...sizeColumns(size),
     ...batchColumns(batch),
+    ...damageColumns(damage),
     arrivalId: row.id,
     ...scopeColumns(row),
     enteredByUserId: actor.userId,
@@ -104,11 +118,12 @@ async function writeEntry(
 }
 
 /**
- * Saves a line of the count, new or the next version of one (goods-in 4.3). Refused while no attribute is marked as
- * the size list, naming the setting (RR-556; code-house-rules 12.14); while the Arrival holds no invoice (DEC-133); a
+ * Saves a line of the count, new or the next version of one (goods-in 4.3, 4.4). Refused while no attribute is marked
+ * as the size list, naming the setting (RR-556; code-house-rules 12.14); while the Arrival holds no invoice (DEC-133); a
  * size that is not an approved value in force today of the attribute marked as the size list; a style, colour and size
  * another line counts already; a product not in force at the Site today, of another brand or of another style code
- * than the line's.
+ * than the line's. The draft's own shape pairs what the line counts with its fields, its extra pieces and its damage
+ * (`countLineDraftSchema`; goods-in 4.9).
  */
 export async function saveCountLine(
   context: TransactionContext,
@@ -162,6 +177,7 @@ export async function saveCountLine(
     if (
       'refusal' in read ||
       read.sku.brandId !== row.brandId ||
+      draft.styleCode === null ||
       textKey(read.sku.styleCode) !== textKey(draft.styleCode)
     ) {
       return refused('refused', 'receiving.sku-not-of-line', [recordItem('merchandise.sku', draft.skuId)]);
@@ -178,12 +194,19 @@ export async function saveCountLine(
       lineId: draft.line?.lineId ?? id,
       replacesEntryId: replaced?.id ?? null,
       removed: false,
-      styleCode: trimmed(draft.styleCode),
+      goods: draft.goods,
+      styleCode: draft.styleCode === null ? null : trimmed(draft.styleCode),
       colour: draft.colour === null ? null : trimmed(draft.colour),
       size,
       skuId: draft.skuId,
+      description: draft.description === null ? null : trimmed(draft.description),
       invoiceQuantity: draft.invoiceQuantity,
       countedQuantity: draft.countedQuantity,
+      extra: draft.extra,
+      damage:
+        draft.damage === null
+          ? null
+          : { quantity: draft.damage.quantity, description: trimmed(draft.damage.description), photo: draft.damage.photo },
       batch: draft.batch === null ? null : { code: trimmed(draft.batch.code), expiryDate: draft.batch.expiryDate },
     },
     replaced,
@@ -216,12 +239,16 @@ export async function removeCountLine(
       lineId,
       replacesEntryId: entry.id,
       removed: true,
+      goods: entry.goods,
       styleCode: entry.styleCode,
       colour: entry.colour,
       size: entry.size,
       skuId: entry.skuId,
+      description: entry.description,
       invoiceQuantity: entry.invoiceQuantity,
       countedQuantity: entry.countedQuantity,
+      extra: entry.extra,
+      damage: entry.damage,
       batch: entry.batch,
     },
     entry,

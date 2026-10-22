@@ -10,3 +10,10 @@ export const grnIssued = defineEvent({
   version: 1,
   payload: z.strictObject({ grnId: z.uuid(), arrivalId: z.uuid() }),
 });
+
+/** A held line was decided: its goods taken in or left held (goods-in 4.6, 10.4). */
+export const heldLineDecided = defineEvent({
+  type: 'receiving.held-line-decided',
+  version: 1,
+  payload: z.strictObject({ heldLineId: z.uuid(), heldLineDecisionId: z.uuid() }),
+});

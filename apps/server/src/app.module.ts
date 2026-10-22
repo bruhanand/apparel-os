@@ -19,7 +19,12 @@ import {
   type ScopeMembers,
 } from './modules/access/index.js';
 import { BookingModule, bookingApprovals } from './modules/booking/index.js';
-import { ReceivingModule, receivingStockCaller } from './modules/receiving/index.js';
+import {
+  ReceivingModule,
+  receivingApprovals,
+  receivingExceptionTypes,
+  receivingStockCaller,
+} from './modules/receiving/index.js';
 import { AUDIT, AuditModule, type AuditInterface } from './modules/audit/index.js';
 import { composedNumbering, numberedKinds } from './numbered-kinds.js';
 import {
@@ -197,6 +202,9 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
               configuration,
             }),
           }),
+          // A held line's decision, taking excess, wrong or unidentified goods in or leaving them held, which asks the
+          // policy gate under the held line's lock (goods-in 4.6, 10.5; S2-F02-T03).
+          receivingApprovals({ audit, services: () => ({ configuration }) }),
         ),
       inject: [AUDIT, LOCATION_IN_USE, CONFIGURATION, BOOK_HELD_STOCK, IMPORT_HANDLERS, ModuleRef],
     },
@@ -220,15 +228,20 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
       useFactory: () => checkEventKinds(STOCK_POSTING_EVENT_KINDS satisfies readonly PostingEventKind[]),
     },
     // The modules that post stock, registered with the ledger at start, none synthetic (stock-ledger 13.2): `receiving`'s
-    // receipt counts from a GRN (goods-in 4.5; S2-F02-T02), and `stock` · documents' damage holds, decisions and
-    // reversals (goods-in 8; stock-ledger 13.15; S2-F08-T01).
+    // receipt counts from a GRN and the holds of what its count found (goods-in 4.5, 4.9; stock-ledger 13.16;
+    // S2-F02-T02, S2-F02-T03), and `stock` · documents' damage holds, decisions and reversals (goods-in 8;
+    // stock-ledger 13.15; S2-F08-T01).
     {
       provide: STOCK_CALLERS,
       useValue: [receivingStockCaller, stockDocumentsStockCaller] satisfies readonly CallerRegistration[],
     },
     // The exception types the raising modules register (access-and-approvals 12.1): the damage a report raises, to
-    // Operations as its routing says (goods-in 8.2; S2-F08-T01).
-    { provide: EXCEPTION_TYPES, useValue: [damageExceptionType] satisfies readonly ExceptionTypeRegistration[] },
+    // Operations as its routing says (goods-in 8.2; S2-F08-T01), and the shortage and held lines a GRN's count finds,
+    // to Booking (goods-in 4.5; S2-F02-T03).
+    {
+      provide: EXCEPTION_TYPES,
+      useValue: [damageExceptionType, ...receivingExceptionTypes] satisfies readonly ExceptionTypeRegistration[],
+    },
     // The decision-evidence contract of `access`, which files-imports' Attach implements (9.5; S1-F08-T03).
     { provide: DECISION_EVIDENCE, useFactory: (audit: AuditInterface) => decisionEvidence(audit), inject: [AUDIT] },
     // The policy-evidence contract of `configuration`, which files-imports' Attach implements (module-map 4.4;

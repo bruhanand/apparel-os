@@ -1,7 +1,7 @@
 import { boolean, date, integer, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 // Drizzle definitions of `receiving`'s tables (code-house-rules 3.4). They mirror the reviewed migration
-// (migrations/organisation/0088) and never create or change a table; an integration test compares each with the
+// (migrations/organisation/0088, 0096) and never create or change a table; an integration test compares each with the
 // migrated database. Never exported from the unit's index.ts, so no other unit can name these tables
 // (code-house-rules 2).
 
@@ -80,7 +80,12 @@ export const arrivalPhoto = receiving.table('arrival_photo', {
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 
-/** One saved version of a count line (goods-in 4.3). */
+/** What a count line counts (goods-in 4.4). */
+export type LineGoodsColumn = 'on-invoice' | 'wrong' | 'unidentified';
+/** What the receiver records of a line's extra pieces (goods-in 4.4). */
+export type ExtraColumn = 'received' | 'not-received';
+
+/** One saved version of a count line (goods-in 4.3, 4.4). */
 export const countEntry = receiving.table('count_entry', {
   id: uuid('id').primaryKey(),
   arrivalId: uuid('arrival_id').notNull(),
@@ -88,7 +93,8 @@ export const countEntry = receiving.table('count_entry', {
   replacesEntryId: uuid('replaces_entry_id'),
   ...facts(),
   removed: boolean('removed').notNull(),
-  styleCode: text('style_code').notNull(),
+  goods: text('goods').$type<LineGoodsColumn>().notNull(),
+  styleCode: text('style_code'),
   colour: text('colour'),
   sizeAttributeId: uuid('size_attribute_id'),
   sizeValueId: uuid('size_value_id'),
@@ -99,6 +105,12 @@ export const countEntry = receiving.table('count_entry', {
   countedQuantity: integer('counted_quantity').notNull(),
   batchCode: text('batch_code'),
   expiryDate: day('expiry_date'),
+  description: text('description'),
+  extra: text('extra').$type<ExtraColumn>(),
+  damagedQuantity: integer('damaged_quantity'),
+  damageDescription: text('damage_description'),
+  damagePhotoStoredFileId: uuid('damage_photo_stored_file_id'),
+  damagePhotoFileReceiptId: uuid('damage_photo_file_receipt_id'),
   enteredByUserId: uuid('entered_by_user_id').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
@@ -124,14 +136,15 @@ export const grn = receiving.table('grn', {
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 
-/** A GRN line (goods-in 4.3, 4.5). */
+/** A GRN line (goods-in 4.3 to 4.5). */
 export const grnLine = receiving.table('grn_line', {
   id: uuid('id').primaryKey(),
   grnId: uuid('grn_id').notNull(),
   lineNumber: integer('line_number').notNull(),
   countEntryId: uuid('count_entry_id').notNull(),
   ...facts(),
-  styleCode: text('style_code').notNull(),
+  goods: text('goods').$type<LineGoodsColumn>().notNull(),
+  styleCode: text('style_code'),
   colour: text('colour'),
   sizeCode: text('size_code'),
   skuId: uuid('sku_id'),
@@ -139,6 +152,59 @@ export const grnLine = receiving.table('grn_line', {
   countedQuantity: integer('counted_quantity').notNull(),
   batchCode: text('batch_code'),
   expiryDate: day('expiry_date'),
+  description: text('description'),
+  extra: text('extra').$type<ExtraColumn>(),
+  damagedQuantity: integer('damaged_quantity'),
+  damageDescription: text('damage_description'),
+  damageReportId: uuid('damage_report_id'),
   countedByUserIds: uuid('counted_by_user_ids').array().notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** The kind of a held line (goods-in 4.6). */
+export type HeldKindColumn = 'excess' | 'wrong' | 'unidentified';
+
+/** A held line: the extra pieces of a GRN line received and held, which Booking decides (goods-in 4.6). */
+export const heldLine = receiving.table('held_line', {
+  id: uuid('id').primaryKey(),
+  grnId: uuid('grn_id').notNull(),
+  grnLineId: uuid('grn_line_id').notNull(),
+  ...facts(),
+  kind: text('kind').$type<HeldKindColumn>().notNull(),
+  quantity: integer('quantity').notNull(),
+  receiptOriginId: uuid('receipt_origin_id').notNull(),
+  holdId: uuid('hold_id').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** A version of a held line, which its decision's approval binds to (goods-in 4.6). */
+export const heldLineVersion = receiving.table('held_line_version', {
+  id: uuid('id').primaryKey(),
+  heldLineId: uuid('held_line_id').notNull(),
+  versionNumber: integer('version_number').notNull(),
+  ...facts(),
+  kind: text('kind').$type<'issued' | 'named'>().notNull(),
+  namedStyleCode: text('named_style_code'),
+  namedColour: text('named_colour'),
+  namedSizeAttributeId: uuid('named_size_attribute_id'),
+  namedSizeValueId: uuid('named_size_value_id'),
+  namedSizeCode: text('named_size_code'),
+  namedSizeMarkedAttributeVersionId: uuid('named_size_marked_attribute_version_id'),
+  namedSkuId: uuid('named_sku_id'),
+  preparedByUserId: uuid('prepared_by_user_id').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** A held line's decision: taken in or left held, once (goods-in 4.6). */
+export const heldLineDecision = receiving.table('held_line_decision', {
+  id: uuid('id').primaryKey(),
+  heldLineId: uuid('held_line_id').notNull(),
+  heldLineVersionId: uuid('held_line_version_id').notNull(),
+  ...facts(),
+  outcome: text('outcome').$type<'taken-in' | 'left-held'>().notNull(),
+  approvalDecisionId: uuid('approval_decision_id').notNull(),
+  decidedByUserId: uuid('decided_by_user_id').notNull(),
+  roleAssignmentId: uuid('role_assignment_id').notNull(),
+  decidedAt: at('decided_at').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });

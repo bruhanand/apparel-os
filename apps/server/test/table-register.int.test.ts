@@ -85,6 +85,9 @@ const RUNTIME_FUNCTIONS: Record<MigrationSetName, readonly string[]> = {
     'receiving.invoice_number_used',
     // stock-ledger 13.7, 14.3: "has this book held stock?", SECURITY DEFINER (DEC-116).
     'stock.book_has_held_stock',
+    // goods-in 4.9, 5.1: where the damage reports on a GRN's lines stand, whatever the reader sees, SECURITY DEFINER
+    // (DEC-117; S2-F02-T03).
+    'stock.damage_of_grn_lines',
     // structure-and-masters 3.5: the location-in-use contract's answer, SECURITY DEFINER (S1-F02-T02).
     'stock.location_has_stock',
     // stock-ledger 13.6: whether Rebuild and compare saw only part, SECURITY DEFINER (DEC-117).

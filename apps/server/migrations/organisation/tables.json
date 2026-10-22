@@ -2132,6 +2132,27 @@
       "design": "goods-in 4.2, 4.3; code-house-rules 6.2, 7.1, 12.7"
     },
     {
+      "table": "receiving.held_line",
+      "class": "scoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "goods-in 4.6, 4.9, 10.3; code-house-rules 6.2, 7.1, 8.2"
+    },
+    {
+      "table": "receiving.held_line_version",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 4.6, 4.9; code-house-rules 6.2, 7.1, 12.7"
+    },
+    {
+      "table": "receiving.held_line_decision",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 4.6, 4.9; PRD-REC-013, POL-17.02; code-house-rules 6.2, 7.1"
+    },
+    {
       "table": "merchandise.marked_attribute",
       "class": "unscoped",
       "marks": ["append-only", "locked"],
