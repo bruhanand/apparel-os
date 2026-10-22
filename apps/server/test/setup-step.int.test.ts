@@ -347,9 +347,11 @@ describe('a new Organisation (access-and-approvals 9.11; S1-F01-AT01, test 19a)'
        group by 1 order by 1`,
     );
     expect(types).toEqual([
-      { record_type: 'access.role', count: '9' },
-      { record_type: 'access.role_assignment', count: '9' },
-      { record_type: 'access.service_identity', count: '8' },
+      // One role and assignment each for the two first users and the eight worker and restore identities; the setup
+      // identity besides, which holds none (S2-F01-T04 adds `booking`).
+      { record_type: 'access.role', count: '10' },
+      { record_type: 'access.role_assignment', count: '10' },
+      { record_type: 'access.service_identity', count: '9' },
       { record_type: 'access.setting', count: '3' },
       { record_type: 'access.setup_record', count: '1' },
       { record_type: 'access.user', count: '2' },
@@ -359,7 +361,7 @@ describe('a new Organisation (access-and-approvals 9.11; S1-F01-AT01, test 19a)'
       organisation.databaseName,
       "select count(*)::text as count from audit.access_record where kind = 'permission-changed'",
     );
-    expect(changes).toEqual([{ count: '9' }]);
+    expect(changes).toEqual([{ count: '10' }]);
   });
 
   it('PRD-ACS-023 the first users sign in to the new Organisation, which the running app finds by its code (RR-250)', async () => {
