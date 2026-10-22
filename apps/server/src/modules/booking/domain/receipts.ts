@@ -1,4 +1,4 @@
-import type { BookingStatus } from '@apparel-os/schemas';
+import type { BookingStatus, ReviewReason } from '@apparel-os/schemas';
 import { goodsOfLine, matchReceipt, type ReceivedGoods } from './lifecycle.js';
 
 // The rules of receiving against a booking (goods-in 3.7, 4.10; PRD-BKG-007, PRD-BKG-008; POL-05.08; DEC-130;
@@ -22,14 +22,8 @@ export interface Delivery {
   readonly arrivalDate: string;
 }
 
-/**
- * Why a GRN line goes to Booking for review at its GRN's issue rather than linking (goods-in 3.7): it matches no line
- * or more than one, or has no identity (unidentified goods); it was counted at a Site that is not the booking's
- * destination; the version in force names another supplier; the booking has no approved version; or it arrived after
- * the window or beyond the line's outstanding, which needs approval (POL-05.08).
- */
-export type ReviewReason =
-  'no-match' | 'ambiguous' | 'other-site' | 'other-supplier' | 'not-approved' | 'late' | 'excess';
+// Why a GRN line goes to Booking for review at its GRN's issue rather than linking (goods-in 3.7) is one of
+// `reviewReasonSchema`'s reasons, the one list of them (packages/schemas).
 
 /** What one GRN line's issue answers: linked to the booking line, or sent for review, naming the line it matches. */
 export type AtIssue =

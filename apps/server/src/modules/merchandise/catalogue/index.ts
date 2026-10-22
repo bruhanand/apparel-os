@@ -25,9 +25,10 @@ export { vocabularyOn } from './queries/records.js';
 export { markedAttributeAt } from './queries/marks.js';
 export type { MarkedAttributeAt } from './queries/marks.js';
 // What `merchandise` · PT reads for a PT file (goods-in 5.2, 5.3, 5.5; S2-F04-T02): the brands and categories in force
-// by code, the brand's styles and SKUs the file names, and the SKUs its barcodes name under the brand.
-export { barcodeSkusOn, brandProductsOn, brandsAndCategoriesOn } from './queries/pt-file.js';
-export type { BrandSku, BrandStyle } from './queries/pt-file.js';
+// by code, the item map of the item marking in force (RR-583), the brand's styles and SKUs the file names, and the
+// SKUs its barcodes name under the brand.
+export { barcodeSkusOn, brandProductsOn, brandsAndCategoriesOn, itemMapOf } from './queries/pt-file.js';
+export type { BarcodeSku, BrandSku, BrandStyle } from './queries/pt-file.js';
 export type { SiteChangeActor, SiteChangeRequest } from './commands/tracking.js';
 export { codeMappingChanged, productConfirmed, trackingProfileChanged } from './events.js';
 export { catalogueRestoreParticipant } from './restore-participant.js';

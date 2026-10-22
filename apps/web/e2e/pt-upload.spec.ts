@@ -7,8 +7,8 @@ import { readWorld, type EnrolledUser, type ReceivingOptions } from './support/w
 // PRD-IMP-007, PRD-IMP-012; DEC-134, DEC-138; code-house-rules 10.1). Warehouse (P-WHS), also assigned to make PTs,
 // counts two pieces of one style and size and issues the GRN; on the GRN, a PT file whose MARGIN is wrong and whose QTY
 // is one short is refused whole, every problem listed by row and column; the corrected file shows its preview, a new
-// style proposed, and is submitted for approval: the GRN's PT waits for a different person, and the GRN is marked PT
-// attached. Every value is SYNTHETIC.
+// style proposed, and is submitted for approval: the GRN's PT waits for a different person, the GRN is marked PT
+// attached, and the inbox keeps it as PT waiting for approval (RR-584). Every value is SYNTHETIC.
 
 /** A SYNTHETIC invoice PDF, as the supplier sent it. */
 const INVOICE_PDF = {
@@ -122,5 +122,11 @@ test('PRD-REC-016 PRD-REC-017 PRD-IMP-012 a PT file for an issued GRN is refused
     await expect(revisions.getByRole('row').nth(1)).toContainText('Awaiting approval');
     await expect(page.getByText(/^PT attached: /)).toBeVisible();
     await expect(page.getByText('A PT file cannot be uploaded for this GRN yet.')).toBeVisible();
+  });
+
+  await test.step('the inbox keeps the delivery as PT waiting for approval (goods-in 4.8; RR-584)', async () => {
+    await page.getByRole('button', { name: 'Back to the inbox' }).click();
+    const row = page.getByRole('table', { name: 'Deliveries' }).getByRole('row').filter({ hasText: 'SYN-INV-PT' });
+    await expect(row).toContainText('PT waiting for approval');
   });
 });

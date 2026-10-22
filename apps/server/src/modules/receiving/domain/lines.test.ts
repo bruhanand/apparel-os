@@ -5,6 +5,7 @@ import { currentLines, grnBlockers, lineCounting, newestEntry, type CountEntryFa
 
 const ANNA = '01900000-0000-7000-8000-00000000a001';
 const BALU = '01900000-0000-7000-8000-00000000b001';
+const SIZE_S = { attributeId: 'size-list', valueId: 'size-s', markedAttributeVersionId: 'marking', code: 'SYN-S' };
 
 let tick = 0;
 function entry(id: string, lineId: string, replaces: string | null, overrides: Partial<CountEntryFacts> = {}) {
@@ -17,7 +18,7 @@ function entry(id: string, lineId: string, replaces: string | null, overrides: P
     goods: 'on-invoice',
     styleCode: 'SYN-STYLE',
     colour: null,
-    size: null,
+    size: SIZE_S,
     skuId: null,
     description: null,
     invoiceQuantity: 3,
@@ -76,6 +77,40 @@ describe('what stops a GRN (goods-in 4.5; DEC-133)', () => {
       code: 'receiving.extra-not-recorded',
       missing: [{ kind: 'count-line', lineId: 'l4' }],
     });
+  });
+
+  it('PRD-MER-005 a line of goods on the invoice or of wrong goods with no size stops the GRN, naming it (RR-586)', () => {
+    const sized = currentLines([entry('s1', 's1', null)]);
+    const unsized = currentLines([
+      entry('s2', 's2', null, { styleCode: 'SYN-A', size: null }),
+      entry('s3', 's3', null, {
+        styleCode: 'SYN-B',
+        goods: 'wrong',
+        skuId: 'sku-b',
+        size: null,
+        invoiceQuantity: 0,
+        extra: 'received',
+      }),
+    ]);
+    expect(grnBlockers(1, [...sized, ...unsized])).toEqual({
+      code: 'receiving.size-required',
+      missing: [
+        { kind: 'count-line', lineId: 's2' },
+        { kind: 'count-line', lineId: 's3' },
+      ],
+    });
+    // Unidentified goods are described, not sized (goods-in 4.4, 4.9).
+    const unidentified = currentLines([
+      entry('u1', 'u1', null, {
+        goods: 'unidentified',
+        styleCode: null,
+        size: null,
+        description: 'SYNTHETIC blue jackets',
+        invoiceQuantity: 0,
+        extra: 'received',
+      }),
+    ]);
+    expect(grnBlockers(1, [...sized, ...unidentified])).toBeUndefined();
   });
 });
 

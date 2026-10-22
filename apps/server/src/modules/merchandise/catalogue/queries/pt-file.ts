@@ -1,5 +1,6 @@
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { partsOf, type TransactionContext } from '../../../../kernel/index.js';
+import { itemMapEntry } from '../db/schema.js';
 
 // What `merchandise` · PT reads of the catalogue for a PT file (goods-in 5.2, 5.3, 5.5; structure-and-masters 4.1 to
 // 4.3; S2-F04-T02): the brands and categories in force by their codes, the lists the template's values are on; the
@@ -121,25 +122,55 @@ export async function brandProductsOn(
 }
 
 /**
+ * The master sheet's item map kept with a version of the item marking (4.2 "As built"; goods-in 5.2, 5.3; RR-583):
+ * each item's value with its sub category, a category, and its type, a value of the type list. An item the map does not
+ * hold is left out: nothing is given by default.
+ */
+export async function itemMapOf(
+  context: TransactionContext,
+  itemMarkingVersionId: string,
+): Promise<Map<string, { readonly categoryId: string; readonly typeValueId: string }>> {
+  const rows = await context.tx
+    .select({
+      itemValueId: itemMapEntry.itemValueId,
+      categoryId: itemMapEntry.categoryId,
+      typeValueId: itemMapEntry.typeValueId,
+    })
+    .from(itemMapEntry)
+    .where(eq(itemMapEntry.markedAttributeVersionId, itemMarkingVersionId));
+  return new Map(rows.map((row) => [row.itemValueId, { categoryId: row.categoryId, typeValueId: row.typeValueId }]));
+}
+
+/** A SKU a barcode names, with its style's code, so its style is read with the file's (goods-in 5.5). */
+export interface BarcodeSku {
+  readonly skuId: string;
+  readonly styleCode: string;
+}
+
+/**
  * The SKUs each barcode given names on the date, as a supplier barcode in force under the brand or the whole
- * Organisation, active mappings only (4.3; goods-in 5.5: a PT's barcode is recorded and resolved under its product's
- * brand). A barcode no mapping names is left out.
+ * Organisation, active mappings only, each with its style's code (4.3; goods-in 5.5: a PT's barcode is recorded and
+ * resolved under its product's brand). A barcode no mapping names is left out.
  */
 export async function barcodeSkusOn(
   context: TransactionContext,
   request: { readonly brandId: string; readonly barcodes: readonly string[]; readonly date: string },
-): Promise<Map<string, string[]>> {
-  const named = new Map<string, string[]>();
+): Promise<Map<string, BarcodeSku[]>> {
+  const named = new Map<string, BarcodeSku[]>();
   for (const codes of inParts([...new Set(request.barcodes)])) {
-    const rows = await context.tx.execute<{ code: string; sku_id: string }>(sql`
-      select distinct k.code, c.sku_id::text as sku_id
+    const rows = await context.tx.execute<{ code: string; sku_id: string; style_code: string }>(sql`
+      select distinct k.code, c.sku_id::text as sku_id, s.code as style_code
       from merchandise.external_code_key k
       join merchandise.external_code c on c.code_key_id = k.id
+      join merchandise.sku u on u.id = c.sku_id
+      join merchandise.style s on s.id = u.style_id
       where k.kind = 'supplier-barcode' and k.code = any(${sql.param(codes)}::text[]) and not c.alias
         and c.valid_during @> ${request.date}::date
         and (c.scope_kind = 'organisation' or (c.scope_kind = 'brand' and c.scope_brand_id = ${request.brandId}::uuid))
       order by k.code, sku_id`);
-    for (const row of rows.rows) named.set(row.code, [...(named.get(row.code) ?? []), row.sku_id]);
+    for (const row of rows.rows) {
+      named.set(row.code, [...(named.get(row.code) ?? []), { skuId: row.sku_id, styleCode: row.style_code }]);
+    }
   }
   return named;
 }

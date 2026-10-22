@@ -14,7 +14,7 @@ The whole first version in one document: [spec.md](spec.md). The design is [good
 
 ## 2. Where we are
 
-Updated 22 Oct 2026. On the integration branch `s2/goods-in-first-version` (not pushed): nine tickets done (`S2-F01-T01` to `T04`, `S2-F02-T01` to `T03`, `S2-F04-T01`, `S2-F08-T01`), each reviewed with its fixes in; every check and 43 browser journeys pass. Being built (wave C): `S2-F02-T04` and `S2-F04-T02`; `S2-F02-T05` follows `S2-F04-T02`, which builds the GRN's "PT attached" mark. The order of the rest is in the plan of 22 Oct 2026 (waves C to G).
+Updated 22 Oct 2026. On the integration branch `s2/goods-in-first-version` (not pushed): eleven tickets done (`S2-F01-T01` to `T04`, `S2-F02-T01` to `T04`, `S2-F04-T01`, `S2-F04-T02`, `S2-F08-T01`), each reviewed with its fixes in; every check and 46 browser journeys pass. `S2-F02-T05` (recount) is built and merged, reviewed with wave D. Being built (wave D): `S2-F06-T01`. The order of the rest is in the plan of 22 Oct 2026 (waves D to G).
 
 ## 3. Scope
 
@@ -54,11 +54,11 @@ Policies 1, 3, 5, 17 and the stage 2 parts of 10 Signed and validated, their val
 | [F02-T02 Inbox, Arrival, count and a clean GRN](s2-f02-arrival-count-and-grn/tickets/T02-inbox-arrival-count-and-a-clean-grn.md) | done | F02-T01 (done) |
 | [F08-T01 Damage reports](s2-f08-damage-holds/tickets/T01-damage-reports.md) | done | F02-T02 (done) |
 | [F02-T03 Findings and held-line decisions](s2-f02-arrival-count-and-grn/tickets/T03-findings-and-held-lines.md) | done | F02-T02, F08-T01 (done) |
-| [F02-T04 Receive against a booking](s2-f02-arrival-count-and-grn/tickets/T04-receive-against-a-booking.md) | in-progress | F02-T02, F01-T04 (done) |
-| [F02-T05 Recount](s2-f02-arrival-count-and-grn/tickets/T05-recount.md) | blocked | F02-T03 (done), F04-T02 (the PT attached mark) |
+| [F02-T04 Receive against a booking](s2-f02-arrival-count-and-grn/tickets/T04-receive-against-a-booking.md) | done | F02-T02, F01-T04 (done) |
+| [F02-T05 Recount](s2-f02-arrival-count-and-grn/tickets/T05-recount.md) | in-progress | F02-T03, F04-T02 (done) |
 | [F04-T01 A brand barcode on several products](s2-f04-pt-upload/tickets/T01-repeated-brand-barcodes.md) | done | — |
-| [F04-T02 Upload a PT file for a GRN](s2-f04-pt-upload/tickets/T02-upload-a-pt-file-for-a-grn.md) | in-progress | F02-T03, F04-T01 (done) |
-| [F06-T01 Approve or reject a PT](s2-f06-pt-approval/tickets/T01-approve-or-reject-a-pt.md) | blocked | F04-T02 |
+| [F04-T02 Upload a PT file for a GRN](s2-f04-pt-upload/tickets/T02-upload-a-pt-file-for-a-grn.md) | done | F02-T03, F04-T01 (done) |
+| [F06-T01 Approve or reject a PT](s2-f06-pt-approval/tickets/T01-approve-or-reject-a-pt.md) | in-progress | F04-T02 (done) |
 | [F07-T01 Scan-in at the Site](s2-f07-scan-in/tickets/T01-scan-in-at-the-site.md) | blocked | F06-T01, F08-T01 |
 | [F09-T01 Reverse a PT before the scan-in](s2-f09-pt-reversal/tickets/T01-reverse-a-pt-before-the-scan-in.md) | blocked | F07-T01 |
 | [F11-T01 Stock search](s2-f11-stock-search-and-reports/tickets/T01-stock-search.md) | blocked | F07-T01 |

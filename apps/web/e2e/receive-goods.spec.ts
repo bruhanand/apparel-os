@@ -205,6 +205,8 @@ test('PRD-REC-004 PRD-MER-011 a Store’s staff counts a batch-tracked product a
     const line = page.getByRole('form', { name: 'Add a line' });
     await line.getByLabel(/^Style code/).fill(world.storeBatchStyleCode);
     await line.getByLabel(/^Product/).selectOption({ label: options.batchSku });
+    // Goods on the invoice are counted with their size before the GRN (goods-in 4.3; RR-586).
+    await line.getByLabel(/^Size$/).selectOption({ label: options.sizes[0] ?? '' });
     await expect(line.getByLabel(/^Batch/)).toBeVisible();
     await line.getByLabel(/^Invoice quantity/).fill('3');
     await line.getByLabel(/^Counted quantity/).fill('3');

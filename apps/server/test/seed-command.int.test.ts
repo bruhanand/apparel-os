@@ -39,8 +39,9 @@ import {
 // process (code-house-rules 11.2). Turborepo builds the seed before the server's integration tests, so this is the
 // code under test. It creates databases with fixed synthetic names; no other test file uses them. It sets up both
 // synthetic Organisations through the setup step (DEC-118, RR-330), then gives each, finished before or not, what `dev`
-// needs and no screen sets up yet, once: the GRN, booking and damage-report series and the season and size markings
-// (DEC-143, DEC-144). Every value is SYNTHETIC.
+// needs and no screen sets up yet, once: the GRN, booking and damage-report series, the season and size markings
+// (DEC-143, DEC-144), and the PT template's six other lists marked, the item map and the template's layout and mapping
+// Confirmed (code review 6 of stage 2, as DEC-144 does). Every value is SYNTHETIC.
 
 /** The series the seed gives each Organisation, by kind, with their SYNTHETIC formats (DEC-143, DEC-144). */
 const SEEDED_SERIES = [
@@ -49,24 +50,51 @@ const SEEDED_SERIES = [
   { kind: 'stock.damage-report', state: 'Open', parts: 'SYN-DMG-#5' },
 ];
 
-/** The SYNTHETIC list attributes the seed marks as the season and the size list (DEC-144). */
-const SEEDED_MARKINGS = [
-  { mark: 'season', code: 'SYN-SEASON', valueKind: 'list', name: 'SYNTHETIC Season', origin: 'synthetic' },
-  { mark: 'size', code: 'SYN-SIZE', valueKind: 'list', name: 'SYNTHETIC Size', origin: 'synthetic' },
+/**
+ * The SYNTHETIC list attribute the seed marks as each mark, by its mark, code and name, and its SYNTHETIC values, as the
+ * catalogue reads them in force (DEC-144): the season and the size list, and the PT template's other lists (goods-in
+ * 5.2), in the order of the marks' names.
+ */
+const SEEDED_LISTS: readonly {
+  readonly mark: AttributeMark;
+  readonly label: string;
+  readonly name: string;
+  readonly values: number;
+}[] = [
+  { mark: 'colour', label: 'COLOUR', name: 'Colour', values: 2 },
+  { mark: 'fit', label: 'FIT', name: 'Fit', values: 2 },
+  { mark: 'gender', label: 'GENDER', name: 'Gender', values: 2 },
+  { mark: 'gst-rate', label: 'GST-RATE', name: 'GST rate', values: 2 },
+  { mark: 'item', label: 'ITEM', name: 'Item', values: 2 },
+  { mark: 'season', label: 'SEASON', name: 'Season', values: 2 },
+  { mark: 'size', label: 'SIZE', name: 'Size', values: 3 },
+  { mark: 'type', label: 'TYPE', name: 'Type', values: 2 },
 ];
 
-/** The SYNTHETIC values the seed gives each marked attribute, as the catalogue reads them in force (DEC-144). */
-const SEEDED_VALUES = {
-  season: [
-    { code: 'SYN-SEASON-1', name: 'SYNTHETIC Season 1' },
-    { code: 'SYN-SEASON-2', name: 'SYNTHETIC Season 2' },
-  ],
-  size: [
-    { code: 'SYN-SIZE-1', name: 'SYNTHETIC Size 1' },
-    { code: 'SYN-SIZE-2', name: 'SYNTHETIC Size 2' },
-    { code: 'SYN-SIZE-3', name: 'SYNTHETIC Size 3' },
-  ],
-};
+const SEEDED_MARKINGS = SEEDED_LISTS.map((each) => ({
+  mark: each.mark,
+  code: `SYN-${each.label}`,
+  valueKind: 'list',
+  name: `SYNTHETIC ${each.name}`,
+  origin: 'synthetic',
+}));
+
+/** The SYNTHETIC values the seed gives each marked attribute (DEC-144). */
+const SEEDED_VALUES = Object.fromEntries(
+  SEEDED_LISTS.map((each) => [
+    each.mark,
+    Array.from({ length: each.values }, (_, at) => ({
+      code: `SYN-${each.label}-${String(at + 1)}`,
+      name: `SYNTHETIC ${each.name} ${String(at + 1)}`,
+    })),
+  ]),
+) as Record<AttributeMark, { code: string; name: string }[]>;
+
+/** The item map the seed writes with the SYNTHETIC item marking (goods-in 5.2, 5.3; RR-583), by codes. */
+const SEEDED_ITEM_MAP = [
+  { item: 'SYN-ITEM-1', category: 'SYN-SUB-CATEGORY', type: 'SYN-TYPE-1' },
+  { item: 'SYN-ITEM-2', category: 'SYN-SUB-CATEGORY', type: 'SYN-TYPE-2' },
+];
 
 const COMMAND = fileURLToPath(new URL('../dist-seed/test/seed/seed.js', import.meta.url));
 const SEEDED = SYNTHETIC_ORGANISATIONS.map((organisation) => syntheticDatabaseName(organisation.code));
@@ -409,7 +437,13 @@ describe('pnpm seed, the local seed (code-house-rules 11.2)', () => {
     }
     const untouchedBefore = await Promise.all(SEEDED.map((database) => untouchedRows(database)));
     for (const database of SEEDED) {
-      expect(await seededSettings(database)).toEqual({ series: [], markings: [], values: [] });
+      expect(await seededSettings(database)).toEqual({
+        series: [],
+        markings: [],
+        values: [],
+        itemMap: [],
+        templates: [],
+      });
     }
 
     // On `dev`, as the Railway dev environment runs it.
@@ -426,10 +460,12 @@ describe('pnpm seed, the local seed (code-house-rules 11.2)', () => {
         'the SYNTHETIC GRN series defined',
         'the SYNTHETIC booking series defined',
         'the SYNTHETIC damage-report series defined',
-        'SYN-SEASON marked as the season attribute',
-        'SYN-SIZE marked as the size attribute',
-        'SYN-SEASON-1, SYN-SEASON-2 added as values of SYN-SEASON',
-        'SYN-SIZE-1, SYN-SIZE-2, SYN-SIZE-3 added as values of SYN-SIZE',
+        ...SEEDED_MARKINGS.map((each) => `${each.code} marked as the ${each.mark} attribute`),
+        ...SEEDED_MARKINGS.map(
+          (each) => `${SEEDED_VALUES[each.mark].map((value) => value.code).join(', ')} added as values of ${each.code}`,
+        ),
+        'SYN-ITEM-1, SYN-ITEM-2 added to the item map',
+        'the SYNTHETIC PT template layout and mapping defined, Confirmed',
       ]) {
         expect(first.output).toContain(`${organisation.code} (${organisation.name}): ${added}`);
       }
@@ -438,7 +474,7 @@ describe('pnpm seed, the local seed (code-house-rules 11.2)', () => {
     // Each marking is in force, with its values, where a budget and a count line read them: the catalogue's interface
     // (goods-in 3.3, 4.3).
     for (const organisation of SYNTHETIC_ORGANISATIONS) {
-      for (const mark of ['season', 'size'] as const) {
+      for (const { mark } of SEEDED_LISTS) {
         expect(await markedNow(organisation.code, mark)).toEqual({ marked: 'set', values: SEEDED_VALUES[mark] });
       }
     }
@@ -450,7 +486,7 @@ describe('pnpm seed, the local seed (code-house-rules 11.2)', () => {
     const before = await Promise.all(SEEDED.map((database) => footprint(database)));
     const second = await runSeed(variables);
     expect(second.exitCode, second.output).toBe(0);
-    expect(second.output).not.toMatch(/ defined| marked as| added as/);
+    expect(second.output).not.toMatch(/ defined| marked as| added as| added to/);
     expect(await Promise.all(SEEDED.map((database) => footprint(database)))).toEqual(before);
   });
 });
@@ -508,17 +544,58 @@ async function seededSettings(database: string) {
          join merchandise.attribute a on a.id = v.attribute_id
         order by a.code, v.code`,
     );
-    return { series: series.rows, markings: markings.rows, values: values.rows };
+    // The item map kept with the item marking in force, by codes (RR-583).
+    const itemMap = await owner.query<{ item: string; category: string; type: string }>(
+      `select iv.code as item, c.code as category, tv.code as type
+         from merchandise.item_map_entry e
+         join merchandise.marked_attribute_version mv
+           on mv.id = e.marked_attribute_version_id and mv.decision = 'Approved' and pg_catalog.upper_inf(mv.valid_during)
+         join merchandise.vocabulary_value iv on iv.id = e.item_value_id
+         join merchandise.category c on c.id = e.category_id
+         join merchandise.vocabulary_value tv on tv.id = e.type_value_id
+        order by iv.code`,
+    );
+    // The PT template's layout and mapping versions, with who proposed and who confirmed them, and any request asked.
+    const templates = await owner.query<{
+      layout: string;
+      mapping: string;
+      target: string;
+      layoutState: string;
+      mappingState: string;
+      proposedBy: string;
+      decidedBy: string;
+      requests: number;
+    }>(
+      `select l.code as layout, m.code as mapping, m.target, lv.state as "layoutState", mv.state as "mappingState",
+              lv.proposed_by_user_id::text as "proposedBy", lv.decided_by_user_id::text as "decidedBy",
+              (select count(*)::int from access.approval_request r
+                where r.document_version_id in (lv.id, mv.id)) as requests
+         from files_imports.layout l
+         join files_imports.layout_version lv on lv.layout_id = l.id
+         join files_imports.mapping m on m.layout_version_id = lv.id
+         join files_imports.mapping_version mv on mv.mapping_id = m.id
+        where m.target = 'merchandise.pt'
+        order by l.code`,
+    );
+    return {
+      series: series.rows,
+      markings: markings.rows,
+      values: values.rows,
+      itemMap: itemMap.rows,
+      templates: templates.rows,
+    };
   } finally {
     await owner.end();
   }
 }
 
 /**
- * What seededSettings answers once the seed has run (DEC-143, DEC-144): the three SYNTHETIC series; both markings, each
- * prepared by the Organisation's first Admin with no approval asked; and the SYNTHETIC values, each proposed by the
- * first Admin and written confirmed by the `setup` identity with no approval asked. The seed writes markings and values
- * as labelled SYNTHETIC settings, since neither first user holds the right or an authenticator to approve them.
+ * What seededSettings answers once the seed has run (DEC-143, DEC-144): the three SYNTHETIC series; every marking, each
+ * prepared by the Organisation's first Admin with no approval asked; the SYNTHETIC values, each proposed by the first
+ * Admin and written confirmed by the `setup` identity with no approval asked; the item map of the SYNTHETIC items; and
+ * the PT template's layout and mapping, proposed by the first Admin and written Confirmed by the `setup` identity with
+ * no approval asked. The seed writes them as labelled SYNTHETIC settings, since neither first user holds the right or an
+ * authenticator to approve them.
  */
 async function expectedSettings(database: string) {
   const owner = await connect(database, 'migration');
@@ -542,7 +619,20 @@ async function expectedSettings(database: string) {
     return {
       series: SEEDED_SERIES,
       markings: SEEDED_MARKINGS.map((each) => ({ ...each, preparedBy: record?.admin, requests: 0 })),
-      values: [...valuesOf('SYN-SEASON', SEEDED_VALUES.season), ...valuesOf('SYN-SIZE', SEEDED_VALUES.size)],
+      values: SEEDED_MARKINGS.flatMap((each) => valuesOf(each.code, SEEDED_VALUES[each.mark])),
+      itemMap: SEEDED_ITEM_MAP,
+      templates: [
+        {
+          layout: 'SYN-PT-TEMPLATE',
+          mapping: 'SYN-PT-TEMPLATE-MAPPING',
+          target: 'merchandise.pt',
+          layoutState: 'Confirmed',
+          mappingState: 'Confirmed',
+          proposedBy: record?.admin,
+          decidedBy: record?.setup,
+          requests: 0,
+        },
+      ],
     };
   } finally {
     await owner.end();
@@ -631,7 +721,11 @@ async function footprint(database: string): Promise<Record<string, string>> {
                 (select count(*) from merchandise.attribute)::text as attributes,
                 (select count(*) from merchandise.marked_attribute_version)::text as markings,
                 (select count(*) from merchandise.vocabulary_proposal)::text as proposals,
-                (select count(*) from merchandise.vocabulary_value_version)::text as "valueVersions"`,
+                (select count(*) from merchandise.vocabulary_value_version)::text as "valueVersions",
+                (select count(*) from merchandise.category_version)::text as categories,
+                (select count(*) from merchandise.item_map_entry)::text as "itemMap",
+                (select count(*) from files_imports.layout_version)::text as layouts,
+                (select count(*) from files_imports.mapping_version)::text as mappings`,
       )
     ).rows;
     return row ?? {};

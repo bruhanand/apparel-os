@@ -1,6 +1,6 @@
 # S2-F06-T01 — Approve or reject a PT
 
-Status: blocked
+Status: in-progress
 Blocked by: S2-F04-T02
 Feature: [Stage 2 first version](../../spec.md)
 

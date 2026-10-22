@@ -21,6 +21,17 @@ export function formatQuantity(quantity: number): string {
   return grouping.format(quantity);
 }
 
+const twoDecimals = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/**
+ * An exact decimal the server sends as text with two decimals, such as a PT row's MARGIN "52.73", which its route's
+ * schema checks on read, with Indian grouping (design-language 8; code-house-rules 12.13): formatted from the text itself,
+ * as `Intl` formats a numeric string, never through a binary fraction.
+ */
+export function formatDecimal(decimal: string): string {
+  return twoDecimals.format(decimal as `${number}`);
+}
+
 /**
  * Rupees as a person types them, with Indian grouping commas allowed and at most two decimals, as whole paise
  * (PRD-MOD-014): read with integer arithmetic, never through a binary fraction. Undefined for anything else, or an

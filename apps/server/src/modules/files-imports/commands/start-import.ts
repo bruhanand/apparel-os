@@ -15,6 +15,7 @@ import {
   type RequestContent,
   type TransactionContext,
 } from '../../../kernel/index.js';
+import { replayRefusal } from '../../access/index.js';
 import type { ImportHandler, ImportNeed, ImportPlace } from '../contracts/import-handlers.js';
 import { openReceiptText } from '../domain/receipt-seal.js';
 import { attach } from './attach.js';
@@ -287,6 +288,16 @@ async function plan(deps: ImportDependencies, input: StartImportInput): Promise<
       const repeated = await repeatRefusal(deps, context, input, handler, versions.layoutId);
       if (repeated !== undefined) refuse(repeated);
       const layout = parsedOrDefect(layoutStructureSchema, versions.structure, 'layout version');
+      // A target whose files have their header on given rows only refuses a layout that looks for it elsewhere (13.2
+      // "As built with S2-F04-T02"; goods-in 5.2: a PT file's header is on row 1 or row 2).
+      const onRows = handler.headerRows;
+      if (onRows !== undefined && (layout.headerRows ?? [layout.headerRow]).some((row) => !onRows.includes(row))) {
+        refuse({
+          kind: 'refused',
+          code: 'files-imports.header-rows-not-allowed',
+          missing: onRows.map((row) => ({ kind: 'header-row', row: String(row) })),
+        });
+      }
       const date = await context.businessDate();
       if (date.kind !== 'set') {
         refuse({
@@ -482,9 +493,11 @@ export async function startImport(
   const authoriseReplay: ReplayAuthorisation = async (context) => {
     const allowed = await authorised(deps, context, input);
     if (allowed.kind === 'allowed') return { kind: 'allowed' };
+    // Only an access refusal stops a replay: the handler's refusal of a file for the record now is a rule of the
+    // operation, which the first answer met as it stood (12.4; `access`'s replayRefusal keeps the kind).
     const { refusal } = allowed;
     if (refusal.kind !== 'not-authorised' && refusal.kind !== 'not-found') return { kind: 'allowed' };
-    return { kind: 'refused', refusal: { ...refusal, kind: refusal.kind } };
+    return { kind: 'refused', refusal: replayRefusal(refusal) };
   };
   return deps.helper.run(
     {
@@ -697,7 +710,7 @@ async function record(
   for (let at = 0; at < rows.length; at += SET) await context.tx.insert(stagedRow).values(rows.slice(at, at + SET));
   // The file is read through its batch: served only to a reader whose assignment covers the batch's scope and every
   // class the file is held to carry (section 11).
-  const facts = scopeFactsOf({ ...scope });
+  const facts = scopeFactsOf(scope);
   const attached = await attach(context, deps.audit, {
     storedFileId: body.storedFileId,
     fileReceiptId: body.fileReceiptId,

@@ -3320,6 +3320,7 @@ export const englishIndia = {
   'receive.waiting.grn': 'Waiting for the GRN',
   'receive.waiting.held-lines': 'Waiting for the decisions on its held goods',
   'receive.waiting.pt': 'Waiting for the PT',
+  'receive.waiting.pt-approval': 'PT waiting for approval',
   'receive.new': 'Record an Arrival',
   'receive.new.intro':
     'Where the goods are, who sent them and how they came. Only units where receiving is available are offered.',
@@ -3375,7 +3376,8 @@ export const englishIndia = {
   'receive.colour.help': 'As the invoice names it; leave it empty when it names none.',
   'receive.no-size': 'No size on the invoice',
   'receive.size': 'Size',
-  'receive.size.help': 'A value of the attribute the Organisation marks as its size list.',
+  'receive.size.help':
+    'A value of the attribute the Organisation marks as its size list. Goods on the invoice and wrong goods need their size before the GRN is issued, since the PT file is matched on it.',
   'receive.size.not-marked':
     'No attribute is marked as the size list yet, so no line can be saved. It is marked in Setup › Vocabularies, on the Attributes tab, and approved by a second person.',
   'receive.product': 'Product',
@@ -3732,6 +3734,8 @@ export const englishIndia = {
   'pt.submit': 'Submit for approval',
   'pt.submit.seen': 'Warnings marked seen.',
   'pt.submit.done': 'Submitted for approval. A different person approves it.',
+  'pt.submit.refused':
+    'The file was not submitted: it no longer passes its checks against the GRN as it stands. Nothing is created. Correct every problem listed in the file and upload it again.',
   'pt.revisions': 'PT revisions',
   'pt.revision.number': 'Revision',
   'pt.revision.state': 'State',
@@ -3779,14 +3783,22 @@ export const englishIndia = {
   'issue.merchandise.pt-held-lines-open':
     'A held line, a damage report or a recount of the GRN waits for its decision.',
   'issue.merchandise.pt-already-attached': 'The GRN has a PT already.',
-  'issue.merchandise.pt-file-refused': 'The file holds no PT row.',
+  'issue.merchandise.pt-file-refused': 'The file cannot make a PT.',
+  'issue.merchandise.pt-item-not-mapped': 'The item map gives this ITEM no SUB CATEGORY and TYPE.',
+  'issue.merchandise.pt-item-map-disagrees': 'The item map gives this ITEM another value here.',
   'issue.merchandise.attribute-not-marked': 'A list of the template is not marked yet.',
   'issue.merchandise.record-not-found': 'The GRN is not found.',
   'error.merchandise.pt-held-lines-open':
     'A held line, a damage report or a recount of this GRN waits for its decision. Upload the PT file once every one is decided.',
   'error.merchandise.pt-already-attached':
     'This GRN has a PT waiting for approval or approved already. Withdraw a wrong draft first.',
-  'error.merchandise.pt-file-refused': 'The file no longer matches the GRN. Upload it again to see every problem.',
+  'error.merchandise.pt-file-refused':
+    'The file no longer passes its checks against the GRN as it stands. Nothing is created. Every problem is listed: correct them and upload the file again.',
+  'error.receiving.size-required':
+    'A line of goods on the invoice, or of wrong goods, has no size. Save each line named with its size, then issue the GRN.',
+  'error.files-imports.header-rows-not-allowed':
+    'This layout looks for the header on a row where these files never have it. Choose the layout the template is set up with.',
+  'missing.header-row.named': 'The header may be on row {row}.',
   'error.merchandise.pt-not-a-draft': 'This PT revision is no longer a draft waiting for approval.',
   'error.files-imports.subject-required': 'Name the record this file is for.',
   'error.files-imports.subject-not-taken': 'This kind of file is not for one record.',
@@ -3798,6 +3810,14 @@ export const englishIndia = {
   'missing.pt-style-size.both': 'Style {style}, size {size}: the file has {file}, the GRN {grn}.',
   'missing.pt-style-size.file': 'Style {style}, size {size}: the file has {file}.',
   'missing.pt-style-size.grn': 'Style {style}, size {size}: the GRN has {grn}.',
+  'missing.pt-style-size.named': 'Style {style}, size {size}.',
+  'missing.pt-style-size.unsized.grn': 'Style {style}, with no size: the GRN has {grn}.',
+  'missing.pt-style-size.unsized.both': 'Style {style}, with no size: the file has {file}, the GRN {grn}.',
+  'missing.pt-style-size.unsized.named': 'Style {style}, with no size.',
+  'missing.pt-rows': 'The file holds no row of the template.',
+  'missing.pt-totals': 'Its totals are too large to keep in whole paise.',
   'missing.layout-sheet-matched.named': 'The sheet {sheet} holds the template’s columns too. Keep one sheet.',
-  'missing.pt-issue.named': 'First problem: {problem}',
+  'missing.pt-issue.named': '{problem}',
+  'missing.pt-issue.row': 'Row {row}: {problem}',
+  'missing.pt-issue.cell': 'Row {row}, {column}: {problem}',
 } as const satisfies Record<string, string | Readonly<Partial<Record<Intl.LDMLPluralRule, string>>>>;

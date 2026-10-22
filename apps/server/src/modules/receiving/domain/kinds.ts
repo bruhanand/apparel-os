@@ -109,10 +109,11 @@ export const EXTRA_EXCEPTION_TYPES = {
 } as const;
 
 /**
- * The exception type of the GRN lines an Arrival against a booking sends to Booking for review at its GRN's issue
- * (goods-in 2, 3.7, 4.5, 4.10; access-and-approvals 12.1; PRD-BKG-007; POL-05.08): one a GRN, of the category mismatch,
- * linking to the GRN, whose lines show why each went to review. Its owner is whoever the routing of the type at the Site
- * names (POL-02.16), Booking by the grill's routing, never set here.
+ * The exception type of the GRN lines sent to Booking for review at their GRN's issue (goods-in 2, 3.7, 4.5, 4.10;
+ * access-and-approvals 12.1; PRD-BKG-007, PRD-BKG-008; POL-05.08): those of an Arrival against a booking that do not
+ * link, and every line that delivers pieces of a GRN received without a booking (12 test 6; RR-580). One a GRN, of the
+ * category mismatch, linking to the GRN, whose lines show where each stands. Its owner is whoever the routing of the type
+ * at the Site names (POL-02.16), Booking by the grill's routing, never set here.
  */
 export const BOOKING_REVIEW_EXCEPTION_TYPE = 'receiving.booking-review';
 

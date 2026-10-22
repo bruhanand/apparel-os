@@ -10,6 +10,12 @@ import type { PtList } from './rows.js';
 /** The module a PT's audit records and approval requests name; its parts share it (code-house-rules 3.2). */
 export const PT_MODULE = 'merchandise';
 
+/**
+ * The rows a PT file's header is on: row 1, or row 2 below a work tab's subtotal row (goods-in 5.2; pt-file-layouts 1.7).
+ * A layout of the PT target finding it on any other row is refused at Start an import (imports-and-opening-data 6.5).
+ */
+export const PT_HEADER_ROWS: readonly number[] = [1, 2];
+
 /** The draft revisions, withdrawals and proposed products a PT's history names. */
 export const PT_REVISION_TYPE = 'merchandise.pt_revision';
 export const PT_PROPOSED_SKU_TYPE = 'merchandise.pt_proposed_sku';

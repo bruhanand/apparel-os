@@ -7,23 +7,33 @@ import { checkRow, type PtLists, type PtRowInput } from './rows.js';
 const id = (n: number) => `01900000-0000-7000-8000-${String(n).padStart(12, '0')}`;
 const list = (...codes: string[]) => new Map(codes.map((code, at) => [code, id(at + 100 * codes.length)]));
 
+/** The GRN's brand (goods-in 5.3: on the brand list, and the GRN's brand). */
+const GRN_BRAND = id(1);
+const types = list('SYN TOP', 'SYN BOTTOM');
+const items = list('SYN T-SHIRT', 'SYN SHORTS');
+const at = (entries: ReadonlyMap<string, string>, code: string) => entries.get(code) ?? 'SYN-NOT-ON-THE-LIST';
+
 const lists: PtLists = {
-  grnBrandId: id(1),
   brands: new Map([
-    ['SYN-BRAND', id(1)],
+    ['SYN-BRAND', GRN_BRAND],
     ['SYN-OTHER-BRAND', id(2)],
   ]),
-  categories: new Map([['SYN CASUAL', id(3)]]),
+  categories: new Map([
+    ['SYN CASUAL', id(3)],
+    ['SYN SPORT', id(4)],
+  ]),
   attributes: {
     season: list('SYN SPRING(Jun-26)'),
     colour: list('SYN NAVY', 'PREMIUM'),
     gender: list('SYN MALE'),
-    type: list('SYN TOP'),
-    item: list('SYN T-SHIRT'),
+    type: types,
+    item: items,
     fit: list('SYN SLIM'),
     size: list('M', '8'),
     gstRate: list('5', '18'),
   },
+  // The master sheet's item map (goods-in 5.2): each item's sub category and type; SYN SHORTS has none.
+  itemMap: new Map([[at(items, 'SYN T-SHIRT'), { categoryId: id(3), typeValueId: at(types, 'SYN TOP') }]]),
 };
 
 /** A good SYNTHETIC row: 2 pieces at MRP 1,999.00, BASIC 700.00, P RATE 945.00, so MARGIN 52.73 (CG-22). */
@@ -61,11 +71,11 @@ const withValues = (values: Partial<PtRowInput['values']>): PtRowInput => ({
 });
 
 const codes = (input: PtRowInput) =>
-  checkRow(input, lists).issues.map((issue) => [issue.field ?? '', issue.code] as const);
+  checkRow(input, lists, GRN_BRAND).issues.map((issue) => [issue.field ?? '', issue.code] as const);
 
 describe('the checks on each row of a PT file (goods-in 5.3)', () => {
   it('DEC-134 PRD-PTW-011 accepts a row whose every value is on its list, with NAG, MARGIN and the amounts in order', () => {
-    const checked = checkRow(good, lists);
+    const checked = checkRow(good, lists, GRN_BRAND);
     expect(checked.issues).toEqual([]);
     expect(checked.row).toMatchObject({
       rowNumber: 3,
@@ -103,7 +113,7 @@ describe('the checks on each row of a PT file (goods-in 5.3)', () => {
   });
 
   it('PRD-MER-007 keeps a barcode leading zeros and refuses one that is not digits', () => {
-    expect(checkRow(withValues({ barcode: '000123' }), lists).row?.barcode).toBe('000123');
+    expect(checkRow(withValues({ barcode: '000123' }), lists, GRN_BRAND).row?.barcode).toBe('000123');
     expect(codes(withValues({ barcode: '89012-34' }))).toEqual([['barcode', 'merchandise.pt-barcode-not-digits']]);
   });
 
@@ -120,6 +130,29 @@ describe('the checks on each row of a PT file (goods-in 5.3)', () => {
 
   it('PRD-PTW-011 refuses NAG that is not QTY', () => {
     expect(codes(withValues({ nag: '3' }))).toEqual([['nag', 'merchandise.pt-nag-not-qty']]);
+  });
+
+  it('PRD-PTW-011 compares NAG with QTY exactly, never at two decimals (code review 6 of stage 2)', () => {
+    // SYNTHETIC: 2.004 rounds to 2.00 at two decimals, but is not 2 pieces.
+    expect(codes(withValues({ nag: '2.004' }))).toEqual([['nag', 'merchandise.pt-nag-not-qty']]);
+    expect(codes(withValues({ nag: '1.999' }))).toEqual([['nag', 'merchandise.pt-nag-not-qty']]);
+    // The same number written with a fraction of zero is QTY.
+    expect(codes(withValues({ nag: '2.00' }))).toEqual([]);
+    expect(codes(withValues({ nag: '-2' }))).toEqual([['nag', 'merchandise.pt-nag-not-qty']]);
+  });
+
+  it('DEC-134 PRD-IMP-007 refuses an ITEM the item map does not give the row SUB CATEGORY and TYPE (goods-in 5.3; RR-583)', () => {
+    expect(codes(withValues({ subCategory: 'SYN SPORT' }))).toEqual([
+      ['subCategory', 'merchandise.pt-item-map-disagrees'],
+    ]);
+    expect(codes(withValues({ type: 'SYN BOTTOM' }))).toEqual([['type', 'merchandise.pt-item-map-disagrees']]);
+    expect(codes(withValues({ subCategory: 'SYN SPORT', type: 'SYN BOTTOM' }))).toEqual([
+      ['subCategory', 'merchandise.pt-item-map-disagrees'],
+      ['type', 'merchandise.pt-item-map-disagrees'],
+    ]);
+    // An item the map does not hold is never given a sub category or type by default.
+    expect(codes(withValues({ item: 'SYN SHORTS' }))).toEqual([['item', 'merchandise.pt-item-not-mapped']]);
+    expect(checkRow(withValues({ item: 'SYN SHORTS' }), lists, GRN_BRAND).row).toBeUndefined();
   });
 
   it('PRD-PTW-011 refuses MARGIN that, rounded half up to two decimals, disagrees with (MRP - P RATE) / MRP x 100', () => {
@@ -139,6 +172,6 @@ describe('the checks on each row of a PT file (goods-in 5.3)', () => {
     expect(codes(withValues({ hsn: undefined, colour: 'SYN PINK' }))).toEqual([
       ['colour', 'merchandise.pt-value-not-on-list'],
     ]);
-    expect(checkRow(withValues({ hsn: undefined }), lists).row).toBeUndefined();
+    expect(checkRow(withValues({ hsn: undefined }), lists, GRN_BRAND).row).toBeUndefined();
   });
 });
