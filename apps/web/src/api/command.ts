@@ -48,10 +48,7 @@ export interface Submission<K extends CommandName> {
  * says is locked or over goes to the lock screen or to sign-in, the screen's input kept (access-and-approvals 3.3). On
  * success the reads named in `invalidates` are read again.
  */
-export function useSubmission<K extends CommandName>(
-  name: K,
-  invalidates: readonly (keyof Table)[],
-): Submission<K> {
+export function useSubmission<K extends CommandName>(name: K, invalidates: readonly (keyof Table)[]): Submission<K> {
   const key = useRef<string | undefined>(undefined);
   const [state, setState] = useState<SubmissionState>({ kind: 'ready' });
   const { session, setSession } = useSession();

@@ -763,6 +763,12 @@ describe('the references inside receiving (code-house-rules 3.2; S2-F02-T02)', (
       'grn (arrival_version_id) arrival_change',
       'grn_line (count_entry_id) count_entry',
       'grn_line (grn_id) grn',
+      // A held line, its versions and its decision (goods-in 4.6, 4.9; S2-F02-T03).
+      'held_line (grn_id) grn',
+      'held_line (grn_line_id) grn_line',
+      'held_line_decision (held_line_id) held_line',
+      'held_line_decision (held_line_version_id) held_line_version',
+      'held_line_version (held_line_id) held_line',
     ]);
   });
 });

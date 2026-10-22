@@ -206,7 +206,11 @@ export async function saveCountLine(
       damage:
         draft.damage === null
           ? null
-          : { quantity: draft.damage.quantity, description: trimmed(draft.damage.description), photo: draft.damage.photo },
+          : {
+              quantity: draft.damage.quantity,
+              description: trimmed(draft.damage.description),
+              photo: draft.damage.photo,
+            },
       batch: draft.batch === null ? null : { code: trimmed(draft.batch.code), expiryDate: draft.batch.expiryDate },
     },
     replaced,

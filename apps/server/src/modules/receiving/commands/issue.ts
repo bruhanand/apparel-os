@@ -19,7 +19,14 @@ import { skuOn } from '../../merchandise/catalogue/index.js';
 import { termsInForce } from '../../merchandise/parties/index.js';
 import type { NumberingInterface } from '../../numbering/index.js';
 import type { StockDocumentsInterface } from '../../stock/documents/index.js';
-import type { Condition, ItemValue, LedgerItem, NamedGoods, Owner, StockLedgerInterface } from '../../stock/ledger/index.js';
+import type {
+  Condition,
+  ItemValue,
+  LedgerItem,
+  NamedGoods,
+  Owner,
+  StockLedgerInterface,
+} from '../../stock/ledger/index.js';
 import { batchColumns } from '../db/columns.js';
 import { arrivalInvoice, grn, grnLine, heldLine, heldLineVersion } from '../db/schema.js';
 import {
@@ -72,10 +79,7 @@ export interface IssueDependencies extends AvailabilityDependencies {
   readonly ledger: StockLedgerInterface;
   readonly access: Pick<AccessInterface, 'requestApproval'>;
   readonly exceptions: Pick<ExceptionsInterface, 'codeSeriesTarget' | 'raise'>;
-  readonly documents: Pick<
-    StockDocumentsInterface,
-    'countDamageReady' | 'countDamageHold' | 'recordCountDamage'
-  >;
+  readonly documents: Pick<StockDocumentsInterface, 'countDamageReady' | 'countDamageHold' | 'recordCountDamage'>;
 }
 
 /** The GRN reads only an Agreement's ownership: it holds no value, so an Agreement's margins are never shown to it. */
@@ -251,7 +255,9 @@ export async function issueGrn(
 
   // The GRN's one ledger request: the receipt counts first, then the holds on the origins they make (13.16).
   const at = { siteId: row.siteId, businessUnitId: row.businessUnitId, locationId: row.receivingLocationId };
-  const items: LedgerItem[] = issued.filter((each) => each.originId !== null).map((each) => receiptCount(row, each, owner));
+  const items: LedgerItem[] = issued
+    .filter((each) => each.originId !== null)
+    .map((each) => receiptCount(row, each, owner));
   const holdItems: { readonly issued: IssuedLine; readonly kind: 'held' | 'damage'; readonly index: number }[] = [];
   for (const each of held) {
     const kind = each.findings.held?.kind;
@@ -282,7 +288,13 @@ export async function issueGrn(
     await context.lock(LOCK_STEP.numberSeries, once(stepEight));
   } else {
     const planned = await dependencies.ledger.plan(context, {
-      source: { module: RECEIVING_MODULE, recordType: GRN_SOURCE_TYPE, recordId: grnId, versionId: grnId, importKind: 'none' },
+      source: {
+        module: RECEIVING_MODULE,
+        recordType: GRN_SOURCE_TYPE,
+        recordId: grnId,
+        versionId: grnId,
+        importKind: 'none',
+      },
       actor: { kind: 'user', userId: actor.userId, roleAssignmentId: actor.roleAssignmentId },
       items,
       idempotencyKey,
@@ -396,8 +408,11 @@ export async function issueGrn(
   // goods nor issued the GRN (goods-in 4.6; PRD-REC-013, POL-02.07), on their cost, Unknown before their PT
   // (PRD-DMG-005; DM-8).
   const facts = factsOf(row);
-  const heldLines: { readonly id: string; readonly kind: keyof typeof HELD_LINE_EXCEPTION_TYPES; readonly versionId: string }[] =
-    [];
+  const heldLines: {
+    readonly id: string;
+    readonly kind: keyof typeof HELD_LINE_EXCEPTION_TYPES;
+    readonly versionId: string;
+  }[] = [];
   for (const each of holdItems.filter((item) => item.kind === 'held')) {
     const { issued: line } = each;
     const heldPart = line.findings.held;
@@ -479,7 +494,11 @@ export async function issueGrn(
       valueChange('agreementVersionId', null, agreement?.versionId ?? null),
       valueChange('movements', null, [...movementIds]),
       valueChange('holds', null, [...holdIds]),
-      valueChange('heldLines', null, heldLines.map((each) => each.id)),
+      valueChange(
+        'heldLines',
+        null,
+        heldLines.map((each) => each.id),
+      ),
       valueChange('damageReports', null, [...reports.values()]),
     ],
     idempotencyKey,

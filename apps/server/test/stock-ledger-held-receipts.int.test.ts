@@ -237,9 +237,8 @@ describe('a receipt count holds the goods it counts in the same request (stock-l
         owner,
         ...overrides,
       }) as LedgerItem;
-    const taken = written(
-      await world.post(world.poster, [unidentified({ receiptOriginId: uuidv7() })]),
-    ).receiptOriginIds[0];
+    const taken = written(await world.post(world.poster, [unidentified({ receiptOriginId: uuidv7() })]))
+      .receiptOriginIds[0];
     const twice = uuidv7();
     const later = uuidv7();
     expect(

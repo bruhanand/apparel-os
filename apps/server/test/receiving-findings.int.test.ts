@@ -418,16 +418,18 @@ beforeAll(async () => {
   for (const person of [bookingApprover, booking, receiver]) await unknownOnlyLimit(person);
   await unknownOnlyLimit(operations, DAMAGE_DECISION);
   // The follow-ups' SYNTHETIC routings: the findings to Booking, damage to Operations (POL-02.16; V-03).
-  for (const type of ['receiving.shortage', 'receiving.excess', 'receiving.wrong-goods', 'receiving.unidentified-goods']) {
+  for (const type of [
+    'receiving.shortage',
+    'receiving.excess',
+    'receiving.wrong-goods',
+    'receiving.unidentified-goods',
+  ]) {
     await route(type, bookingApprover);
   }
   await route('stock.damage', operations);
 }, 400_000);
 
 afterAll(async () => {
-  if (process.env.DEBUG_LOG_FILE !== undefined) {
-    (await import('node:fs')).writeFileSync(process.env.DEBUG_LOG_FILE, api.logText());
-  }
   await (setup as StructureSetup | undefined)?.close();
   await (router as OrganisationRouter | undefined)?.close();
   await (api as AccessTestApp | undefined)?.close();
@@ -763,7 +765,9 @@ describe('what the PT reads of the GRN (goods-in 5.1, 5.4)', () => {
     );
     expect(after?.undecided).toEqual([]);
     const size0 = fixture.sizes.values[0]?.code ?? null;
-    const goods = Object.fromEntries((after?.goods ?? []).map((group) => [`${group.styleCode}|${group.size ?? ''}`, group.quantity]));
+    const goods = Object.fromEntries(
+      (after?.goods ?? []).map((group) => [`${group.styleCode}|${group.size ?? ''}`, group.quantity]),
+    );
     // SYNTHETIC hand-worked: clean 4; short 8 received less 2 confirmed damaged; excess 7 with its 2 taken in; over 3
     // received; the wrong goods left held, none; the unidentified goods taken in under the style and size named, 3.
     expect(goods).toEqual({

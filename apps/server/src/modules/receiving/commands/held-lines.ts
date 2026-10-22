@@ -130,7 +130,9 @@ export async function nameHeldLineProduct(
     actionType: HELD_LINE_DECISION,
   });
   const locked = await context.lock(LOCK_STEP.document, [heldLineLock(heldLineId), ...open]);
-  const row = locked.missing.some((each) => each.id === heldLineId) ? undefined : await heldLineRow(context, heldLineId);
+  const row = locked.missing.some((each) => each.id === heldLineId)
+    ? undefined
+    : await heldLineRow(context, heldLineId);
   if (row === undefined) return refusalOf(notFound(heldLineId));
   const versions = await versionsOf(context, heldLineId);
   const latest = versions.at(-1);
@@ -157,7 +159,11 @@ export async function nameHeldLineProduct(
   }
   if (draft.skuId !== null) {
     const read = await skuOn(context, draft.skuId, row.siteId, date);
-    if ('refusal' in read || read.sku.brandId !== row.brandId || textKey(read.sku.styleCode) !== textKey(draft.styleCode)) {
+    if (
+      'refusal' in read ||
+      read.sku.brandId !== row.brandId ||
+      textKey(read.sku.styleCode) !== textKey(draft.styleCode)
+    ) {
       return refused('refused', 'receiving.sku-not-of-line', [recordItem('merchandise.sku', draft.skuId)]);
     }
   }
@@ -268,9 +274,11 @@ function decisionEffect(dependencies: EffectDependencies): DocumentEffect {
     const { row, version } = open;
     // Unidentified goods are taken in only once Booking names their product (goods-in 4.6; POL-17.02).
     if (outcome === 'taken-in' && row.kind === 'unidentified' && version.kind !== 'named') {
-      return refusalOf(
-        { kind: 'refused', code: 'receiving.product-not-named', missing: [recordItem(HELD_LINE_TYPE, row.id)] },
-      );
+      return refusalOf({
+        kind: 'refused',
+        code: 'receiving.product-not-named',
+        missing: [recordItem(HELD_LINE_TYPE, row.id)],
+      });
     }
     const { actor, decisionId } = deciding(decider);
     const heldLineDecisionId = uuidv7();

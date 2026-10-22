@@ -1,10 +1,4 @@
-import {
-  lineFindings,
-  type GrnLine,
-  type HeldLine,
-  type HeldLineState,
-  type NamedProduct,
-} from '@apparel-os/schemas';
+import { lineFindings, type GrnLine, type HeldLine, type HeldLineState, type NamedProduct } from '@apparel-os/schemas';
 import { and, asc, desc, eq, gte, inArray, isNotNull, lt, lte, ne, or, type SQL } from 'drizzle-orm';
 import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
 import type { LatestRequest } from '../../access/index.js';
@@ -205,7 +199,10 @@ export async function heldLineFacts(context: TransactionContext, heldLineId: str
  * The resolution check of a held line's follow-up (access-and-approvals 12.3; PRD-EXC-002): verified once Booking has
  * decided it, taken in or left held; otherwise not verified, naming the held line still waiting.
  */
-export async function heldLineDecided(context: TransactionContext, subject: ResolutionSubject): Promise<ResolutionAnswer> {
+export async function heldLineDecided(
+  context: TransactionContext,
+  subject: ResolutionSubject,
+): Promise<ResolutionAnswer> {
   const undecided = [];
   for (const link of subject.links) {
     const [decided] = await context.tx
@@ -287,7 +284,10 @@ export async function ptBasisOf(
   for (const report of reports) {
     if (report.state === 'Submitted') undecided.push({ kind: 'damage-report', damageReportId: report.damageReportId });
   }
-  const groups = new Map<string, { styleCode: string; size: string | null; quantity: number; parts: GoodPiecesPart[] }>();
+  const groups = new Map<
+    string,
+    { styleCode: string; size: string | null; quantity: number; parts: GoodPiecesPart[] }
+  >();
   for (const line of lines) {
     const findings = findingsOf(line);
     const part = held.get(line.id);

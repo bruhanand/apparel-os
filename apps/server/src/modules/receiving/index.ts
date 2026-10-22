@@ -4,12 +4,7 @@ export { RECEIVING } from './tokens.js';
 export { Receiving } from './receiving.js';
 export type { IssueNeed, ReceivingDependencies, ReceivingInterface } from './receiving.js';
 export { GRN_KIND, GRN_SCOPE_KEY, receivingStockCaller } from './domain/kinds.js';
-export {
-  HELD_LINE_DECISIONS,
-  RECEIVE_GOODS,
-  RECEIVE_GOODS_STATUTORY,
-  RECEIVING_CAPABILITY,
-} from './domain/gate.js';
+export { HELD_LINE_DECISIONS, RECEIVE_GOODS, RECEIVE_GOODS_STATUTORY, RECEIVING_CAPABILITY } from './domain/gate.js';
 export { receivingApprovals } from './commands/held-lines.js';
 export type { EffectServices as HeldLineEffectServices } from './commands/held-lines.js';
 export { receivingExceptionTypes } from './exception-types.js';

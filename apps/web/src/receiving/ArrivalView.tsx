@@ -301,7 +301,10 @@ const lineFormSchema = z
     if ((line.damageQuantity === null) !== (line.damageDescription.trim() === '')) {
       issue('damageDescription', 'receive.damage.both');
     }
-    if (line.damageQuantity !== null && (line.damageQuantity < 1 || line.damageQuantity > damageablePiecesOf(counted))) {
+    if (
+      line.damageQuantity !== null &&
+      (line.damageQuantity < 1 || line.damageQuantity > damageablePiecesOf(counted))
+    ) {
       issue('damageQuantity', 'receive.damage.too-many');
     }
     if ((line.batchCode.trim() === '') !== (line.expiryDate === '')) issue('expiryDate', 'receive.batch.both');
@@ -995,7 +998,11 @@ function GrnPrint({
 
 /** The product named for unidentified goods, as one text: style code, colour and size where given. */
 function namedText(named: NonNullable<NonNullable<GrnLine['heldLine']>['named']>): string {
-  return formatList([named.styleCode, ...(named.colour === null ? [] : [named.colour]), ...(named.size === null ? [] : [named.size.code])]);
+  return formatList([
+    named.styleCode,
+    ...(named.colour === null ? [] : [named.colour]),
+    ...(named.size === null ? [] : [named.size.code]),
+  ]);
 }
 
 /** The damage reports the count raised, each with its state and decision, read on request (goods-in 8.5). */

@@ -6,8 +6,9 @@ import { readWorld, type EnrolledUser, type ReceivingOptions } from './support/w
 // S2-F02-T02: the journeys of Receive Goods, one per persona that receives (code-house-rules 10.1; goods-in 4.1 to
 // 4.5, section 11; PRD-REC-001 to PRD-REC-008; DEC-133), each in a SYNTHETIC world of its own. A Warehouse receiver
 // (P-WHS) sees the unit where receiving is not granted named with what it lacks, records an Arrival, is told to record
-// the supplier invoice first, counts a line short of its invoice and is refused the GRN with the reason, corrects the
-// count and issues the GRN with no approval. A Store's staff (P-STM) counts a batch-tracked product named on the line,
+// the supplier invoice first, counts a line short of its invoice and is refused the GRN with the reason, since this
+// world routes the shortage's follow-up to no one at the Site (goods-in 4.9; S2-F02-T03), corrects the count and issues
+// the GRN with no approval. A Store's staff (P-STM) counts a batch-tracked product named on the line,
 // is refused the GRN until the line has its batch and expiry, adds them and issues it. Each finds the GRN printed with
 // quantities only. Every value is SYNTHETIC.
 
@@ -98,7 +99,7 @@ async function recordInvoice(page: Page, number: string): Promise<void> {
   await expect(page.getByText(`Invoice ${number} of ${shown(organisationToday())}`)).toBeVisible();
 }
 
-test('PRD-REC-001 PRD-REC-008 DEC-133 a Warehouse receiver records an Arrival, its invoice first, is refused a GRN short of its invoice, and issues it with no approval', async ({
+test('PRD-REC-001 PRD-REC-008 DEC-133 a Warehouse receiver records an Arrival, its invoice first, is refused a GRN whose shortage has no owner at the Site, and issues it with no approval', async ({
   page,
 }) => {
   test.setTimeout(180_000);
@@ -140,12 +141,13 @@ test('PRD-REC-001 PRD-REC-008 DEC-133 a Warehouse receiver records an Arrival, i
     await expect(row).toContainText(world.receiver.displayName);
   });
 
-  await test.step('the GRN is refused while the count differs from the invoice, with the reason', async () => {
+  await test.step('the GRN is refused while its shortage’s follow-up has no owner at the Site, with the reason', async () => {
+    // The shortage reaches Booking as an exception, routed at the Site (goods-in 4.9; POL-02.16): this world routes none.
     await page.getByRole('button', { name: 'Issue the GRN' }).click();
     await expect(
       page
         .getByRole('alert')
-        .filter({ hasText: 'A counted quantity differs from its invoice quantity. The GRN is issued only when' }),
+        .filter({ hasText: 'Exceptions of this type have no owner here yet: no exception rule is in force.' }),
     ).toBeVisible();
     await expect(page.getByRole('region', { name: /^GRN SYN-GRN-/ })).toHaveCount(0);
   });

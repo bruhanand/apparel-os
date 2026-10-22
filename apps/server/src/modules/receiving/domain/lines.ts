@@ -1,4 +1,10 @@
-import { extraPiecesOf, type EvidenceFile, type ExtraPieces, type LineGoods, type MissingItem } from '@apparel-os/schemas';
+import {
+  extraPiecesOf,
+  type EvidenceFile,
+  type ExtraPieces,
+  type LineGoods,
+  type MissingItem,
+} from '@apparel-os/schemas';
 import { textKey } from './text.js';
 
 // The count as it stands (goods-in 4.3 to 4.5; S2-F02-T02, S2-F02-T03): each line is the chain of its saved entries, the

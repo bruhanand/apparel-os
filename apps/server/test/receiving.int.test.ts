@@ -608,8 +608,10 @@ describe('one line per style, colour and size (goods-in 4.3)', () => {
     });
     // Another size is another line, and the line itself is saved again over its own version.
     expect((await saveLine(storeReceiver, arrivalId, describedLine('SYN-STYLE-ONCE', 1, 1, 1))).status).toBe(200);
+    // Counted beyond the invoice now, so its extra piece is recorded as received or not (goods-in 4.4).
     const resaved = await saveLine(storeReceiver, arrivalId, {
       ...describedLine('SYN-STYLE-ONCE', 2, 3),
+      extra: 'received',
       line: { lineId, versionToken: lineVersionToken },
     });
     expect(resaved.status, JSON.stringify(resaved.body)).toBe(200);

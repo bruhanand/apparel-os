@@ -3308,7 +3308,8 @@ export const englishIndia = {
   'receive.goods.unidentified': 'Unidentified goods',
   'receive.style-code.required': 'Enter the style code.',
   'receive.description': 'What the goods look like',
-  'receive.description.help': 'Unidentified goods carry no identity. Say what they look like, so Booking can name them.',
+  'receive.description.help':
+    'Unidentified goods carry no identity. Say what they look like, so Booking can name them.',
   'receive.description.required': 'Say what the unidentified goods look like.',
   'receive.product.wrong-help': 'Wrong goods are a product already set up that the invoice does not list.',
   'receive.invoice-quantity.none': 'Goods on the invoice have pieces on it.',
@@ -3337,7 +3338,10 @@ export const englishIndia = {
   'receive.held': 'Booking’s decision',
   'receive.held.named': 'Named {product}',
   'receive.count-damage': 'Damage found at the count',
-  'receive.count-damage.line': { one: 'Line {line}: {count} piece, {description}', other: 'Line {line}: {count} pieces, {description}' },
+  'receive.count-damage.line': {
+    one: 'Line {line}: {count} piece, {description}',
+    other: 'Line {line}: {count} pieces, {description}',
+  },
   'receive.name-product': 'Name the product of unidentified goods',
   'receive.name-product.intro':
     'Unidentified goods are taken in only once their product is named. Whoever names it does not decide it: a different Booking approver does, in My work.',

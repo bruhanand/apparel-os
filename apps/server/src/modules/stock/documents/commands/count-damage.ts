@@ -60,7 +60,10 @@ export async function countDamageReady(
   if (codes.kind === 'refused') return refusalOf(codes.refusal);
   return {
     kind: 'success',
-    answer: { seriesId: series.seriesId, series: [dependencies.numbering.seriesLockTarget(series.seriesId), codes.value] },
+    answer: {
+      seriesId: series.seriesId,
+      series: [dependencies.numbering.seriesLockTarget(series.seriesId), codes.value],
+    },
   };
 }
 

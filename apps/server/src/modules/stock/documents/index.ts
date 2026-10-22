@@ -3,11 +3,7 @@ export { StockDocumentsModule } from './stock-documents.module.js';
 export { STOCK_DOCUMENTS } from './tokens.js';
 export { StockDocuments, damageExceptionType } from './documents.js';
 export type { DamageActor, StockDocumentsDependencies, StockDocumentsInterface } from './documents.js';
-export type {
-  CountDamagePlace,
-  CountDamageReady,
-  CountDamageWritten,
-} from './commands/count-damage.js';
+export type { CountDamagePlace, CountDamageReady, CountDamageWritten } from './commands/count-damage.js';
 export type { GrnLineDamage } from './queries/grn-lines.js';
 export {
   DAMAGE_CAPABILITY,
