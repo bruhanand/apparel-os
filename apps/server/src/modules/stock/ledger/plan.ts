@@ -1034,6 +1034,8 @@ export async function planRequest(
       }
     }
   };
+  // SKUs the caller's command makes, which no read answers yet (13.19): Plan takes their facts as given.
+  for (const made of request.madeSkus ?? []) skus.set(made.skuId, { ...made });
   for (const item of request.items) await planItem(item);
 
   // A counted origin's identifier is the caller's (13.16): one already written is no new origin.

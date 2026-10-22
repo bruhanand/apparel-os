@@ -4,8 +4,11 @@ import { healthResponseSchema } from './health.js';
 import {
   grnPtReadSchema,
   PT_TYPE,
+  ptDownloadSchema,
   ptPreviewQuerySchema,
   ptPreviewSchema,
+  ptRevisionParamsSchema,
+  ptRevisionReadSchema,
   ptTemplateQuerySchema,
   ptTemplateSchema,
   ptWithdrawalSchema,
@@ -1260,6 +1263,52 @@ const RECOUNT_LINE_CODES = [
  * decided already, its lines checked again under the locks, the decision verified under the ledger's locks on the
  * goods' cost then (access-and-approvals 9.7), and the shortage follow-up a recount raises (goods-in 4.9).
  */
+/**
+ * The codes of a PT revision's decision (goods-in 6.3, 6.6; S2-F06-T01): the policy gate; the GRN changed since the
+ * upload, a held line, damage report or recount waiting again, or the revision no longer the one waiting; a series
+ * missing or paused; a new product the catalogue refuses under the locks; the decision verified under the ledger's
+ * locks on the PT's cost (access-and-approvals 9.7); and the ledger's refusals of the identity step, the holds the PT
+ * route ends, the coverage and the cost established: overlapping coverage, units held, reserved or taken by a claim the
+ * approver cannot see, a count freeze, a missing cost setting or posting map, or a locked period (stock-ledger 13.8;
+ * books-and-posting 10).
+ */
+const PT_DECISION_CODES = [
+  'configuration.operation-unavailable',
+  'merchandise.record-not-found',
+  'merchandise.pt-not-a-draft',
+  'merchandise.pt-held-lines-open',
+  'merchandise.pt-grn-changed',
+  'merchandise.no-pt-series',
+  'merchandise.pt-series-paused',
+  'merchandise.no-sku-code-series',
+  'merchandise.sku-code-series-paused',
+  'merchandise.pt-size-not-in-size-set',
+  'merchandise.pt-colour-not-identity',
+  'merchandise.pt-tracking-unknown',
+  'merchandise.code-taken',
+  'merchandise.sku-exists',
+  'merchandise.code-conflict',
+  'merchandise.reference-not-in-force',
+  'merchandise.value-not-in-vocabulary',
+  'access.approval-value-exceeded',
+  'stock.invalid-item',
+  'stock.place-invalid',
+  'stock.plan-stale',
+  'stock.held',
+  'stock.reserved',
+  'stock.blocked',
+  'stock.insufficient-available',
+  'stock.count-freeze-active',
+  'stock.condition-route',
+  'stock.coverage-overlap',
+  'stock.not-covered',
+  'stock.exceeds-source',
+  'stock.wrong-release-event',
+  'stock.no-cost-setting',
+  'stock.posting-refused',
+  'stock.rule-not-set',
+] as const satisfies readonly ErrorCode[];
+
 const RECOUNT_DECISION_CODES = [
   'configuration.operation-unavailable',
   'receiving.recount-decided',
@@ -1926,6 +1975,8 @@ export const routes = {
       ...HELD_LINE_DECISION_CODES,
       // A recount's approval (goods-in 4.7, 4.11; S2-F02-T05).
       ...RECOUNT_DECISION_CODES,
+      // A PT revision's approval or rejection (goods-in 6.3, 6.6; S2-F06-T01).
+      ...PT_DECISION_CODES,
       // Layout, mapping and mapping rule versions (imports-and-opening-data 6.4; S1-F06-T03).
       'files-imports.proposal-not-found',
       'files-imports.proposal-not-open',
@@ -5454,6 +5505,28 @@ export const routes = {
       'merchandise.record-not-found',
       'merchandise.pt-not-a-draft',
     ],
+  }),
+  // A PT revision as its approver reviews it in My work and its GRN's screen shows it, and an Official PT downloaded in
+  // its template's columns (goods-in 6.2, 6.5, 6.6, section 11; S2-F06-T01). Approving or rejecting it is `access`'s
+  // Decide (access-and-approvals 9.5); its effect is `merchandise` · PT's (9.8b).
+  readPtRevision: defineRoute({
+    method: 'GET',
+    path: '/api/merchandise/pt/revisions/{revisionId}',
+    params: ptRevisionParamsSchema,
+    query: ptPreviewQuerySchema,
+    access: { kind: 'action', action: 'view', recordType: PT_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: ptRevisionReadSchema,
+    codes: [...HISTORY_CODES, 'merchandise.record-not-found'],
+  }),
+  downloadPt: defineRoute({
+    method: 'GET',
+    path: '/api/merchandise/pt/revisions/{revisionId}/download',
+    params: ptRevisionParamsSchema,
+    access: { kind: 'action', action: 'view', recordType: PT_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: ptDownloadSchema,
+    codes: [...HISTORY_CODES, 'merchandise.record-not-found', 'merchandise.pt-not-official', 'files-imports.layout-not-found'],
   }),
   downloadPtTemplate: defineRoute({
     method: 'GET',

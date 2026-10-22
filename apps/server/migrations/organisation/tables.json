@@ -2322,6 +2322,55 @@
       "design": "goods-in 5.3, 5.5, 5.7, 5.8; PRD-IMP-006, PRD-PTW-011; code-house-rules 3.3, 6.2, 7.1"
     },
     {
+      "table": "merchandise.pt_rejection",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 6.3, 6.6; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "merchandise.pt_post_request",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 6.3, 6.6; stock-ledger 10.6; access-and-approvals 9.8; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "merchandise.pt_posting_failure",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 6.3, 6.6; access-and-approvals 9.8; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "merchandise.pt_approval",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 6.3, 6.6; PRD-REC-018; DEC-097; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "merchandise.pt_product",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 6.3, 6.6; PRD-MER-013; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "merchandise.pt_origin",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 6.3, 6.6; stock-ledger 13.14; PRD-PTW-010; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "merchandise.pt_hold_release",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 4.6, 6.3, 6.6; stock-ledger 6.1; code-house-rules 6.2, 7.1"
+    },
+    {
       "table": "merchandise.marked_attribute",
       "class": "unscoped",
       "marks": ["append-only", "locked"],

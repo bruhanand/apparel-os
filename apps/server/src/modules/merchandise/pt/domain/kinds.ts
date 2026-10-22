@@ -1,5 +1,7 @@
 import { PT_APPROVAL, PT_TYPE, type AttributeMark } from '@apparel-os/schemas';
-import type { ApprovalRule, ModuleApprovals } from '../../../access/index.js';
+import type { ApprovalRule } from '../../../access/index.js';
+import type { NumberedKind } from '../../../numbering/index.js';
+import type { CallerRegistration } from '../../../stock/ledger/index.js';
 import type { PtList } from './rows.js';
 
 // The kinds `merchandise` · PT declares (goods-in 5, 6.1, 10.1; S2-F04-T02): the module it records under, its approval
@@ -15,8 +17,8 @@ export const PT_PROPOSED_SKU_TYPE = 'merchandise.pt_proposed_sku';
 /**
  * A PT revision's approval (goods-in 6.1; PRD-REC-017, PRD-ACS-015, POL-02.07, POL-02.09): independent, so none of its
  * preparers decides it, within a limit on its value at cost, the total proposed acquisition cost. Declared here, with
- * the request its submit makes; the decision's effect, which makes the PT official and values the stock, is
- * S2-F06-T01's. Until then a decision is recorded and changes nothing (access-and-approvals 9.8; DEC-097).
+ * the request its submit makes; the decision's effect, which makes the PT Official and values the stock, or ends the
+ * draft, is commands/pt-decision.ts (goods-in 6.3; S2-F06-T01).
  */
 export const ptApprovalRules: readonly ApprovalRule[] = [
   {
@@ -31,6 +33,48 @@ export const ptApprovalRules: readonly ApprovalRule[] = [
   },
 ];
 
+/**
+ * The PT number an approval gives the PT (goods-in 6.3 step 3, 10.4; PRD-REC-018): one series for the Organisation, not
+ * restarted each financial year, whose years are not set (GC5-1), as the GRN's. No format is set here: the
+ * Organisation chooses it (numbering-and-audit 3.5; RR-449). **Design choice.**
+ */
+export const PT_KIND: NumberedKind = {
+  kind: 'merchandise.pt',
+  yearly: false,
+  scopeKeyStandsFor: 'the Organisation as a whole: one PT series',
+  displayScope: { standsFor: 'the Organisation as a whole', perYear: false },
+};
+
+/** The one scope key of the PT kind: the Organisation itself (one database per Organisation). */
+export const PT_SCOPE_KEY = 'organisation';
+
+/** The record type a PT approval's stock effects name as their source (stock-ledger 13.2; books-and-posting 5.1). */
+export const PT_STOCK_SOURCE_TYPE = 'pt_revision';
+
+/**
+ * `merchandise` · PT as a stock caller (stock-ledger 13.2, 13.14): a revision's approval ends the holds the PT route
+ * ends for goods Booking took in, gives the GRN's pieces their SKUs by the identity step, and records the coverage and
+ * establishes the cost of the pieces it covers (goods-in 6.3 steps 4 and 5; S2-F06-T01); no import kind.
+ */
+export const ptStockCaller: CallerRegistration = {
+  module: PT_MODULE,
+  synthetic: false,
+  recordTypes: [
+    {
+      recordType: PT_STOCK_SOURCE_TYPE,
+      itemKinds: ['release-hold', 'identity-resolved', 'record-coverage', 'cost-established'],
+      importKinds: ['none'],
+    },
+  ],
+};
+
+/**
+ * The most rows of a PT whose approval posts in its decision's transaction; a larger one is posted by a queued job, one
+ * at a time per accounting book (goods-in 6.3, 6.6; module-map 6.2 flow E; stock-ledger 10.6). A technical cap, the
+ * builders' choice and no business limit: no source sets the size of a "large" document. **Design choice.**
+ */
+export const PT_POSTED_WITH_DECISION_ROWS = 1_000;
+
 /** The marked attribute each list of the template is (structure-and-masters 4.2 "As built"; goods-in 5.2). */
 export const LIST_MARKS: Readonly<Record<PtList, AttributeMark>> = {
   season: 'season',
@@ -42,11 +86,3 @@ export const LIST_MARKS: Readonly<Record<PtList, AttributeMark>> = {
   size: 'size',
   gstRate: 'gst-rate',
 };
-
-/**
- * The approval rule `merchandise` · PT declares to `access` (access-and-approvals 8; module-map section 3, rule 6),
- * which the composition root hands over at start. It declares no decision effect yet (S2-F06-T01).
- */
-export function ptApprovals(): ModuleApprovals {
-  return { rules: ptApprovalRules, effects: new Map() };
-}

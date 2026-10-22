@@ -175,7 +175,7 @@ export async function skuOn(
  * The tracking profile in force for a category's goods at a Site on a date (4.5, 4.6), or undefined while the category
  * has no link or its profile no version in force: the SKU's profile is then Unknown, never defaulted.
  */
-async function trackingOn(
+export async function trackingOn(
   context: TransactionContext,
   categoryId: string,
   siteId: string,

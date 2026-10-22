@@ -31,6 +31,7 @@ export type {
   LedgerItemKind,
   LedgerRequest,
   LedgerSource,
+  MadeSku,
   NamedGoods,
   OriginGoods,
   Owner,

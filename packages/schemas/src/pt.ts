@@ -56,8 +56,12 @@ export const ptMarkSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('set'), ptRevisionId: idSchema, lastChange: markChangeSchema }),
 ]);
 
-/** A revision's state (design-language 7): Awaiting approval, Withdrawn, then, with S2-F06-T01, its decision. */
-export const ptRevisionStateSchema = z.enum(['Awaiting approval', 'Withdrawn', 'Approved', 'Rejected']);
+/**
+ * A revision's state (design-language 7; goods-in 6.3, 6.6): Awaiting approval, Withdrawn or Rejected; once approved,
+ * Official when its approval is posted, Queued while a large PT waits for its posting job, and Failed when that job was
+ * refused, its decision kept unused (stock-ledger 10.6; access-and-approvals 9.8; S2-F06-T01).
+ */
+export const ptRevisionStateSchema = z.enum(['Awaiting approval', 'Withdrawn', 'Rejected', 'Queued', 'Failed', 'Official']);
 export type PtRevisionState = z.infer<typeof ptRevisionStateSchema>;
 
 /** One PT file submitted for the GRN, as its GRN's screen lists it (goods-in 5.7). */
@@ -74,6 +78,8 @@ export const ptRevisionSummarySchema = z.strictObject({
   differences: z.number().int().nonnegative(),
   request: z.strictObject({ id: idSchema, state: approvalRequestStateSchema }).optional(),
   withdrawn: z.strictObject({ by: idSchema, at: asOf }).optional(),
+  /** The PT's number from its series, once its approval is posted (goods-in 6.3 step 3; S2-F06-T01). */
+  number: z.string().optional(),
 });
 export type PtRevisionSummary = z.infer<typeof ptRevisionSummarySchema>;
 
@@ -207,3 +213,69 @@ export const ptTemplateQuerySchema = z.strictObject({
 });
 /** The blank template of a layout version, with the lists its values must be on (goods-in section 11). */
 export const ptTemplateSchema = z.strictObject({ fileName: z.string(), contentBase64: z.base64() });
+
+/**
+ * Why a queued posting of a PT's approval was refused (goods-in 6.3, 6.6; stock-ledger 10.6; access-and-approvals 9.8
+ * step 4): the refusal's code and what it names, kept with the request to post; the decision stays unused.
+ */
+export const ptPostingFailureSchema = z.strictObject({
+  code: z.string(),
+  missing: z.array(missingItemSchema),
+  at: asOf,
+});
+
+/** The largest page of a revision's rows the review reads: a technical cap (code-house-rules 12.1 "Reads"). */
+export const PT_REVISION_ROWS_PAGE_CAP = 200;
+
+export const ptRevisionParamsSchema = z.strictObject({ revisionId: idSchema });
+
+/**
+ * A PT revision as its approver reviews it in My work and its GRN's screen shows it (goods-in 6.2, 6.3, 6.6, section
+ * 11; S2-F06-T01): the GRN with its Arrival, whose invoices and photos the Arrival shows; who uploaded it and when; its
+ * state, its number once Official, and a queued posting's failure; the totals of pieces, MRP, BASIC and P RATE times
+ * QTY side by side (DEC-140); the new products it proposes, each with its SKU code once confirmed; the repeated barcodes
+ * and the differences from existing products (goods-in 5.5); and its rows, a page at a time, with BASIC, P RATE and
+ * MARGIN masked for a reader not granted cost or margin (PRD-ACS-008).
+ */
+export const ptRevisionReadSchema = z.strictObject({
+  asOf,
+  ptId: idSchema,
+  revisionId: idSchema,
+  revisionNumber: z.number().int().positive(),
+  state: ptRevisionStateSchema,
+  number: z.string().nullable(),
+  grn: z.strictObject({ grnId: idSchema, number: z.string(), arrivalId: idSchema }),
+  uploadedBy: idSchema,
+  submittedAt: asOf,
+  request: z.strictObject({ id: idSchema, state: approvalRequestStateSchema }).optional(),
+  failure: ptPostingFailureSchema.optional(),
+  totals: ptTotalsSchema,
+  newProducts: z.array(
+    z.strictObject({
+      styleCode: z.string(),
+      colour: z.string(),
+      size: z.string(),
+      newStyle: z.boolean(),
+      rowNumbers: z.array(z.number().int().positive()),
+      /** The SKU's code the approval generated (RR-585); absent before. */
+      skuCode: z.string().optional(),
+    }),
+  ),
+  repeatedBarcodes: z.array(z.strictObject({ barcode: z.string(), rowNumbers: z.array(z.number().int().positive()) })),
+  differences: z.array(
+    z.strictObject({
+      rowNumber: z.number().int().positive(),
+      field: z.string(),
+      file: z.string(),
+      product: z.string().nullable(),
+    }),
+  ),
+  rows: z.array(ptPreviewRowSchema),
+  next: z.number().int().positive().nullable(),
+  /** The names of the people named, an unknown one left out (PRD-MOD-015). */
+  people: z.array(z.strictObject({ userId: idSchema, name: z.string() })),
+});
+export type PtRevisionRead = z.infer<typeof ptRevisionReadSchema>;
+
+/** An Official PT as an XLSX file in its template's columns (goods-in 6.5; PRD-PTW-008, PRD-PTW-009). */
+export const ptDownloadSchema = z.strictObject({ fileName: z.string(), contentBase64: z.base64() });
