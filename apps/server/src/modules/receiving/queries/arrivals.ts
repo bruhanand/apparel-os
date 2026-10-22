@@ -2,6 +2,7 @@ import {
   INBOX_PAGE_CAP,
   type Arrival,
   type Grn,
+  type GrnLineBooking,
   type Inbox,
   type InboxEntry,
   type InboxQuery,
@@ -10,9 +11,19 @@ import {
 import { and, asc, desc, eq, inArray, lt } from 'drizzle-orm';
 import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
 import type { RecordFacts } from '../../access/index.js';
+import type { GrnLineReceipt } from '../../booking/index.js';
 import { siteExists, structureOn } from '../../organisation/index.js';
 import type { GrnLineDamage } from '../../stock/documents/index.js';
-import { arrival, arrivalInvoice, arrivalPhoto, grn, grnLine, heldLine, heldLineDecision } from '../db/schema.js';
+import {
+  arrival,
+  arrivalInvoice,
+  arrivalPhoto,
+  grn,
+  grnLine,
+  grnLineBooking,
+  heldLine,
+  heldLineDecision,
+} from '../db/schema.js';
 import { currentLines, grnBlockers } from '../domain/lines.js';
 import { grnLineViews, linesOfGrn, type Requests } from './held-lines.js';
 import { arrivalRow, entriesByArrival, entriesOf, factsOf, newestChange, type ArrivalRow } from '../commands/common.js';
@@ -24,10 +35,52 @@ import { receivingMissing, type AvailabilityDependencies } from './availability.
 
 const instant = (at: Date) => at.toISOString();
 
+/**
+ * Where each GRN line given stands in the bookings the reader may see, from `booking`: its receipt link and a proposal
+ * of it still waiting (goods-in 3.7, 4.10).
+ */
+export type Receipts = (grnLineIds: readonly string[]) => Promise<ReadonlyMap<string, GrnLineReceipt>>;
+
+/**
+ * Each GRN line's place against bookings (goods-in 3.7, 4.10; S2-F02-T04): what its GRN's issue did with it, linked or
+ * sent for review, kept by `receiving` where its Arrival named a booking; and its link now and a proposal waiting, as
+ * far as the reader may see the bookings, from `booking`.
+ */
+async function bookingLinksOf(
+  context: TransactionContext,
+  grnId: string,
+  lineIds: readonly string[],
+  receipts: Receipts,
+): Promise<GrnLineBooking[]> {
+  const atIssue = await context.tx.select().from(grnLineBooking).where(eq(grnLineBooking.grnId, grnId));
+  const now = await receipts(lineIds);
+  return lineIds.map((grnLineId): GrnLineBooking => {
+    const kept = atIssue.find((each) => each.grnLineId === grnLineId);
+    let issued: GrnLineBooking['atIssue'] = null;
+    if (kept !== undefined) {
+      if (kept.outcome === 'linked') {
+        if (kept.bookingLineKey === null) throw new CommandDefect(`A linked GRN line names no booking line: ${kept.id}`);
+        issued = { outcome: 'linked', bookingId: kept.bookingId, lineKey: kept.bookingLineKey };
+      } else {
+        if (kept.reason === null) throw new CommandDefect(`A GRN line sent for review names no reason: ${kept.id}`);
+        issued = { outcome: 'review', bookingId: kept.bookingId, reason: kept.reason, lineKey: kept.bookingLineKey };
+      }
+    }
+    const current = now.get(grnLineId);
+    return { grnLineId, atIssue: issued, link: current?.link ?? null, proposal: current?.proposal ?? null };
+  });
+}
+
 /** The GRN as printed: quantities and findings only, never a value (goods-in 4.5). */
-async function grnView(context: TransactionContext, arrivalId: string, requests: Requests): Promise<Grn | null> {
+async function grnView(
+  context: TransactionContext,
+  arrivalId: string,
+  requests: Requests,
+  receipts: Receipts,
+): Promise<Grn | null> {
   const [row] = await context.tx.select().from(grn).where(eq(grn.arrivalId, arrivalId));
   if (row === undefined) return null;
+  const lines = await linesOfGrn(context, row.id);
   return {
     id: row.id,
     number: row.number,
@@ -35,7 +88,13 @@ async function grnView(context: TransactionContext, arrivalId: string, requests:
     businessDate: row.businessDate,
     enteredBy: row.issuedByUserId,
     countedBy: row.countedByUserIds,
-    lines: await grnLineViews(context, await linesOfGrn(context, row.id), requests),
+    lines: await grnLineViews(context, lines, requests),
+    bookingLinks: await bookingLinksOf(
+      context,
+      row.id,
+      lines.map((line) => line.id),
+      receipts,
+    ),
   };
 }
 
@@ -55,6 +114,7 @@ export async function arrivalView(
   row: ArrivalRow,
   today: string,
   requests: Requests,
+  receipts: Receipts,
 ): Promise<Arrival> {
   const invoices = await context.tx
     .select()
@@ -67,7 +127,7 @@ export async function arrivalView(
     .where(eq(arrivalPhoto.arrivalId, row.id))
     .orderBy(asc(arrivalPhoto.recordedAt), asc(arrivalPhoto.id));
   const lines = currentLines(await entriesOf(context, row.id));
-  const issued = await grnView(context, row.id, requests);
+  const issued = await grnView(context, row.id, requests, receipts);
   // Recording the Arrival records its first change in the same transaction (commands/arrival.ts).
   const newest = await newestChange(context, row.id);
   if (newest === undefined) throw new CommandDefect('An Arrival has no change recorded');
@@ -99,6 +159,7 @@ export async function arrivalView(
     ewayBillNumber: row.ewayBillNumber,
     cartons: row.cartons,
     arrivedAt: instant(row.arrivedAt),
+    bookingId: row.bookingId,
     recordedBy: row.recordedByUserId,
     recordedAt: instant(row.recordedAt),
     versionToken: newest.id,

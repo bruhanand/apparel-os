@@ -3,6 +3,7 @@ import {
   BOOKING_APPROVAL,
   BOOKING_CANCELLATION,
   BOOKING_EXTENSION,
+  BOOKING_RECEIPT_LINK,
   BOOKING_TYPE,
   OPEN_TO_BUY_APPROVAL,
   OPEN_TO_BUY_BUDGET_TYPE,
@@ -46,6 +47,7 @@ import { missingText } from '../components/UnavailableState';
 import { AttributeName } from '../merchandise/AttributeName';
 import { MARK_LABEL } from '../merchandise/marked';
 import { AmendmentLines, extensionEnd } from '../booking/AmendmentLines';
+import { ReceiptLinkLines } from '../booking/ReceiptLinkLines';
 import { OpenToBuyFacts, TermsFacts, TotalsView, valueAtCostOf } from '../booking/facts';
 import { StatusView } from '../booking/StatusView';
 import { useBookingNames } from '../booking/names';
@@ -562,6 +564,43 @@ function AmendmentFacts({ view }: { view: ApprovalRequestView }) {
 }
 
 /**
+ * A proposal to link late or excess goods into a booking, for its approval (goods-in 3.7, 4.10; POL-05.08; RR-577;
+ * S2-F02-T04): the booking's brand, supplier, destination and window as extended, each GRN line proposed with the goods
+ * and pieces it delivers, the day they arrived and why it needs approval, and the version in force with each line's
+ * quantities now, so the approver sees what would be delivered or over-delivered. The booking is read with view on its
+ * own type, within the reader's scope.
+ */
+function ReceiptLinkFacts({ view }: { view: ApprovalRequestView }) {
+  const names = useBookingNames();
+  const query = useQuery({
+    ...readQuery(api, 'readBooking', { params: { bookingId: view.document.recordId } }),
+    enabled: useViewable(BOOKING_TYPE),
+  });
+  const booking = query.data?.booking;
+  const proposal = booking?.receiptLinkProposals.find((each) => each.id === view.document.versionId);
+  if (booking === undefined || proposal === undefined) return null;
+  return (
+    <div className="flex flex-col gap-3">
+      <Facts>
+        <Fact label="booking.brand">{names.brand.field(booking.brandId)}</Fact>
+        <Fact label="booking.supplier">{names.party.field(booking.version.supplierPartyId)}</Fact>
+        <Fact label="booking.destination">{names.site.field(booking.destinationSiteId)}</Fact>
+        {booking.status !== undefined && (
+          <Fact label="booking.window">
+            {t('booking.window.range', {
+              from: formatDate(booking.status.deliveryWindow.from),
+              to: formatDate(booking.status.deliveryWindow.to),
+            })}
+          </Fact>
+        )}
+      </Facts>
+      <ReceiptLinkLines proposal={proposal} status={booking.status} />
+      {booking.status !== undefined && <StatusView status={booking.status} />}
+    </div>
+  );
+}
+
+/**
  * A version of the season or size attribute: which it marks, the attribute it names and what is in force now, and
  * where the choice came from (structure-and-masters 4.2 "As built"; RR-550, RR-556).
  */
@@ -695,6 +734,9 @@ export function DocumentFacts({ view }: { view: ApprovalRequestView }) {
     case BOOKING_CANCELLATION:
     case BOOKING_EXTENSION:
       return <AmendmentFacts view={view} />;
+    // Late or excess goods proposed into a booking (goods-in 4.10; POL-05.08; S2-F02-T04).
+    case BOOKING_RECEIPT_LINK:
+      return <ReceiptLinkFacts view={view} />;
     // A damage report's decision and a reversal's approval (goods-in 8.3; S2-F08-T01).
     case DAMAGE_DECISION:
       return <DamageFacts view={view} reversal={false} />;

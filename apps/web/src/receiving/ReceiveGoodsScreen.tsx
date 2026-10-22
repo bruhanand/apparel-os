@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ARRIVAL_TYPE, RECEIVING_CAPS, type Inbox, type InboxView } from '@apparel-os/schemas';
+import { ARRIVAL_TYPE, BOOKING_TYPE, RECEIVING_CAPS, type Inbox, type InboxView } from '@apparel-os/schemas';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -14,6 +14,7 @@ import { UnavailableState } from '../components/UnavailableState';
 import { describedBy, FormField } from '../forms/FormField';
 import { AsOf } from '../history/AsOf';
 import { formatDateTime } from '../history/format';
+import { formatDate } from '../setup/format';
 import { t } from '../messages/catalogue';
 import { instantOfLocal, LOCAL_DATE_TIME } from '../setup/business-date';
 import { formatList } from '../setup/format';
@@ -28,7 +29,8 @@ import { inForce, optionText, unknownText, useMasterNames } from './names';
 // S2-F02-T02): one inbox per Site, Pending and History. Each unit of the Site shows whether receiving is available
 // there, naming what is missing; "Goods arrived" records an Arrival at a unit that may receive, and an Arrival opens
 // where its invoices, photos and count are entered and its GRN issued. "Receive against booking" opens the same
-// workflow once bookings are received against (S2-F02-T04).
+// workflow, naming one booking of the supplier and brand that goods may be received against, whose open lines show as
+// the expected goods (goods-in 3.7, 4.1, 4.2; PRD-REC-002; S2-F02-T04).
 
 type Unit = Inbox['units'][number];
 
@@ -50,17 +52,34 @@ const arrivalFormSchema = z.object({
     .refine((text) => Number(text) <= RECEIVING_CAPS.cartons, { message: 'receive.cartons.invalid' })
     .transform((text) => Number(text)),
   arrivedAt: z.string().regex(LOCAL_DATE_TIME),
+  bookingId: z.union([z.literal(''), z.uuid()]),
+});
+/** "Receive against booking" names one booking (goods-in 4.2). */
+const againstBookingSchema = arrivalFormSchema.refine((form) => form.bookingId !== '', {
+  path: ['bookingId'],
+  message: 'receive.booking.required',
 });
 type ArrivalFormInput = z.input<typeof arrivalFormSchema>;
 type ArrivalFormOutput = z.output<typeof arrivalFormSchema>;
 
-/** Records an Arrival at a unit of the Site that may receive (goods-in 4.2); it opens once recorded. */
-function NewArrivalForm({ units, onRecorded }: { units: readonly Unit[]; onRecorded: (arrivalId: string) => void }) {
+/**
+ * Records an Arrival at a unit of the Site that may receive (goods-in 4.2); it opens once recorded. Against a booking,
+ * it names one of the supplier and brand chosen that goods may be received against: Approved, Issued or Confirmed.
+ */
+function NewArrivalForm({
+  units,
+  againstBooking,
+  onRecorded,
+}: {
+  units: readonly Unit[];
+  againstBooking: boolean;
+  onRecorded: (arrivalId: string) => void;
+}) {
   const names = useMasterNames();
   // The arrival time is typed as the Organisation's wall clock, as the screens show times (code-house-rules 9).
   const timeZone = useTimeZone();
   const form = useForm<ArrivalFormInput, unknown, ArrivalFormOutput>({
-    resolver: zodResolver(arrivalFormSchema),
+    resolver: zodResolver(againstBooking ? againstBookingSchema : arrivalFormSchema),
     mode: 'onBlur',
     defaultValues: {
       businessUnitId: '',
@@ -74,7 +93,14 @@ function NewArrivalForm({ units, onRecorded }: { units: readonly Unit[]; onRecor
       ewayBillNumber: '',
       cartons: '',
       arrivedAt: '',
+      bookingId: '',
     },
+  });
+  const supplierPartyId = form.watch('supplierPartyId');
+  const brandId = form.watch('brandId');
+  const bookings = useQuery({
+    ...readQuery(api, 'listBookings', { query: { receivable: 'true', brandId, supplierPartyId } }),
+    enabled: useGranted(BOOKING_TYPE, 'view') && againstBooking && supplierPartyId !== '' && brandId !== '',
   });
   const submission = useSubmission('recordArrival', INBOX_READS);
   const errors = form.formState.errors;
@@ -141,7 +167,7 @@ function NewArrivalForm({ units, onRecorded }: { units: readonly Unit[]; onRecor
   return (
     <form
       id="receive-arrival-form"
-      aria-label={t('receive.new')}
+      aria-label={t(againstBooking ? 'receive.new.against' : 'receive.new')}
       noValidate
       className="flex flex-col gap-3"
       onSubmit={(event) => {
@@ -158,13 +184,16 @@ function NewArrivalForm({ units, onRecorded }: { units: readonly Unit[]; onRecor
               ...(entered.ewayBillNumber.trim() === '' ? {} : { ewayBillNumber: entered.ewayBillNumber }),
               cartons: entered.cartons,
               arrivedAt: instantOfLocal(entered.arrivedAt, timeZone),
+              ...(againstBooking && entered.bookingId !== '' ? { bookingId: entered.bookingId } : {}),
             },
           });
           if (recorded !== undefined) onRecorded(recorded.arrivalId);
         })(event);
       }}
     >
-      <p className="m-0 text-body-sm text-text-2">{t('receive.new.intro')}</p>
+      <p className="m-0 text-body-sm text-text-2">
+        {t(againstBooking ? 'receive.new.against.intro' : 'receive.new.intro')}
+      </p>
       <SubmissionBanner state={submission.state} done="receive.recorded" />
       {select(
         'businessUnitId',
@@ -195,6 +224,38 @@ function NewArrivalForm({ units, onRecorded }: { units: readonly Unit[]; onRecor
         'receive-brand',
         'receive.brand',
         inForce(names.brands).map((brand) => ({ value: brand.id, text: optionText(brand) })),
+      )}
+      {againstBooking && (
+        <FormField
+          id="receive-booking"
+          label="receive.booking"
+          help="receive.booking.help"
+          required
+          error={errors.bookingId}
+          message={errors.bookingId === undefined ? undefined : 'receive.booking.required'}
+        >
+          <select
+            id="receive-booking"
+            className={inputClass}
+            {...describedBy('receive-booking', { invalid: errors.bookingId !== undefined, help: true })}
+            {...form.register('bookingId')}
+          >
+            <option value="">{t('setup.choose')}</option>
+            {(bookings.data?.bookings ?? []).flatMap((booking) =>
+              booking.number === undefined
+                ? []
+                : [
+                    <option key={booking.id} value={booking.id}>
+                      {t('receive.booking.option', {
+                        number: booking.number,
+                        from: formatDate(booking.deliveryWindow.from),
+                        to: formatDate(booking.deliveryWindow.to),
+                      })}
+                    </option>,
+                  ],
+            )}
+          </select>
+        </FormField>
       )}
       {text('transporter', 'receive-transporter', 'receive.transporter', true)}
       {text('lorryReceiptNumber', 'receive-lr-number', 'receive.lorry-receipt-number', true)}
@@ -317,7 +378,7 @@ function SiteInbox({ siteId }: { siteId: string }) {
   const timeZone = useTimeZone();
   const [view, setView] = useState<InboxView>('pending');
   const [open, setOpen] = useState<string | null>(null);
-  const [recording, setRecording] = useState(false);
+  const [recording, setRecording] = useState<'goods' | 'booking' | null>(null);
   // The page shown: the first, or the one after a delivery (code-house-rules 12.1).
   const [after, setAfter] = useState<string | undefined>(undefined);
   const query = useQuery(
@@ -346,7 +407,15 @@ function SiteInbox({ siteId }: { siteId: string }) {
           action="create"
           variant="primary"
           onClick={() => {
-            setRecording(true);
+            setRecording('goods');
+          }}
+        />
+        <GrantedButton
+          label="receive.against-booking"
+          recordType={ARRIVAL_TYPE}
+          action="create"
+          onClick={() => {
+            setRecording('booking');
           }}
         />
         <span className="flex-1" />
@@ -413,17 +482,19 @@ function SiteInbox({ siteId }: { siteId: string }) {
                   )}
                 </div>
               )}
-              {recording && (
+              {recording !== null && (
                 <RecordDrawer
-                  title={t('receive.new')}
+                  title={t(recording === 'booking' ? 'receive.new.against' : 'receive.new')}
                   onClose={() => {
-                    setRecording(false);
+                    setRecording(null);
                   }}
                   details={
                     <NewArrivalForm
+                      key={recording}
                       units={inbox.units}
+                      againstBooking={recording === 'booking'}
                       onRecorded={(arrivalId) => {
-                        setRecording(false);
+                        setRecording(null);
                         setOpen(arrivalId);
                       }}
                     />

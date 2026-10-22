@@ -1,9 +1,9 @@
 import type { SettingOrigin } from '@apparel-os/schemas';
-import { bigint, customType, date, integer, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { bigint, boolean, customType, date, integer, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 // Drizzle definitions of `booking`'s tables (code-house-rules 3.4). They mirror the reviewed migrations
-// (migrations/organisation/0086, 0094, 0098) and never create or change a table; an integration test compares each with the
-// migrated database. Never exported from the unit's index.ts, so no other unit can name these tables
+// (migrations/organisation/0086, 0094, 0098, 0101) and never create or change a table; an integration test compares
+// each with the migrated database. Never exported from the unit's index.ts, so no other unit can name these tables
 // (code-house-rules 2).
 
 const bookingSchema = pgSchema('booking');
@@ -259,6 +259,51 @@ export const bookingReceiptLink = bookingSchema.table('booking_receipt_link', {
   kind: text('kind').$type<'at-issue' | 'later'>().notNull(),
   linkedByUserId: uuid('linked_by_user_id').notNull(),
   linkedAt: at('linked_at').notNull(),
+  businessDate: day('business_date').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+  /** The approved proposal a later link of late or excess goods came from (goods-in 4.10; POL-05.08); else none. */
+  proposalId: uuid('booking_receipt_link_proposal_id'),
+});
+
+/** A proposal to link late or excess goods into the booking, for a different person to approve (goods-in 4.10). */
+export const bookingReceiptLinkProposal = bookingSchema.table('booking_receipt_link_proposal', {
+  id: uuid('id').primaryKey(),
+  bookingId: uuid('booking_id').notNull(),
+  bookingVersionId: uuid('booking_version_id').notNull(),
+  ...scope,
+  proposedByUserId: uuid('proposed_by_user_id').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** A GRN line a proposal links to the booking line named by its key, with why it needs approval (POL-05.08). */
+export const bookingReceiptLinkProposalLine = bookingSchema.table('booking_receipt_link_proposal_line', {
+  id: uuid('id').primaryKey(),
+  proposalId: uuid('booking_receipt_link_proposal_id').notNull(),
+  bookingLineId: uuid('booking_line_id').notNull(),
+  ...scope,
+  grnId: uuid('grn_id').notNull(),
+  grnNumber: text('grn_number').notNull(),
+  grnLineId: uuid('grn_line_id').notNull(),
+  grnSiteId: uuid('grn_site_id').notNull(),
+  styleCode: text('style_code').notNull(),
+  colour: text('colour'),
+  size: text('size'),
+  quantity: integer('quantity').notNull(),
+  arrivalDate: day('arrival_date').notNull(),
+  late: boolean('late').notNull(),
+  excess: boolean('excess').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** A proposal's decision, made once through `access` (goods-in 4.10; POL-02.07). */
+export const bookingReceiptLinkProposalDecision = bookingSchema.table('booking_receipt_link_proposal_decision', {
+  id: uuid('id').primaryKey(),
+  proposalId: uuid('booking_receipt_link_proposal_id').notNull(),
+  ...scope,
+  decision: text('decision').$type<'Approved' | 'Rejected'>().notNull(),
+  approvalDecisionId: uuid('approval_decision_id').notNull(),
+  decidedByUserId: uuid('decided_by_user_id').notNull(),
+  decidedAt: at('decided_at').notNull(),
   businessDate: day('business_date').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });

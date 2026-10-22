@@ -2,6 +2,7 @@ import { randomInt } from 'node:crypto';
 import { uuidv7 } from '@apparel-os/domain';
 import {
   BOOKING_APPROVAL,
+  arrivalReadSchema,
   bookingReadSchema,
   exceptionViewSchema,
   myWorkSchema,
@@ -27,14 +28,7 @@ import {
 // The access module's JobIdentities, as AccessJobIdentitiesModule provides it to the worker (RR-273).
 import { jobIdentities } from '../src/modules/access/commands/job-identities.js';
 import { Audit } from '../src/modules/audit/index.js';
-import {
-  BOOKING,
-  BOOKING_JOBS_IDENTITY,
-  bookingJobKinds,
-  overdueExceptionType,
-  type BookingInterface,
-  type ReceiptLinked,
-} from '../src/modules/booking/index.js';
+import { BOOKING_JOBS_IDENTITY, bookingJobKinds, overdueExceptionType } from '../src/modules/booking/index.js';
 // The overdue job's selection, which only this test reads apart from the job (goods-in 3.10).
 import { overdueCandidates } from '../src/modules/booking/queries/overdue.js';
 import { Exceptions } from '../src/modules/exceptions/index.js';
@@ -42,6 +36,7 @@ import { Inbox } from '../src/modules/inbox/index.js';
 import { NUMBERING, type NumberingInterface } from '../src/modules/numbering/index.js';
 import { composedNumbering } from '../src/numbered-kinds.js';
 import { defineSyntheticBookingSeries } from './fixtures/booking-series.js';
+import { defineSyntheticGrnSeries } from './fixtures/grn-series.js';
 import { syntheticCode, syntheticName } from './fixtures/synthetic.js';
 import { syntheticWorkerSettings } from './fixtures/worker-settings.js';
 import {
@@ -67,18 +62,26 @@ import { STORE_FILE_PATH, syntheticPdfUpload } from './support/opening-app.js';
 import { decided, structureSetup, type StructureSetup } from './support/organisation.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { databaseUrl } from './support/postgres.js';
-import { placeScope, receivingFixture, type ReceivingFixture } from './support/receiving.js';
+import {
+  placeScope,
+  RECEIVER_AUTHORITY,
+  receivingFixture,
+  receivingGateOpen,
+  receivingGranted,
+  type ReceivingFixture,
+} from './support/receiving.js';
 
 // S2-F01-T04: an approved booking's lifecycle through the whole application, on real PostgreSQL (goods-in 3.4 to 3.8,
 // 3.10, 10.3, 12 tests 4, 5 and 7; PRD-BKG-005, PRD-BKG-006, PRD-BKG-008, PRD-BKG-009, PRD-BKG-013; POL-05.01,
 // POL-05.03 to POL-05.07, POL-05.10; DEC-099, DEC-132). Booking records Issued and Confirmed; a change after approval is
 // a new version approved again, reserving or releasing the difference and taking the Agreement version then in force;
 // a cancellation of an undelivered balance and an extension of the window are each approved by a different person;
-// delivered quantities come from receipt links, made here through `booking`'s receipt link operation by a test caller
-// standing for `receiving` (S2-F02-T04 makes the real one); and an overdue balance reaches Booking in My work, raised by
-// the overdue job, with nothing cancelled. Policies 5 and 1 are opened through TEST-ONLY checks reporting labelled
-// synthetic values (RR-561, RR-565; support/booking.ts). Every person, place, brand, price, budget, limit, date and
-// number here is SYNTHETIC.
+// delivered quantities come from receipt links, made by real GRNs issued against the booking through receiving's routes
+// (S2-F02-T04; receiving-against-booking.int.test.ts proves the links themselves, tests 5 and 6 of goods-in section 12);
+// and an overdue balance reaches Booking in My work, raised by the overdue job, with nothing cancelled. Policies 5 and 1
+// are opened through TEST-ONLY checks reporting labelled synthetic values (RR-561, RR-565; support/booking.ts), and
+// policies 4 and 10 on the values the modules report. Every person, place, brand, price, budget, limit, date and number
+// here is SYNTHETIC.
 
 const BOOKING_TYPE = 'booking.booking';
 const BUDGET = 'booking.open_to_buy_budget';
@@ -110,7 +113,7 @@ let booker: SyntheticUser;
 let accounts: SyntheticUser;
 /** The Owner (P-OWN): approves budgets, bookings, cancellations and extensions within a SYNTHETIC limit. */
 let owner: SyntheticUser;
-/** A receiver standing for `receiving`'s caller of the receipt link, who sees the bookings it links to. */
+/** Warehouse (P-WHS): receives goods against the bookings, so sees them too (goods-in 4.10). */
 let receiver: SyntheticUser;
 let settingsAdmin: SyntheticUser;
 let settingsApprover: SyntheticUser;
@@ -204,7 +207,14 @@ async function storedFile(user: SyntheticUser): Promise<{ storedFileId: string; 
   return { storedFileId: stored.storedFileId as string, fileReceiptId: stored.receiptId as string };
 }
 
-/** One line at the SYNTHETIC cost, with colour and size where given. */
+/** The fixture's size value of the label given, whose code a booking line and a GRN line name (goods-in 4.3). */
+function sizeOf(label: string): { readonly id: string; readonly code: string } {
+  const value = fixture.sizes.values.find((each) => each.label === label);
+  if (value === undefined) throw new Error(`no size ${label}`);
+  return value;
+}
+
+/** One line at the SYNTHETIC cost, with colour and size where given; a size by its label, written as its code. */
 function line(
   styleCode: string,
   quantity: number,
@@ -214,7 +224,7 @@ function line(
     ...(options.lineKey === undefined ? {} : { lineKey: options.lineKey }),
     styleCode,
     colour: options.colour ?? null,
-    size: options.size ?? null,
+    size: options.size === undefined ? null : sizeOf(options.size).code,
     quantity,
     indicativeCost: COST,
     mrp: 99_900,
@@ -256,7 +266,7 @@ async function approvedBooking(
 }
 
 function keyOf(booking: Booking, size: string): string {
-  const found = booking.status?.lines.find((each) => each.size === size);
+  const found = booking.status?.lines.find((each) => each.size === sizeOf(size).code);
   if (found === undefined) throw new Error(`no line of size ${size}`);
   return found.lineKey;
 }
@@ -270,45 +280,66 @@ async function remaining(): Promise<number> {
 }
 
 /**
- * A test caller standing for `receiving` at a GRN's issue (goods-in 3.7, 10.2): a command of the application as the
- * receiver, holding the booking's lock at step 1 as `receiving` will with its Arrival, linking each GRN line through
- * `booking`'s receipt link operation. The GRN and its lines are SYNTHETIC identifiers: `booking` keeps them with no
- * foreign key, and S2-F02-T04 makes the real caller.
+ * Goods received against a booking through receiving's routes, as the receiver (goods-in 4.2 to 4.5, 4.10; S2-F02-T04):
+ * an Arrival naming the booking at its destination's Store, its invoice, a count line for each, as invoiced, and its
+ * GRN; each line links at issue to the booking line it matches. A late or excess line goes to Booking for review
+ * (POL-05.08): Booking proposes it and the Owner approves it, so its pieces count as delivered too.
  */
 async function receive(
   bookingId: string,
-  lines: readonly { size: string | null; colour?: string | null; quantity: number; styleCode?: string }[],
-  siteId: string = fixture.siteId,
-): Promise<ReceiptLinked[]> {
-  const booking = api.app.get<BookingInterface>(BOOKING);
-  const grnId = uuidv7();
-  return api.app.get<CommandRunner>(COMMAND_RUNNER).run(
-    {
-      commandName: 'test.receive-against-booking',
-      organisation,
-      correlationId: uuidv7(),
-      actor: { kind: 'actor', actorId: receiver.id },
-    },
-    async (context) => {
-      await context.lock(1, [booking.bookingLockTarget(bookingId)]);
-      const answers: ReceiptLinked[] = [];
-      for (const each of lines) {
-        const outcome = await booking.linkReceiptAtIssue(
-          context,
-          { userId: receiver.id, roleAssignmentId: assignments.get(receiver.id) ?? '' },
-          {
-            bookingId,
-            grnLine: { grnId, grnLineId: uuidv7(), siteId },
-            goods: { styleCode: each.styleCode ?? 'SYN-LIFE', colour: each.colour ?? 'SYN NAVY', size: each.size },
-            quantity: each.quantity,
-          },
-        );
-        if (outcome.kind !== 'success') throw new Error(`Refused: ${outcome.refusal.code}`);
-        answers.push(outcome.answer);
-      }
-      return answers;
-    },
+  lines: readonly { size: string; colour?: string | null; quantity: number; styleCode?: string }[],
+): Promise<void> {
+  const made = ok(
+    await post(receiver, '/api/receiving/arrivals', {
+      businessUnitId: fixture.wholeStore,
+      receivingLocationId: fixture.storeLocation,
+      supplierPartyId: fixture.supplier.id,
+      brandId: fixture.brand.id,
+      transporter: syntheticName('Transporter'),
+      lorryReceipt: { number: 'SYN-LR-LIF', date: setup.today() },
+      cartons: 1,
+      arrivedAt: new Date(clock.now().getTime() - 60_000).toISOString(),
+      bookingId,
+    }),
   );
+  const arrivalId = made.arrivalId as string;
+  ok(
+    await post(receiver, `/api/receiving/arrivals/${arrivalId}/invoices`, {
+      number: `SYN-INV-LIF-${String(randomInt(1_000_000_000))}`,
+      date: setup.today(),
+      file: await storedFile(receiver),
+    }),
+  );
+  for (const each of lines) {
+    ok(
+      await post(receiver, `/api/receiving/arrivals/${arrivalId}/count-lines`, {
+        goods: 'on-invoice',
+        styleCode: each.styleCode ?? 'SYN-LIFE',
+        colour: each.colour === undefined ? 'SYN NAVY' : each.colour,
+        sizeValueId: sizeOf(each.size).id,
+        skuId: null,
+        description: null,
+        invoiceQuantity: each.quantity,
+        countedQuantity: each.quantity,
+        extra: null,
+        damage: null,
+        batch: null,
+      }),
+    );
+  }
+  const read = arrivalReadSchema.parse(ok(await get(receiver, `/api/receiving/arrivals/${arrivalId}`))).arrival;
+  const issued = ok(await post(receiver, `/api/receiving/arrivals/${arrivalId}/grn`, { versionToken: read.versionToken }));
+  const grn = arrivalReadSchema.parse(ok(await get(receiver, `/api/receiving/arrivals/${arrivalId}`))).arrival.grn;
+  const reviewed = (grn?.bookingLinks ?? []).flatMap((each) =>
+    each.atIssue?.outcome === 'review' && each.atIssue.lineKey !== null
+      ? [{ grnLineId: each.grnLineId, lineKey: each.atIssue.lineKey }]
+      : [],
+  );
+  if (reviewed.length === 0) return;
+  const proposed = ok(
+    await post(booker, `/api/receiving/grns/${issued.grnId as string}/booking-links`, { bookingId, lines: reviewed }),
+  ) as { proposal: { proposalId: string; requestId: string } };
+  ok(await decide(owner, proposed.proposal.requestId, proposed.proposal.proposalId));
 }
 
 /** Terms with every value Unknown but the ownership-transfer event (POL-01.05), for a SYNTHETIC Agreement version. */
@@ -368,7 +399,10 @@ beforeAll(async () => {
     keysEnvironment: keys,
     label: 'LIFECYCLE',
   });
-  fixture = await receivingFixture(setup, database, 'LIF');
+  fixture = await receivingFixture(setup, database, 'LIF', { sizes: ['S', 'M', 'L', 'XL'] });
+  // Goods are received against the bookings at the destination's Store (goods-in 4.10).
+  await receivingGateOpen(setup, database, BOOKING_POLICY_CHECKS);
+  await receivingGranted(setup, database, fixture.siteId, [fixture.wholeStore], BOOKING_POLICY_CHECKS);
   const today = setup.today();
   const okOf = <A>(outcome: { kind: 'success'; answer: A } | { kind: 'refusal'; refusal: { code: string } }): A => {
     if (outcome.kind !== 'success') throw new Error(`Refused: ${outcome.refusal.code}`);
@@ -411,6 +445,8 @@ beforeAll(async () => {
     { recordType: 'files_imports.stored_file', action: 'create' },
     { recordType: 'exceptions.exception', action: 'view' },
     { recordType: 'exceptions.exception', action: 'edit' },
+    // Reading the GRNs whose late lines Booking proposes into the booking (goods-in 4.10).
+    { recordType: 'receiving.arrival', action: 'view' },
     PANEL,
   ]);
   accounts = await enrolled('LIF-ACCOUNTS', [
@@ -426,7 +462,7 @@ beforeAll(async () => {
     { recordType: BUDGET, action: 'approve' },
     PANEL,
   ]);
-  receiver = await enrolled('LIF-RECEIVER', [{ recordType: BOOKING_TYPE, action: 'view' }]);
+  receiver = await enrolled('LIF-RECEIVER', [...RECEIVER_AUTHORITY, { recordType: BOOKING_TYPE, action: 'view' }]);
   settingsAdmin = await enrolled('LIF-SETTINGS', [
     { recordType: 'access.approval_limit', action: 'view' },
     { recordType: 'access.approval_limit', action: 'create' },
@@ -481,6 +517,19 @@ beforeAll(async () => {
     }),
   );
   ok(await decide(settingsApprover, routing.requestId as string, routing.versionId as string));
+  // Late goods go to Booking for review at the GRN's issue (goods-in 4.10; POL-05.08), routed the same way.
+  const review = ok(
+    await post(settingsAdmin, '/api/exceptions/routing', {
+      typeCode: 'receiving.booking-review',
+      siteId: fixture.siteId,
+      owner: { kind: 'user', userId: booker.id },
+      dueRule: { format: 'elapsed-minutes-v1', minutes: 60 },
+      escalation: { kind: 'user', userId: booker.id },
+      validFrom: today,
+      origin: 'synthetic',
+    }),
+  );
+  ok(await decide(settingsApprover, review.requestId as string, review.versionId as string));
   await bookingGateOpen(setup, database);
   const numbering = api.app.get<NumberingInterface>(NUMBERING);
   await api.app.get<CommandRunner>(COMMAND_RUNNER).run(
@@ -493,6 +542,7 @@ beforeAll(async () => {
     async (context) => {
       await defineSyntheticBookingSeries(context, numbering);
       await defineSyntheticCodeSeries(context, numbering);
+      await defineSyntheticGrnSeries(context, numbering);
     },
   );
 }, 300_000);
@@ -611,91 +661,6 @@ describe('Issued and Confirmed (goods-in 3.4; POL-05.01, DEC-099)', () => {
   });
 });
 
-describe('quantities from receipt links (goods-in 3.6, 3.7; 12 test 5)', () => {
-  let booking: Booking;
-
-  it('PRD-BKG-005 PRD-BKG-006 booked 10 each of S, M and L; deliveries of 5, 3 and 2 a size leave 15, 6 and 0', async () => {
-    booking = await approvedBooking(['S', 'M', 'L'].map((size) => line('SYN-LIFE', 10, { colour: 'SYN NAVY', size })));
-    expect(booking.status?.totals).toEqual({
-      ordered: 30,
-      delivered: 0,
-      cancelled: 0,
-      outstanding: 30,
-      overDelivered: 0,
-    });
-    const outstanding: number[] = [];
-    for (const each of [5, 3, 2]) {
-      const answers = await receive(
-        booking.id,
-        // Matched ignoring case and spaces at the ends (goods-in 3.7; DEC-130).
-        ['s', ' M', 'l '].map((size) => ({ size, colour: 'syn navy', quantity: each, styleCode: ' syn-life' })),
-      );
-      expect(answers.map((answer) => answer.kind)).toEqual(['linked', 'linked', 'linked']);
-      outstanding.push((await readBooking(booker, booking.id)).status?.totals.outstanding ?? -1);
-    }
-    expect(outstanding).toEqual([15, 6, 0]);
-    const read = await readBooking(booker, booking.id);
-    expect(read.status?.lines.map((each) => [each.size, each.delivered, each.outstanding])).toEqual([
-      ['S', 10, 0],
-      ['M', 10, 0],
-      ['L', 10, 0],
-    ]);
-  });
-
-  it('PRD-BKG-007 a line matching no booking line, or counted at another Site, goes to review and links nothing', async () => {
-    const answers = await receive(booking.id, [{ size: 'XL', quantity: 1 }]);
-    expect(answers).toEqual([{ kind: 'review', reason: 'no-match' }]);
-    expect(await receive(booking.id, [{ size: 'S', quantity: 1 }], uuidv7())).toEqual([
-      { kind: 'review', reason: 'other-site' },
-    ]);
-    expect((await readBooking(booker, booking.id)).status?.totals.delivered).toBe(30);
-  });
-
-  it('PRD-BKG-008 DEC-130 a later link names a line its goods match, is dated and signed, and shows beyond ordered as over-delivered', async () => {
-    const service = api.app.get<BookingInterface>(BOOKING);
-    const grnLineId = uuidv7();
-    const link = (size: string) =>
-      api.app.get<CommandRunner>(COMMAND_RUNNER).run(
-        {
-          commandName: 'test.link-later',
-          organisation,
-          correlationId: uuidv7(),
-          actor: { kind: 'actor', actorId: receiver.id },
-        },
-        async (context) => {
-          await context.lock(1, [service.bookingLockTarget(booking.id)]);
-          return service.linkReceiptLater(
-            context,
-            { userId: receiver.id, roleAssignmentId: assignments.get(receiver.id) ?? '' },
-            {
-              bookingId: booking.id,
-              lineKey: keyOf(booking, 'M'),
-              grnLine: { grnId: uuidv7(), grnLineId, siteId: fixture.siteId },
-              goods: { styleCode: ' syn-life', colour: 'syn navy', size },
-              quantity: 2,
-            },
-          );
-        },
-      );
-    // Goods of another size are not the line's: a receipt link always names a line its goods match (goods-in 3.10).
-    const otherGoods = await link('L');
-    expect(otherGoods.kind === 'refusal' ? otherGoods.refusal : otherGoods.kind).toEqual({
-      kind: 'refused',
-      code: 'booking.goods-not-of-line',
-      missing: [{ kind: 'booking-line', recordId: booking.id, lineKey: keyOf(booking, 'M') }],
-    });
-    expect((await link('m ')).kind).toBe('success');
-    const again = await link('M');
-    expect(again.kind === 'refusal' ? again.refusal.code : again.kind).toBe('booking.receipt-already-linked');
-    const read = await readBooking(booker, booking.id);
-    expect(read.status?.lines.find((each) => each.size === 'M')).toMatchObject({
-      delivered: 12,
-      outstanding: 0,
-      overDelivered: 2,
-    });
-  });
-});
-
 describe('cancelling an undelivered balance (goods-in 3.5, 3.6; 12 test 4)', () => {
   let booking: Booking;
 
@@ -729,7 +694,7 @@ describe('cancelling an undelivered balance (goods-in 3.5, 3.6; 12 test 4)', () 
     expect(errorOf(await decide(booker, proposed.requestId as string, amendmentId))?.code).toMatch(/^access\./);
     ok(await decide(owner, proposed.requestId as string, amendmentId));
     const after = await readBooking(booker, booking.id);
-    expect(after.status?.lines.find((each) => each.size === 'S')).toMatchObject({
+    expect(after.status?.lines.find((each) => each.size === sizeOf('S').code)).toMatchObject({
       ordered: 10,
       delivered: 4,
       cancelled: 6,
@@ -1091,8 +1056,8 @@ describe('the overdue balance (goods-in 3.8; 12 test 7)', () => {
       const read = await readBooking(booker, booking.id);
       expect(read.state).toBe('Approved');
       expect(read.status?.lines.map((each) => [each.size, each.outstanding, each.cancelled, each.overdue])).toEqual([
-        ['S', 8, 0, true],
-        ['M', 0, 0, false],
+        [sizeOf('S').code, 8, 0, true],
+        [sizeOf('M').code, 0, 0, false],
       ]);
       // It cannot close while the balance is still overdue (PRD-EXC-002); extended, it can.
       expect(errorOf(await post(booker, `/api/exceptions/exceptions/${raised.id}/close`, {}))?.code).toMatch(

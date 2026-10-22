@@ -134,7 +134,8 @@ export interface ReceivingFixture extends SyntheticStores {
    */
   readonly sizes: {
     readonly attributeId: string;
-    readonly values: readonly { readonly id: string; readonly code: string }[];
+    /** Each value with the label it was made from, such as `S`, its code SYNTHETIC. */
+    readonly values: readonly { readonly id: string; readonly code: string; readonly label: string }[];
   };
   /** A value of a list attribute that is not the size list. */
   readonly colourValueId: string;
@@ -159,13 +160,14 @@ export interface ReceivingFixture extends SyntheticStores {
  * The world: the units of syntheticStores, the mappings of the Stores' whole-store units and of the warehouse verified,
  * the brand counter's left unverified (POL-10.08); and the masters of merchandise above. The size list is the
  * attribute the Organisation marks as its size list, when one is marked; otherwise a new list attribute, which the
- * fixture marks unless told not to (RR-556). Receiving is granted apart, by receivingGranted, once the gate is open.
+ * fixture marks unless told not to (RR-556), with a value for each label given, `S` and `M` unless told otherwise.
+ * Receiving is granted apart, by receivingGranted, once the gate is open.
  */
 export async function receivingFixture(
   setup: StructureSetup,
   database: string,
   label: string,
-  choices: { readonly marksSizes?: boolean } = {},
+  choices: { readonly marksSizes?: boolean; readonly sizes?: readonly string[] } = {},
 ): Promise<ReceivingFixture> {
   let counter = 0;
   const next = (prefix: string) => syntheticCode(`${label}-${prefix}-${String(++counter)}`);
@@ -270,7 +272,10 @@ export async function receivingFixture(
     if (confirmed?.valueId === undefined) throw new Error(`${code} was not confirmed`);
     return { id: confirmed.valueId, code };
   };
-  const sizeValues = [await value(sizeAttributeId, next('S')), await value(sizeAttributeId, next('M'))];
+  const sizeValues: { id: string; code: string; label: string }[] = [];
+  for (const size of choices.sizes ?? ['S', 'M']) {
+    sizeValues.push({ ...(await value(sizeAttributeId, next(size))), label: size });
+  }
   if (marked.kind === 'not-set' && choices.marksSizes !== false) {
     await writeSyntheticMarking(database, 'size', sizeAttributeId, setup.preparer.id);
   }

@@ -37,8 +37,11 @@ import {
   countLineDraftSchema,
   countLineRemovalSchema,
   countLineSavedSchema,
+  grnBookingLinkedSchema,
+  grnBookingLinksDraftSchema,
   grnIssueSchema,
   grnIssuedSchema,
+  grnParamsSchema,
   HELD_LINE_TYPE,
   heldLineParamsSchema,
   heldLineProductDraftSchema,
@@ -1077,6 +1080,10 @@ const BOOKING_DECISION_CODES = [
   'booking.version-not-in-force',
   'booking.balance-changed',
   'booking.not-an-extension',
+  // A proposal to link late or excess goods, rechecked under the booking's lock (goods-in 4.10; S2-F02-T04).
+  'booking.line-not-found',
+  'booking.goods-not-of-line',
+  'booking.receipt-already-linked',
 ] as const satisfies readonly ErrorCode[];
 
 /**
@@ -1181,6 +1188,8 @@ const GRN_ISSUE_CODES = [
   'exceptions.exception-code-series-paused',
   'exceptions.exception-code-series-exhausted',
   'exceptions.no-routing',
+  // An Arrival against a booking the issuer may not see (goods-in 4.10; S2-F02-T04).
+  'booking.record-not-found',
 ] as const satisfies readonly ErrorCode[];
 
 /**
@@ -5143,6 +5152,11 @@ export const routes = {
       'receiving.brand-not-in-force',
       'receiving.supplier-not-linked',
       'receiving.arrival-in-future',
+      // Against a booking (goods-in 3.7, 4.2, 4.10; S2-F02-T04): one the receiver may see, approved, of the Arrival's
+      // supplier and brand.
+      'booking.record-not-found',
+      'booking.not-approved',
+      'receiving.booking-not-of-arrival',
     ],
   }),
   recordArrivalInvoice: defineRoute({
@@ -5253,6 +5267,39 @@ export const routes = {
       'receiving.not-unidentified',
       'receiving.size-not-on-list',
       'receiving.sku-not-of-line',
+    ],
+  }),
+  // Booking's later link of GRN lines to the lines of one booking (goods-in 3.7, 4.10, section 11; PRD-BKG-008;
+  // POL-05.08; S2-F02-T04): a GRN received without a booking, or lines sent for review. Lines within the delivery window
+  // and the booking line's outstanding link at once; late or excess ones are proposed for a different person's approval
+  // through `access`. Authorised in the command with the booking's facts, and with view on the GRN's Arrival with its
+  // own facts (access-and-approvals 5.3); policy-gated as a booking's approval is (goods-in 10.5).
+  linkGrnToBooking: defineRoute({
+    method: 'POST',
+    path: '/api/receiving/grns/{grnId}/booking-links',
+    params: grnParamsSchema,
+    access: { kind: 'action', action: 'edit', recordType: BOOKING_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: grnBookingLinksDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: grnBookingLinkedSchema,
+    codes: [
+      ...HISTORY_CODES,
+      'kernel.cross-site-request',
+      'configuration.operation-unavailable',
+      'booking.record-not-found',
+      'booking.not-approved',
+      'booking.line-not-found',
+      'booking.goods-not-of-line',
+      'booking.receipt-already-linked',
+      'booking.receipt-link-proposed',
+      'booking.link-proposal-pending',
+      'receiving.record-not-found',
+      'receiving.booking-not-of-arrival',
+      'receiving.nothing-received',
+      'receiving.product-not-named',
     ],
   }),
   // Damage reports (goods-in 8, section 11; PRD-DMG-001 to PRD-DMG-006, PRD-STK-017; S2-F08-T01): anyone authorised at

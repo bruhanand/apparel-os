@@ -12,7 +12,18 @@ export { APPROVE_BOOKING, APPROVE_BOOKING_TERMS, BOOKING_CAPABILITY, BOOKING_OPE
 export { bookingApproved } from './events.js';
 // The lifecycle (goods-in 3.4 to 3.8; S2-F01-T04): the receipt link's types for `receiving`, the overdue job kind,
 // its service identity and its exception type for the composition root.
-export type { GrnLineRef, Linker, ReceiptAtIssue, ReceiptLater, ReceiptLinked } from './commands/receipt-link.js';
+export type {
+  Linker,
+  PlannedAtIssue,
+  ReceivableBooking,
+  ReceiptAtIssue,
+  ReceiptsAtIssue,
+  ReceiptsLater,
+  ReceiptsLinked,
+} from './commands/receipt-link.js';
+export type { ReviewReason } from './domain/receipts.js';
+export type { ReceivedGoods } from './domain/lifecycle.js';
+export type { GrnLineReceipt } from './queries/receipt-links.js';
 export { BOOKING_JOBS_IDENTITY, bookingJobKinds, overdueExceptionType } from './jobs/overdue.js';
 export type { OverdueJobDependencies } from './jobs/overdue.js';
 export { bookingAmended } from './events.js';
