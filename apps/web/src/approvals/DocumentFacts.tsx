@@ -43,7 +43,7 @@ import { formatDateTime } from '../history/format';
 import { missingText } from '../components/UnavailableState';
 import { AttributeName } from '../merchandise/AttributeName';
 import { MARK_LABEL } from '../merchandise/marked';
-import { OpenToBuyFacts, TermsFacts, TotalsView } from '../booking/facts';
+import { OpenToBuyFacts, TermsFacts, TotalsView, valueAtCostOf } from '../booking/facts';
 import { useBookingNames } from '../booking/names';
 import { ImportFacts } from './ImportFacts';
 import { DamageReportFacts } from '../stock/DamageReport';
@@ -514,7 +514,7 @@ function BookingFacts({ view }: { view: ApprovalRequestView }) {
       <TotalsView lines={version.lines} />
       <section aria-label={t('booking.open-to-buy')} className="flex flex-col gap-1">
         <h4 className="text-label font-semibold text-text-2">{t('booking.open-to-buy')}</h4>
-        <OpenToBuyFacts remaining={booking.openToBuy} />
+        <OpenToBuyFacts remaining={booking.openToBuy} {...valueAtCostOf(booking)} />
       </section>
       <section aria-label={t('booking.terms')} className="flex flex-col gap-1">
         <h4 className="text-label font-semibold text-text-2">{t('booking.terms')}</h4>

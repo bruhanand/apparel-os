@@ -8,6 +8,7 @@ import {
   lockTable,
   RECOVERY_HOLD_CODE,
   scopeFactsOf,
+  withSavepoint,
   type CommandRefusal,
   type LockTarget,
   type TransactionContext,
@@ -16,7 +17,7 @@ import type { AuditInterface, AuditScope } from '../../audit/index.js';
 import { DECISION_EVIDENCE_KIND, type DecisionEvidence } from '../contracts/decision-evidence.js';
 import { approvalDecision, approvalReason, approvalReasonVersion, approvalRequest } from '../db/schema.js';
 import { authorityOf, offeredTo, type Authority, type LimitedValue, type LimitRow } from '../domain/approval-limits.js';
-import type { ApprovalRule, DocumentEffect } from '../domain/approval-rules.js';
+import type { ApprovalRule, DecisionWritten, DocumentEffect } from '../domain/approval-rules.js';
 import type { OrganisationKeys } from '../domain/organisation-keys.js';
 import { scopeCoversMove } from '../domain/scope.js';
 import { approvalDecided } from '../events.js';
@@ -129,8 +130,8 @@ interface DocumentHandler {
   earlierStepDeciders?(context: TransactionContext, versionId: string): Promise<readonly string[]>;
   /** A check of the document's own, under the locks, before the code is taken. */
   precheck?(context: TransactionContext, versionId: string): Promise<CommandRefusal | undefined>;
-  /** Whether the decision is written before an approval's effect, which uses it under its locks (9.8b). */
-  readonly postsWithDecision?: boolean;
+  /** When the decision is written, against an approval's effect; after it unless the effect says before (9.8b). */
+  readonly decisionWritten?: DecisionWritten;
   approve(context: TransactionContext, decider: Decider, versionId: string): Promise<Prepared<unknown>>;
   reject(
     context: TransactionContext,
@@ -196,7 +197,7 @@ function moduleEffect(effect: DocumentEffect): DocumentHandler {
     ...(effect.precheck === undefined
       ? {}
       : { precheck: (c: TransactionContext, v: string) => effect.precheck?.(c, v) ?? Promise.resolve(undefined) }),
-    ...(effect.postsWithDecision === true ? { postsWithDecision: true } : {}),
+    ...(effect.decisionWritten === undefined ? {} : { decisionWritten: effect.decisionWritten }),
     approve: (c, d, v) => effect.approve(c, decider(d), v),
     reject: (c, d, v) => effect.reject(c, decider(d), v),
   };
@@ -1101,18 +1102,25 @@ export class Approvals {
       });
       await context.tx.update(approvalRequest).set({ state: outcome }).where(eq(approvalRequest.id, request.id));
     };
-    if (outcome === 'Approved' && handler.postsWithDecision === true) {
+    if (outcome === 'Approved' && handler.decisionWritten === 'before-effect') {
       // An effect that posts through the stock ledger verifies and uses the decision under its locks, as any posting
       // does (9.7, 9.8b; stock-ledger 13.1), so the decision is written first, under a savepoint: when the effect
-      // refuses, the decision and the effect's locks and writes are rolled back together, and nothing is written.
-      await context.tx.execute(sql.raw('savepoint decision_effect'));
-      await writeDecision();
-      const effect = await handler.approve(context, decider, request.documentVersionId);
-      if (effect.kind === 'refusal') {
-        await context.tx.execute(sql.raw('rollback to savepoint decision_effect'));
-        return { kind: 'refusal', refusal: effect.refusal, causedBySecret: false };
+      // refuses, the decision and the effect's writes are rolled back together, and nothing is written.
+      const tried = await withSavepoint(
+        context,
+        'decision_effect',
+        [],
+        async () => {
+          await writeDecision();
+          return handler.approve(context, decider, request.documentVersionId);
+        },
+        (effect) => effect.kind !== 'refusal',
+      );
+      if (tried.kind === 'caught')
+        throw new CommandDefect('A decision effect caught a database error it names none of');
+      if (tried.value.kind === 'refusal') {
+        return { kind: 'refusal', refusal: tried.value.refusal, causedBySecret: false };
       }
-      await context.tx.execute(sql.raw('release savepoint decision_effect'));
     } else if (outcome === 'Approved') {
       // The effect rechecks its own record and may still refuse, so nothing of the decision is written before it.
       const effect = await handler.approve(context, decider, request.documentVersionId);

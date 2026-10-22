@@ -260,17 +260,17 @@ export async function issueGrn(
     .map((each) => receiptCount(row, each, owner));
   const holdItems: { readonly issued: IssuedLine; readonly kind: 'held' | 'damage'; readonly index: number }[] = [];
   for (const each of held) {
-    const kind = each.findings.held?.kind;
-    if (kind === undefined) continue;
+    const part = each.findings.held;
+    if (part === null) throw new CommandDefect('A held line with nothing held');
     holdItems.push({ issued: each, kind: 'held', index: items.length });
     items.push({
       kind: 'place-hold',
       lineId: each.id,
-      holdKind: kind === 'excess' ? 'excess' : 'quarantine',
-      reason: HOLD_REASONS[kind],
+      holdKind: part.kind === 'excess' ? 'excess' : 'quarantine',
+      reason: HOLD_REASONS[part.kind],
       at,
       condition: conditionOf(each.line),
-      goods: [goodsOf(each, each.findings.held?.quantity ?? 0)],
+      goods: [goodsOf(each, part.quantity)],
     });
   }
   for (const each of damaged) {

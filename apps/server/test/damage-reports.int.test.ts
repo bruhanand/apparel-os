@@ -96,6 +96,8 @@ let cautious: Person;
 let proposer: Person;
 /** Who approves a reversal, a different person from its proposer. */
 let reversalApprover: Person;
+/** A reader of damage reports at the other Store only, whose scope covers none of these reports. */
+let outsider: Person;
 /** The GRN lines the reports name: goods of a product not yet set up, and the batch-tracked product. */
 let describedLine: string;
 let productLine: string;
@@ -333,6 +335,11 @@ beforeAll(async () => {
     { recordType: 'stock.damage_reversal', action: 'approve' },
   ]);
   reversalApprover = await enrolled('DMG-REVERSAL', REVERSAL_APPROVER_AUTHORITY);
+  outsider = await enrolled(
+    'DMG-OUTSIDER',
+    [{ recordType: 'stock.damage_report', action: 'view' }],
+    storeScope(fixture.otherStoreId),
+  );
   settingsAdmin = await enrolled('DMG-SETTINGS', [
     ...LIMIT_ADMIN_AUTHORITY,
     { recordType: 'exceptions.exception_routing', action: 'view' },
@@ -422,6 +429,9 @@ afterAll(async () => {
   await (world as SyntheticWorld | undefined)?.reset();
 });
 
+/** The source `receiving` names when it reports damage on a line of its GRN (goods-in 8.5, 10.2). */
+const RECEIVING_GRN = { module: 'receiving', recordType: 'grn' } as const;
+
 interface Reported {
   damageReportId: string;
   number: string;
@@ -487,6 +497,16 @@ describe('reporting damage (goods-in 8.1, 8.2; design test 16)', () => {
     expect(read.photoAttachmentIds).toHaveLength(1);
   });
 
+  it('PRD-SEC-005 a report outside the reader’s scope is not found, never refused as not authorised', async () => {
+    // Row-level security hides it, so it has no facts to authorise with: it is not found (code-house-rules 12.3).
+    const hidden = await get(outsider, `/api/stock/damage-reports/${first.damageReportId}`);
+    expect(hidden.status).toBe(404);
+    expect(errorOf(hidden)).toMatchObject({
+      code: 'stock.record-not-found',
+      missing: [{ kind: 'record', recordType: 'stock.damage_report', recordId: first.damageReportId }],
+    });
+  });
+
   it('POL-02.16 PRD-EXC-001 the report reaches Operations in My work as an exception of its Unknown exposure', async () => {
     const work = await get(operations, '/api/inbox/my-work');
     expect(work.status, JSON.stringify(work.body)).toBe(200);
@@ -547,6 +567,11 @@ describe('deciding a report (goods-in 8.3; design test 16)', () => {
     expect(confirmed.status, JSON.stringify(confirmed.body)).toBe(200);
     expect(await custodyBy(null)).toEqual({ good: 5, damaged: 1 });
     expect(await holdsOn('described')).toEqual([{ kind: 'quarantine', condition: 'damaged', quantity: 1 }]);
+    // The quarantine records a reason code, which a screen names from the catalogue, never stored text (12.13).
+    expect(await holdReasons(secondReport.damageReportId)).toEqual([
+      { kind: 'damage', reason: 'SYNTHETIC torn seam seen at the count' },
+      { kind: 'quarantine', reason: 'stock.damage-confirmed' },
+    ]);
     const read = await readReport(reporter, secondReport.damageReportId);
     expect(read.state).toBe('Confirmed');
     expect(read.rounds[0]?.decision).toMatchObject({ outcome: 'Confirmed', decidedByUserId: operations.user.id });
@@ -589,7 +614,7 @@ describe('reversing a mistaken confirmation (goods-in 8.3; PRD-STK-017; design t
     expect(damageReportReadSchema.parse(panel.body).report).toMatchObject({
       id: secondReport.damageReportId,
       state: 'Confirmed',
-      reversals: [{ id: damageReversalId, outcome: null }],
+      reversals: [{ id: damageReversalId, outcome: null, state: 'Awaiting approval' }],
     });
     // Its proposer cannot approve it (PRD-ACS-006).
     const own = await decide(proposer, requestId, damageReversalId, 'approve');
@@ -602,7 +627,12 @@ describe('reversing a mistaken confirmation (goods-in 8.3; PRD-STK-017; design t
     const read = await readReport(reporter, secondReport.damageReportId);
     expect(read.state).toBe('Submitted');
     expect(read.reversals).toEqual([
-      expect.objectContaining({ id: damageReversalId, outcome: 'Approved', proposedByUserId: proposer.user.id }),
+      expect.objectContaining({
+        id: damageReversalId,
+        outcome: 'Approved',
+        state: 'Approved',
+        proposedByUserId: proposer.user.id,
+      }),
     ]);
     expect(read.rounds.map((each) => each.kind)).toEqual(['reported', 'restored']);
     // The confirmation is never edited: the reversal is its own movement, linked to the condition change.
@@ -669,11 +699,17 @@ describe('the interface `receiving` calls (goods-in 10.2)', () => {
     const documents = api.app.get<StockDocumentsInterface>(STOCK_DOCUMENTS);
     const actor = { userId: reporter.user.id, roleAssignmentId: reporter.assignmentId };
     const draft = draftOf({ grnLineId: describedLine }, 1) as Parameters<StockDocumentsInterface['reportDamage']>[2];
+    // The caller names the source whose line it is, as `receiving` names its GRN (goods-in 8.5): a line another
+    // source made names no goods of it.
+    const elsewhere = await asUserIn(api.app, organisation, reporter.user.id, (context) =>
+      documents.reportDamage(context, actor, draft, { lineSource: { module: 'stock', recordType: 'damage_report' } }),
+    );
+    expect(elsewhere.kind === 'refusal' ? elsewhere.refusal.code : elsewhere.kind).toBe('stock.goods-not-found');
     // The caller's command fails after the report: nothing of it stays, its number and hold included.
     let rolledBack: string | undefined;
     await expect(
       asUserIn(api.app, organisation, reporter.user.id, async (context) => {
-        const made = await documents.reportDamage(context, actor, draft);
+        const made = await documents.reportDamage(context, actor, draft, { lineSource: RECEIVING_GRN });
         if (made.kind !== 'success') throw new Error(made.refusal.code);
         rolledBack = made.answer.damageReportId;
         throw new Error('SYNTHETIC failure of the caller after the report');
@@ -685,7 +721,7 @@ describe('the interface `receiving` calls (goods-in 10.2)', () => {
     expect(await holdsOn('described')).toEqual([]);
     // The caller's command commits: the report is there with its hold and the next number.
     const committed = await asUserIn(api.app, organisation, reporter.user.id, (context) =>
-      documents.reportDamage(context, actor, draft),
+      documents.reportDamage(context, actor, draft, { lineSource: RECEIVING_GRN }),
     );
     if (committed.kind !== 'success') throw new Error(committed.refusal.code);
     const read = await readReport(reporter, committed.answer.damageReportId);
@@ -698,6 +734,20 @@ describe('the interface `receiving` calls (goods-in 10.2)', () => {
     expect(sequence).toEqual(sequence.map((_each, index) => index + 1));
   });
 });
+
+/** The holds a report's goods were placed under, by kind and reason, as the verifier reads them (stock-ledger 14.2). */
+async function holdReasons(reportId: string): Promise<{ kind: string; reason: string }[]> {
+  const verify = await connect(database, 'verify');
+  try {
+    const result = await verify.query<{ kind: string; reason: string }>(
+      'select kind, reason from stock.hold where source_record_id = $1 order by kind',
+      [reportId],
+    );
+    return result.rows;
+  } finally {
+    await verify.end();
+  }
+}
 
 /** Every report's number, in the order made, as the verifier reads them: gap-free (numbering-and-audit 3.2). */
 async function numbersOfReports(): Promise<string[]> {

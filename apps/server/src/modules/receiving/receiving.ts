@@ -122,8 +122,9 @@ export class Receiving {
 
   /**
    * What issuing the Arrival's GRN needs besides create on the GRN (goods-in 4.9, 8.5): create on damage reports while
-   * the count holds damage, since the issuer reports it. Read before any lock, for the route to authorise and hold; the
-   * command reads the count again under the Arrival's lock, and the ledger's rows refuse a report not authorised.
+   * the count holds damage, since the issuer reports it. Read before any lock, for the route to authorise and hold: a
+   * line saved after this read changes the Arrival's version, so the command refuses the issue as stale under the lock
+   * (code-house-rules 12.7), and the count it issues is the one read here.
    */
   async issueAlsoNeeds(context: TransactionContext, arrivalId: string): Promise<readonly IssueNeed[]> {
     const row = await arrivalRow(context, arrivalId);

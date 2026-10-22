@@ -1,4 +1,3 @@
-import { paise } from '@apparel-os/domain';
 import { z } from 'zod';
 import { approvalRequestStateSchema } from './approvals.js';
 import { businessDateSchema, idSchema, paiseSchema } from './common.js';
@@ -163,21 +162,24 @@ export const BOOKING_TYPE = 'booking.booking';
 export const BOOKING_APPROVAL = 'booking.booking.approve';
 
 /**
- * The technical caps on what Booking enters (goods-in 3.4 "As built"): the builders' choice, set by no rule of the PRD
- * or the policies, so a booking stays bounded and its request fits its body limit. **Design choice**; none is a
+ * The technical caps on what Booking enters (goods-in 3.9 "Input caps"): the builders' choice, set by no rule of the
+ * PRD or the policies, so a booking stays bounded and its request fits its body limit. **Design choice**; none is a
  * business limit.
  */
 export const BOOKING_CAPS = {
-  /** Lines of one booking version. */
-  lines: 1_000,
+  /** Lines of one booking version: a style × colour × size booking at the scale of a PT file (goods-in 12 test 21). */
+  lines: 10_000,
   /** Pieces on one line. */
   pieces: 1_000_000,
   /** A style code, a colour or a size as the document writes it. */
   codeText: 60,
 } as const;
 
-/** The body limit of a route that saves a booking's Draft, which holds every line (code-house-rules 12.1). */
-export const BOOKING_DRAFT_BODY_LIMIT_BYTES = 512 * 1024;
+/**
+ * The body limit of a route that saves a booking's Draft, which holds every line (code-house-rules 12.1): 8 MiB, so a
+ * Draft at every cap fits, its texts in a script of up to three bytes a character (goods-in 3.9 "Input caps").
+ */
+export const BOOKING_DRAFT_BODY_LIMIT_BYTES = 8 * 1024 * 1024;
 
 /** The largest page of bookings: a technical cap the builders set (code-house-rules 12.1 "Reads"), not a KDPS value. */
 export const BOOKING_PAGE_CAP = 100;
@@ -203,9 +205,8 @@ export const bookingLineDraftSchema = z.strictObject({
 });
 export type BookingLineDraft = z.infer<typeof bookingLineDraftSchema>;
 
-/** A line's style, quantity and prices, as the totals read them. */
+/** A line's quantity and prices, as the check that its totals fit reads them. */
 interface Priced {
-  readonly styleCode: string;
   readonly quantity: number;
   readonly indicativeCost: number;
   readonly mrp: number;
@@ -263,8 +264,11 @@ export type BookingDraftChange = z.infer<typeof bookingDraftChangeSchema>;
 export const bookingSavedSchema = z.strictObject({ bookingId: idSchema, versionId: idSchema, versionToken: idSchema });
 export type BookingSaved = z.infer<typeof bookingSavedSchema>;
 
-/** Booking documents the brand gave, photos or PDFs stored first (goods-in 3.1; PRD-IMP-002). */
-export const bookingDocumentsDraftSchema = z.strictObject({ files: evidenceListSchema });
+/**
+ * Booking documents the brand gave, photos or PDFs stored first (goods-in 3.1; PRD-IMP-002), naming the version token
+ * read, since attaching them is a change of the booking (code-house-rules 12.7).
+ */
+export const bookingDocumentsDraftSchema = z.strictObject({ files: evidenceListSchema, versionToken: idSchema });
 export type BookingDocumentsDraft = z.infer<typeof bookingDocumentsDraftSchema>;
 
 export const bookingDocumentsAttachedSchema = z.strictObject({
@@ -308,42 +312,6 @@ export const bookingStyleTotalsSchema = z.strictObject({
   mrp: paiseSchema,
 });
 export type BookingStyleTotals = z.infer<typeof bookingStyleTotalsSchema>;
-
-/**
- * The totals of a booking and of each style, in the order each style first appears (goods-in 3.1; PRD-BKG-003). A
- * style is its style code compared ignoring case and spaces at the ends, as a GRN line is matched (3.7). Exact: whole
- * paise times whole pieces, never rounded (PRD-MOD-014); a total beyond a safe integer throws, which the draft's schema
- * refuses first. The booking's value at cost is `booking.cost` (DM-8).
- */
-export function bookingTotals(lines: readonly Priced[]): {
-  readonly booking: BookingTotals;
-  readonly styles: BookingStyleTotals[];
-} {
-  const styles = new Map<string, { styleCode: string; pieces: number; cost: number; mrp: number }>();
-  let pieces = 0;
-  let cost = 0;
-  let mrp = 0;
-  for (const line of lines) {
-    const key = line.styleCode.trim().toUpperCase();
-    const style = styles.get(key) ?? { styleCode: line.styleCode.trim(), pieces: 0, cost: 0, mrp: 0 };
-    style.pieces += line.quantity;
-    style.cost = paise(style.cost + line.quantity * line.indicativeCost);
-    style.mrp = paise(style.mrp + line.quantity * line.mrp);
-    styles.set(key, style);
-    pieces += line.quantity;
-    cost = paise(cost + line.quantity * line.indicativeCost);
-    mrp = paise(mrp + line.quantity * line.mrp);
-  }
-  return {
-    booking: { pieces, cost: paise(cost), mrp: paise(mrp) },
-    styles: [...styles.values()].map((style) => ({
-      styleCode: style.styleCode,
-      pieces: style.pieces,
-      cost: paise(style.cost),
-      mrp: paise(style.mrp),
-    })),
-  };
-}
 
 /** One saved line of a version. */
 export const bookingLineSchema = z.strictObject({

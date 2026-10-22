@@ -96,6 +96,13 @@ export const damageRoundSchema = z.strictObject({
 });
 export type DamageRound = z.infer<typeof damageRoundSchema>;
 
+/**
+ * A reversal's state (design-language 7): Awaiting approval until a different person decides it, then Approved or
+ * Rejected (goods-in 8.3).
+ */
+export const damageReversalStateSchema = z.enum(['Awaiting approval', 'Approved', 'Rejected']);
+export type DamageReversalState = z.infer<typeof damageReversalStateSchema>;
+
 /** A reversal of a confirmation, proposed with a reason and approved or rejected by a different person (8.3). */
 export const damageReversalViewSchema = z.strictObject({
   id: idSchema,
@@ -106,6 +113,7 @@ export const damageReversalViewSchema = z.strictObject({
   requestId: idSchema.nullable(),
   requestState: approvalRequestStateSchema.nullable(),
   outcome: z.enum(['Approved', 'Rejected']).nullable(),
+  state: damageReversalStateSchema,
 });
 export type DamageReversalView = z.infer<typeof damageReversalViewSchema>;
 

@@ -9,18 +9,17 @@ import type { FilesImportsInterface } from '../../../files-imports/index.js';
 import { skuOn } from '../../../merchandise/catalogue/index.js';
 import type { NumberingInterface } from '../../../numbering/index.js';
 import { locationPlace, mappingOn } from '../../../organisation/index.js';
-import { originOfSourceLine, type NamedGoods, type StockLedgerInterface } from '../../ledger/index.js';
+import { originOfSourceLine, type LineSource, type NamedGoods, type StockLedgerInterface } from '../../ledger/index.js';
 import {
   DAMAGE_REPORT_KIND,
   DAMAGE_REPORT_SCOPE_KEY,
   DAMAGE_SOURCE_TYPE,
-  DOCUMENTS_MODULE,
   MISSING_DAMAGE_REPORT_SERIES,
 } from '../domain/kinds.js';
 import { damageHoldItem } from '../domain/items.js';
 import { damageUnavailable } from '../queries/availability.js';
-import { recordItem, refusalOf, refused, today, type Actor, type Outcome } from './common.js';
-import { post } from './posting.js';
+import { ledgerSource, recordItem, refusalOf, refused, today, type Actor, type Outcome } from './common.js';
+import { post, valueOfLine } from './posting.js';
 import { recordReport } from './record.js';
 
 // Report damage (goods-in 8.1, 8.2, 10.3; PRD-DMG-001, PRD-DMG-004, PRD-DMG-005, PRD-ACP-005; S2-F08-T01): anyone
@@ -59,19 +58,27 @@ const refusalOfCode = (code: string, item: CommandRefusal['missing'][number]): C
   missing: [item],
 });
 
-/** The GRN line goods a report names are those `receiving` counted on it (goods-in 4.5; stock-ledger 13.2). */
-const GRN_LINE_SOURCE = { module: 'receiving', recordType: 'grn' } as const;
+/**
+ * How a report is made: the source whose line the draft's GRN line is, which the caller names (`receiving` its own
+ * GRN; the damage route the source the line's receipt origin names), and the request's idempotency key (goods-in 8.5).
+ */
+export interface ReportOptions {
+  readonly lineSource?: LineSource | undefined;
+  readonly idempotencyKey?: string | undefined;
+}
 
 /**
  * The place and goods of a draft (goods-in 8.2): the location's Site and business unit (structure-and-masters 3.5),
  * the unit's mapping in force today for its Store and legal entity (PRD-MOD-010), and the goods: a GRN line's by the
- * receipt origin its count made, of a product not yet set up too (stock-ledger 13.15), or a product in force at the
- * Site. Their brand is the SKU's, or the one goods of Unknown SKU were counted under (RR-555).
+ * receipt origin its count made, the line of the source the caller names, of a product not yet set up too
+ * (stock-ledger 13.15), or a product in force at the Site. Their brand is the SKU's, or the one goods of Unknown SKU
+ * were counted under (RR-555). A line of no source named, or of another source, names no goods.
  */
 async function placeOf(
   context: TransactionContext,
   draft: DamageReportDraft,
   date: string,
+  lineSource: LineSource | undefined,
 ): Promise<Placed | { readonly refusal: CommandRefusal }> {
   const place = await locationPlace(context, draft.locationId);
   if (place === undefined) {
@@ -94,7 +101,10 @@ async function placeOf(
   let skuId: string | null;
   let receiptOriginId: string | null = null;
   if (draft.goods.kind === 'grn-line') {
-    const origin = await originOfSourceLine(context, { ...GRN_LINE_SOURCE, lineId: draft.goods.grnLineId });
+    const origin =
+      lineSource === undefined
+        ? undefined
+        : await originOfSourceLine(context, { ...lineSource, lineId: draft.goods.grnLineId });
     if (origin === undefined) {
       return {
         refusal: refusalOfCode('stock.goods-not-found', recordItem('receiving.grn_line', draft.goods.grnLineId)),
@@ -137,8 +147,9 @@ export async function newReportFacts(
   context: TransactionContext,
   draft: DamageReportDraft,
   date: string,
+  lineSource: LineSource | undefined,
 ): Promise<RecordFacts | CommandRefusal> {
-  const placed = await placeOf(context, draft, date);
+  const placed = await placeOf(context, draft, date, lineSource);
   return 'refusal' in placed ? placed.refusal : placed.facts;
 }
 
@@ -147,11 +158,12 @@ export async function reportDamage(
   dependencies: ReportDependencies,
   reporter: Actor,
   draft: DamageReportDraft,
-  idempotencyKey?: string,
+  options: ReportOptions = {},
 ): Promise<Outcome<DamageReported>> {
+  const { idempotencyKey } = options;
   const date = await today(context);
   if (typeof date !== 'string') return refusalOf(date);
-  const placed = await placeOf(context, draft, date);
+  const placed = await placeOf(context, draft, date, options.lineSource);
   if ('refusal' in placed) return refusalOf(placed.refusal);
   const { facts } = placed;
   const unavailable = await damageUnavailable(context, dependencies, facts);
@@ -172,27 +184,21 @@ export async function reportDamage(
   const reportId = uuidv7();
   const roundId = uuidv7();
   const at = { siteId: facts.siteId, businessUnitId: facts.businessUnitId, locationId: draft.locationId };
+  const hold = damageHoldItem(uuidv7(), at, placed.goods, draft.description);
   const posted = await post(
     context,
     { ledger: dependencies.ledger },
     {
-      source: {
-        module: DOCUMENTS_MODULE,
-        recordType: DAMAGE_SOURCE_TYPE,
-        recordId: reportId,
-        versionId: roundId,
-        importKind: 'none',
-      },
+      source: ledgerSource(DAMAGE_SOURCE_TYPE, reportId, roundId),
       actor: reporter,
-      items: [damageHoldItem(uuidv7(), at, placed.goods, draft.description)],
+      items: [hold],
       series: [dependencies.numbering.seriesLockTarget(series.seriesId), codes.value],
       ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
     },
   );
   if (posted.kind === 'refusal') return posted;
   const [holdId] = posted.answer.written.holdIds;
-  const [value] = posted.answer.values;
-  if (holdId === undefined || value === undefined) throw new CommandDefect('A damage report posted no hold');
+  if (holdId === undefined) throw new CommandDefect('A damage report posted no hold');
   return recordReport(
     context,
     dependencies,
@@ -201,7 +207,7 @@ export async function reportDamage(
       reportId,
       roundId,
       holdId,
-      value,
+      value: valueOfLine(posted.answer.values, hold.lineId),
       seriesId: series.seriesId,
       scope: {
         siteId: facts.siteId,

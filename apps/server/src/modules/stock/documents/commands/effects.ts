@@ -6,12 +6,7 @@ import {
   DAMAGE_REVERSAL_TYPE,
 } from '@apparel-os/schemas';
 import { eq } from 'drizzle-orm';
-import {
-  CommandDefect,
-  type CommandRefusal,
-  type LockTarget,
-  type TransactionContext,
-} from '../../../../kernel/index.js';
+import { CommandDefect, type LockTarget, type TransactionContext } from '../../../../kernel/index.js';
 import type {
   AccessInterface,
   DocumentEffect,
@@ -37,7 +32,9 @@ import {
   audited,
   decisionsOf,
   factsOf,
+  ledgerSource,
   recordItem,
+  refused,
   reportLock,
   reportRow,
   requestValueOf,
@@ -46,8 +43,9 @@ import {
   valueChange,
   type Actor,
   type ReportRow,
+  type RoundRow,
 } from './common.js';
-import { post } from './posting.js';
+import { post, valueOfLine } from './posting.js';
 
 // What a decision does to a damage report or to a reversal of its confirmation (goods-in 8.3, 10.3; access-and-approvals
 // 9.8b; stock-ledger 13.15; PRD-DMG-002, PRD-DMG-003, PRD-DMG-006, PRD-STK-017; S2-F08-T01), in the decision's
@@ -74,12 +72,6 @@ export interface EffectServices {
 export interface EffectDependencies {
   readonly audit: AuditInterface;
   readonly services: () => EffectServices;
-}
-
-const refusalOutcome = (refusal: CommandRefusal): EffectOutcome => ({ kind: 'refusal', refusal });
-
-function refusal(kind: CommandRefusal['kind'], code: string, missing: CommandRefusal['missing'] = []): EffectOutcome {
-  return refusalOutcome({ kind, code, missing });
 }
 
 /** Who decides: the person and the assignment relied on, with the decision, which every effect has (9.5). */
@@ -110,16 +102,16 @@ async function reversalRow(context: TransactionContext, reversalId: string) {
 async function openRound(
   context: TransactionContext,
   roundId: string,
-): Promise<{ readonly report: ReportRow; readonly round: typeof damageRound.$inferSelect } | EffectOutcome> {
+): Promise<{ readonly report: ReportRow; readonly round: RoundRow } | EffectOutcome> {
   const round = await roundRow(context, roundId);
   const report = round === undefined ? undefined : await reportRow(context, round.damageReportId);
   if (round === undefined || report === undefined) {
-    return refusal('not-found', 'stock.record-not-found', [recordItem(DAMAGE_REPORT_TYPE, roundId)]);
+    return refused('not-found', 'stock.record-not-found', [recordItem(DAMAGE_REPORT_TYPE, roundId)]);
   }
   const latest = (await roundsOf(context, report.id)).at(-1);
   const decided = (await decisionsOf(context, report.id)).some((each) => each.damageRoundId === roundId);
   if (latest?.id !== roundId || decided) {
-    return refusal('refused', 'stock.report-decided', [recordItem(DAMAGE_REPORT_TYPE, report.id)]);
+    return refused('refused', 'stock.report-decided', [recordItem(DAMAGE_REPORT_TYPE, report.id)]);
   }
   return { report, round };
 }
@@ -127,10 +119,67 @@ async function openRound(
 /** A line identifier for each item, a UUIDv7 (stock-ledger 13.3). */
 const lines = () => uuidv7();
 
+/**
+ * Records a round's decision (goods-in 8.3): confirmed, with the condition change and the quarantine it posted, or
+ * rejected, with neither; by the decider, under the decision, scoped as the report is. Answers its identifier.
+ */
+async function recordReportDecision(
+  context: TransactionContext,
+  report: ReportRow,
+  round: RoundRow,
+  decided: { readonly actor: Actor; readonly decisionId: string },
+  outcome:
+    | { readonly outcome: 'Confirmed'; readonly movementId: string; readonly quarantineHoldId: string }
+    | { readonly outcome: 'Rejected' },
+): Promise<string> {
+  const id = uuidv7();
+  await context.tx.insert(damageDecision).values({
+    id,
+    damageReportId: report.id,
+    damageRoundId: round.id,
+    outcome: outcome.outcome,
+    approvalDecisionId: decided.decisionId,
+    decidedByUserId: decided.actor.userId,
+    roleAssignmentId: decided.actor.roleAssignmentId,
+    decidedAt: context.startedAt,
+    movementId: outcome.outcome === 'Confirmed' ? outcome.movementId : null,
+    quarantineHoldId: outcome.outcome === 'Confirmed' ? outcome.quarantineHoldId : null,
+    ...scopeColumns(report),
+  });
+  return id;
+}
+
+/**
+ * Records a reversal's decision (goods-in 8.3): approved, with the reversal movement and the damage hold placed again,
+ * or rejected, with neither; by the decider, under the decision, scoped as the report is.
+ */
+async function recordReversalDecision(
+  context: TransactionContext,
+  report: ReportRow,
+  reversalId: string,
+  decided: { readonly actor: Actor; readonly decisionId: string },
+  outcome:
+    | { readonly outcome: 'Approved'; readonly movementId: string; readonly restoredHoldId: string }
+    | { readonly outcome: 'Rejected' },
+): Promise<void> {
+  await context.tx.insert(damageReversalDecision).values({
+    id: uuidv7(),
+    damageReversalId: reversalId,
+    outcome: outcome.outcome,
+    approvalDecisionId: decided.decisionId,
+    decidedByUserId: decided.actor.userId,
+    roleAssignmentId: decided.actor.roleAssignmentId,
+    decidedAt: context.startedAt,
+    movementId: outcome.outcome === 'Approved' ? outcome.movementId : null,
+    restoredHoldId: outcome.outcome === 'Approved' ? outcome.restoredHoldId : null,
+    ...scopeColumns(report),
+  });
+}
+
 /** A report's decision: confirm or reject its latest round (goods-in 8.3). */
 function decisionEffect(dependencies: EffectDependencies): DocumentEffect {
   return {
-    postsWithDecision: true,
+    decisionWritten: 'before-effect',
     async targets(context, roundId): Promise<LockTarget[]> {
       const round = await roundRow(context, roundId);
       return round === undefined ? [] : [reportLock(round.damageReportId)];
@@ -144,17 +193,12 @@ function decisionEffect(dependencies: EffectDependencies): DocumentEffect {
       const open = await openRound(context, roundId);
       if ('kind' in open) return open;
       const { report, round } = open;
-      const { actor, decisionId } = deciding(decider);
+      const decided = deciding(decider);
+      const { actor, decisionId } = decided;
       const services = dependencies.services();
-      const { items, valueOf } = confirmationItems(lines, placeOfReport(report), goodsOf(report), round.holdId);
+      const { items, valuedLineId } = confirmationItems(lines, placeOfReport(report), goodsOf(report), round.holdId);
       const posted = await post(context, services, {
-        source: {
-          module: DOCUMENTS_MODULE,
-          recordType: DAMAGE_SOURCE_TYPE,
-          recordId: report.id,
-          versionId: round.id,
-          importKind: 'none',
-        },
+        source: ledgerSource(DAMAGE_SOURCE_TYPE, report.id, round.id),
         actor,
         items,
         approval: {
@@ -167,7 +211,7 @@ function decisionEffect(dependencies: EffectDependencies): DocumentEffect {
             versionId: round.id,
           },
           preparers: [report.reportedByUserId],
-          valueOf,
+          valuedLineId,
         },
       });
       if (posted.kind === 'refusal') return posted;
@@ -176,19 +220,10 @@ function decisionEffect(dependencies: EffectDependencies): DocumentEffect {
       if (movementId === undefined || quarantineHoldId === undefined) {
         throw new CommandDefect('A confirmation posted no condition change or quarantine');
       }
-      const damageDecisionId = uuidv7();
-      await context.tx.insert(damageDecision).values({
-        id: damageDecisionId,
-        damageReportId: report.id,
-        damageRoundId: round.id,
+      const damageDecisionId = await recordReportDecision(context, report, round, decided, {
         outcome: 'Confirmed',
-        approvalDecisionId: decisionId,
-        decidedByUserId: actor.userId,
-        roleAssignmentId: actor.roleAssignmentId,
-        decidedAt: context.startedAt,
         movementId,
         quarantineHoldId,
-        ...scopeColumns(report),
       });
       await audited(context, dependencies.audit, actor, report, {
         record: { type: DAMAGE_REPORT_TYPE, id: report.id, versionId: round.id },
@@ -212,34 +247,16 @@ function decisionEffect(dependencies: EffectDependencies): DocumentEffect {
       const open = await openRound(context, roundId);
       if ('kind' in open) return open;
       const { report, round } = open;
-      const { actor, decisionId } = deciding(decider);
+      const decided = deciding(decider);
+      const { actor, decisionId } = decided;
       // Only this report's damage hold ends; every other hold and reservation stays (PRD-DMG-003).
       const posted = await post(context, dependencies.services(), {
-        source: {
-          module: DOCUMENTS_MODULE,
-          recordType: DAMAGE_SOURCE_TYPE,
-          recordId: report.id,
-          versionId: round.id,
-          importKind: 'none',
-        },
+        source: ledgerSource(DAMAGE_SOURCE_TYPE, report.id, round.id),
         actor,
         items: rejectionItems(lines(), round.holdId),
       });
       if (posted.kind === 'refusal') return posted;
-      const damageDecisionId = uuidv7();
-      await context.tx.insert(damageDecision).values({
-        id: damageDecisionId,
-        damageReportId: report.id,
-        damageRoundId: round.id,
-        outcome: 'Rejected',
-        approvalDecisionId: decisionId,
-        decidedByUserId: actor.userId,
-        roleAssignmentId: actor.roleAssignmentId,
-        decidedAt: context.startedAt,
-        movementId: null,
-        quarantineHoldId: null,
-        ...scopeColumns(report),
-      });
+      const damageDecisionId = await recordReportDecision(context, report, round, decided, { outcome: 'Rejected' });
       await audited(context, dependencies.audit, actor, report, {
         record: { type: DAMAGE_REPORT_TYPE, id: report.id, versionId: round.id },
         operation: 'reject-damage-report',
@@ -265,7 +282,7 @@ async function openReversal(context: TransactionContext, reversalId: string) {
   const reversal = await reversalRow(context, reversalId);
   const report = reversal === undefined ? undefined : await reportRow(context, reversal.damageReportId);
   if (reversal === undefined || report === undefined) {
-    return refusal('not-found', 'stock.record-not-found', [recordItem(DAMAGE_REVERSAL_TYPE, reversalId)]);
+    return refused('not-found', 'stock.record-not-found', [recordItem(DAMAGE_REVERSAL_TYPE, reversalId)]);
   }
   const [decided] = await context.tx
     .select({ id: damageReversalDecision.id })
@@ -281,7 +298,7 @@ async function openReversal(context: TransactionContext, reversalId: string) {
     confirmation.movementId === null ||
     confirmation.quarantineHoldId === null
   ) {
-    return refusal('refused', 'stock.report-not-confirmed', [recordItem(DAMAGE_REPORT_TYPE, report.id)]);
+    return refused('refused', 'stock.report-not-confirmed', [recordItem(DAMAGE_REPORT_TYPE, report.id)]);
   }
   return {
     report,
@@ -294,7 +311,7 @@ async function openReversal(context: TransactionContext, reversalId: string) {
 /** A reversal's approval (goods-in 8.3; PRD-STK-017). */
 function reversalEffect(dependencies: EffectDependencies): DocumentEffect {
   return {
-    postsWithDecision: true,
+    decisionWritten: 'before-effect',
     async targets(context, reversalId): Promise<LockTarget[]> {
       const reversal = await reversalRow(context, reversalId);
       return reversal === undefined ? [] : [reportLock(reversal.damageReportId)];
@@ -308,18 +325,19 @@ function reversalEffect(dependencies: EffectDependencies): DocumentEffect {
       const open = await openReversal(context, reversalId);
       if ('kind' in open) return open;
       const { report, reversal, rounds, confirmation } = open;
-      const { actor, decisionId } = deciding(decider);
+      const decided = deciding(decider);
+      const { actor, decisionId } = decided;
       const services = dependencies.services();
       const goods = goodsOf(report);
-      const { items, valueOf } = reversalItems(lines, placeOfReport(report), goods, confirmation, report.description);
+      const { items, valuedLineId, restoredHoldLineId } = reversalItems(
+        lines,
+        placeOfReport(report),
+        goods,
+        confirmation,
+        report.description,
+      );
       const posted = await post(context, services, {
-        source: {
-          module: DOCUMENTS_MODULE,
-          recordType: REVERSAL_SOURCE_TYPE,
-          recordId: reversal.id,
-          versionId: reversal.id,
-          importKind: 'none',
-        },
+        source: ledgerSource(REVERSAL_SOURCE_TYPE, reversal.id, reversal.id),
         actor,
         items,
         approval: {
@@ -332,27 +350,21 @@ function reversalEffect(dependencies: EffectDependencies): DocumentEffect {
             versionId: reversal.id,
           },
           preparers: [reversal.proposedByUserId],
-          valueOf,
+          valuedLineId,
         },
       });
       if (posted.kind === 'refusal') return posted;
       const [movementId] = posted.answer.written.movementIds;
       const [restoredHoldId] = posted.answer.written.holdIds;
-      const restoredValue = posted.answer.values[2];
-      if (movementId === undefined || restoredHoldId === undefined || restoredValue === undefined) {
+      if (movementId === undefined || restoredHoldId === undefined) {
         throw new CommandDefect('A reversal posted no movement or restored hold');
       }
-      await context.tx.insert(damageReversalDecision).values({
-        id: uuidv7(),
-        damageReversalId: reversal.id,
+      // The restored round's request is on the damage hold placed again, valued as the posting valued it.
+      const restoredValue = valueOfLine(posted.answer.values, restoredHoldLineId);
+      await recordReversalDecision(context, report, reversal.id, decided, {
         outcome: 'Approved',
-        approvalDecisionId: decisionId,
-        decidedByUserId: actor.userId,
-        roleAssignmentId: actor.roleAssignmentId,
-        decidedAt: context.startedAt,
         movementId,
         restoredHoldId,
-        ...scopeColumns(report),
       });
       // The report waits for its decision again, in a round of its own on the restored hold, decided by none who
       // reported it (goods-in 8.5; PRD-DMG-002).
@@ -398,21 +410,11 @@ function reversalEffect(dependencies: EffectDependencies): DocumentEffect {
       const reversal = await reversalRow(context, reversalId);
       const report = reversal === undefined ? undefined : await reportRow(context, reversal.damageReportId);
       if (reversal === undefined || report === undefined) {
-        return refusal('not-found', 'stock.record-not-found', [recordItem(DAMAGE_REVERSAL_TYPE, reversalId)]);
+        return refused('not-found', 'stock.record-not-found', [recordItem(DAMAGE_REVERSAL_TYPE, reversalId)]);
       }
-      const { actor, decisionId } = deciding(decider);
-      await context.tx.insert(damageReversalDecision).values({
-        id: uuidv7(),
-        damageReversalId: reversal.id,
-        outcome: 'Rejected',
-        approvalDecisionId: decisionId,
-        decidedByUserId: actor.userId,
-        roleAssignmentId: actor.roleAssignmentId,
-        decidedAt: context.startedAt,
-        movementId: null,
-        restoredHoldId: null,
-        ...scopeColumns(report),
-      });
+      const decided = deciding(decider);
+      const { actor, decisionId } = decided;
+      await recordReversalDecision(context, report, reversal.id, decided, { outcome: 'Rejected' });
       await audited(context, dependencies.audit, actor, report, {
         record: { type: DAMAGE_REVERSAL_TYPE, id: reversal.id, versionId: reversal.id },
         operation: 'reject-damage-reversal',
