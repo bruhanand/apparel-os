@@ -3334,6 +3334,7 @@ export const englishIndia = {
   'damage.round.restored': 'After a reversal',
   'damage.round.waiting': 'Waiting for a decision',
   'damage.round.decided': '{outcome}, {at}',
+  'damage.round.line': '{round}: {decision}',
   'damage.renew': 'Ask for the decision again',
   'damage.renew.help':
     'Asks again on the cost of the goods now, when the decision was refused because their cost changed since it was asked.',

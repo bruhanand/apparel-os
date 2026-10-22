@@ -2,7 +2,12 @@
 export { StockDocumentsModule } from './stock-documents.module.js';
 export { STOCK_DOCUMENTS } from './tokens.js';
 export { StockDocuments, damageExceptionType } from './documents.js';
-export type { DamageActor, StockDocumentsDependencies, StockDocumentsInterface } from './documents.js';
+export type {
+  DamageActor,
+  DamageReportOptions,
+  StockDocumentsDependencies,
+  StockDocumentsInterface,
+} from './documents.js';
 export {
   DAMAGE_CAPABILITY,
   DAMAGE_EXCEPTION_TYPE,

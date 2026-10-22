@@ -59855,6 +59855,14 @@
                                     "type": "null"
                                   }
                                 ]
+                              },
+                              "state": {
+                                "type": "string",
+                                "enum": [
+                                  "Awaiting approval",
+                                  "Approved",
+                                  "Rejected"
+                                ]
                               }
                             },
                             "required": [
@@ -59865,7 +59873,8 @@
                               "proposedAt",
                               "requestId",
                               "requestState",
-                              "outcome"
+                              "outcome",
+                              "state"
                             ],
                             "additionalProperties": false
                           }
@@ -60338,6 +60347,14 @@
                                     "type": "null"
                                   }
                                 ]
+                              },
+                              "state": {
+                                "type": "string",
+                                "enum": [
+                                  "Awaiting approval",
+                                  "Approved",
+                                  "Rejected"
+                                ]
                               }
                             },
                             "required": [
@@ -60348,7 +60365,8 @@
                               "proposedAt",
                               "requestId",
                               "requestState",
-                              "outcome"
+                              "outcome",
+                              "state"
                             ],
                             "additionalProperties": false
                           }

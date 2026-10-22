@@ -116,13 +116,16 @@ export function ReportDamage({ grnLineId, locationId }: { grnLineId: string; loc
   );
 }
 
-/** One round of the decision: when it was asked and what was decided (goods-in 8.5). */
+/** One round of the decision: which round it is and what was decided, or that it waits (goods-in 8.5). */
 function roundText(round: DamageRound, timeZone: string): string {
-  if (round.decision === null) return t('damage.round.waiting');
-  return t('damage.round.decided', {
-    outcome: t(`state.${stateIdOf(round.decision.outcome)}`),
-    at: formatDateTime(round.decision.decidedAt, timeZone),
-  });
+  const decision =
+    round.decision === null
+      ? t('damage.round.waiting')
+      : t('damage.round.decided', {
+          outcome: t(`state.${stateIdOf(round.decision.outcome)}`),
+          at: formatDateTime(round.decision.decidedAt, timeZone),
+        });
+  return t('damage.round.line', { round: t(`damage.round.${round.kind}`), decision });
 }
 
 /** The report's facts, as its screen and its approval panels show them. */
@@ -143,9 +146,7 @@ export function DamageReportFacts({ report }: { report: DamageReport }) {
       <h4 className="m-0 text-body font-semibold">{t('damage.decisions')}</h4>
       <ul aria-label={t('damage.decisions')} className="m-0 flex list-none flex-col gap-1 p-0 text-body-sm">
         {report.rounds.map((round) => (
-          <li key={round.id}>
-            <span className="font-semibold">{t(`damage.round.${round.kind}`)}</span>: {roundText(round, timeZone)}
-          </li>
+          <li key={round.id}>{roundText(round, timeZone)}</li>
         ))}
       </ul>
       {report.reversals.length > 0 && (
@@ -156,7 +157,7 @@ export function DamageReportFacts({ report }: { report: DamageReport }) {
               <li key={reversal.id}>
                 {t('damage.reversal.line', {
                   reason: reversal.reason,
-                  state: t(`state.${stateIdOf(reversal.outcome ?? reversal.requestState ?? 'Awaiting approval')}`),
+                  state: t(`state.${stateIdOf(reversal.state)}`),
                 })}
               </li>
             ))}

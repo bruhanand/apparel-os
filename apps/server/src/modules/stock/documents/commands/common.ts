@@ -10,8 +10,9 @@ import {
 } from '../../../../kernel/index.js';
 import type { RecordFacts } from '../../../access/index.js';
 import type { AuditChange, AuditInterface, AuditScope } from '../../../audit/index.js';
-import type { ItemValue } from '../../ledger/index.js';
+import type { ItemValue, LedgerSource } from '../../ledger/index.js';
 import { damageDecision, damageReport, damageReversal, damageReversalDecision, damageRound } from '../db/schema.js';
+import { DOCUMENTS_MODULE } from '../domain/kinds.js';
 
 // What every command and read of `stock` · documents shares (code-house-rules 8.1, 8.2, 12.3, 12.7).
 
@@ -61,6 +62,22 @@ export const reportNotFound = (reportId: string): CommandRefusal => ({
   kind: 'not-found',
   code: 'stock.record-not-found',
   missing: [recordItem(DAMAGE_REPORT_TYPE, reportId)],
+});
+
+/** The report changed since the version named was read (code-house-rules 12.7). */
+export const staleReport = (reportId: string): Outcome<never> =>
+  refused('conflict', 'kernel.stale-version', [recordItem(DAMAGE_REPORT_TYPE, reportId)]);
+
+/**
+ * The source a posting of a report or a reversal names in the ledger (stock-ledger 13.2): `stock` · documents, the
+ * record and the version it posts for, and no import kind (goods-in 8.5).
+ */
+export const ledgerSource = (recordType: string, recordId: string, versionId: string): LedgerSource => ({
+  module: DOCUMENTS_MODULE,
+  recordType,
+  recordId,
+  versionId,
+  importKind: 'none',
 });
 
 export type ReportRow = typeof damageReport.$inferSelect;
@@ -142,10 +159,11 @@ export async function reversalsOf(
   return rows;
 }
 
+/** The value an approval request carries on its basis (access-and-approvals 9.1). */
+export type RequestValue = { readonly kind: 'unknown' } | { readonly kind: 'known'; readonly amountPaise: Paise };
+
 /** The value a request carries on its basis: the ledger's value of the goods, never zero for Unknown (PRD-ACS-016). */
-export function requestValueOf(
-  value: ItemValue,
-): { readonly kind: 'unknown' } | { readonly kind: 'known'; readonly amountPaise: Paise } {
+export function requestValueOf(value: ItemValue): RequestValue {
   return value.kind === 'known' ? { kind: 'known', amountPaise: value.amountPaise } : { kind: 'unknown' };
 }
 

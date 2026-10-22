@@ -5,7 +5,7 @@ import { refuse, type ItemValue, type ValuedItem } from '../request.js';
 import { share, sumPaise, takeInOrder } from '../valuation.js';
 import type { BalanceState, MovementEntry, OriginState, PieceState } from '../working.js';
 import { onlyOrigin, SL, type Moved, type OriginGroup, type SaleState, type ValuationLayerEntry } from './state.js';
-import { TransferItems } from './transfer.js';
+import { DamageItems } from './damage.js';
 
 // Sales and customer returns (stock-ledger 6.3, 7.2, 7.5, 13.4; S1-F10-T03): custody leaving at handover at the
 // formula cost, a supplier-owned unit's pass-through at its agreed cost, and units coming back at the cost their sale
@@ -13,7 +13,7 @@ import { TransferItems } from './transfer.js';
 
 type ItemOf<K extends ValuedItem['kind']> = Extract<ValuedItem, { kind: K }>;
 
-export abstract class SaleItems extends TransferItems {
+export abstract class SaleItems extends DamageItems {
   /**
    * Sale issue (6.3, 7.5, 13.4; PRD-STK-003, PRD-POS-018): custody leaves at handover, of units sellable at the Store:
    * in custody there, good, covered, accepted, free of holds and reservations; value leaves the pool at the formula
