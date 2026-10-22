@@ -2665,7 +2665,6 @@ await bookingLimitApproved(
   { userId: bookingOwner.id, roleAssignmentId: bookingOwnerAssignment.assignmentId },
   100_000_000,
 );
-await receivingStructure.close();
 const bookingReasonId = await writeSyntheticReason(receivingDatabase, 'approve');
 await fixtureRunner.run(
   {
@@ -2775,6 +2774,8 @@ if (heldRouting.kind !== 'done') throw new Error(`The excess rule was refused: $
     if (decided.kind !== 'success') throw new Error(`An exception rule was not approved: ${decided.refusal.code}`);
   }
 }
+// The setup's people approved the exception rules above, so its connections end only now.
+await receivingStructure.close();
 await receivingRouter.close();
 
 // The readiness journey's world (site-readiness.spec.ts; S1-F04-T02), in its own Organisation made by the setup step:

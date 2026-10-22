@@ -546,9 +546,11 @@ describe('recording a booking (goods-in 3.1, 3.2; PRD-BKG-001 to PRD-BKG-003)', 
     );
     expect(list.bookings.map((each) => each.id)).toContain(made.bookingId);
     expect(list.bookings.find((each) => each.id === made.bookingId)?.totals).toEqual(booking.version.totals);
-    // A reader scoped to another brand reads nothing of it (access-and-approvals 5.3).
+    // A reader scoped to another brand reads nothing of it (access-and-approvals 5.3): hidden, it is not found, never
+    // refused as not authorised, which would say it exists (code-house-rules 12.3; PRD-SEC-005).
     const outside = await get(otherBrandReader, `/api/booking/bookings/${made.bookingId as string}`);
-    expect(outside.status).toBe(403);
+    expect(outside.status).toBe(404);
+    expect(outside.body).toMatchObject({ error: { code: 'booking.record-not-found' } });
     const theirs = bookingListSchema.parse(ok(await get(otherBrandReader, '/api/booking/bookings')));
     expect(theirs.bookings.map((each) => each.id)).not.toContain(made.bookingId);
   });
