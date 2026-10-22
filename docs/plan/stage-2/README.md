@@ -14,7 +14,7 @@ The whole first version in one document: [spec.md](spec.md). The design is [good
 
 ## 2. Where we are
 
-Updated 22 Oct 2026. On the integration branch `s2/goods-in-first-version` (not pushed): eleven tickets done (`S2-F01-T01` to `T04`, `S2-F02-T01` to `T04`, `S2-F04-T01`, `S2-F04-T02`, `S2-F08-T01`), each reviewed with its fixes in; every check and 46 browser journeys pass. `S2-F02-T05` (recount) is built and merged, reviewed with wave D. Being built (wave D): `S2-F06-T01`. The order of the rest is in the plan of 22 Oct 2026 (waves D to G).
+Updated 22 Oct 2026, **paused at a checkpoint** at the product owner's request. On the integration branch `s2/goods-in-first-version` (not pushed, tip after 67c653a8): eleven tickets done (`S2-F01-T01` to `T04`, `S2-F02-T01` to `T04`, `S2-F04-T01`, `S2-F04-T02`, `S2-F08-T01`), each reviewed with its fixes in. Built and merged, not yet reviewed: `S2-F02-T05` (recount) and `S2-F06-T01` (PT approval); every check and 47 browser journeys pass. To resume: code review of those two (wave D), its fixes with RR-608; then `S2-F07-T01` (scan-in, not started), waves F and G as in the plan of 22 Oct 2026.
 
 ## 3. Scope
 
