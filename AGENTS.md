@@ -88,7 +88,7 @@ pnpm workspaces with Turborepo. Node.js 22.18 or later; the pnpm version is the 
 | `apps/web` | The React web app (Vite, Tailwind CSS) |
 | `apps/counter` | The offline counter app (`offline-counter.md` 5.1), its Vite build (base `/counter/`), the build guard that fails the build if the costing entry point enters it (`build-guard.ts`), the golden-case test page (`golden/`), the enrolment and device sign-in pages with the device key kept through Dexie (`S1-F12-T01`), and the counter's browser tests in `e2e/`; no till screen or service worker yet |
 | `packages/domain` | Shared primitives: money in integer paise, Unknown, UUIDv7 |
-| `packages/calculations` | The shared calculations of `shared-calculations.md` (GC-7): selling at `@apparel-os/calculations`, costing at `@apparel-os/calculations/costing` (server only); the golden cases in `golden/`. It imports only `@apparel-os/domain` |
+| `packages/calculations` | The shared calculations of `shared-calculations.md` (GC-7): selling at `@apparel-os/calculations`, costing at `@apparel-os/calculations/costing` (server only), booking totals at `@apparel-os/calculations/booking`; the golden cases in `golden/`. It imports only `@apparel-os/domain` |
 | `packages/schemas` | Shared Zod schemas for the API, with the route table and the typed client (code-house-rules 12.2) |
 | `packages/ui` | Shared UI helpers for shadcn/ui |
 | `tools/module-check` | The module boundary check |

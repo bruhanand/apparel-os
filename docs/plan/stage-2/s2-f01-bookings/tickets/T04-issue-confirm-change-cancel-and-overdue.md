@@ -1,6 +1,6 @@
 # S2-F01-T04 — Issued, Confirmed, changes, cancellation and overdue
 
-Status: blocked
+Status: in-progress
 Blocked by: S2-F01-T03
 Feature: [Stage 2 first version](../../spec.md)
 

@@ -14,7 +14,7 @@ The whole first version in one document: [spec.md](spec.md). The design is [good
 
 ## 2. Where we are
 
-Updated 22 Oct 2026. On the integration branch `s2/goods-in-first-version` (not pushed): five tickets done (`S2-F01-T01`, `S2-F01-T02`, `S2-F02-T01`, `S2-F02-T02`, `S2-F04-T01`), each reviewed with its fixes in; every check and 40 browser journeys pass. Ready next: `S2-F01-T03` (record and approve a booking; booking approval waits for RR-561) and `S2-F08-T01` (damage reports).
+Updated 22 Oct 2026. On the integration branch `s2/goods-in-first-version` (not pushed): seven tickets done (`S2-F01-T01` to `T03`, `S2-F02-T01`, `S2-F02-T02`, `S2-F04-T01`, `S2-F08-T01`), each reviewed with its fixes in; every check and 42 browser journeys pass. Being built (wave B): `S2-F01-T04` and `S2-F02-T03`. The order of the rest is in the plan of 22 Oct 2026 (waves C to G).
 
 ## 3. Scope
 
@@ -48,12 +48,12 @@ Policies 1, 3, 5, 17 and the stage 2 parts of 10 Signed and validated, their val
 | --- | --- | --- |
 | [F01-T01 Remove the Agreement's default model](s2-f01-bookings/tickets/T01-remove-the-agreement-default-model.md) | done | — |
 | [F01-T02 Open-to-buy budgets](s2-f01-bookings/tickets/T02-open-to-buy-budgets.md) | done | — |
-| [F01-T03 Record and approve a booking](s2-f01-bookings/tickets/T03-record-and-approve-a-booking.md) | ready-for-agent | F01-T01, F01-T02 (done) |
-| [F01-T04 Issued, Confirmed, changes, cancellation and overdue](s2-f01-bookings/tickets/T04-issue-confirm-change-cancel-and-overdue.md) | blocked | F01-T03 |
+| [F01-T03 Record and approve a booking](s2-f01-bookings/tickets/T03-record-and-approve-a-booking.md) | done | F01-T01, F01-T02 (done) |
+| [F01-T04 Issued, Confirmed, changes, cancellation and overdue](s2-f01-bookings/tickets/T04-issue-confirm-change-cancel-and-overdue.md) | in-progress | F01-T03 (done) |
 | [F02-T01 Ledger: receipt count without a product, identity step](s2-f02-arrival-count-and-grn/tickets/T01-receipt-count-without-a-product.md) | done | — |
 | [F02-T02 Inbox, Arrival, count and a clean GRN](s2-f02-arrival-count-and-grn/tickets/T02-inbox-arrival-count-and-a-clean-grn.md) | done | F02-T01 (done) |
-| [F08-T01 Damage reports](s2-f08-damage-holds/tickets/T01-damage-reports.md) | ready-for-agent | F02-T02 (done) |
-| [F02-T03 Findings and held-line decisions](s2-f02-arrival-count-and-grn/tickets/T03-findings-and-held-lines.md) | blocked | F02-T02, F08-T01 |
+| [F08-T01 Damage reports](s2-f08-damage-holds/tickets/T01-damage-reports.md) | done | F02-T02 (done) |
+| [F02-T03 Findings and held-line decisions](s2-f02-arrival-count-and-grn/tickets/T03-findings-and-held-lines.md) | in-progress | F02-T02, F08-T01 (done) |
 | [F02-T04 Receive against a booking](s2-f02-arrival-count-and-grn/tickets/T04-receive-against-a-booking.md) | blocked | F02-T02, F01-T04 |
 | [F02-T05 Recount](s2-f02-arrival-count-and-grn/tickets/T05-recount.md) | blocked | F02-T03 |
 | [F04-T01 A brand barcode on several products](s2-f04-pt-upload/tickets/T01-repeated-brand-barcodes.md) | done | — |

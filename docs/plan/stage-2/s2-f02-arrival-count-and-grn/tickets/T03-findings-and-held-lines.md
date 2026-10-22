@@ -1,6 +1,6 @@
 # S2-F02-T03 — Findings at the count and the held-line decisions
 
-Status: blocked
+Status: in-progress
 Blocked by: S2-F02-T02, S2-F08-T01
 Feature: [Stage 2 first version](../../spec.md)
 
