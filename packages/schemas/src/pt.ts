@@ -61,7 +61,14 @@ export const ptMarkSchema = z.discriminatedUnion('kind', [
  * Official when its approval is posted, Queued while a large PT waits for its posting job, and Failed when that job was
  * refused, its decision kept unused (stock-ledger 10.6; access-and-approvals 9.8; S2-F06-T01).
  */
-export const ptRevisionStateSchema = z.enum(['Awaiting approval', 'Withdrawn', 'Rejected', 'Queued', 'Failed', 'Official']);
+export const ptRevisionStateSchema = z.enum([
+  'Awaiting approval',
+  'Withdrawn',
+  'Rejected',
+  'Queued',
+  'Failed',
+  'Official',
+]);
 export type PtRevisionState = z.infer<typeof ptRevisionStateSchema>;
 
 /** One PT file submitted for the GRN, as its GRN's screen lists it (goods-in 5.7). */

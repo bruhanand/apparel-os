@@ -33,7 +33,8 @@ import { scopeColumnsOf } from './scope-columns.js';
 //   business effect, so it asks no gate (DEC-116); the uploader uploads a corrected file (goods-in 6.3).
 
 /** How a PT's approval posts (goods-in 6.6): with its decision, or above a number of rows through the queued job. */
-export type PtPostingQueue = { readonly kind: 'with-decision' } | { readonly kind: 'queued-above'; readonly rows: number };
+export type PtPostingQueue =
+  { readonly kind: 'with-decision' } | { readonly kind: 'queued-above'; readonly rows: number };
 
 /** What the decision's effect acts through, bound late, since `access` is built with it (access-and-approvals 9.8b). */
 export interface PtDecisionServices extends PostingServices {
@@ -46,11 +47,19 @@ export interface PtDecisionDependencies {
 }
 
 /** Who decides: the person and the assignment relied on, with the decision, which every effect has (9.5). */
-function deciding(decider: EffectDecider): { readonly userId: string; readonly roleAssignmentId: string; readonly decisionId: string } {
+function deciding(decider: EffectDecider): {
+  readonly userId: string;
+  readonly roleAssignmentId: string;
+  readonly decisionId: string;
+} {
   if (decider.roleAssignmentId === undefined || decider.approvalDecisionId === undefined) {
     throw new CommandDefect('A PT revision was decided without its decision or the assignment relied on');
   }
-  return { userId: decider.actor.id, roleAssignmentId: decider.roleAssignmentId, decisionId: decider.approvalDecisionId };
+  return {
+    userId: decider.actor.id,
+    roleAssignmentId: decider.roleAssignmentId,
+    decisionId: decider.approvalDecisionId,
+  };
 }
 
 /**
@@ -144,7 +153,13 @@ export function ptDecisionEffect(dependencies: PtDecisionDependencies): Document
 }
 
 /** A revision's scope facts as an audit record carries them: no Store is none (numbering-and-audit 4.1). */
-function scopeColumnsOfAudit(revision: { siteId: string; storeId: string | null; businessUnitId: string; legalEntityId: string; brandId: string }) {
+function scopeColumnsOfAudit(revision: {
+  siteId: string;
+  storeId: string | null;
+  businessUnitId: string;
+  legalEntityId: string;
+  brandId: string;
+}) {
   return {
     siteId: revision.siteId,
     businessUnitId: revision.businessUnitId,
@@ -168,7 +183,11 @@ async function requestPosting(
 ): Promise<EffectOutcome> {
   const standing = await revisionStanding(context, revisionId);
   const notDraft = draftRefusal(standing, revisionId);
-  if (notDraft !== undefined || standing === undefined) return { kind: 'refusal', refusal: notDraft ?? { kind: 'not-found', code: 'merchandise.record-not-found', missing: [] } };
+  if (notDraft !== undefined || standing === undefined)
+    return {
+      kind: 'refusal',
+      refusal: notDraft ?? { kind: 'not-found', code: 'merchandise.record-not-found', missing: [] },
+    };
   const { revision } = standing;
   const date = await context.businessDate();
   if (date.kind === 'not-set') return { kind: 'refusal', refusal: BUSINESS_DATE_NOT_SET };

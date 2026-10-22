@@ -29,7 +29,11 @@ export async function ptDownloadOf(
   if (standing === undefined) return revisionNotFound(revisionId);
   const { revision, approval } = standing;
   if (approval === undefined) {
-    return { kind: 'refused', code: 'merchandise.pt-not-official', missing: [recordItem(PT_REVISION_TYPE, revisionId)] };
+    return {
+      kind: 'refused',
+      code: 'merchandise.pt-not-official',
+      missing: [recordItem(PT_REVISION_TYPE, revisionId)],
+    };
   }
   const { brands } = await brandsAndCategoriesOn(context, revision.businessDate);
   const brandCode = [...brands].find(([, id]) => id === revision.brandId)?.[0] ?? null;

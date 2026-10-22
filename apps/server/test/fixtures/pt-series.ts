@@ -40,14 +40,16 @@ async function defineOnce(
     return 'unchanged';
   }
   const format = await numbering.defineFormatVersion(context, series.formatCode, series.format);
-  if (format.kind !== 'done') throw new Error(`The SYNTHETIC ${series.kind} format was refused: ${format.refusal.code}`);
+  if (format.kind !== 'done')
+    throw new Error(`The SYNTHETIC ${series.kind} format was refused: ${format.refusal.code}`);
   const defined = await numbering.defineSeries(context, {
     kind: series.kind,
     scopeKey: series.scopeKey,
     displayScopeKey: series.scopeKey,
     formatCode: series.formatCode,
   });
-  if (defined.kind !== 'done') throw new Error(`The SYNTHETIC ${series.kind} series was refused: ${defined.refusal.code}`);
+  if (defined.kind !== 'done')
+    throw new Error(`The SYNTHETIC ${series.kind} series was refused: ${defined.refusal.code}`);
   return 'defined';
 }
 

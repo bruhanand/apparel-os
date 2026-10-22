@@ -144,7 +144,10 @@ async function attributesOf(context: TransactionContext, valueIds: readonly stri
 export async function checkPtProducts(
   context: TransactionContext,
   request: { readonly products: readonly PtProductRequest[]; readonly siteId: string; readonly date: string },
-): Promise<{ readonly kind: 'checked'; readonly checked: CheckedPtProducts } | { readonly kind: 'refused'; readonly refusal: CommandRefusal }> {
+): Promise<
+  | { readonly kind: 'checked'; readonly checked: CheckedPtProducts }
+  | { readonly kind: 'refused'; readonly refusal: CommandRefusal }
+> {
   const { date } = request;
   const attributeOf = await attributesOf(
     context,
@@ -252,7 +255,8 @@ export async function checkPtProducts(
     if (values !== undefined) {
       return { kind: 'refused', refusal: { ...values, missing: [rowItem(product.rowNumber), ...values.missing] } };
     }
-    if (!tracking.has(categoryId)) tracking.set(categoryId, await trackingOn(context, categoryId, request.siteId, date));
+    if (!tracking.has(categoryId))
+      tracking.set(categoryId, await trackingOn(context, categoryId, request.siteId, date));
     const profile = tracking.get(categoryId);
     if (profile === undefined) {
       return { kind: 'refused', refusal: refusal('merchandise.pt-tracking-unknown', named) };
@@ -260,7 +264,8 @@ export async function checkPtProducts(
     const identity = identityOf(category.identityAttributeIds, [colour]);
     const key = identityKey(identity);
     const seenKey = JSON.stringify([styleId, product.size, key]);
-    if (seen.has(seenKey)) return { kind: 'refused', refusal: refusal('merchandise.sku-exists', [rowItem(product.rowNumber)]) };
+    if (seen.has(seenKey))
+      return { kind: 'refused', refusal: refusal('merchandise.sku-exists', [rowItem(product.rowNumber)]) };
     seen.add(seenKey);
     if (newStyle === undefined) {
       const [same] = await context.tx
@@ -400,7 +405,8 @@ export async function confirmPtProducts(
   };
   // One proposal per style: a new style with its SKUs, or an existing style with the new SKUs it is given.
   const groups = new Map<string, CheckedPtProduct[]>();
-  for (const product of checked.products) groups.set(product.styleId, [...(groups.get(product.styleId) ?? []), product]);
+  for (const product of checked.products)
+    groups.set(product.styleId, [...(groups.get(product.styleId) ?? []), product]);
   const proposals = [...groups].map(([styleId, products]) => ({
     id: uuidv7(),
     styleId,

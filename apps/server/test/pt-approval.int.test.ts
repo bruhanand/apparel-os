@@ -173,9 +173,11 @@ describe('approving a PT (goods-in 6.3; 12 test 11)', () => {
     expect((await w.revision(revisionId)).state).toBe('Awaiting approval');
   });
 
-  it('PRD-ACS-015 POL-02.09 judges the approver\'s limit on P RATE times QTY, never on MRP', async () => {
+  it("PRD-ACS-015 POL-02.09 judges the approver's limit on P RATE times QTY, never on MRP", async () => {
     // SYNTHETIC: 2 pieces at P RATE 945.00 = 1,890.00, above the low limit of 10.00 (support/pt-approval.ts).
-    const { revisionId, requestId } = await ownedPt('PTA-LIMIT', [{ sizeAt: 0, counted: 2 }], () => [{ QTY: 2, NAG: 2 }]);
+    const { revisionId, requestId } = await ownedPt('PTA-LIMIT', [{ sizeAt: 0, counted: 2 }], () => [
+      { QTY: 2, NAG: 2 },
+    ]);
     const request = await w.get(w.people.ptApprover, `/api/access/approval-requests/${requestId}`);
     expect(request.status, JSON.stringify(request.body)).toBe(200);
     expect(JSON.stringify(request.body.value)).toContain('189000');
@@ -206,9 +208,7 @@ describe('approving a PT (goods-in 6.3; 12 test 11)', () => {
     // The second receiving world's book has no cost setting, period or map (support/pt-approval.ts).
     const style = syntheticCode('PTA-UNMAPPED');
     const { grnId } = await w.issuedGrn([{ style, sizeAt: 0, counted: 1 }], { world: w.unmapped });
-    const { revisionId, requestId } = await w.submittedPt(grnId, [
-      w.ptRow(style, 0, {}, w.unmapped.brand.code),
-    ]);
+    const { revisionId, requestId } = await w.submittedPt(grnId, [w.ptRow(style, 0, {}, w.unmapped.brand.code)]);
     const refused = await w.decide(w.people.ptApprover, requestId, revisionId);
     expect(refused.status, JSON.stringify(refused.body)).toBe(403);
     expect(errorOf(refused)).toMatchObject({ code: 'configuration.operation-unavailable' });
@@ -218,11 +218,14 @@ describe('approving a PT (goods-in 6.3; 12 test 11)', () => {
       eventKind: 'stock.cost-established',
     });
     const read = await w.grnPt(grnId);
-    expect(read.pt?.revisions[0]).toMatchObject({ state: 'Awaiting approval', request: { state: 'Awaiting approval' } });
+    expect(read.pt?.revisions[0]).toMatchObject({
+      state: 'Awaiting approval',
+      request: { state: 'Awaiting approval' },
+    });
     expect(read.mark).toMatchObject({ kind: 'set', ptRevisionId: revisionId });
   });
 
-  it('RR-585 refuses a new product whose size is not in its category\'s size set, naming the row', async () => {
+  it("RR-585 refuses a new product whose size is not in its category's size set, naming the row", async () => {
     // A third size on the size list, not in the casual category's size set (structure-and-masters 4.1).
     const { setup } = w;
     const sizeCode = syntheticCode('PTA-XL');
@@ -235,7 +238,9 @@ describe('approving a PT (goods-in 6.3; 12 test 11)', () => {
     );
     if (proposed.kind !== 'success') throw new Error(proposed.refusal.code);
     decided(await setup.decide(proposed.answer.requestId, proposed.answer.proposalId));
-    const confirmed = await setup.run(setup.preparer.id, (c) => setup.catalogue.proposal(c, proposed.answer.proposalId));
+    const confirmed = await setup.run(setup.preparer.id, (c) =>
+      setup.catalogue.proposal(c, proposed.answer.proposalId),
+    );
     const style = syntheticCode('PTA-XL-STYLE');
     const arrival = await w.post(w.people.receiver, '/api/receiving/arrivals', {
       businessUnitId: w.fixture.wholeStore,
@@ -299,10 +304,9 @@ describe('approving a PT (goods-in 6.3; 12 test 11)', () => {
 describe('the goods Booking took in and the damage the count found (goods-in 4.6, 6.3 step 5, 8.4)', () => {
   it('PRD-REC-013 POL-17.02 ends the excess hold by the PT route and covers the extra pieces with the rest', async () => {
     const style = syntheticCode('PTA-EXCESS');
-    const { arrivalId, grnId } = await w.issuedGrn(
-      [{ style, sizeAt: 0, counted: 3, invoice: 2, extra: 'received' }],
-      { brand: 'owned' },
-    );
+    const { arrivalId, grnId } = await w.issuedGrn([{ style, sizeAt: 0, counted: 3, invoice: 2, extra: 'received' }], {
+      brand: 'owned',
+    });
     const held = (await w.arrival(arrivalId)).grn?.lines[0]?.heldLine;
     if (held?.requestId == null) throw new Error('no held line');
     const taken = await w.decide(w.people.bookingApprover, held.requestId, held.versionToken);
@@ -323,7 +327,10 @@ describe('the goods Booking took in and the damage the count found (goods-in 4.6
     const report = (await w.arrival(arrivalId)).grn?.lines[0]?.damage?.damageReportId ?? '';
     const reportRead = await w.get(w.people.operations, `/api/stock/damage-reports/${report}`);
     expect(reportRead.status, JSON.stringify(reportRead.body)).toBe(200);
-    const { versionToken, rounds } = reportRead.body.report as { versionToken: string; rounds: { requestId: string }[] };
+    const { versionToken, rounds } = reportRead.body.report as {
+      versionToken: string;
+      rounds: { requestId: string }[];
+    };
     const confirmed = await w.decide(w.people.operations, rounds[0]?.requestId ?? '', versionToken);
     expect(confirmed.status, JSON.stringify(confirmed.body)).toBe(200);
     const { revisionId, requestId } = await w.submittedPt(grnId, [w.ptRow(style, 0, { QTY: 2, NAG: 2 }, w.owned.code)]);
@@ -343,9 +350,11 @@ describe('the goods Booking took in and the damage the count found (goods-in 4.6
   });
 
   it('DEC-137 refuses the approval while damage reported on the GRN after the upload waits, and once it changed the good pieces', async () => {
-    const { grnId, arrivalId, revisionId, requestId } = await ownedPt('PTA-LATE-DAMAGE', [{ sizeAt: 0, counted: 2 }], () => [
-      { QTY: 2, NAG: 2 },
-    ]);
+    const { grnId, arrivalId, revisionId, requestId } = await ownedPt(
+      'PTA-LATE-DAMAGE',
+      [{ sizeAt: 0, counted: 2 }],
+      () => [{ QTY: 2, NAG: 2 }],
+    );
     const lineId = (await w.arrival(arrivalId)).grn?.lines[0]?.id ?? '';
     const reported = await w.post(w.people.receiver, '/api/stock/damage-reports', {
       locationId: w.fixture.storeLocation,
@@ -368,7 +377,7 @@ describe('the goods Booking took in and the damage the count found (goods-in 4.6
 });
 
 describe('rejecting a PT (goods-in 6.3 "Reject")', () => {
-  it('PRD-REC-017 ends the draft and clears the GRN\'s mark, so a corrected file is uploaded and approved', async () => {
+  it("PRD-REC-017 ends the draft and clears the GRN's mark, so a corrected file is uploaded and approved", async () => {
     const { style, grnId, revisionId, requestId } = await ownedPt('PTA-REJECT', [{ sizeAt: 0, counted: 1 }], () => [
       { 'P RATE': 950, MARGIN: 52.4762 },
     ]);
@@ -376,7 +385,10 @@ describe('rejecting a PT (goods-in 6.3 "Reject")', () => {
     expect(rejected.status, JSON.stringify(rejected.body)).toBe(200);
     const read = await w.grnPt(grnId);
     expect(read.pt?.revisions[0]).toMatchObject({ state: 'Rejected', request: { state: 'Rejected' } });
-    expect(read.mark).toMatchObject({ kind: 'not-set', lastChange: { reason: 'pt-rejected', ptRevisionId: revisionId } });
+    expect(read.mark).toMatchObject({
+      kind: 'not-set',
+      lastChange: { reason: 'pt-rejected', ptRevisionId: revisionId },
+    });
     expect(read.upload).toEqual({ kind: 'ready' });
     const again = await w.submittedPt(grnId, [w.ptRow(style, 0, {}, w.owned.code)]);
     const approved = await w.decide(w.people.ptApprover, again.requestId, again.revisionId);
@@ -405,9 +417,11 @@ describe('approvals at once (12 test 12)', () => {
   });
 
   it('PRD-ACP-002 a recount racing a PT approval: the approval succeeds and the recount is refused, the PT standing', async () => {
-    const { grnId, arrivalId, revisionId, requestId } = await ownedPt('PTA-RECOUNT-RACE', [{ sizeAt: 0, counted: 2 }], () => [
-      { QTY: 2, NAG: 2 },
-    ]);
+    const { grnId, arrivalId, revisionId, requestId } = await ownedPt(
+      'PTA-RECOUNT-RACE',
+      [{ sizeAt: 0, counted: 2 }],
+      () => [{ QTY: 2, NAG: 2 }],
+    );
     const lineId = (await w.arrival(arrivalId)).grn?.lines[0]?.id ?? '';
     const [approved, recount] = await Promise.all([
       w.decide(w.people.ptApprover, requestId, revisionId),
@@ -427,11 +441,14 @@ describe('the PT review and its download (goods-in 6.2, 6.5)', () => {
   let reviewed: { revisionId: string; style: string };
 
   beforeAll(async () => {
-    const { style, revisionId, requestId } = await ownedPt('PTA-REVIEW', [{ sizeAt: 0, counted: 2 }, { sizeAt: 1, counted: 1 }], () => [
-      {},
-      {},
-      { 'P RATE': 900, MARGIN: 54.9775 },
-    ]);
+    const { style, revisionId, requestId } = await ownedPt(
+      'PTA-REVIEW',
+      [
+        { sizeAt: 0, counted: 2 },
+        { sizeAt: 1, counted: 1 },
+      ],
+      () => [{}, {}, { 'P RATE': 900, MARGIN: 54.9775 }],
+    );
     reviewed = { revisionId, style };
     // Awaiting approval: the review shows it as the approver sees it.
     const review = await w.revision(revisionId, w.people.ptApprover, '?limit=2');
@@ -477,7 +494,7 @@ describe('the PT review and its download (goods-in 6.2, 6.5)', () => {
     expect(errorOf(refused)).toMatchObject({ code: 'access.not-authorised' });
   });
 
-  it('PRD-PTW-008 PRD-PTW-009 downloads an Official PT as XLSX in the template\'s columns', async () => {
+  it("PRD-PTW-008 PRD-PTW-009 downloads an Official PT as XLSX in the template's columns", async () => {
     const download = await w.get(w.people.ptApprover, `/api/merchandise/pt/revisions/${reviewed.revisionId}/download`);
     expect(download.status, JSON.stringify(download.body)).toBe(200);
     const { fileName, contentBase64 } = download.body as { fileName: string; contentBase64: string };

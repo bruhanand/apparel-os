@@ -147,26 +147,34 @@ export async function ptGateRefusal(
  * The GRN's good pieces still those the PT covers, per style and size (goods-in 5.4, 6.3): each coverage of the revision
  * the same quantity as the GRN's good pieces of its style and size, and the GRN no other. Undefined when they are.
  */
-function changedRefusal(basis: PtBasis, coverage: readonly { styleCode: string; sizeCode: string | null; quantity: number }[]) {
+function changedRefusal(
+  basis: PtBasis,
+  coverage: readonly { styleCode: string; sizeCode: string | null; quantity: number }[],
+) {
   const goods = new Map(basis.goods.map((each) => [keyOf(each.styleCode, each.size), each]));
   for (const each of coverage) {
     const now = goods.get(keyOf(each.styleCode, each.sizeCode));
     if (now?.quantity !== each.quantity) {
-      return { kind: 'refused' as const, code: 'merchandise.pt-grn-changed', missing: [styleSize(each.styleCode, each.sizeCode)] };
+      return {
+        kind: 'refused' as const,
+        code: 'merchandise.pt-grn-changed',
+        missing: [styleSize(each.styleCode, each.sizeCode)],
+      };
     }
     goods.delete(keyOf(each.styleCode, each.sizeCode));
   }
   const [extra] = goods.values();
   return extra === undefined
     ? undefined
-    : { kind: 'refused' as const, code: 'merchandise.pt-grn-changed', missing: [styleSize(extra.styleCode, extra.size)] };
+    : {
+        kind: 'refused' as const,
+        code: 'merchandise.pt-grn-changed',
+        missing: [styleSize(extra.styleCode, extra.size)],
+      };
 }
 
 /** The new products of the revision as the catalogue checks them: each from the first row proposing it (6.6). */
-function productRequests(
-  content: Awaited<ReturnType<typeof revisionContent>>,
-  brandId: string,
-): PtProductRequest[] {
+function productRequests(content: Awaited<ReturnType<typeof revisionContent>>, brandId: string): PtProductRequest[] {
   return content.proposals.map((proposal) => {
     const rows = content.rows.filter((row) => row.ptProposedSkuId === proposal.id);
     const [first] = rows;
@@ -218,7 +226,8 @@ export async function postApproval(
   const { revisionId, poster } = request;
   const standing = await revisionStanding(context, revisionId);
   const notDraft = draftRefusal(standing, revisionId);
-  if (notDraft !== undefined || standing === undefined) return { kind: 'refusal', refusal: notDraft ?? revisionNotFound(revisionId) };
+  if (notDraft !== undefined || standing === undefined)
+    return { kind: 'refusal', refusal: notDraft ?? revisionNotFound(revisionId) };
   const { revision } = standing;
   const date = await context.businessDate();
   if (date.kind === 'not-set') return { kind: 'refusal', refusal: BUSINESS_DATE_NOT_SET };
@@ -446,7 +455,9 @@ export async function postApproval(
     documentId: revisionId,
   });
   if (number.kind === 'refused') {
-    return refused('unavailable', 'merchandise.pt-series-paused', [{ kind: 'number-series', numberedKind: PT_KIND.kind }]);
+    return refused('unavailable', 'merchandise.pt-series-paused', [
+      { kind: 'number-series', numberedKind: PT_KIND.kind },
+    ]);
   }
   const scope = scopeColumnsOf(revision);
   await context.tx.insert(ptApproval).values({

@@ -22,7 +22,11 @@ export const PT_POSTING_IDENTITY = 'merchandise-pt-posting';
 
 /** The PT's posting of a request, as the consumer reaches it: `merchandise` · PT's interface. */
 export interface PtPosting {
-  postRequested(context: TransactionContext, publisher: PtPostingPublisher, postRequestId: string): Promise<PtPostingAnswer>;
+  postRequested(
+    context: TransactionContext,
+    publisher: PtPostingPublisher,
+    postRequestId: string,
+  ): Promise<PtPostingAnswer>;
 }
 
 /** The posting consumer, with the PT it posts through, bound late; its step runs as its service identity. */

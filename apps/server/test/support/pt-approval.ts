@@ -1,32 +1,41 @@
 import { randomInt } from 'node:crypto';
 import { paise, uuidv7 } from '@apparel-os/domain';
 import {
-  ACCOUNT_TYPE,
   arrivalReadSchema,
-  BOOK_SETTING_TYPE,
   DAMAGE_DECISION,
   grnPtReadSchema,
   HELD_LINE_DECISION,
-  POSTING_MAP_TYPE,
   PT_APPROVAL,
   ptPreviewSchema,
   ptRevisionReadSchema,
   type Arrival,
   type AssignmentScope,
   type FieldClass,
-  type FinanceChanged,
   type GrnPtRead,
-  type PolicyNumber,
+  permissionRegistry,
   type PtRevisionRead,
 } from '@apparel-os/schemas';
 import { expect } from 'vitest';
-import { OrganisationRouter, type RoutedOrganisation } from '../../src/kernel/index.js';
-import { ACCESS, type AccessInterface } from '../../src/modules/access/index.js';
-import { Audit } from '../../src/modules/audit/index.js';
-import { Configuration, type ValidityCheck } from '../../src/modules/configuration/index.js';
-import { JOURNAL_KIND, postingConfigurationCheck } from '../../src/modules/finance/books/index.js';
-import { policyEvidence } from '../../src/modules/files-imports/index.js';
-import { PT_APPROVAL_CAPABILITY, PT_OPERATIONS, type PtPostingQueue } from '../../src/modules/merchandise/pt/index.js';
+import {
+  CommandRunner,
+  IdempotencyHelper,
+  OrganisationRouter,
+  OUTBOX_AUTHORITY,
+  OUTBOX_PROCESSOR_IDENTITY,
+  restrictedValueCipherNotConfigured,
+  secretCheckNotImplemented,
+  Worker,
+  type RoutedOrganisation,
+} from '../../src/kernel/index.js';
+import { ACCESS, jobIdentities, type AccessInterface } from '../../src/modules/access/index.js';
+import {
+  PT,
+  PT_POSTING_IDENTITY,
+  ptPostingConsumer,
+  ptPostRequested,
+  type PtInterface,
+  type PtPostingQueue,
+} from '../../src/modules/merchandise/pt/index.js';
 import { NUMBERING, type NumberingInterface } from '../../src/modules/numbering/index.js';
 import { STOCK_POSTING_EVENT_KINDS } from '../../src/modules/stock/ledger/index.js';
 import { defineSyntheticDamageReportSeries } from '../fixtures/damage-report-series.js';
@@ -40,41 +49,34 @@ import {
   syntheticKeysEnvironment,
   SyntheticClock,
   SYNTHETIC_ORIGIN,
+  syntheticTimezone,
   writeSyntheticReason,
   writeSyntheticSetting,
   writeSyntheticUser,
   type AccessTestApp,
   type SyntheticUser,
 } from './access.js';
-import { syntheticPolicyValues } from './booking.js';
-import { TEST_COMPOSITION } from './composition.js';
-import {
-  asUserIn,
-  damageGateOpen,
-  DECIDER_AUTHORITY,
-  RECEIVER_REPORTER_AUTHORITY,
-  SYNTHETIC_POLICY_17_VALUES,
-} from './damage.js';
+import { asUserIn, damageGateOpen, DECIDER_AUTHORITY, RECEIVER_REPORTER_AUTHORITY } from './damage.js';
 import { defineSyntheticCodeSeries } from './exceptions.js';
 import { grantSynthetic, type SyntheticAuthority } from './grants.js';
 import { defineSyntheticImportBatchSeries } from './imports.js';
-import { capturingLogger } from './jobs.js';
+import { capturingLogger, writeSyntheticServiceIdentity } from './jobs.js';
+import { syntheticWorkerSettings } from '../fixtures/worker-settings.js';
 import { startTestFileStore, type TestFileStore } from './minio.js';
 import { STORE_FILE_PATH, syntheticPdfUpload } from './opening-app.js';
 import { decided, structureSetup, type StructureSetup } from './organisation.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './organisations.js';
 import { databaseUrl } from './postgres.js';
 import { ptWorld, type PtWorld } from './pt.js';
+import { ptGateOpen, PT_TEST_CHECKS, syntheticPtBook, type SyntheticAccount } from './pt-gate.js';
 import {
   agreementTerms,
-  RECEIVING_POLICY_CHECKS,
   receivingFixture,
   receivingGateOpen,
   receivingGranted,
   STOCK_VIEW,
   type ReceivingFixture,
 } from './receiving.js';
-import { writeSyntheticStoredFile } from './tax-rules.js';
 
 // The SYNTHETIC world of a PT's approval (goods-in 6; S2-F06-T01), on the world of a PT upload (support/pt.ts), made
 // through the real commands where a person would make them (code-house-rules 11.2): the receiving world, the template's
@@ -87,6 +89,8 @@ import { writeSyntheticStoredFile } from './tax-rules.js';
 // and 3 on the one value of a TEST-ONLY check each, labelled synthetic (goods-in 10.5; RR-561, RR-565); the series,
 // SYNTHETIC; and the people. Every person, place, list, product, account, amount and number is SYNTHETIC.
 
+export { ptGateOpen, PT_TEST_CHECKS } from './pt-gate.js';
+
 export interface Person {
   readonly user: SyntheticUser;
   readonly assignmentId: string;
@@ -96,13 +100,6 @@ export interface Call {
   readonly status: number;
   readonly body: Record<string, unknown>;
 }
-
-/** The TEST-ONLY checks the application under test registers beside its own (goods-in 10.5). */
-export const PT_TEST_CHECKS: readonly ValidityCheck[] = [
-  SYNTHETIC_POLICY_17_VALUES,
-  syntheticPolicyValues(1),
-  syntheticPolicyValues(3),
-];
 
 /** What a Booking approver holds: reading the Arrival, deciding its held lines and the approval panel. */
 const BOOKING_APPROVER_AUTHORITY: readonly SyntheticAuthority[] = [
@@ -141,9 +138,6 @@ export const PT_APPROVER_AUTHORITY: readonly SyntheticAuthority[] = [
   { recordType: 'access.approval_reason', action: 'view' },
   ...STOCK_VIEW,
 ];
-
-/** The SYNTHETIC accounts of the book: stock value, and the receipt account set by Accounts and the CA (DEC-140). */
-type SyntheticAccount = 'INV' | 'TRN' | 'RCPT';
 
 export interface PtApprovalWorld {
   readonly world: SyntheticWorld;
@@ -353,112 +347,7 @@ export async function ptApprovalWorld(
   decided(await setup.decide(agreement.requestId, agreement.versionId));
 
   // The book: a SYNTHETIC cost setting, chart, map, period and journal series (books-and-posting 2.2, 3.1, 4.1, 6.1).
-  const inForce = async (
-    change: FinanceChanged,
-    recordType: typeof ACCOUNT_TYPE | typeof BOOK_SETTING_TYPE | typeof POSTING_MAP_TYPE,
-  ) => {
-    ok(
-      await setup.asPreparerDo((c, p) =>
-        setup.books.recordCaEvidence(c, p, {
-          versions: [{ recordType, versionId: change.versionId }],
-          evidence: {
-            kind: 'reference',
-            what: syntheticName('CA approval letter'),
-            givenBy: syntheticName('CA'),
-            givenOn: setup.today(),
-            keptAt: syntheticName('Accounts file'),
-          },
-        }),
-      ),
-    );
-    decided(await setup.decide(change.requestId ?? '', change.versionId));
-  };
-  const bookId = fixture.bookId;
-  const cost = ok(
-    await setup.asPreparerDo((c, p) =>
-      setup.books.prepareBookSetting(c, p, bookId, {
-        kind: 'cost',
-        formula: 'moving-average',
-        poolMode: 'book',
-        origin: 'synthetic',
-        validFrom: setup.today(),
-      }),
-    ),
-  );
-  await inForce(cost, BOOK_SETTING_TYPE);
-  const accounts = { INV: '', TRN: '', RCPT: '' } as Record<SyntheticAccount, string>;
-  for (const [account, nature] of [
-    ['INV', 'asset'],
-    ['TRN', 'asset'],
-    ['RCPT', 'liability'],
-  ] as const) {
-    const change = ok(
-      await setup.asPreparerDo((c, p) =>
-        setup.books.prepareAccount(c, p, {
-          bookId,
-          code: syntheticCode(`${label}-${account}`),
-          nature,
-          origin: 'synthetic',
-          name: syntheticName(`Account ${account}`),
-          validFrom: setup.today(),
-        }),
-      ),
-    );
-    await inForce(change, ACCOUNT_TYPE);
-    accounts[account] = change.recordId;
-  }
-  const map = ok(
-    await setup.asPreparerDo((c, p) =>
-      setup.books.preparePostingMap(c, p, {
-        bookId,
-        eventKind: 'stock.cost-established',
-        origin: 'synthetic',
-        validFrom: setup.today(),
-        lines: [
-          { component: 'to-pool', side: 'debit', accountId: accounts.INV, requiresStore: false, requiresBrand: false },
-          { component: 'to-pool', side: 'credit', accountId: accounts.RCPT, requiresStore: false, requiresBrand: false },
-          // Goods in transit between pools take their value onto the dispatch (stock-ledger 7.6).
-          { component: 'to-dispatch', side: 'debit', accountId: accounts.TRN, requiresStore: false, requiresBrand: false },
-          {
-            component: 'to-dispatch',
-            side: 'credit',
-            accountId: accounts.RCPT,
-            requiresStore: false,
-            requiresBrand: false,
-          },
-        ],
-      }),
-    ),
-  );
-  await inForce(map, POSTING_MAP_TYPE);
-  const financialYear = syntheticCode(`${label}-FY`);
-  const period = ok(
-    await setup.asPreparerDo((c, p) =>
-      setup.books.definePeriod(c, p, bookId, {
-        code: syntheticCode(`${label}-P1`),
-        financialYear,
-        firstDay: setup.day(-5),
-        lastDay: setup.day(60),
-      }),
-    ),
-  );
-  const journalFormat = syntheticCode(`${label}-JV`);
-  await setup.run(setup.preparer.id, (c) =>
-    setup.numbering.defineFormatVersion(c, journalFormat, [
-      { kind: 'text', text: 'SYN-JV-' },
-      { kind: 'sequence', width: 5 },
-    ]),
-  );
-  const journals = await setup.run(setup.preparer.id, (c) =>
-    setup.numbering.defineSeries(c, {
-      kind: JOURNAL_KIND.kind,
-      scopeKey: bookId,
-      financialYear,
-      displayScopeKey: bookId,
-      formatCode: journalFormat,
-    }),
-  );
-  if (journals.kind !== 'done') throw new Error(`Journal series refused: ${journals.refusal.code}`);
+  const { accounts, periodId } = await syntheticPtBook(setup, label, fixture.bookId);
 
   // Both clocks a day on, so the size set is in force for every command of the test.
   setup.advanceDays(1);
@@ -542,13 +431,14 @@ export async function ptApprovalWorld(
   ]);
   const bookingApprover = await enrolled(`${label}-BOOKING-APPROVER`, BOOKING_APPROVER_AUTHORITY);
   // Operations (P-OPS), who confirms or rejects damage reported by someone else (goods-in 8.3).
-  const operations = await enrolled(`${label}-OPS`, [...DECIDER_AUTHORITY, { recordType: 'receiving.arrival', action: 'view' }]);
+  const operations = await enrolled(`${label}-OPS`, [
+    ...DECIDER_AUTHORITY,
+    { recordType: 'receiving.arrival', action: 'view' },
+  ]);
   // Whoever makes PTs holds approve on them too, so only their having uploaded it keeps them from deciding it.
-  const ptMaker = await enrolled(
-    `${label}-MAKER`,
-    [...PT_MAKER_AUTHORITY, ...PT_APPROVER_AUTHORITY],
-    { fieldClasses: ['cost', 'margin'] },
-  );
+  const ptMaker = await enrolled(`${label}-MAKER`, [...PT_MAKER_AUTHORITY, ...PT_APPROVER_AUTHORITY], {
+    fieldClasses: ['cost', 'margin'],
+  });
   const ptApprover = await enrolled(`${label}-APPROVER`, PT_APPROVER_AUTHORITY, { fieldClasses: ['cost', 'margin'] });
   const secondApprover = await enrolled(`${label}-SECOND`, PT_APPROVER_AUTHORITY, { fieldClasses: ['cost', 'margin'] });
   const lowLimitApprover = await enrolled(`${label}-LOW`, PT_APPROVER_AUTHORITY);
@@ -680,7 +570,11 @@ export async function ptApprovalWorld(
     expect(made.status, JSON.stringify(made.body)).toBe(200);
     const arrivalId = (made.body as { arrivalId: string }).arrivalId;
     fileCount += 1;
-    const stored = await post(receiver, STORE_FILE_PATH, syntheticPdfUpload('PT-APPROVAL', `FILE-${String(fileCount)}`));
+    const stored = await post(
+      receiver,
+      STORE_FILE_PATH,
+      syntheticPdfUpload('PT-APPROVAL', `FILE-${String(fileCount)}`),
+    );
     expect(stored.status, JSON.stringify(stored.body)).toBe(200);
     const { storedFileId, receiptId } = stored.body as { storedFileId: string; receiptId: string };
     const invoice = await post(receiver, `/api/receiving/arrivals/${arrivalId}/invoices`, {
@@ -775,7 +669,7 @@ export async function ptApprovalWorld(
     lists,
     owned: { brandId: ownedId, code: ownedCode, supplierId: fixture.supplier.id },
     accounts,
-    periodId: period.periodId,
+    periodId,
     people: {
       receiver,
       bookingApprover,
@@ -812,63 +706,58 @@ export async function ptApprovalWorld(
   };
 }
 
-/** The three policies PT approval needs besides 10, which receiving's gate already opened (goods-in 10.5). */
-const PT_POLICIES: readonly PolicyNumber[] = [1, 3, 9];
+/** A running worker serving the world's Organisation with the PT's posting consumer. */
+export interface PtPostingWorker {
+  stop(): Promise<void>;
+}
 
 /**
- * The PT approval gate open Organisation-wide (goods-in 10.5; module-map 4.4; DM-6), through configuration's commands as
- * labelled synthetic status (code-house-rules 12.14): the setup's preparer records policies 1, 3 and 9 Signed; the
- * approver, who entered none of their values, validates them, each with a SYNTHETIC stored file as evidence; the
- * preparer switches the PT approval capability on. The values validated are the book's posting configuration (policy
- * 9) and the TEST-ONLY checks' (policies 1 and 3).
+ * Starts a worker with the posting consumer of a large PT's approval (goods-in 6.6; stock-ledger 10.6;
+ * code-house-rules 12.9), bound to the application's PT, as no production worker composes it yet (RR-602): its
+ * deliveries go to the posting queue, one at a time per book, under a SYNTHETIC internal service identity holding what
+ * the posting needs (the PT, the GRN it covers and the stock it writes, which row-level security scopes), on behalf of
+ * the approver; with the outbox processor's own identity. At the SYNTHETIC test speed.
  */
-export async function ptGateOpen(setup: StructureSetup, database: string): Promise<void> {
-  const audit = new Audit(capturingLogger().logger);
-  const configuration = new Configuration({ audit, environment: { name: 'local' }, evidence: policyEvidence(audit) });
-  for (const check of [postingConfigurationCheck, ...RECEIVING_POLICY_CHECKS]) configuration.registerCheck(check);
-  for (const check of PT_TEST_CHECKS) configuration.registerCheck(check, TEST_COMPOSITION);
-  for (const operation of PT_OPERATIONS) configuration.registerOperation(operation);
-  const signer = setup.preparer;
-  const validator = setup.approver;
-  const signing = await grantSynthetic(database, { kind: 'user', id: signer.id }, [
-    { recordType: 'configuration.policy_status', action: 'create' },
-    { recordType: 'configuration.capability', action: 'edit' },
+export async function startPtPostingWorker(world: PtApprovalWorld): Promise<PtPostingWorker> {
+  await writeSyntheticServiceIdentity(world.database, OUTBOX_PROCESSOR_IDENTITY, [OUTBOX_AUTHORITY]);
+  await writeSyntheticServiceIdentity(world.database, PT_POSTING_IDENTITY, [
+    { recordType: 'merchandise.pt', action: 'view' },
+    { recordType: 'merchandise.pt', action: 'edit' },
+    { recordType: 'receiving.arrival', action: 'view' },
+    { recordType: 'receiving.grn', action: 'view' },
+    ...STOCK_VIEW,
   ]);
-  const validating = await grantSynthetic(database, { kind: 'user', id: validator.id }, [
-    { recordType: 'configuration.policy_validation', action: 'create' },
-  ]);
-  for (const policy of PT_POLICIES) {
-    const signatureEvidence = await writeSyntheticStoredFile(database, signer.id);
-    ok(
-      await setup.run(signer.id, (context) =>
-        configuration.recordSignature(context, { userId: signer.id, roleAssignmentId: signing.assignmentId }, policy, {
-          signatory: syntheticName(`policy ${String(policy)} signatory`),
-          signedOn: setup.today(),
-          origin: 'synthetic',
-          evidence: [signatureEvidence],
-        }),
-      ),
-    );
-    const validationEvidence = await writeSyntheticStoredFile(database, validator.id);
-    ok(
-      await setup.run(validator.id, (context) =>
-        configuration.recordValidation(
-          context,
-          { userId: validator.id, roleAssignmentId: validating.assignmentId },
-          policy,
-          { origin: 'synthetic', evidence: [validationEvidence] },
-        ),
-      ),
-    );
-  }
-  ok(
-    await setup.run(signer.id, (context) =>
-      configuration.switchCapability(
-        context,
-        { userId: signer.id, roleAssignmentId: signing.assignmentId },
-        PT_APPROVAL_CAPABILITY,
-        true,
-      ),
-    ),
+  const consumer = ptPostingConsumer(() => world.api.app.get<PtInterface>(PT));
+  const registry = { events: [ptPostRequested], consumers: [consumer], jobKinds: [] };
+  const log = capturingLogger().logger;
+  const router = new OrganisationRouter(
+    { directoryConnectionString: databaseUrl(world.world.directory, 'runtime'), poolMax: 8 },
+    log,
   );
+  const runner = new CommandRunner({
+    clock: { now: () => world.clock.now() },
+    timezones: syntheticTimezone,
+    logger: log,
+  });
+  const worker = new Worker({
+    router,
+    runner,
+    helper: new IdempotencyHelper({
+      runner,
+      logger: log,
+      secretCheck: secretCheckNotImplemented,
+      cipher: restrictedValueCipherNotConfigured,
+    }),
+    identities: jobIdentities(permissionRegistry),
+    logger: log,
+    registry,
+    settings: syntheticWorkerSettings(registry, { fast: true }),
+  });
+  await worker.start();
+  return {
+    stop: async () => {
+      await worker.stop();
+      await router.close();
+    },
+  };
 }

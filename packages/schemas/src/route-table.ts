@@ -1223,7 +1223,6 @@ const HELD_LINE_DECISION_CODES = [
   'receiving.product-not-named',
 ] as const satisfies readonly ErrorCode[];
 
-
 /**
  * The stock ledger's refusals a recount's receipt counts and reversals can meet (stock-ledger 13.4, 13.8, 13.18;
  * goods-in 4.11; S2-F02-T05): read for its proposal's value and posted at its approval. A reversal takes free units
@@ -5533,7 +5532,12 @@ export const routes = {
     access: { kind: 'action', action: 'view', recordType: PT_TYPE, authorisedIn: 'command' },
     command: false,
     response: ptDownloadSchema,
-    codes: [...HISTORY_CODES, 'merchandise.record-not-found', 'merchandise.pt-not-official', 'files-imports.layout-not-found'],
+    codes: [
+      ...HISTORY_CODES,
+      'merchandise.record-not-found',
+      'merchandise.pt-not-official',
+      'files-imports.layout-not-found',
+    ],
   }),
   downloadPtTemplate: defineRoute({
     method: 'GET',

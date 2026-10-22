@@ -1999,6 +1999,10 @@
               "exceptions.no-routing",
               "finance.book-stock-unanswered",
               "kernel.recovery-hold",
+              "merchandise.no-pt-series",
+              "merchandise.no-sku-code-series",
+              "merchandise.pt-series-paused",
+              "merchandise.sku-code-series-paused",
               "organisation.location-in-use-unanswered",
               "stock.no-cost-setting",
               "stock.rule-not-set"
@@ -2098,12 +2102,18 @@
               "finance.version-overlaps",
               "merchandise.attribute-not-list",
               "merchandise.brand-counter-one-brand",
+              "merchandise.code-conflict",
               "merchandise.code-taken",
               "merchandise.not-an-identity-attribute",
               "merchandise.office-unit-has-no-brand",
               "merchandise.party-not-supplier",
               "merchandise.proposal-not-open",
-              "merchandise.pt-decision-not-available",
+              "merchandise.pt-colour-not-identity",
+              "merchandise.pt-grn-changed",
+              "merchandise.pt-held-lines-open",
+              "merchandise.pt-not-a-draft",
+              "merchandise.pt-size-not-in-size-set",
+              "merchandise.pt-tracking-unknown",
               "merchandise.reference-not-in-force",
               "merchandise.size-not-in-size-set",
               "merchandise.sku-exists",
@@ -2143,18 +2153,22 @@
               "site-lifecycle.check-failed",
               "site-lifecycle.site-already-ready",
               "stock.blocked",
+              "stock.condition-route",
               "stock.count-freeze-active",
+              "stock.coverage-overlap",
               "stock.exceeds-source",
               "stock.held",
               "stock.insufficient-available",
               "stock.invalid-item",
+              "stock.not-covered",
               "stock.not-in-custody",
               "stock.place-invalid",
               "stock.plan-stale",
               "stock.posting-refused",
               "stock.report-decided",
               "stock.report-not-confirmed",
-              "stock.reserved"
+              "stock.reserved",
+              "stock.wrong-release-event"
             ]
           },
           "500": {
@@ -3983,6 +3997,152 @@
                 "additionalProperties": false
               }
             }
+          }
+        }
+      }
+    },
+    "/api/merchandise/pt/revisions/{revisionId}/download": {
+      "get": {
+        "operationId": "downloadPt",
+        "x-access": {
+          "kind": "action",
+          "action": "view",
+          "recordType": "merchandise.pt",
+          "authorisedIn": "command"
+        },
+        "parameters": [
+          {
+            "name": "revisionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "fileName": {
+                      "type": "string"
+                    },
+                    "contentBase64": {
+                      "type": "string",
+                      "format": "base64",
+                      "contentEncoding": "base64",
+                      "pattern": "^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$"
+                    }
+                  },
+                  "required": [
+                    "fileName",
+                    "contentBase64"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.business-date-not-set",
+              "access.not-authorised"
+            ]
+          },
+          "404": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "files-imports.layout-not-found",
+              "merchandise.record-not-found"
+            ]
+          },
+          "422": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "merchandise.pt-not-official"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
           }
         }
       }
@@ -64989,8 +65149,10 @@
                                     "enum": [
                                       "Awaiting approval",
                                       "Withdrawn",
-                                      "Approved",
-                                      "Rejected"
+                                      "Rejected",
+                                      "Queued",
+                                      "Failed",
+                                      "Official"
                                     ]
                                   },
                                   "batchId": {
@@ -65189,6 +65351,9 @@
                                       "at"
                                     ],
                                     "additionalProperties": false
+                                  },
+                                  "number": {
+                                    "type": "string"
                                   }
                                 },
                                 "required": [
@@ -73906,6 +74071,747 @@
             },
             "x-error-codes": [
               "merchandise.proposal-not-found"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
+          }
+        }
+      }
+    },
+    "/api/merchandise/pt/revisions/{revisionId}": {
+      "get": {
+        "operationId": "readPtRevision",
+        "x-access": {
+          "kind": "action",
+          "action": "view",
+          "recordType": "merchandise.pt",
+          "authorisedIn": "command"
+        },
+        "parameters": [
+          {
+            "name": "revisionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9]\\d*$"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9]\\d*$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "asOf": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "ptId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    },
+                    "revisionId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    },
+                    "revisionNumber": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "Awaiting approval",
+                        "Withdrawn",
+                        "Rejected",
+                        "Queued",
+                        "Failed",
+                        "Official"
+                      ]
+                    },
+                    "number": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "grn": {
+                      "type": "object",
+                      "properties": {
+                        "grnId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                        },
+                        "number": {
+                          "type": "string"
+                        },
+                        "arrivalId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                        }
+                      },
+                      "required": [
+                        "grnId",
+                        "number",
+                        "arrivalId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "uploadedBy": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    },
+                    "submittedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "request": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                        },
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "Awaiting approval",
+                            "Approved",
+                            "Rejected",
+                            "Superseded",
+                            "Withdrawn"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "state"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "failure": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "missing": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "required": [
+                              "kind"
+                            ],
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "at": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "missing",
+                        "at"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "totals": {
+                      "type": "object",
+                      "properties": {
+                        "rows": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "pieces": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "mrpPaise": {
+                          "type": "number"
+                        },
+                        "basicPaise": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "amount"
+                                },
+                                "paise": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "paise"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "masked"
+                                },
+                                "fieldClass": {
+                                  "type": "string",
+                                  "enum": [
+                                    "salary-and-payroll",
+                                    "identity-documents",
+                                    "bank-details",
+                                    "customer-contact",
+                                    "cost",
+                                    "margin",
+                                    "employee-photos",
+                                    "location-evidence"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "fieldClass"
+                              ],
+                              "additionalProperties": false
+                            }
+                          ]
+                        },
+                        "costPaise": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "amount"
+                                },
+                                "paise": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "paise"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "masked"
+                                },
+                                "fieldClass": {
+                                  "type": "string",
+                                  "enum": [
+                                    "salary-and-payroll",
+                                    "identity-documents",
+                                    "bank-details",
+                                    "customer-contact",
+                                    "cost",
+                                    "margin",
+                                    "employee-photos",
+                                    "location-evidence"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "fieldClass"
+                              ],
+                              "additionalProperties": false
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "rows",
+                        "pieces",
+                        "mrpPaise",
+                        "basicPaise",
+                        "costPaise"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "newProducts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "styleCode": {
+                            "type": "string"
+                          },
+                          "colour": {
+                            "type": "string"
+                          },
+                          "size": {
+                            "type": "string"
+                          },
+                          "newStyle": {
+                            "type": "boolean"
+                          },
+                          "rowNumbers": {
+                            "type": "array",
+                            "items": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "skuCode": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "styleCode",
+                          "colour",
+                          "size",
+                          "newStyle",
+                          "rowNumbers"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "repeatedBarcodes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "barcode": {
+                            "type": "string"
+                          },
+                          "rowNumbers": {
+                            "type": "array",
+                            "items": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          }
+                        },
+                        "required": [
+                          "barcode",
+                          "rowNumbers"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "differences": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "rowNumber": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "file": {
+                            "type": "string"
+                          },
+                          "product": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "rowNumber",
+                          "field",
+                          "file",
+                          "product"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "rowNumber": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "styleCode": {
+                            "type": "string"
+                          },
+                          "size": {
+                            "type": "string"
+                          },
+                          "colour": {
+                            "type": "string"
+                          },
+                          "barcode": {
+                            "type": "string"
+                          },
+                          "quantity": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "mrpPaise": {
+                            "type": "number"
+                          },
+                          "basicPaise": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "amount"
+                                  },
+                                  "paise": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "paise"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "masked"
+                                  },
+                                  "fieldClass": {
+                                    "type": "string",
+                                    "enum": [
+                                      "salary-and-payroll",
+                                      "identity-documents",
+                                      "bank-details",
+                                      "customer-contact",
+                                      "cost",
+                                      "margin",
+                                      "employee-photos",
+                                      "location-evidence"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "fieldClass"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          },
+                          "pRatePaise": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "amount"
+                                  },
+                                  "paise": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "paise"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "masked"
+                                  },
+                                  "fieldClass": {
+                                    "type": "string",
+                                    "enum": [
+                                      "salary-and-payroll",
+                                      "identity-documents",
+                                      "bank-details",
+                                      "customer-contact",
+                                      "cost",
+                                      "margin",
+                                      "employee-photos",
+                                      "location-evidence"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "fieldClass"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          },
+                          "margin": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "margin"
+                                  },
+                                  "value": {
+                                    "type": "string",
+                                    "pattern": "^-?\\d+\\.\\d{2}$"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "value"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "masked"
+                                  },
+                                  "fieldClass": {
+                                    "type": "string",
+                                    "enum": [
+                                      "salary-and-payroll",
+                                      "identity-documents",
+                                      "bank-details",
+                                      "customer-contact",
+                                      "cost",
+                                      "margin",
+                                      "employee-photos",
+                                      "location-evidence"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "fieldClass"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          },
+                          "product": {
+                            "type": "string",
+                            "enum": [
+                              "existing",
+                              "proposed"
+                            ]
+                          },
+                          "repeated": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "rowNumber",
+                          "styleCode",
+                          "size",
+                          "colour",
+                          "barcode",
+                          "quantity",
+                          "mrpPaise",
+                          "basicPaise",
+                          "pRatePaise",
+                          "margin",
+                          "product",
+                          "repeated"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "next": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "people": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "userId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "userId",
+                          "name"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "asOf",
+                    "ptId",
+                    "revisionId",
+                    "revisionNumber",
+                    "state",
+                    "number",
+                    "grn",
+                    "uploadedBy",
+                    "submittedAt",
+                    "totals",
+                    "newProducts",
+                    "repeatedBarcodes",
+                    "differences",
+                    "rows",
+                    "next",
+                    "people"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.business-date-not-set",
+              "access.not-authorised"
+            ]
+          },
+          "404": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "merchandise.record-not-found"
             ]
           },
           "500": {

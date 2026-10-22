@@ -248,7 +248,7 @@ Names follow the PRD and the KDPS policies. The state names for Site, Store and 
 | 8 | Submitted | Pending | ◔ | PT, adjustment, offer, damage report |
 | 9 | Awaiting approval | Pending | ◔ | Any record that needs independent approval, a period reopening among them |
 | 10 | Awaiting outcome | Pending | ◔ | Card or UPI payment, refund, IRN, e-way bill, Tally voucher, bank payment |
-| 11 | Queued | Pending | ◔ | Offline counter upload queue, export, Tally batch |
+| 11 | Queued | Pending | ◔ | Offline counter upload queue, export, Tally batch, an approved PT waiting for its posting job (goods-in 6.6) |
 | 12 | Recorded manually | Pending | ◔ | Card or UPI payment recorded by the cashier without provider evidence (`PRD-POS-010`) |
 | 13 | Partly received | Pending | ◔ | Booking, transfer |
 | 14 | In transit | Moving | ▸ | Transfer while any dispatch has not yet arrived (`PRD-TRF-013`), supplier-return shipment, cash in transit |
@@ -276,7 +276,7 @@ Names follow the PRD and the KDPS policies. The state names for Site, Store and 
 | 36 | Reopened | Attention | ! | Exception, financial period |
 | 37 | Reversed | Stopped | ✕ | PT, adjustment, posted entry |
 | 38 | Rejected | Stopped | ✕ | PT, damage report, transfer, adjustment, offer, master version, proposal, period reopening |
-| 39 | Failed | Stopped | ✕ | Sync, export, delivery, refund, payment, import batch |
+| 39 | Failed | Stopped | ✕ | Sync, export, delivery, refund, payment, import batch, an approved PT whose posting job was refused (goods-in 6.6) |
 | 40 | Refused | Stopped | ✕ | Offline bill refused on upload |
 | 41 | Conflict | Stopped | ✕ | Offline bill that conflicts on upload |
 | 42 | Connection lost | Stopped | ✕ | Online till |

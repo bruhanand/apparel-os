@@ -1216,6 +1216,8 @@ export function ArrivalView({
           label="setup.refresh"
           onClick={() => {
             void query.refetch();
+            // And the GRN's PT, whose approval another person decides (goods-in 6.3, 6.5; S2-F06-T01).
+            void queryClient.invalidateQueries({ queryKey: ['readGrnPt'] });
           }}
         />
       </Toolbar>

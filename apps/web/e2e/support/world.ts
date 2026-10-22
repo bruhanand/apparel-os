@@ -300,6 +300,21 @@ export interface SyntheticWorld {
     readonly refusedFile: string;
     readonly goodFile: string;
   };
+  /**
+   * The PT approval journey (S2-F06-T01), in the receiving Organisation, in the PT file journey's world, on its lists
+   * and template, with a style of its own: Warehouse (P-WHS), also assigned to make PTs, who counts, issues the GRN and
+   * uploads its PT file; Operations (P-OPS), assigned to approve PTs within a SYNTHETIC limit; the approve reason; the
+   * GRN's style code; and one SYNTHETIC PT file of two pieces of that style and the world's first size, a new product.
+   */
+  readonly ptApproval: {
+    readonly organisationCode: string;
+    readonly maker: EnrolledUser;
+    readonly approver: EnrolledUser;
+    readonly reasonId: string;
+    readonly options: ReceivingOptions;
+    readonly styleCode: string;
+    readonly file: string;
+  };
   readonly openToBuy: {
     readonly organisationCode: string;
     readonly booking: EnrolledUser;

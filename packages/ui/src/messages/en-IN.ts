@@ -3667,6 +3667,12 @@ export const englishIndia = {
   'approval.action.merchandise.pt.approve': 'PT approval',
   'history.operation.submit-pt': 'Submitted a PT file for approval',
   'history.operation.withdraw-pt': 'Withdrew a draft PT',
+  'history.operation.approve-pt': 'Approved a PT: numbered and posted',
+  'history.operation.reject-pt': 'Rejected a draft PT',
+  'history.operation.request-pt-posting': 'Approved a PT: queued for posting',
+  'history.operation.pt-posting-failed': 'Posting of an approved PT failed',
+  'history.operation.confirm-pt-product': 'Confirmed the new products of an approved PT',
+  'history.operation.map-pt-barcodes': 'Mapped the barcodes of an approved PT',
   'history.operation.set-pt-attached': 'Marked the GRN as having its PT attached',
   'history.operation.clear-pt-attached': 'Cleared the GRN’s PT attached mark',
   'pt.title': 'PT file',
@@ -3820,4 +3826,34 @@ export const englishIndia = {
   'missing.pt-issue.named': '{problem}',
   'missing.pt-issue.row': 'Row {row}: {problem}',
   'missing.pt-issue.cell': 'Row {row}, {column}: {problem}',
+  // The PT review, its approval and its download (goods-in 6.2, 6.3, 6.5, 6.6; S2-F06-T01).
+  'pt.row.basic': 'BASIC',
+  'pt.review.title': 'What approving it makes',
+  'pt.review.what': 'the PT revision',
+  'pt.review.grn': 'GRN',
+  'pt.review.uploaded': 'Uploaded',
+  'pt.review.sku-code': 'SKU code {code}',
+  'pt.revision.pt-number': 'PT number',
+  'pt.posting.failed':
+    'The approval could not be posted. Nothing of the PT is posted and it has no number: the decision stays unused.',
+  'pt.download': 'Download the PT',
+  'pt.download.pending': 'Wait while the PT file is made.',
+  'pt.download.failed': 'The PT could not be downloaded.',
+  'error.merchandise.pt-grn-changed':
+    'The GRN changed after the PT file was uploaded. Nothing is approved: reject this revision and upload the file again.',
+  'error.merchandise.no-pt-series': 'No open number series for PTs is set up yet.',
+  'error.merchandise.pt-series-paused': 'The number series for PTs is paused.',
+  'error.merchandise.no-sku-code-series': 'No open number series for SKU codes is set up yet.',
+  'error.merchandise.sku-code-series-paused': 'The number series for SKU codes is paused.',
+  'error.merchandise.pt-size-not-in-size-set':
+    'A new product’s size is not in its category’s size set. Nothing is approved: reject this revision and correct the file.',
+  'error.merchandise.pt-colour-not-identity':
+    'The colour is not part of this category’s product identity. Nothing is approved: reject this revision.',
+  'error.merchandise.pt-tracking-unknown':
+    'The category of a new product has no tracking in force. Nothing is approved until the category has one.',
+  'error.merchandise.pt-not-official': 'Only an Official PT can be downloaded.',
+  'missing.number-series.merchandise.pt': 'An open number series for PTs.',
+  'missing.number-series.merchandise.sku-code': 'An open number series for SKU codes.',
+  'missing.pt-row.named': 'Row {row}.',
+  'missing.size.named': 'Size {size}.',
 } as const satisfies Record<string, string | Readonly<Partial<Record<Intl.LDMLPluralRule, string>>>>;
