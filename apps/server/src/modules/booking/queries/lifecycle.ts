@@ -127,7 +127,7 @@ export async function extensionsOf(context: TransactionContext, versionId: strin
       ),
     );
   return rows.map(({ amendment }) => {
-    // An extension always names the window's end, by its table's constraint (migration 0096): none is a defect.
+    // An extension always names the window's end, by its table's constraint (migration 0098): none is a defect.
     if (amendment.windowTo === null) throw new CommandDefect(`An extension names no window end: ${amendment.id}`);
     const dated = new Map<string, string>();
     for (const line of lines) {
