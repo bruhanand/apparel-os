@@ -34,8 +34,8 @@ export const bookingApprovalRule: ApprovalRule = {
  * POL-05.07, POL-05.10; S2-F01-T04): each decided under approve on the booking by a different authorised person from
  * its proposer, which can never be switched off (POL-02.07). Neither has a value basis: no source names one
  * (domain-model section 5 names none for either), a cancellation releases open-to-buy and an extension moves dates
- * only, so neither needs an approval limit (access-and-approvals 9.3). **Design choice**, for the product owner to
- * confirm. The reasons are configured, with no default (POL-02.23).
+ * only, so neither needs an approval limit (access-and-approvals 9.3). Decided by the product owner, 22 Oct 2026, as
+ * built (RR-574). The reasons are configured, with no default (POL-02.23).
  */
 export const amendmentApprovalRules: readonly ApprovalRule[] = [BOOKING_CANCELLATION, BOOKING_EXTENSION].map(
   (actionType): ApprovalRule => ({

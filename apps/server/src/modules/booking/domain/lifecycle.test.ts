@@ -76,7 +76,7 @@ describe('the quantities of a line (goods-in 3.6)', () => {
 describe('the overdue balance (goods-in 3.8)', () => {
   it('POL-05.06 PRD-BKG-009 a balance is overdue once the window has passed; a line’s own date is shown, not deciding it', () => {
     const lines = [line(KEY_S, 'S', { deliveryDate: '2026-10-05' }), line(KEY_M, 'M', { deliveryDate: '2026-11-05' })];
-    // The line's own date passed, the window not: nothing is overdue yet (RR-576).
+    // The line's own date passed, the window not: nothing is overdue yet (POL-05.06; RR-576).
     expect(
       statusOf(inputs({ lines }), '2026-10-06').lines.map((each) => [each.deliveryDate, each.dueDate, each.overdue]),
     ).toEqual([

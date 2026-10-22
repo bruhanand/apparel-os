@@ -51,7 +51,7 @@ const later = (a: string, b: string): string => (a > b ? a : b);
  * over-delivered (delivered beyond ordered); its own delivery date, where it has one, as the latest approved extension
  * naming it left it, shown only; its due date, the window's end as the approved extensions left it; and overdue once
  * the window has passed with something outstanding: "When the delivery window expires, mark the remaining balance
- * overdue" (POL-05.06). Whether a line's own date should also make it overdue is the product owner's (RR-576).
+ * overdue" (POL-05.06), as the product owner decided on 22 Oct 2026 (RR-576).
  */
 export function statusOf(inputs: StatusInputs, today: string): BookingStatus {
   let windowTo = inputs.version.windowTo;

@@ -12,7 +12,7 @@ import { bookingOverdue } from '../db/schema.js';
  * that is not marked for its due date yet (goods-in 3.6, 3.8, 3.10): outstanding, its ordered pieces less those
  * delivered by its receipt links and those cancelled by approved cancellations, above zero, and its due date, the
  * window's end as the approved extensions of that version left it, before the date (POL-05.06). A line's own delivery
- * date decides nothing (RR-576). Only a selection: each booking is read again under its lock through the booking
+ * date decides nothing (RR-576, decided by the product owner on 22 Oct 2026). Only a selection: each booking is read again under its lock through the booking
  * status, which decides.
  */
 export async function overdueCandidates(context: TransactionContext, today: string, limit: number): Promise<string[]> {

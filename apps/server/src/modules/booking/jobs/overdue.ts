@@ -146,8 +146,7 @@ async function markOverdue(
 /**
  * The exception an overdue balance raises (access-and-approvals 12.1; goods-in 3.8; PRD-EXC-001): of the category
  * shortage, the goods ordered not delivered within the window, linking to the booking, routed to Booking as its routing
- * at the Site says (POL-02.16). **Design choice** of the category among PRD-EXC-001's, for the product owner to confirm
- * (RR-576). It closes once each balance it marked is no longer overdue: delivered or cancelled, or the window extended
+ * at the Site says (POL-02.16). The category is the product owner's, decided on 22 Oct 2026 (RR-576). It closes once each balance it marked is no longer overdue: delivered or cancelled, or the window extended
  * to today or later (PRD-EXC-002). Its evidence carries no restricted class.
  */
 export const overdueExceptionType: ExceptionTypeRegistration = {
