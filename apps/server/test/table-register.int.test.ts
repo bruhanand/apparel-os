@@ -62,6 +62,9 @@ const RUNTIME_FUNCTIONS: Record<MigrationSetName, readonly string[]> = {
     'audit.delete_after_retention',
     'audit.ensure_partitions',
     'audit.seal_block',
+    // goods-in 4.11: which GRN lines deliver their pieces to a booking, linked or proposed, whatever the reader sees,
+    // SECURITY DEFINER (DEC-117; S2-F02-T05).
+    'booking.grn_lines_delivering',
     // imports-and-opening-data 11: the record an attachment belongs to, SECURITY DEFINER, and whether the transaction
     // names a record its owning module admitted the actor to (migration 0039; RR-452).
     'files_imports.attached_record',
@@ -782,6 +785,14 @@ describe('the references inside receiving (code-house-rules 3.2; S2-F02-T02)', (
       'held_line_decision (held_line_id) held_line',
       'held_line_decision (held_line_version_id) held_line_version',
       'held_line_version (held_line_id) held_line',
+      // A recount, its lines, its decision and its stock effects (goods-in 4.7, 4.11; S2-F02-T05).
+      'recount (grn_id) grn',
+      'recount_decision (recount_id) recount',
+      'recount_line (grn_line_id) grn_line',
+      'recount_line (recount_id) recount',
+      'recount_movement (grn_line_id) grn_line',
+      'recount_movement (recount_id) recount',
+      'recount_movement (recount_line_id) recount_line',
     ]);
   });
 });

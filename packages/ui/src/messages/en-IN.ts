@@ -3474,6 +3474,52 @@ export const englishIndia = {
   'held.named': 'Product named',
   'held.counted-by': 'Counted by',
 
+  // A recount of a GRN's lines (goods-in 4.7, 4.11, section 11; PRD-REC-019; S2-F02-T05).
+  'record-type.receiving.recount': 'Recount of a GRN',
+  'approval.action.receiving.recount.approval': 'Recount of a GRN',
+  'history.operation.propose-recount': 'Proposed a recount of a GRN',
+  'history.operation.approve-recount': 'Approved a recount of a GRN',
+  'history.operation.reject-recount': 'Rejected a recount of a GRN',
+  'error.receiving.recount-pending':
+    'A recount of this GRN waits for its decision already. Have it approved or rejected before proposing another.',
+  'error.receiving.recount-decided': 'This recount is decided already. A decision is made once.',
+  'error.receiving.recount-unchanged':
+    'A line is recounted at the pieces it counts now. Change its pieces or leave it out.',
+  'error.receiving.recount-held-line':
+    'This line’s extra pieces are held for Booking’s decision, and only the PT route or that decision ends their hold, so a recount does not change it.',
+  'error.receiving.recount-not-on-invoice':
+    'This line counts goods not on the invoice, which a recount does not change.',
+  'error.receiving.recount-adds-extra':
+    'This line’s count recorded no pieces beyond the invoice, so a recount does not count beyond it.',
+  'error.receiving.recount-below-damage': 'A recount counts at least the pieces the count found damaged.',
+  'error.receiving.recount-linked':
+    'This line delivers its pieces to a booking, linked or proposed, so a recount does not change it.',
+  'receive.recounted': 'Recounted',
+  'receive.recounts': 'Recounts',
+  'receive.recount.of': 'Recount proposed {at}',
+  'receive.recount.by': 'Proposed by {name}, {at}',
+  'receive.recount.why': 'Why: {reason}',
+  'receive.recount.line': 'Line {line}: counted {before}, recounted {after}',
+  'receive.recount.decided': 'Decided by {name}, {at}',
+  'receive.recount.propose': 'Propose a recount',
+  'receive.recount.intro':
+    'A miscount is corrected by a recount of the lines concerned, which a different person approves in My work. The GRN keeps its original count. Leave a line blank to keep its count.',
+  'receive.recount.lines': 'Lines to recount',
+  'receive.recount.pieces': 'Recounted pieces',
+  'receive.recount.pieces.of': 'Recounted pieces of line {line}',
+  'receive.recount.reason': 'Why the lines are recounted',
+  'receive.recount.none': 'Enter the recounted pieces of at least one line.',
+  'receive.recount.send': 'Propose the recount',
+  'receive.recount.proposed': 'Recount proposed. A different person approves it in My work.',
+  'receive.recount.waiting': 'A recount of this GRN waits for its decision in My work.',
+  'recount.grn': 'GRN',
+  'recount.reason': 'Why recounted',
+  'recount.proposed-by': 'Proposed by',
+  'recount.lines': 'Lines recounted',
+  'recount.line': 'Line',
+  'recount.before': 'Counted',
+  'recount.after': 'Recounted',
+
   // Damage reports (goods-in 8, section 11; PRD-DMG-001 to PRD-DMG-006, PRD-STK-017; S2-F08-T01).
   'record-type.stock.damage_report': 'Damage report',
   'record-type.stock.damage_reversal': 'Reversal of a damage confirmation',
@@ -3730,13 +3776,14 @@ export const englishIndia = {
     'The file’s QTY for this style and size does not add up to the GRN’s good pieces.',
   'issue.merchandise.pt-style-size-not-on-grn': 'The GRN has no good pieces of this style and size.',
   'issue.merchandise.pt-style-size-missing': 'The file has no row of a style and size the GRN holds.',
-  'issue.merchandise.pt-held-lines-open': 'A held line or a damage report of the GRN waits for its decision.',
+  'issue.merchandise.pt-held-lines-open':
+    'A held line, a damage report or a recount of the GRN waits for its decision.',
   'issue.merchandise.pt-already-attached': 'The GRN has a PT already.',
   'issue.merchandise.pt-file-refused': 'The file holds no PT row.',
   'issue.merchandise.attribute-not-marked': 'A list of the template is not marked yet.',
   'issue.merchandise.record-not-found': 'The GRN is not found.',
   'error.merchandise.pt-held-lines-open':
-    'A held line or a damage report of this GRN waits for its decision. Upload the PT file once every one is decided.',
+    'A held line, a damage report or a recount of this GRN waits for its decision. Upload the PT file once every one is decided.',
   'error.merchandise.pt-already-attached':
     'This GRN has a PT waiting for approval or approved already. Withdraw a wrong draft first.',
   'error.merchandise.pt-file-refused': 'The file no longer matches the GRN. Upload it again to see every problem.',

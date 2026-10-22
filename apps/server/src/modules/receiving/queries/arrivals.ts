@@ -26,6 +26,7 @@ import {
 } from '../db/schema.js';
 import { currentLines, grnBlockers } from '../domain/lines.js';
 import { grnLineViews, linesOfGrn, type Requests } from './held-lines.js';
+import { recountViewsOf } from './recounts.js';
 import { arrivalRow, entriesByArrival, entriesOf, factsOf, newestChange, type ArrivalRow } from '../commands/common.js';
 import { receivingMissing, type AvailabilityDependencies } from './availability.js';
 
@@ -82,6 +83,13 @@ async function grnView(
   const [row] = await context.tx.select().from(grn).where(eq(grn.arrivalId, arrivalId));
   if (row === undefined) return null;
   const lines = await linesOfGrn(context, row.id);
+  // Its recounts, each a linked record of its own (goods-in 4.7, 4.11; S2-F02-T05).
+  const recounted = await recountViewsOf(
+    context,
+    row.id,
+    new Map(lines.map((line) => [line.id, line.lineNumber])),
+    requests,
+  );
   return {
     id: row.id,
     number: row.number,
@@ -96,6 +104,8 @@ async function grnView(
       lines.map((line) => line.id),
       receipts,
     ),
+    recounts: recounted.recounts,
+    recountVersionToken: recounted.versionToken,
   };
 }
 
@@ -205,6 +215,11 @@ export function peopleOf(arrival: Arrival): string[] {
   if (arrival.grn !== null) {
     ids.add(arrival.grn.enteredBy);
     for (const id of arrival.grn.countedBy) ids.add(id);
+    // Who proposed and who decided each recount (goods-in 4.11).
+    for (const recount of arrival.grn.recounts) {
+      ids.add(recount.proposedBy);
+      if (recount.decision !== null) ids.add(recount.decision.decidedBy);
+    }
   }
   return [...ids];
 }

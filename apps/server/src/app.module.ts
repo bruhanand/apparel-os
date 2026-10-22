@@ -18,7 +18,13 @@ import {
   type ModuleApprovals,
   type ScopeMembers,
 } from './modules/access/index.js';
-import { BookingModule, bookingApprovals, overdueExceptionType } from './modules/booking/index.js';
+import {
+  BOOKING,
+  BookingModule,
+  bookingApprovals,
+  overdueExceptionType,
+  type BookingInterface,
+} from './modules/booking/index.js';
 import {
   ReceivingModule,
   receivingApprovals,
@@ -40,8 +46,10 @@ import {
 } from './modules/files-imports/index.js';
 import {
   EXCEPTION_TYPES,
+  EXCEPTIONS,
   ExceptionsModule,
   routingApprovals,
+  type ExceptionsInterface,
   type ExceptionTypeRegistration,
 } from './modules/exceptions/index.js';
 import { InboxModule, workItemRoutingApprovals } from './modules/inbox/index.js';
@@ -205,8 +213,20 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
             }),
           }),
           // A held line's decision, taking excess, wrong or unidentified goods in or leaving them held, which asks the
-          // policy gate under the held line's lock (goods-in 4.6, 10.5; S2-F02-T03).
-          receivingApprovals({ audit, services: () => ({ configuration }) }),
+          // policy gate under the held line's lock (goods-in 4.6, 10.5; S2-F02-T03); and a recount's approval, which
+          // posts its receipt counts and reversals through the stock ledger, verifying and using the decision under its
+          // locks, raises a shortage it finds and reads which GRN lines deliver to a booking (goods-in 4.11;
+          // S2-F02-T05); `access`, the ledger, exceptions and bookings reach it when it runs, never at start (9.8b).
+          receivingApprovals({
+            audit,
+            services: () => ({
+              configuration,
+              access: modules.get<AccessInterface>(ACCESS, { strict: false }),
+              ledger: modules.get<StockLedgerInterface>(STOCK_LEDGER, { strict: false }),
+              exceptions: modules.get<ExceptionsInterface>(EXCEPTIONS, { strict: false }),
+              booking: modules.get<BookingInterface>(BOOKING, { strict: false }),
+            }),
+          }),
           // A PT revision's approval on its total proposed acquisition cost, requested when a PT file is submitted
           // (goods-in 5.6, 6.1; S2-F04-T02); its decision's effect comes with S2-F06-T01.
           ptApprovals(),

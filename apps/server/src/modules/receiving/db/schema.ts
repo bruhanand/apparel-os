@@ -1,7 +1,7 @@
 import { boolean, date, integer, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 // Drizzle definitions of `receiving`'s tables (code-house-rules 3.4). They mirror the reviewed migration
-// (migrations/organisation/0088, 0096, 0102) and never create or change a table; an integration test compares each
+// (migrations/organisation/0088, 0096, 0102, 0105, 0107) and never create or change a table; an integration test compares each
 // with the migrated database. Never exported from the unit's index.ts, so no other unit can name these tables
 // (code-house-rules 2).
 
@@ -248,5 +248,59 @@ export const grnLineBooking = receiving.table('grn_line_booking', {
   reason: text('reason').$type<ReviewReasonColumn>(),
   bookingLineKey: uuid('booking_line_key'),
   receiptLinkId: uuid('receipt_link_id'),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** A recount of a GRN's lines, proposed with a reason (goods-in 4.7, 4.11; PRD-REC-019; migration 0107). */
+export const recount = receiving.table('recount', {
+  id: uuid('id').primaryKey(),
+  grnId: uuid('grn_id').notNull(),
+  ...facts(),
+  reason: text('reason').notNull(),
+  proposedByUserId: uuid('proposed_by_user_id').notNull(),
+  roleAssignmentId: uuid('role_assignment_id').notNull(),
+  proposedAt: at('proposed_at').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** A line of a recount: the GRN line, its count when proposed and its count as recounted (goods-in 4.11). */
+export const recountLine = receiving.table('recount_line', {
+  id: uuid('id').primaryKey(),
+  recountId: uuid('recount_id').notNull(),
+  grnLineId: uuid('grn_line_id').notNull(),
+  ...facts(),
+  countedBefore: integer('counted_before').notNull(),
+  countedAfter: integer('counted_after').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** A recount's decision: approved or rejected, once (goods-in 4.11). */
+export const recountDecision = receiving.table('recount_decision', {
+  id: uuid('id').primaryKey(),
+  recountId: uuid('recount_id').notNull(),
+  ...facts(),
+  outcome: text('outcome').$type<'approved' | 'rejected'>().notNull(),
+  approvalDecisionId: uuid('approval_decision_id').notNull(),
+  decidedByUserId: uuid('decided_by_user_id').notNull(),
+  roleAssignmentId: uuid('role_assignment_id').notNull(),
+  decidedAt: at('decided_at').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/**
+ * Each stock effect of an approved recount, its identifier the ledger request's line (goods-in 4.11; stock-ledger
+ * 13.18): pieces found, counted into the origin it names, or pieces of a receipt count reversed off the origin it names.
+ */
+export const recountMovement = receiving.table('recount_movement', {
+  id: uuid('id').primaryKey(),
+  recountId: uuid('recount_id').notNull(),
+  recountLineId: uuid('recount_line_id').notNull(),
+  grnLineId: uuid('grn_line_id').notNull(),
+  ...facts(),
+  kind: text('kind').$type<'added' | 'reversed'>().notNull(),
+  receiptOriginId: uuid('receipt_origin_id').notNull(),
+  reversesMovementId: uuid('reverses_movement_id'),
+  movementId: uuid('movement_id').notNull(),
+  quantity: integer('quantity').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });

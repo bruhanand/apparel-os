@@ -2,6 +2,7 @@ import {
   GRN_TYPE,
   HELD_LINE_TYPE,
   DAMAGE_REPORT_TYPE,
+  RECOUNT_TYPE,
   markedAttributeSetting,
   type MissingItem,
 } from '@apparel-os/schemas';
@@ -61,7 +62,8 @@ const recordItem = (recordType: string, recordId: string): MissingItem => ({ kin
 
 /**
  * Whether a PT file may be uploaded for the GRN now (goods-in 5.1; DEC-137): every held line and every damage report on
- * its lines decided, and no PT revision of it waiting for approval or standing. Undefined when it may; the GRN must be
+ * its lines decided, no recount of it waiting for its decision (4.11), and no PT revision of it waiting for approval or
+ * standing. Undefined when it may; the GRN must be
  * one the reader sees.
  */
 export async function uploadBlock(
@@ -82,11 +84,17 @@ function blockOf(basis: PtBasis, mark: PtMark): CommandRefusal | undefined {
     return {
       kind: 'refused',
       code: 'merchandise.pt-held-lines-open',
-      missing: basis.undecided.map((each) =>
-        each.kind === 'held-line'
-          ? recordItem(HELD_LINE_TYPE, each.heldLineId)
-          : recordItem(DAMAGE_REPORT_TYPE, each.damageReportId),
-      ),
+      missing: basis.undecided.map((each) => {
+        switch (each.kind) {
+          case 'held-line':
+            return recordItem(HELD_LINE_TYPE, each.heldLineId);
+          case 'damage-report':
+            return recordItem(DAMAGE_REPORT_TYPE, each.damageReportId);
+          case 'recount':
+            // A recount of the GRN waiting for its decision may still change its pieces (goods-in 4.11; S2-F02-T05).
+            return recordItem(RECOUNT_TYPE, each.recountId);
+        }
+      }),
     };
   }
   if (mark.kind === 'set') {
@@ -212,7 +220,8 @@ export async function ptPlanOf(
     styleCode: group.styleCode,
     size: group.size,
     quantity: group.quantity,
-    grnLineIds: group.parts.map((part) => part.grnLineId),
+    // A recounted line's goods may be on several origins, each a part (goods-in 4.11): each line once.
+    grnLineIds: [...new Set(group.parts.map((part) => part.grnLineId))],
   }));
   const match = matchGrn(matched, goods);
   issues.push(...match.issues);

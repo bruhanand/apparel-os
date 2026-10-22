@@ -11,6 +11,8 @@ import type {
   InboxQuery,
   InvoiceDraft,
   PhotosDraft,
+  RecountDraft,
+  RecountRead,
 } from '@apparel-os/schemas';
 import type { LockTarget, TransactionContext } from '../../kernel/index.js';
 import type { AccessInterface, RecordFacts } from '../access/index.js';
@@ -29,13 +31,17 @@ import { removeCountLine, saveCountLine } from './commands/count.js';
 import { nameHeldLineProduct } from './commands/name-held-line-product.js';
 import { issueGrn } from './commands/issue.js';
 import { linkToBooking } from './commands/link-to-booking.js';
+import { proposeRecount } from './commands/propose-recount.js';
 import { clearPtMark, ptMarkLock, setPtMark, type PtMarkChange } from './commands/pt-mark.js';
 import { grnForPt, ptMarkOf, type GrnForPt, type PtMark } from './queries/pt-mark.js';
 import { currentLines } from './domain/lines.js';
 import { arrivalFacts, arrivalView, inboxOf, peopleOf } from './queries/arrivals.js';
+import { recountFacts, recountPanelOf } from './queries/recounts.js';
 import {
+  grnLineViews,
   heldLineFacts,
   heldLineView,
+  linesOfGrn,
   ptBasisOf,
   receiptProblems,
   type PtBasis,
@@ -66,6 +72,7 @@ export interface ReceivingDependencies {
     | 'linkReceiptsAtIssue'
     | 'linkReceiptsLater'
     | 'receiptsOfGrnLines'
+    | 'grnLinesDelivering'
   >;
 }
 
@@ -179,6 +186,41 @@ export class Receiving {
    */
   linkToBooking(context: TransactionContext, actor: Actor, grnId: string, draft: GrnBookingLinksDraft) {
     return linkToBooking(context, this.dependencies, actor, grnId, draft);
+  }
+
+  /**
+   * Proposes a recount of the GRN's lines with a reason, for a different person's approval (goods-in 4.7, 4.11;
+   * PRD-REC-019): refused while the GRN's PT is attached, while another recount of it waits, and for a line a recount
+   * does not change.
+   */
+  proposeRecount(context: TransactionContext, actor: Actor, grnId: string, draft: RecountDraft) {
+    return proposeRecount(context, this.dependencies, actor, grnId, draft);
+  }
+
+  /** The facts of a recount the reader may see, which its read authorises with (5.3); else undefined. */
+  recountFacts(context: TransactionContext, recountId: string): Promise<RecordFacts | undefined> {
+    return recountFacts(context, recountId);
+  }
+
+  /** A recount with the GRN lines it names, as its approval's panel shows it (goods-in 4.11), or undefined. */
+  async readRecount(
+    context: TransactionContext,
+    recountId: string,
+    named: (userIds: readonly string[]) => Promise<ReadonlyMap<string, string>>,
+    requests: Requests,
+  ): Promise<Omit<RecountRead, 'asOf'> | undefined> {
+    const panel = await recountPanelOf(context, recountId, requests, async (grnId, grnLineIds) => {
+      const lines = (await linesOfGrn(context, grnId)).filter((line) => grnLineIds.includes(line.id));
+      return grnLineViews(context, lines, requests);
+    });
+    if (panel === undefined) return undefined;
+    const { recount } = panel;
+    const names = await named([
+      recount.proposedBy,
+      ...(recount.decision === null ? [] : [recount.decision.decidedBy]),
+      ...panel.lines.flatMap((line) => line.countedBy),
+    ]);
+    return { ...panel, people: [...names].map(([userId, name]) => ({ userId, name })) };
   }
 
   /** The facts of a held line the reader may see, which its routes authorise with (5.3); else undefined. */

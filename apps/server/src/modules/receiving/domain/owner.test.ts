@@ -1,6 +1,6 @@
 import type { AgreementTerms } from '@apparel-os/schemas';
 import { describe, expect, it } from 'vitest';
-import { ownerColumns, receiptOwner } from './owner.js';
+import { ownerColumns, ownerOfGrn, receiptOwner } from './owner.js';
 
 // The owner a GRN records on its receipt counts (goods-in 4.5, 4.8; PRD-ORG-014, POL-01.05, POL-01.06; DEC-141). Every
 // identifier here is SYNTHETIC.
@@ -58,5 +58,22 @@ describe('the owner at the receipt count (goods-in 4.5; PRD-ORG-014, DEC-141)', 
       ownerId: BRAND,
     });
     expect(ownerColumns({ kind: 'unknown' })).toEqual({ ownerKind: 'unknown', ownerId: null });
+  });
+});
+
+describe('the owner a recount gives its receipt counts (goods-in 4.11; PRD-ORG-014)', () => {
+  it('PRD-ORG-014 the GRN’s owner, read back from what the GRN keeps with its Agreement version', () => {
+    expect(ownerOfGrn({ ownerKind: 'brand', ownerId: BRAND, agreementVersionId: VERSION })).toEqual({
+      kind: 'brand',
+      brandId: BRAND,
+      agreementVersionId: VERSION,
+    });
+    expect(ownerOfGrn({ ownerKind: 'organisation', ownerId: LEGAL_ENTITY, agreementVersionId: VERSION })).toEqual({
+      kind: 'organisation',
+      legalEntityId: LEGAL_ENTITY,
+      agreementVersionId: VERSION,
+    });
+    expect(ownerOfGrn({ ownerKind: 'unknown', ownerId: null, agreementVersionId: null })).toEqual({ kind: 'unknown' });
+    expect(() => ownerOfGrn({ ownerKind: 'brand', ownerId: BRAND, agreementVersionId: null })).toThrow();
   });
 });

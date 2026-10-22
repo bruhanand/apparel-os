@@ -50,6 +50,7 @@ import {
 } from './BookingLinks';
 import { optionText, unknownText, useMasterNames, useProducts } from './names';
 import { PtFile } from './PtFile';
+import { ProposeRecount, RecountsView } from './Recounts';
 
 // Receive Goods › an Arrival: its details, its supplier invoices first, its photos, the count line by line and its GRN
 // (goods-in 4.2 to 4.5, section 11; PRD-REC-003 to PRD-REC-008; DEC-133, DEC-138; S2-F02-T02). The count is saved as
@@ -949,6 +950,7 @@ function GrnPrint({
               <Th label="receive.batch" />
               <Th label="receive.invoice-quantity" />
               <Th label="receive.counted-quantity" />
+              <Th label="receive.recounted" />
               <Th label="receive.received" />
               <Th label="receive.findings" />
               <Th label="receive.held" />
@@ -968,6 +970,10 @@ function GrnPrint({
                 <Cell text={batchText(line.batch)} />
                 <Cell text={formatQuantity(line.invoiceQuantity)} numeric />
                 <Cell text={formatQuantity(line.countedQuantity)} numeric />
+                <Cell
+                  text={line.recounted === null ? t('receive.none') : formatQuantity(line.recounted.countedQuantity)}
+                  numeric
+                />
                 <Cell text={formatQuantity(line.findings.received)} numeric />
                 <td className="px-3">
                   <FindingChips line={{ ...line, damaged: line.findings.damaged }} />
@@ -1009,6 +1015,8 @@ function GrnPrint({
         <ReportDamage key={damageLine} grnLineId={damageLine} locationId={arrival.receivingLocationId} />
       )}
       <CountDamage lines={grn.lines} />
+      <RecountsView arrival={arrival} grn={grn} />
+      <ProposeRecount grn={grn} reading={reading} />
       <NameProducts lines={grn.lines} reading={reading} />
       <LinkToBooking arrival={arrival} grn={grn} reading={reading} named={bookings} />
       <p className="m-0 text-caption text-text-2">{t('receive.grn.note')}</p>

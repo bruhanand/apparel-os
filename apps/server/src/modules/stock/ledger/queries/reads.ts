@@ -122,6 +122,31 @@ export async function originOfSourceLine(
   return { receiptOriginId: row.id, skuId: row.skuId, brandId: row.brandId };
 }
 
+/**
+ * The receipt count a source's line made, with the origin it made (13.4, 13.6; 13.18; goods-in 4.11; S2-F02-T05): the
+ * movement a recount reverses pieces of. Read under the reader's actor; undefined when the line made none the reader
+ * may see.
+ */
+export async function receiptCountOfLine(
+  context: TransactionContext,
+  source: { readonly module: string; readonly recordType: string; readonly lineId: string },
+): Promise<(SourceLineOrigin & { readonly movementId: string }) | undefined> {
+  const origin = await originOfSourceLine(context, source);
+  if (origin === undefined) return undefined;
+  const [row] = await context.tx
+    .select({ id: movement.id })
+    .from(movement)
+    .where(
+      and(
+        eq(movement.kind, 'receipt-count'),
+        eq(movement.sourceModule, source.module),
+        eq(movement.sourceRecordType, source.recordType),
+        eq(movement.sourceLineId, source.lineId),
+      ),
+    );
+  return row === undefined ? undefined : { ...origin, movementId: row.id };
+}
+
 /** The source whose line made a receipt origin: its module and record type (13.2, 13.6). */
 export interface LineSource {
   readonly module: string;

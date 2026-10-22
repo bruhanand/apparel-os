@@ -39,6 +39,7 @@ import { recordConfirmation } from './commands/record-confirmation.js';
 import { recordIssue } from './commands/record-issue.js';
 import { bookingLock, bookingPage, bookingRow, bookingView, receivableBookingOf } from './queries/bookings.js';
 import { statusOfBooking } from './queries/lifecycle.js';
+import { grnLinesDelivering } from './queries/grn-lines-delivering.js';
 import { receiptsOfGrnLines, type GrnLineReceipt } from './queries/receipt-links.js';
 import { planAtIssue } from './queries/receipts.js';
 import { refusalOf, today, type Outcome } from './commands/common.js';
@@ -263,6 +264,14 @@ export class Booking {
     grnLineIds: readonly string[],
   ): Promise<ReadonlyMap<string, GrnLineReceipt>> {
     return receiptsOfGrnLines(context, grnLineIds);
+  }
+
+  /**
+   * Of the GRN lines given, those that deliver their pieces to a booking, linked or waiting in a proposal, whatever the
+   * reader may see (goods-in 4.11; DEC-117): a recount does not change them (S2-F02-T05).
+   */
+  grnLinesDelivering(context: TransactionContext, grnLineIds: readonly string[]): Promise<ReadonlySet<string>> {
+    return grnLinesDelivering(context, grnLineIds);
   }
 }
 
