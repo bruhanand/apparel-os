@@ -1009,7 +1009,7 @@ function GrnPrint({
       )}
       <CountDamage lines={grn.lines} />
       <NameProducts lines={grn.lines} reading={reading} />
-      <LinkToBooking arrival={arrival} grn={grn} reading={reading} />
+      <LinkToBooking arrival={arrival} grn={grn} reading={reading} named={bookings} />
       <p className="m-0 text-caption text-text-2">{t('receive.grn.note')}</p>
     </section>
   );

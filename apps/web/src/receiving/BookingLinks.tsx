@@ -198,7 +198,18 @@ function goodsText(goods: CountedGoods | null): string {
  * and the outstanding link at once; late or excess ones go to a different person for approval, as the answer says.
  * Shown to whoever holds edit on bookings; the server checks it again.
  */
-export function LinkToBooking({ arrival, grn, reading }: { arrival: Arrival; grn: Grn; reading: Reading }) {
+export function LinkToBooking({
+  arrival,
+  grn,
+  reading,
+  named: bookingsNamed,
+}: {
+  arrival: Arrival;
+  grn: Grn;
+  reading: Reading;
+  /** The bookings the Arrival and its GRN name, as the screen reads them, which name the Arrival's own. */
+  named: Bookings;
+}) {
   const mayLink = useGranted(BOOKING_TYPE, 'edit');
   const viewable = useGranted(BOOKING_TYPE, 'view');
   const lines = linkableLines(grn);
@@ -217,7 +228,8 @@ export function LinkToBooking({ arrival, grn, reading }: { arrival: Arrival; grn
     retry: false,
   }).data?.booking;
   const submission = useSubmission('linkGrnToBooking', LINK_READS);
-  if (!mayLink || lines.length === 0) return null;
+  // The answer stays on screen once the lines it linked or proposed have left the form (goods-in 4.10).
+  if (!mayLink || (lines.length === 0 && answer === null)) return null;
   const status = booking?.id === chosen ? booking.status : undefined;
   /** The booking line a GRN line links to: the one picked, else the one it matched at issue, else its only match. */
   const lineKeyOf = (line: GrnLine): string => {
@@ -246,100 +258,106 @@ export function LinkToBooking({ arrival, grn, reading }: { arrival: Arrival; grn
           {t('receive.link.done', { linked: answer.linked, proposed: answer.proposed })}
         </p>
       )}
-      <FormField id="link-booking" label="receive.link.booking" required>
-        <select
-          id="link-booking"
-          className={`${inputClass} max-w-md`}
-          value={chosen}
-          {...describedBy('link-booking', { invalid: false, help: false })}
-          onChange={(event) => {
-            setChosen(event.target.value);
-            setPicked({});
-          }}
-        >
-          <option value="">{t('setup.choose')}</option>
-          {arrival.bookingId !== null && (
-            <option value={arrival.bookingId}>
-              {bookingText(booking?.id === arrival.bookingId ? booking : undefined) ?? unknownText()}
-            </option>
-          )}
-          {bookings.map((each) => (
-            <option key={each.id} value={each.id}>
-              {each.number ?? unknownText()}
-            </option>
-          ))}
-        </select>
-      </FormField>
-      {status !== undefined && (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-body-sm" aria-label={t('receive.link.lines')}>
-            <thead>
-              <tr>
-                <Th label="receive.line-number" />
-                <Th label="receive.link.counted" />
-                <Th label="receive.received" />
-                <Th label="receive.link.booking-line" />
-              </tr>
-            </thead>
-            <tbody>
-              {lines.map((line) => {
-                const goods = goodsOf(line);
-                const offered = goods === null ? [] : matchingLines(status.lines, goods);
-                const id = `link-line-${line.id}`;
-                return (
-                  <tr key={line.id} className="h-10 border-t border-border">
-                    <td className="px-3 tabular-nums">{formatQuantity(line.lineNumber)}</td>
-                    <td className="px-3">{goodsText(goods)}</td>
-                    <td className="px-3 tabular-nums">{formatQuantity(line.findings.received)}</td>
-                    <td className="px-3">
-                      <label htmlFor={id} className="sr-only">
-                        {t('receive.link.booking-line.of', { number: formatQuantity(line.lineNumber) })}
-                      </label>
-                      <select
-                        id={id}
-                        className={inputClass}
-                        value={lineKeyOf(line)}
-                        disabled={goods === null}
-                        onChange={(event) => {
-                          setPicked({ ...picked, [line.id]: event.target.value });
-                        }}
-                      >
-                        <option value="">{t('receive.link.none')}</option>
-                        {offered.map((each) => (
-                          <option key={each.lineKey} value={each.lineKey}>
-                            {lineOption(each)}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-      <div>
-        <Button
-          variant="primary"
-          label="receive.link.send"
-          disabled={named.length === 0 || submission.state.kind === 'pending' || reading.shown}
-          {...(reading.shown ? { reason: 'receive.reading-again' } : {})}
-          onClick={() => {
-            if (reading.now()) return;
-            void (async () => {
-              const done = await submission.submit({
-                params: { grnId: grn.id },
-                body: { bookingId: chosen, lines: named },
-              });
-              if (done !== undefined) {
-                setAnswer({ linked: done.linked.length, proposed: done.proposal?.grnLineIds.length ?? 0 });
+      {lines.length > 0 && (
+        <>
+          <FormField id="link-booking" label="receive.link.booking" required>
+            <select
+              id="link-booking"
+              className={`${inputClass} max-w-md`}
+              value={chosen}
+              {...describedBy('link-booking', { invalid: false, help: false })}
+              onChange={(event) => {
+                setChosen(event.target.value);
                 setPicked({});
-              }
-            })();
-          }}
-        />
-      </div>
+              }}
+            >
+              <option value="">{t('setup.choose')}</option>
+              {arrival.bookingId !== null && (
+                <option value={arrival.bookingId}>{bookingField(bookingsNamed, arrival.bookingId)}</option>
+              )}
+              {bookings.flatMap((each) =>
+                each.number === undefined
+                  ? []
+                  : [
+                      <option key={each.id} value={each.id}>
+                        {each.number}
+                      </option>,
+                    ],
+              )}
+            </select>
+          </FormField>
+          {status !== undefined && (
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-body-sm" aria-label={t('receive.link.lines')}>
+                <thead>
+                  <tr>
+                    <Th label="receive.line-number" />
+                    <Th label="receive.link.counted" />
+                    <Th label="receive.received" />
+                    <Th label="receive.link.booking-line" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {lines.map((line) => {
+                    const goods = goodsOf(line);
+                    const offered = goods === null ? [] : matchingLines(status.lines, goods);
+                    const id = `link-line-${line.id}`;
+                    return (
+                      <tr key={line.id} className="h-10 border-t border-border">
+                        <td className="px-3 tabular-nums">{formatQuantity(line.lineNumber)}</td>
+                        <td className="px-3">{goodsText(goods)}</td>
+                        <td className="px-3 tabular-nums">{formatQuantity(line.findings.received)}</td>
+                        <td className="px-3">
+                          <label htmlFor={id} className="sr-only">
+                            {t('receive.link.booking-line.of', { number: formatQuantity(line.lineNumber) })}
+                          </label>
+                          <select
+                            id={id}
+                            className={inputClass}
+                            value={lineKeyOf(line)}
+                            disabled={goods === null}
+                            onChange={(event) => {
+                              setPicked({ ...picked, [line.id]: event.target.value });
+                            }}
+                          >
+                            <option value="">{t('receive.link.none')}</option>
+                            {offered.map((each) => (
+                              <option key={each.lineKey} value={each.lineKey}>
+                                {lineOption(each)}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <div>
+            <Button
+              variant="primary"
+              label="receive.link.send"
+              disabled={named.length === 0 || submission.state.kind === 'pending' || reading.shown}
+              {...(reading.shown ? { reason: 'receive.reading-again' } : {})}
+              onClick={() => {
+                if (reading.now()) return;
+                void (async () => {
+                  const done = await submission.submit({
+                    params: { grnId: grn.id },
+                    body: { bookingId: chosen, lines: named },
+                  });
+                  if (done !== undefined) {
+                    setAnswer({ linked: done.linked.length, proposed: done.proposal?.grnLineIds.length ?? 0 });
+                    setPicked({});
+                  }
+                })();
+              }}
+            />
+          </div>
+        </>
+      )}
     </Card>
   );
 }
