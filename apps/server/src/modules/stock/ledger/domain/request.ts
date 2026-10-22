@@ -59,6 +59,22 @@ export interface Goods {
   readonly pieceCodes?: readonly string[];
 }
 
+/**
+ * Goods of a product not yet set up, named by their receipt origin (stock-ledger 13.15; goods-in 8.2; PRD-DMG-005;
+ * S2-F08-T01): no SKU names them before the identity step, so a hold, the damaged condition and the reversal of a
+ * condition change name the origin they were counted under. They are counted by quantity, in pieces (DEC-137), so they
+ * carry no piece codes.
+ */
+export interface OriginGoods {
+  readonly skuId: null;
+  readonly receiptOriginId: string;
+  readonly quantity: number;
+  readonly pieceCodes?: undefined;
+}
+
+/** Goods a hold, a condition change or its reversal names: of a SKU, or of Unknown SKU by their origin (13.15). */
+export type NamedGoods = Goods | OriginGoods;
+
 /** The owner a receipt count records on its origin (PRD-ORG-014, PRD-ORG-019), or Unknown. */
 export type Owner =
   | { readonly kind: 'organisation'; readonly legalEntityId: string; readonly agreementVersionId?: string }
@@ -179,7 +195,7 @@ export type LedgerItem =
       readonly at: Place;
       readonly from: Condition;
       readonly to: Condition;
-      readonly goods: Goods;
+      readonly goods: NamedGoods;
     }
   | {
       readonly kind: 'record-coverage';
@@ -200,7 +216,7 @@ export type LedgerItem =
       readonly withinReservationId?: string;
       readonly at: Place;
       readonly condition: Condition;
-      readonly goods: readonly Goods[];
+      readonly goods: readonly NamedGoods[];
     }
   | { readonly kind: 'release-hold'; readonly lineId: string; readonly holdId: string; readonly event: string }
   | {
@@ -355,13 +371,15 @@ export type ValuedItem =
       /**
        * Reversal (13.4, 7.5; PRD-MOD-011, PRD-ACS-014, PRD-LED-017, PRD-LED-018): undoes units of the movement named,
        * at the place the units are, or come back to. A count loss linked to a surplus names the surplus origin whose
-       * units it takes the place of (8.4; S1-F10-T06).
+       * units it takes the place of (8.4; S1-F10-T06). A condition change made in error, such as a mistaken damage
+       * confirmation, has its units return to the condition they had, under the approval the request carries (13.15;
+       * PRD-STK-017; S2-F08-T01); goods of Unknown SKU are named by their origin.
        */
       readonly kind: 'reversal';
       readonly lineId: string;
       readonly movementId: string;
       readonly at: Place;
-      readonly goods: Goods;
+      readonly goods: NamedGoods;
       readonly replacesOriginId?: string;
     }
   | {

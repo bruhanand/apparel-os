@@ -11,6 +11,7 @@ import {
   movementLeg,
   piece,
   receiptOrigin,
+  receiptOriginState,
   reservationClaim,
   transitValue,
   transitValueLayer,
@@ -25,6 +26,7 @@ import {
   type Goods,
   type LedgerItem,
   type LedgerRequest,
+  type NamedGoods,
 } from './domain/request.js';
 import type { Formula, PoolMode } from './domain/valuation.js';
 import type { TransitKind } from './domain/working.js';
@@ -236,6 +238,30 @@ export async function planRequest(
       if (reserving) reservedSkus.add(at);
     }
   };
+  /**
+   * Goods of a product not yet set up, named by their receipt origin (13.15; S2-F08-T01): an origin of Unknown SKU, whose
+   * balances at the unit are those of the SKU balance of the brand it was counted under (13.14; RR-555). The origin is
+   * read, so it is locked shared at step 2, and only its balances under that row are read under the locks.
+   */
+  const unknownOriginAt = async (lineId: string, unit: UnitFacts, originId: string) => {
+    const [origin] = await context.tx
+      .select({ skuId: receiptOrigin.skuId, brandId: receiptOrigin.brandId })
+      .from(receiptOrigin)
+      .where(eq(receiptOrigin.id, originId));
+    if (origin?.skuId !== null) {
+      throw new StockRefused(
+        refusalOf('invalid-item', lineId, [{ kind: 'receipt-origin', receiptOriginId: originId }]),
+      );
+    }
+    if (origin.brandId === null) throw new CommandDefect('An origin of goods of Unknown SKU names no brand');
+    shared(originId);
+    unknownBalanceOf(unit, origin.brandId);
+  };
+  /** Goods a hold, a condition change or its reversal names: of a SKU, or of Unknown SKU by their origin (13.15). */
+  const namedGoodsAt = async (lineId: string, unit: UnitFacts, goods: NamedGoods) => {
+    if (goods.skuId === null) await unknownOriginAt(lineId, unit, goods.receiptOriginId);
+    else await goodsAt(lineId, unit, goods);
+  };
   /** Adds the SKU balances of the claims a release or end will end, so it locks their balances and pieces (13.5). */
   const claimsOf = async (lineId: string, claims: readonly { balanceId: string | null; pieceId: string | null }[]) => {
     for (const claim of claims) {
@@ -243,6 +269,11 @@ export async function planRequest(
         const [row] = await context.tx.select().from(balance).where(eq(balance.id, claim.balanceId));
         if (row?.skuId != null)
           balanceOf(await unitOf(lineId, row.siteId, row.businessUnitId), await skuOf(lineId, row.skuId, row.siteId));
+        // A claim on goods of Unknown SKU: their brand's SKU balance, and the origin, so its balance is read (13.15).
+        else if (row?.brandId != null) {
+          unknownBalanceOf(await unitOf(lineId, row.siteId, row.businessUnitId), row.brandId);
+          shared(row.receiptOriginId);
+        }
       }
       if (claim.pieceId !== null) {
         const [row] = await context.tx.select({ code: piece.code }).from(piece).where(eq(piece.id, claim.pieceId));
@@ -340,6 +371,35 @@ export async function planRequest(
     };
     transits.set(key, target);
     return target;
+  };
+  /**
+   * The pool of goods valued for their approval, as a reservation is (13.10 "Value for approval"): a reservation, a
+   * damage hold, a condition change and its reversal (13.15; domain-model 5, DM-8). Named for step 6 when the book has a
+   * cost setting, so the value is read under the pool's lock; goods of Unknown SKU have no pool and no cost (13.14). For
+   * a hold, a condition change or its reversal, only while some unit of the SKU at the unit has its cost established:
+   * otherwise every unit's value is Unknown, and no empty pool is made for them (7.6; G2). One established after Plan is
+   * `plan-stale` under the locks (13.1).
+   */
+  const valuedPoolOf = async (lineId: string, unit: UnitFacts, goods: NamedGoods, always = false) => {
+    if (goods.skuId === null || (await settingIfAny(unit.bookId)) === undefined) return;
+    if (!always) {
+      const [valued] = await context.tx
+        .select({ id: balance.id })
+        .from(balance)
+        .innerJoin(receiptOriginState, eq(receiptOriginState.receiptOriginId, balance.receiptOriginId))
+        .where(
+          and(
+            eq(balance.siteId, unit.siteId),
+            eq(balance.businessUnitId, unit.businessUnitId),
+            eq(balance.skuId, goods.skuId),
+            gt(balance.quantity, 0),
+            eq(receiptOriginState.valueKnown, true),
+          ),
+        )
+        .limit(1);
+      if (valued === undefined) return;
+    }
+    await poolOf(lineId, unit, await skuOf(lineId, goods.skuId, unit.siteId));
   };
   /** Check postable is asked about each valued item before any lock, with every component of its kind (13.1). */
   const probe = (lineId: string, eventKind: string, unit: UnitFacts, sku: SkuFacts) => {
@@ -547,25 +607,33 @@ export async function planRequest(
         }
         return;
       }
-      case 'condition-change':
+      case 'condition-change': {
+        const unit = await place(item.lineId, item.at.siteId, item.at.businessUnitId, item.at.locationId);
+        await namedGoodsAt(item.lineId, unit, item.goods);
+        await valuedPoolOf(item.lineId, unit, item.goods);
+        return;
+      }
       case 'record-acceptance': {
         const unit = await place(item.lineId, item.at.siteId, item.at.businessUnitId, item.at.locationId);
         await goodsAt(item.lineId, unit, item.goods);
         return;
       }
-      case 'place-hold':
+      case 'place-hold': {
+        const unit = await place(item.lineId, item.at.siteId, item.at.businessUnitId, item.at.locationId);
+        for (const goods of item.goods) {
+          await namedGoodsAt(item.lineId, unit, goods);
+          if (item.holdKind === 'damage') await valuedPoolOf(item.lineId, unit, goods);
+        }
+        if (item.withinReservationId !== undefined) reservationIds.add(item.withinReservationId);
+        return;
+      }
       case 'reserve': {
         const unit = await place(item.lineId, item.at.siteId, item.at.businessUnitId, item.at.locationId);
-        for (const goods of item.goods) await goodsAt(item.lineId, unit, goods, item.kind === 'reserve');
-        if (item.kind === 'place-hold' && item.withinReservationId !== undefined)
-          reservationIds.add(item.withinReservationId);
+        for (const goods of item.goods) await goodsAt(item.lineId, unit, goods, true);
         // A reservation is valued for its approval at its pool's cost of the units (13.10 "Value for approval";
         // product owner, 11 Oct 2026): the pool is locked at step 6 and read under the lock. A book with no cost
         // setting has no pool, and the reservation's value is Unknown.
-        if (item.kind === 'reserve' && (await settingIfAny(unit.bookId)) !== undefined) {
-          for (const goods of item.goods)
-            await poolOf(item.lineId, unit, await skuOf(item.lineId, goods.skuId, unit.siteId));
-        }
+        for (const goods of item.goods) await valuedPoolOf(item.lineId, unit, goods, true);
         return;
       }
       case 'record-coverage': {
@@ -750,19 +818,44 @@ export async function planRequest(
             refusalOf('invalid-item', item.lineId, [{ kind: 'movement', movementId: item.movementId }]),
           );
         }
-        // Built for a receipt count made in error and a count loss (13.4 "Reversal"; S1-F10-T06).
-        if (reversed.kind !== 'receipt-count' && reversed.kind !== 'count-difference') {
+        // Built for a receipt count made in error and a count loss (13.4 "Reversal"; S1-F10-T06), and a condition
+        // change made in error (13.15; S2-F08-T01).
+        if (
+          reversed.kind !== 'receipt-count' &&
+          reversed.kind !== 'count-difference' &&
+          reversed.kind !== 'condition-change'
+        ) {
           throw new StockRefused(
             refusalOf('invalid-item', item.lineId, [{ kind: 'reversal-of', movementKind: reversed.kind }]),
           );
         }
         reversedIds.add(reversed.id);
         const unit = await place(item.lineId, item.at.siteId, item.at.businessUnitId, item.at.locationId);
-        const sku = await skuOf(item.lineId, item.goods.skuId, unit.siteId);
         const legs = await context.tx
           .select({ originId: movementLeg.receiptOriginId })
           .from(movementLeg)
           .where(eq(movementLeg.movementId, reversed.id));
+        if (reversed.kind === 'condition-change') {
+          // Damaged goods never become good but by this linked reversal, under the approval the request carries,
+          // whose decision `access` verifies under the lock (PRD-DMG-010, PRD-STK-017; 13.15). Its origins are only
+          // read; the units return to the condition they left at the place named, valued for the approval.
+          if (request.approval === undefined) {
+            throw new StockRefused(refusalOf('condition-route', item.lineId, [{ kind: 'route', route: 'reversal' }]));
+          }
+          for (const leg of legs) shared(leg.originId);
+          await namedGoodsAt(item.lineId, unit, item.goods);
+          await valuedPoolOf(item.lineId, unit, item.goods);
+          return;
+        }
+        if (item.goods.skuId === null) {
+          throw new StockRefused(
+            refusalOf('invalid-item', item.lineId, [
+              { kind: 'receipt-origin', receiptOriginId: item.goods.receiptOriginId },
+            ]),
+          );
+        }
+        const goods: Goods = item.goods;
+        const sku = await skuOf(item.lineId, goods.skuId, unit.siteId);
         await poolOf(item.lineId, unit, sku);
         if (reversed.kind === 'receipt-count') {
           // An inflow made in error: its origin's established value changes, so the origin is locked exclusively
@@ -772,7 +865,7 @@ export async function planRequest(
             enteredOrigins.add(leg.originId);
           }
           await goodsAt(item.lineId, unit, {
-            ...item.goods,
+            ...goods,
             ...(sku.pieceTracked ? {} : { receiptOriginId: legs[0]?.originId ?? '' }),
           });
           probe(item.lineId, 'stock.cost-established-reversal', unit, sku);
@@ -782,9 +875,9 @@ export async function planRequest(
         for (const leg of legs) shared(leg.originId);
         await unitOf(item.lineId, reversed.siteId, reversed.businessUnitId);
         balanceOf(unit, sku);
-        for (const code of item.goods.pieceCodes ?? []) pieceCodes.set(code, item.lineId);
+        for (const code of goods.pieceCodes ?? []) pieceCodes.set(code, item.lineId);
         if (item.replacesOriginId !== undefined) {
-          await goodsAt(item.lineId, unit, { ...item.goods, receiptOriginId: item.replacesOriginId });
+          await goodsAt(item.lineId, unit, { ...goods, receiptOriginId: item.replacesOriginId });
         }
         await poolOf(item.lineId, await unitOf(item.lineId, reversed.siteId, reversed.businessUnitId), sku);
         probe(item.lineId, 'stock.count-loss-reversal', unit, sku);

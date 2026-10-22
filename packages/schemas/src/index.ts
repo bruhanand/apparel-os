@@ -560,3 +560,6 @@ export * from './booking.js';
 
 // `receiving`'s Arrival, count and GRN (goods-in 4.1 to 4.5; S2-F02-T02).
 export * from './receiving.js';
+
+// `stock` · documents' damage reports (goods-in 8; S2-F08-T01).
+export * from './damage.js';

@@ -1,6 +1,6 @@
-import { and, asc, eq, gt, type SQL } from 'drizzle-orm';
+import { and, asc, eq, gt, isNull, type SQL } from 'drizzle-orm';
 import type { TransactionContext } from '../../../../kernel/index.js';
-import { balance, movement, movementPiece, piece } from '../db/schema.js';
+import { balance, movement, movementPiece, piece, receiptOrigin } from '../db/schema.js';
 
 // The ledger's reads (stock-ledger 13.6; S1-F10-T02): Custody, Piece, Availability, and Rebuild and compare over the
 // quantity projections (2.1). They take no lock and run in the reader's transaction, under the reader's actor, so
@@ -86,4 +86,38 @@ export async function pieceByCode(context: TransactionContext, code: string) {
     acceptedSiteId: row.acceptedSiteId,
     movements: movements.map((each) => ({ id: each.id, kind: each.kind })),
   };
+}
+
+/** The receipt origin a source line made, as a document that names the line reads it (13.6; 13.15). */
+export interface SourceLineOrigin {
+  readonly receiptOriginId: string;
+  /** The SKU, or null while the goods' product is not set up (Unknown; 13.14). */
+  readonly skuId: string | null;
+  /** The SKU's brand, or for goods of Unknown SKU the brand they were counted under (14.1; RR-555). */
+  readonly brandId: string;
+}
+
+/**
+ * The receipt origin a source's line made, such as a GRN line's receipt count (4; 13.6), so a damage report names the
+ * goods of a GRN line, of a product not yet set up too, by their origin (13.15; goods-in 8.2; S2-F08-T01). Read under
+ * the reader's actor; undefined when the line made none the reader may see. A split or an identity step keeps the
+ * original origin as it was (13.14), which is the one answered.
+ */
+export async function originOfSourceLine(
+  context: TransactionContext,
+  source: { readonly module: string; readonly recordType: string; readonly lineId: string },
+): Promise<SourceLineOrigin | undefined> {
+  const [row] = await context.tx
+    .select({ id: receiptOrigin.id, skuId: receiptOrigin.skuId, brandId: receiptOrigin.brandId })
+    .from(receiptOrigin)
+    .where(
+      and(
+        eq(receiptOrigin.sourceModule, source.module),
+        eq(receiptOrigin.sourceRecordType, source.recordType),
+        eq(receiptOrigin.sourceLineId, source.lineId),
+        isNull(receiptOrigin.parentOriginId),
+      ),
+    );
+  if (row?.brandId == null) return undefined;
+  return { receiptOriginId: row.id, skuId: row.skuId, brandId: row.brandId };
 }

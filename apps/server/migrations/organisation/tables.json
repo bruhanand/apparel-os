@@ -2146,6 +2146,48 @@
       "runtime": ["INSERT", "SELECT", "UPDATE"],
       "design": "structure-and-masters 4.2, 6.2; code-house-rules 3.3, 7.3, 12.14",
       "why": "The catalogue belongs to the Organisation as a whole: its record types carry no scope fact, so the permission on the record type decides (structure-and-masters 6.2; access-and-approvals 5.3); only merchandise code reads it"
+    },
+    {
+      "table": "stock.damage_report",
+      "class": "scoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "goods-in 8.2, 8.5, 10.1, 10.3, 10.4; code-house-rules 6.2, 7.1, 8.2"
+    },
+    {
+      "table": "stock.damage_report_photo",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 8.2, 8.5; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "stock.damage_round",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 8.5; code-house-rules 6.2, 7.1, 12.7"
+    },
+    {
+      "table": "stock.damage_decision",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 8.3, 8.5; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "stock.damage_reversal",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 8.3, 8.5; PRD-STK-017; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "stock.damage_reversal_decision",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 8.3, 8.5; PRD-STK-017; code-house-rules 6.2, 7.1"
     }
   ]
 }

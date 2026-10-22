@@ -1,9 +1,17 @@
 import { paise, type Paise } from '@apparel-os/domain';
 import type { UnitFacts } from '../../ports.js';
 import { compareCodeUnits } from '../keys.js';
-import { refuse, type Goods, type ItemValue, type LedgerItem, type Place, type ValuedItem } from '../request.js';
+import {
+  refuse,
+  type Goods,
+  type ItemValue,
+  type LedgerItem,
+  type Place,
+  type UnitPlace,
+  type ValuedItem,
+} from '../request.js';
 import { negate, quote, sumPaise, takeInOrder, type Holding } from '../valuation.js';
-import type { BalanceState, MovementEntry, PieceState, TransitKind } from '../working.js';
+import type { BalanceState, ClaimState, MovementEntry, PieceState, TransitKind } from '../working.js';
 import { CostItems } from './cost.js';
 import {
   onlyOrigin,
@@ -21,6 +29,14 @@ import {
 
 type ItemOf<K extends ValuedItem['kind']> = Extract<ValuedItem, { kind: K }>;
 
+/** Units of one origin an item covers, valued for its approval: a quantity, or one piece (13.10). */
+interface Units {
+  readonly originId: string;
+  readonly skuId: string | null;
+  readonly quantity: number;
+  readonly pieceId: string | null;
+}
+
 export abstract class TransferItems extends CostItems {
   /**
    * Reserve (13.5), valued for its approval (13.10 "Value for approval"; product owner, 11 Oct 2026): a transfer's or a
@@ -34,29 +50,100 @@ export abstract class TransferItems extends CostItems {
     super.reserve(item);
     const reservation = this.entries.reservations.at(-1);
     if (reservation === undefined) throw new Error('A reservation without its entry');
-    const unit = this.unit(item.at.siteId, item.at.businessUnitId);
-    const bySku = new Map<string, { quantity: number; pieceIds: string[]; allValued: boolean }>();
-    for (const claim of reservation.claims) {
-      const piece = claim.pieceId === null ? undefined : this.pieces.get(claim.pieceId);
-      const balance = claim.balanceId === null ? undefined : this.balances.get(claim.balanceId);
-      const originId = piece?.receiptOriginId ?? balance?.receiptOriginId;
-      const skuId = piece?.skuId ?? balance?.skuId;
-      if (originId === undefined || skuId == null) throw new Error('A reservation claim without its units');
-      const origin = this.origin(item.lineId, originId);
-      const units = bySku.get(skuId) ?? { quantity: 0, pieceIds: [], allValued: true };
-      units.quantity += claim.quantity;
-      if (piece !== undefined) units.pieceIds.push(piece.id);
-      units.allValued &&= this.valued(origin);
-      bySku.set(skuId, units);
-    }
-    let total = 0;
-    for (const [skuId, units] of bySku) {
-      if (!units.allValued || !this.valuing.costSettings.has(unit.bookId)) return { kind: 'unknown' };
-      const took = quote(this.poolOf(item.lineId, unit, skuId), {
-        quantity: units.quantity,
-        ...(units.pieceIds.length > 0 ? { pieceIds: units.pieceIds } : {}),
+    return this.costOfUnits(
+      item.lineId,
+      item.at,
+      reservation.claims.map((claim) => this.claimedUnits(claim)),
+    );
+  }
+
+  /**
+   * A damage hold (13.15; S2-F08-T01), valued for the approval of the damage report that places it as a reservation is:
+   * the pool's cost of the units it claims, since a damage confirmation is approved on the goods' cost (domain-model 5;
+   * DM-8, DEC-105). Every other hold answers no cost of its own (13.9).
+   */
+  protected override placeHold(item: Extract<LedgerItem, { kind: 'place-hold' }>): ItemValue {
+    const value = super.placeHold(item);
+    if (item.holdKind !== 'damage') return value;
+    const hold = this.entries.holds.at(-1);
+    if (hold === undefined) throw new Error('A hold without its entry');
+    return this.costOfUnits(
+      item.lineId,
+      item.at,
+      hold.claims.map((claim) => this.claimedUnits(claim)),
+    );
+  }
+
+  /**
+   * A condition change (13.15; S2-F08-T01), valued as a reservation is: the pool's cost of the units it changes, which a
+   * damage confirmation is approved on (domain-model 5; DM-8, DEC-105). No value moves.
+   */
+  protected override conditionChange(item: Extract<LedgerItem, { kind: 'condition-change' }>): ItemValue {
+    super.conditionChange(item);
+    const movement = this.entries.movements.at(-1);
+    if (movement === undefined) throw new Error('A condition change without its movement');
+    return this.costOfUnits(item.lineId, item.at, this.unitsLeaving(movement));
+  }
+
+  /** The units a claim holds: its origin, SKU, quantity and piece (6.1). */
+  protected claimedUnits(claim: ClaimState): Units {
+    const piece = claim.pieceId === null ? undefined : this.pieces.get(claim.pieceId);
+    const balance = claim.balanceId === null ? undefined : this.balances.get(claim.balanceId);
+    const originId = piece?.receiptOriginId ?? balance?.receiptOriginId;
+    if (originId === undefined) throw new Error('A claim without its units');
+    return {
+      originId,
+      skuId: piece === undefined ? (balance?.skuId ?? null) : piece.skuId,
+      quantity: claim.quantity,
+      pieceId: piece?.id ?? null,
+    };
+  }
+
+  /** The units a movement takes from where they were: its out legs, with its pieces (2.2). */
+  protected unitsLeaving(movement: MovementEntry): Units[] {
+    const pieces = movement.pieceIds.map((id) => this.pieces.get(id));
+    return movement.legs
+      .filter((leg) => leg.direction === 'out')
+      .flatMap((leg): Units[] => {
+        const own = pieces.filter((piece) => piece?.receiptOriginId === leg.receiptOriginId);
+        if (own.length === 0)
+          return [{ originId: leg.receiptOriginId, skuId: leg.skuId, quantity: leg.quantity, pieceId: null }];
+        return own.map((piece) => ({
+          originId: leg.receiptOriginId,
+          skuId: leg.skuId,
+          quantity: 1,
+          pieceId: piece?.id ?? null,
+        }));
       });
-      if (took === undefined) refuse('rule-not-set', item.lineId, SL('SL-2'));
+  }
+
+  /**
+   * The cost of units for an approval (13.10 "Value for approval"): the pool's current cost of them at its formula, what
+   * an outflow of them now would take (7.3, 7.4), worked out under the pool's lock and changing nothing. Unknown when any
+   * unit's cost is Unknown, its goods are of Unknown SKU or not the Organisation's (7.2, 13.14), or its book has no cost
+   * setting, so no pool; `rule-not-set` (SL-2) when it does not divide into whole paise.
+   */
+  protected costOfUnits(lineId: string, place: UnitPlace, units: readonly Units[]): ItemValue {
+    const unit = this.unit(place.siteId, place.businessUnitId);
+    const bySku = new Map<string, { quantity: number; pieceIds: string[]; allValued: boolean }>();
+    for (const each of units) {
+      if (each.skuId === null) return { kind: 'unknown' };
+      const origin = this.origin(lineId, each.originId);
+      const sku = bySku.get(each.skuId) ?? { quantity: 0, pieceIds: [], allValued: true };
+      sku.quantity += each.quantity;
+      if (each.pieceId !== null) sku.pieceIds.push(each.pieceId);
+      sku.allValued &&= this.valued(origin);
+      bySku.set(each.skuId, sku);
+    }
+    if (bySku.size === 0) return { kind: 'unknown' };
+    let total = 0;
+    for (const [skuId, sku] of bySku) {
+      if (!sku.allValued || !this.valuing.costSettings.has(unit.bookId)) return { kind: 'unknown' };
+      const took = quote(this.poolOf(lineId, unit, skuId), {
+        quantity: sku.quantity,
+        ...(sku.pieceIds.length > 0 ? { pieceIds: sku.pieceIds } : {}),
+      });
+      if (took === undefined) refuse('rule-not-set', lineId, SL('SL-2'));
       total += sumPaise(took.map((each) => each.value));
     }
     return { kind: 'known', amountPaise: paise(total) };

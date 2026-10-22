@@ -107,6 +107,18 @@ export interface DocumentEffect {
    * version, who may not decide this one besides its preparers (access-and-approvals 9.3, 9.8b; DEC-142).
    */
   earlierStepDeciders?(context: TransactionContext, versionId: string): Promise<readonly string[]>;
+  /**
+   * A check of the document's own under the locks, before anything of the decision is written, for either outcome,
+   * such as the policy gate of the operation the decision makes (access-and-approvals 7.1 step 2, 9.8b; S2-F08-T01).
+   */
+  precheck?(context: TransactionContext, versionId: string): Promise<CommandRefusal | undefined>;
+  /**
+   * Whether an approval posts the document through the stock ledger in the decision's transaction, verifying and
+   * using the decision under its locks as any posting does (access-and-approvals 9.7, 9.8b; stock-ledger 13.1;
+   * S2-F08-T01): Decide then writes the decision first, under a savepoint, so Verify under lock and Record use find it,
+   * and rolls the decision back with the effect when the effect refuses, so nothing of either is written.
+   */
+  readonly postsWithDecision?: boolean;
   approve(context: TransactionContext, decider: EffectDecider, versionId: string): Promise<EffectOutcome>;
   reject(context: TransactionContext, decider: EffectDecider, versionId: string): Promise<EffectOutcome>;
 }

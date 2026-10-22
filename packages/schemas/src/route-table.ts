@@ -42,6 +42,17 @@ import {
   photosDraftSchema,
 } from './receiving.js';
 import {
+  DAMAGE_REPORT_TYPE,
+  DAMAGE_REVERSAL_TYPE,
+  damageDecisionRenewalSchema,
+  damageDecisionRenewedSchema,
+  damageReportDraftSchema,
+  damageReportedSchema,
+  damageReportReadSchema,
+  damageReversalDraftSchema,
+  damageReversalProposedSchema,
+} from './damage.js';
+import {
   demoSignInListSchema,
   demoSignInRequestSchema,
   enrolmentConfirmRequestSchema,
@@ -1105,6 +1116,51 @@ const GRN_ISSUE_CODES = [
   'stock.blocked',
 ] as const satisfies readonly ErrorCode[];
 
+/**
+ * The stock ledger's refusals a damage hold can meet, placed by a report or read for a request's value (stock-ledger
+ * 13.8, 13.15; goods-in 8.2, 8.5; S2-F08-T01): the goods not of the line or not in custody, a cost pool that appeared
+ * after Plan, and a cost that does not divide into whole paise (SL-2). A hold is stopped by no count freeze (13.9).
+ */
+const DAMAGE_HOLD_CODES = [
+  'stock.invalid-item',
+  'stock.place-invalid',
+  'stock.plan-stale',
+  'stock.not-in-custody',
+  'stock.rule-not-set',
+] as const satisfies readonly ErrorCode[];
+
+/**
+ * The codes of a damage report's decision and a reversal's approval (goods-in 8.3; S2-F08-T01): the policy gate, the
+ * report already decided or its confirmation no longer the one it stands on, the decision verified under the ledger's
+ * locks on the goods' cost then (access-and-approvals 9.7), and the ledger's refusals of the condition change and its
+ * reversal: units held, reserved or taken by a claim the decider cannot see, a count freeze over them, more than the
+ * change moved (stock-ledger 13.8, 13.15).
+ */
+const DAMAGE_DECISION_CODES = [
+  'configuration.operation-unavailable',
+  'stock.record-not-found',
+  'stock.report-decided',
+  'stock.report-not-confirmed',
+  'access.approval-value-exceeded',
+  ...DAMAGE_HOLD_CODES,
+  'stock.insufficient-available',
+  'stock.held',
+  'stock.reserved',
+  'stock.blocked',
+  'stock.count-freeze-active',
+  'stock.exceeds-source',
+] as const satisfies readonly ErrorCode[];
+
+/** The codes every change of a damage report can answer (goods-in 8.5; S2-F08-T01). */
+const DAMAGE_CHANGE_CODES = [
+  ...HISTORY_CODES,
+  'kernel.cross-site-request',
+  'kernel.stale-version',
+  'configuration.operation-unavailable',
+  'stock.record-not-found',
+  ...DAMAGE_HOLD_CODES,
+] as const satisfies readonly ErrorCode[];
+
 export const routes = {
   health: defineRoute({
     method: 'GET',
@@ -1709,6 +1765,8 @@ export const routes = {
       ...OPEN_TO_BUY_DECISION_CODES,
       // A booking version's approval (goods-in 3.4, 10.3; S2-F01-T03).
       ...BOOKING_DECISION_CODES,
+      // A damage report's decision and a reversal's approval (goods-in 8.3; S2-F08-T01).
+      ...DAMAGE_DECISION_CODES,
       // Layout, mapping and mapping rule versions (imports-and-opening-data 6.4; S1-F06-T03).
       'files-imports.proposal-not-found',
       'files-imports.proposal-not-open',
@@ -5009,6 +5067,80 @@ export const routes = {
     shows: 'nothing',
     response: grnIssuedSchema,
     codes: GRN_ISSUE_CODES,
+  }),
+  // Damage reports (goods-in 8, section 11; PRD-DMG-001 to PRD-DMG-006, PRD-STK-017; S2-F08-T01): anyone authorised at
+  // a Site reports damage on goods there, held at once; the decision is made in My work through the approval panel
+  // (access-and-approvals 9.5); a confirmation's reversal is proposed here and approved there. A report carries every
+  // scope fact, so each route authorises in its command with the report's facts (access-and-approvals 5.3), and each
+  // asks the policy gate (goods-in 10.5).
+  reportDamage: defineRoute({
+    method: 'POST',
+    path: '/api/stock/damage-reports',
+    access: { kind: 'action', action: 'create', recordType: DAMAGE_REPORT_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: damageReportDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: damageReportedSchema,
+    codes: [
+      ...HISTORY_CODES,
+      'kernel.cross-site-request',
+      'configuration.operation-unavailable',
+      'stock.location-not-found',
+      'stock.goods-not-found',
+      'stock.no-damage-report-series',
+      'stock.damage-report-series-paused',
+      // The exception-code series and the routing are the gate's checks (goods-in 10.5); the series may still be used
+      // up when the exception takes its number (numbering-and-audit 3.7).
+      'exceptions.exception-code-series-exhausted',
+      ...DAMAGE_HOLD_CODES,
+    ],
+  }),
+  readDamageReport: defineRoute({
+    method: 'GET',
+    path: '/api/stock/damage-reports/{damageReportId}',
+    params: z.strictObject({ damageReportId: idSchema }),
+    access: { kind: 'action', action: 'view', recordType: DAMAGE_REPORT_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: damageReportReadSchema,
+    codes: [...HISTORY_CODES, 'stock.record-not-found'],
+  }),
+  // The report a reversal belongs to, as its approval panel shows it (goods-in 8.3; access-and-approvals 9.5).
+  readDamageReversal: defineRoute({
+    method: 'GET',
+    path: '/api/stock/damage-reversals/{damageReversalId}',
+    params: z.strictObject({ damageReversalId: idSchema }),
+    access: { kind: 'action', action: 'view', recordType: DAMAGE_REPORT_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: damageReportReadSchema,
+    codes: [...HISTORY_CODES, 'stock.record-not-found'],
+  }),
+  renewDamageDecision: defineRoute({
+    method: 'POST',
+    path: '/api/stock/damage-reports/{damageReportId}/decision-renewal',
+    params: z.strictObject({ damageReportId: idSchema }),
+    access: { kind: 'action', action: 'create', recordType: DAMAGE_REPORT_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: damageDecisionRenewalSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: damageDecisionRenewedSchema,
+    codes: [...DAMAGE_CHANGE_CODES, 'stock.report-decided'],
+  }),
+  proposeDamageReversal: defineRoute({
+    method: 'POST',
+    path: '/api/stock/damage-reports/{damageReportId}/reversals',
+    params: z.strictObject({ damageReportId: idSchema }),
+    access: { kind: 'action', action: 'create', recordType: DAMAGE_REVERSAL_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: damageReversalDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: damageReversalProposedSchema,
+    codes: [...DAMAGE_CHANGE_CODES, 'stock.report-not-confirmed', 'stock.reversal-open'],
   }),
 } as const satisfies Readonly<Record<string, Route>>;
 

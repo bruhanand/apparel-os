@@ -492,6 +492,9 @@ export function ApprovalPanel({ requestId }: { requestId: string }) {
     'listApprovalReasonRecords',
     'listApprovalReasons',
     'listApprovalLimits',
+    // A damage report's decision or a reversal's approval changes the report its facts show (S2-F08-T01).
+    'readDamageReport',
+    'readDamageReversal',
     ...ORGANISATION_READS,
   ]);
   if (request.isPending) return <LoadingState rows={4} />;

@@ -9,6 +9,9 @@ import {
   BANK_DETAILS_CHANGE,
   BILL_FORMAT_CHANGE_APPROVAL,
   BILL_FORMAT_CHANGE_TYPE,
+  DAMAGE_DECISION,
+  DAMAGE_REPORT_TYPE,
+  DAMAGE_REVERSAL_APPROVAL,
   FINANCIAL_YEAR_CHANGE_APPROVAL,
   FINANCIAL_YEAR_CHANGE_TYPE,
   LAYOUT_CONFIRMATION,
@@ -41,6 +44,7 @@ import { MARK_LABEL } from '../merchandise/marked';
 import { OpenToBuyFacts, TermsFacts, TotalsView } from '../booking/facts';
 import { useBookingNames } from '../booking/names';
 import { ImportFacts } from './ImportFacts';
+import { DamageReportFacts } from '../stock/DamageReport';
 import { actionTitle } from './subject';
 
 // The material facts of the version an approval request binds to (PRD-ACS-007; access-and-approvals 9.1; spec
@@ -543,6 +547,35 @@ function MarkedAttributeFacts({ view }: { view: ApprovalRequestView }) {
   );
 }
 
+/**
+ * A damage report, for its decision, or the report a reversal of its confirmation belongs to, for the reversal's
+ * approval: the goods and quantity, what is wrong, the photos and the decisions so far (goods-in 8.3, 8.5; S2-F08-T01).
+ * The report is read with view on its own type, within the reader's scope.
+ */
+function DamageFacts({ view, reversal }: { view: ApprovalRequestView; reversal: boolean }) {
+  const viewable = useViewable(DAMAGE_REPORT_TYPE);
+  const report = useQuery({
+    ...readQuery(api, 'readDamageReport', { params: { damageReportId: view.document.recordId } }),
+    enabled: viewable && !reversal,
+  });
+  const ofReversal = useQuery({
+    ...readQuery(api, 'readDamageReversal', { params: { damageReversalId: view.document.recordId } }),
+    enabled: viewable && reversal,
+  });
+  const read = (reversal ? ofReversal : report).data?.report;
+  if (read === undefined) return null;
+  const proposed = read.reversals.find((each) => each.id === view.document.recordId);
+  return (
+    <Facts>
+      <Fact label="damage.number">{read.number}</Fact>
+      {proposed !== undefined && <Fact label="damage.reversal.reason">{proposed.reason}</Fact>}
+      <div className="sm:col-span-2">
+        <DamageReportFacts report={read} />
+      </div>
+    </Facts>
+  );
+}
+
 /** The facts of the request's version, by its action type; nothing where the reader may not read them. */
 export function DocumentFacts({ view }: { view: ApprovalRequestView }) {
   switch (view.actionType) {
@@ -584,6 +617,11 @@ export function DocumentFacts({ view }: { view: ApprovalRequestView }) {
     // A booking version's approval (goods-in 3.4; S2-F01-T03).
     case BOOKING_APPROVAL:
       return <BookingFacts view={view} />;
+    // A damage report's decision and a reversal's approval (goods-in 8.3; S2-F08-T01).
+    case DAMAGE_DECISION:
+      return <DamageFacts view={view} reversal={false} />;
+    case DAMAGE_REVERSAL_APPROVAL:
+      return <DamageFacts view={view} reversal />;
     // The season or size attribute (structure-and-masters 4.2 "As built"; RR-550, RR-556).
     case MARKED_ATTRIBUTE_CHANGE:
       return <MarkedAttributeFacts view={view} />;

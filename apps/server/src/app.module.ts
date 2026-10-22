@@ -75,10 +75,18 @@ import {
   LocationStock,
   SkuStockPresence,
   STOCK_CALLERS,
+  STOCK_LEDGER,
   STOCK_POSTING_EVENT_KINDS,
   StockLedgerModule,
   type CallerRegistration,
+  type StockLedgerInterface,
 } from './modules/stock/ledger/index.js';
+import {
+  damageExceptionType,
+  StockDocumentsModule,
+  stockDocumentsApprovals,
+  stockDocumentsStockCaller,
+} from './modules/stock/documents/index.js';
 import {
   BOOK_HELD_STOCK,
   BooksModule,
@@ -178,6 +186,17 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
             numbering: composedNumbering(),
             requests: () => modules.get<AccessInterface>(ACCESS, { strict: false }),
           }),
+          // A damage report's decision and a reversal's approval (goods-in 8.3; S2-F08-T01), which post through the
+          // stock ledger and verify and use the decision under its locks; `access` and the ledger are built after
+          // these effects, so they reach them when they run, never at start (access-and-approvals 9.8b).
+          stockDocumentsApprovals({
+            audit,
+            services: () => ({
+              access: modules.get<AccessInterface>(ACCESS, { strict: false }),
+              ledger: modules.get<StockLedgerInterface>(STOCK_LEDGER, { strict: false }),
+              configuration,
+            }),
+          }),
         ),
       inject: [AUDIT, LOCATION_IN_USE, CONFIGURATION, BOOK_HELD_STOCK, IMPORT_HANDLERS, ModuleRef],
     },
@@ -201,10 +220,15 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
       useFactory: () => checkEventKinds(STOCK_POSTING_EVENT_KINDS satisfies readonly PostingEventKind[]),
     },
     // The modules that post stock, registered with the ledger at start, none synthetic (stock-ledger 13.2): `receiving`'s
-    // receipt counts from a GRN (goods-in 4.5; S2-F02-T02).
-    { provide: STOCK_CALLERS, useValue: [receivingStockCaller] satisfies readonly CallerRegistration[] },
-    // The exception types the raising modules register (access-and-approvals 12.1): none yet beside the module's own.
-    { provide: EXCEPTION_TYPES, useValue: [] satisfies readonly ExceptionTypeRegistration[] },
+    // receipt counts from a GRN (goods-in 4.5; S2-F02-T02), and `stock` · documents' damage holds, decisions and
+    // reversals (goods-in 8; stock-ledger 13.15; S2-F08-T01).
+    {
+      provide: STOCK_CALLERS,
+      useValue: [receivingStockCaller, stockDocumentsStockCaller] satisfies readonly CallerRegistration[],
+    },
+    // The exception types the raising modules register (access-and-approvals 12.1): the damage a report raises, to
+    // Operations as its routing says (goods-in 8.2; S2-F08-T01).
+    { provide: EXCEPTION_TYPES, useValue: [damageExceptionType] satisfies readonly ExceptionTypeRegistration[] },
     // The decision-evidence contract of `access`, which files-imports' Attach implements (9.5; S1-F08-T03).
     { provide: DECISION_EVIDENCE, useFactory: (audit: AuditInterface) => decisionEvidence(audit), inject: [AUDIT] },
     // The policy-evidence contract of `configuration`, which files-imports' Attach implements (module-map 4.4;
@@ -269,6 +293,8 @@ export class ModuleApprovalsModule {}
     BookingModule,
     // Receive Goods: the inbox, the Arrival, the count and the GRN (module-map section 5; goods-in 4; S2-F02-T02).
     ReceivingModule,
+    // Damage reports (module-map section 5; goods-in 8; S2-F08-T01).
+    StockDocumentsModule,
   ],
 })
 export class AppModule {}

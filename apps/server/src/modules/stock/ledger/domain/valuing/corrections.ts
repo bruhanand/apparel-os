@@ -1,6 +1,6 @@
 import { paise } from '@apparel-os/domain';
 import { freeUnits } from '../availability.js';
-import { refuse, type ItemValue, type ValuedItem } from '../request.js';
+import { refuse, type Goods, type ItemValue, type ValuedItem } from '../request.js';
 import { negate, oldestFirst, share, sumPaise, takeInOrder } from '../valuation.js';
 import type { ClaimState, OriginState, PieceState } from '../working.js';
 import { SaleItems } from './sale.js';
@@ -9,6 +9,9 @@ import { SL, type Moved, type OriginGroup, type SaleState, type ValuationLayerEn
 // Disposal, count differences, reversals and piece corrections (stock-ledger 7.5, 7.9, 8.2 to 8.4, 13.4; S1-F10-T06).
 
 type ItemOf<K extends ValuedItem['kind']> = Extract<ValuedItem, { kind: K }>;
+
+/** A reversal of goods of a SKU: every reversal but a condition change's names its goods by SKU (13.15). */
+type SkuReversal = Omit<ItemOf<'reversal'>, 'goods'> & { readonly goods: Goods };
 
 /** The release event a disposal ends each disposable hold kind's claim with (6.1; 14.2 `hold_release`). */
 const DISPOSAL_RELEASES: Readonly<Record<string, string | undefined>> = {
@@ -182,17 +185,91 @@ export abstract class Corrections extends SaleItems {
    * Reversal (7.5, 13.4; PRD-MOD-011, PRD-ACS-014, PRD-LED-017, PRD-LED-018): undoes units of a movement, within what
    * it moved and was not reversed (`exceeds-source`). Built for the two the golden scenarios need: a receipt count made
    * in error (G13), whose units leave custody and whose value comes off at the value its cost added; and a count loss
-   * (G3, 8.4), whose units come back at the cost the loss took. A reversal of any other kind is not built yet
-   * (`invalid-item`, naming the kind).
+   * (G3, 8.4), whose units come back at the cost the loss took; and a condition change made in error, such as a
+   * mistaken damage confirmation, whose units return to the condition they left (13.15; PRD-STK-017; S2-F08-T01). A
+   * reversal of any other kind is not built yet (`invalid-item`, naming the kind).
    */
   protected reversal(item: ItemOf<'reversal'>): ItemValue {
     this.checkGoodsShape(item.lineId, item.goods);
     const reversed = this.reversed.get(item.movementId);
     if (reversed === undefined)
       refuse('invalid-item', item.lineId, [{ kind: 'movement', movementId: item.movementId }]);
-    if (reversed.kind === 'receipt-count') return this.reverseInflow(item, reversed);
-    if (reversed.kind === 'count-difference' && reversed.direction === 'out') return this.reverseLoss(item, reversed);
+    if (reversed.kind === 'condition-change') return this.reverseConditionChange(item, reversed);
+    // Goods of Unknown SKU are named by their origin only for a condition change's reversal (13.15).
+    const { goods } = item;
+    if (goods.skuId === null) {
+      refuse('invalid-item', item.lineId, [{ kind: 'receipt-origin', receiptOriginId: goods.receiptOriginId }]);
+    }
+    const ofSku = { ...item, goods };
+    if (reversed.kind === 'receipt-count') return this.reverseInflow(ofSku, reversed);
+    if (reversed.kind === 'count-difference' && reversed.direction === 'out') return this.reverseLoss(ofSku, reversed);
     refuse('invalid-item', item.lineId, [{ kind: 'reversal-of', movementKind: reversed.kind }]);
+  }
+
+  /**
+   * A condition change made in error (13.15; PRD-STK-017, PRD-ACS-014; S2-F08-T01), such as a mistaken damage
+   * confirmation, which Plan admits only under the approval the request carries: its units, free at the place named in
+   * the condition it gave them, return to the condition they left, of the same origins, within what it changed and was
+   * not reversed (`exceeds-source`). The movement names the one it reverses; the change itself is never edited. Units
+   * still held, such as by their quarantine, are `held` until that hold ends by its own event in the same request or
+   * before (6.2). No value moves; valued for its approval as the condition change was (13.10).
+   */
+  private reverseConditionChange(item: ItemOf<'reversal'>, reversed: SaleState): ItemValue {
+    const into = reversed.legs.filter((leg) => leg.direction === 'in');
+    const left = reversed.legs.find((leg) => leg.direction === 'out')?.condition;
+    const gave = into[0]?.condition;
+    if (left === undefined || gave === undefined) throw new Error('A condition change without its legs');
+    const { goods } = item;
+    // The origins the goods may be of: those the change moved, of the SKU named, or the one named (13.3).
+    const origins = [...new Set(into.map((leg) => leg.originId))].filter((originId) => {
+      if (goods.receiptOriginId !== undefined && originId !== goods.receiptOriginId) return false;
+      return this.origin(item.lineId, originId).skuId === goods.skuId;
+    });
+    const room = (originId: string) =>
+      into.filter((leg) => leg.originId === originId).reduce((sum, leg) => sum + leg.quantity, 0) -
+      (reversed.returned.get(originId)?.quantity ?? 0);
+    if (goods.quantity > origins.reduce((sum, originId) => sum + room(originId), 0)) {
+      refuse('exceeds-source', item.lineId, [{ kind: 'movement', movementId: reversed.id }]);
+    }
+    const taken: ReturnType<typeof this.take> = [];
+    if (goods.pieceCodes !== undefined) {
+      for (const code of goods.pieceCodes) {
+        if (!reversed.pieceIds.has(this.piece(item.lineId, code).id)) {
+          refuse('exceeds-source', item.lineId, [{ kind: 'piece', code }]);
+        }
+      }
+      taken.push(...this.take(item.lineId, item.at, gave, goods));
+    } else {
+      let wanted = goods.quantity;
+      for (const originId of origins) {
+        const quantity = Math.min(wanted, room(originId));
+        if (quantity <= 0) continue;
+        taken.push(...this.take(item.lineId, item.at, gave, { ...goods, quantity, receiptOriginId: originId }));
+        wanted -= quantity;
+        if (wanted === 0) break;
+      }
+    }
+    const brand = this.goodsBrand(goods);
+    const movement = this.newMovement(
+      'reversal',
+      item.lineId,
+      item.at.siteId,
+      item.at.businessUnitId,
+      [goods.skuId],
+      goods.skuId === null && brand !== null ? [brand] : undefined,
+    );
+    movement.reversesMovementId = reversed.id;
+    this.moveUnits(item.lineId, movement, taken, {
+      businessUnitId: item.at.businessUnitId,
+      locationId: item.at.locationId,
+      condition: left,
+    });
+    for (const each of taken) {
+      const originId = each.balance.receiptOriginId;
+      const done = reversed.returned.get(originId) ?? { quantity: 0, value: 0 };
+      reversed.returned.set(originId, { quantity: done.quantity + each.quantity, value: done.value });
+    }
+    return this.costOfUnits(item.lineId, item.at, this.unitsLeaving(movement));
   }
 
   /**
@@ -203,7 +280,7 @@ export abstract class Corrections extends SaleItems {
    * they hold the units and that value; any rest would come off other layers, which is OPEN (SL-27), so such a reversal
    * is `rule-not-set`. Posts `stock.cost-established-reversal` (books-and-posting 7.2).
    */
-  private reverseInflow(item: ItemOf<'reversal'>, reversed: SaleState): ItemValue {
+  private reverseInflow(item: SkuReversal, reversed: SaleState): ItemValue {
     const [leg] = reversed.legs;
     if (leg === undefined) throw new Error('A receipt count without its leg');
     const origin = this.origin(item.lineId, leg.originId);
@@ -298,7 +375,7 @@ export abstract class Corrections extends SaleItems {
    * released by its link to the loss (6.1 `loss-link`). They come back unaccepted, unless a piece was accepted at the
    * Site before (6.3).
    */
-  private reverseLoss(item: ItemOf<'reversal'>, reversed: SaleState): ItemValue {
+  private reverseLoss(item: SkuReversal, reversed: SaleState): ItemValue {
     const back = new Map<string, OriginGroup>();
     const add = (origin: OriginState, quantity: number, piece: PieceState | null) => {
       const group = back.get(origin.id) ?? { origin, quantity: 0, pieces: [] };

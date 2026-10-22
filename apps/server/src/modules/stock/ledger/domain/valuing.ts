@@ -75,8 +75,20 @@ export class Valuing extends Corrections {
         return at(item.from.siteId, item.from.businessUnitId, null, item.goods.skuId);
       case 'disposal':
       case 'count-difference':
-      case 'reversal':
         return at(item.at.siteId, item.at.businessUnitId, item.at.locationId, item.goods.skuId);
+      case 'reversal': {
+        if (item.goods.skuId !== null) {
+          return at(item.at.siteId, item.at.businessUnitId, item.at.locationId, item.goods.skuId);
+        }
+        // Goods of Unknown SKU touch their location and the brand they were counted under (13.15; RR-555).
+        const brand = this.goodsBrand(item.goods);
+        return [
+          { siteId: item.at.siteId, businessUnitId: item.at.businessUnitId, kind: 'location', id: item.at.locationId },
+          ...(brand === null
+            ? []
+            : [{ siteId: item.at.siteId, businessUnitId: item.at.businessUnitId, kind: 'brand' as const, id: brand }]),
+        ];
+      }
       case 'piece-correction': {
         const found = this.piecesByCode.get(item.foundPieceCode);
         const missing = this.piecesByCode.get(item.missingPieceCode);

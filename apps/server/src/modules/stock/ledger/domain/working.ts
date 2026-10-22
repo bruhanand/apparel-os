@@ -16,10 +16,10 @@ import {
   type Condition,
   type DescribedIdentity,
   type FreezeScope,
-  type Goods,
   type IdentityPart,
   type ItemValue,
   type LedgerItem,
+  type NamedGoods,
   type Owner,
   type Place,
 } from './request.js';
@@ -591,14 +591,12 @@ export class Working {
           ...at(item.from.siteId, item.to.businessUnitId, [item.to.locationId], skuIds, brands(skuIds)),
         ];
       }
-      case 'condition-change':
-        return at(
-          item.at.siteId,
-          item.at.businessUnitId,
-          [item.at.locationId],
-          [item.goods.skuId],
-          brands([item.goods.skuId]),
-        );
+      case 'condition-change': {
+        // Goods of Unknown SKU touch their location and the brand they were counted under (13.15; 14.1; RR-555).
+        const skuIds = item.goods.skuId === null ? [] : [item.goods.skuId];
+        const brand = this.goodsBrand(item.goods);
+        return at(item.at.siteId, item.at.businessUnitId, [item.at.locationId], skuIds, brand === null ? [] : [brand]);
+      }
       case 'reserve': {
         const skuIds = item.goods.map((goods) => goods.skuId);
         return at(item.at.siteId, item.at.businessUnitId, [item.at.locationId], skuIds, brands(skuIds));
@@ -723,7 +721,7 @@ export class Working {
    * then the receipt origin made first, whose UUIDv7 sorts first (PRD-MOD-008). The origin, not the balance row,
    * breaks a tie, so a sale's legs are read back in the order it took them (S1-F10-T06, G9).
    */
-  protected balancesAt(place: Place, condition: Condition, goods: Goods): BalanceState[] {
+  protected balancesAt(place: Place, condition: Condition, goods: NamedGoods): BalanceState[] {
     return [...this.balances.values()]
       .filter(
         (row) =>
@@ -744,8 +742,8 @@ export class Working {
   }
 
   /** Plan staleness (13.1): every origin with stock here was one Plan found and locked. */
-  protected checkNotStale(lineId: string, place: Place, goods: Goods, candidates: readonly BalanceState[]): void {
-    if (goods.receiptOriginId !== undefined || goods.pieceCodes !== undefined) return;
+  protected checkNotStale(lineId: string, place: Place, goods: NamedGoods, candidates: readonly BalanceState[]): void {
+    if (goods.skuId === null || goods.receiptOriginId !== undefined || goods.pieceCodes !== undefined) return;
     const seen = this.inputs.originsSeen.get(
       skuKey(place.siteId, place.businessUnitId, goods.skuId, this.sku(goods.skuId).brandId),
     );
@@ -829,6 +827,15 @@ export class Working {
     return skuId === null ? null : this.sku(skuId).brandId;
   }
 
+  /**
+   * The brand of goods an item names: the SKU's, or for goods of Unknown SKU named by their origin, the brand they
+   * were counted under, which their origin keeps (13.14, 13.15; RR-555).
+   */
+  protected goodsBrand(goods: NamedGoods): string | null {
+    if (goods.skuId !== null) return this.sku(goods.skuId).brandId;
+    return this.origins.get(goods.receiptOriginId)?.scope.brandId ?? null;
+  }
+
   /** Why free units fall short (13.8): held or reserved by what the actor can see, or simply not there. */
   protected shortfall(lineId: string, candidates: readonly BalanceState[], wanted: number, reservation = false): never {
     let quantity = 0;
@@ -859,15 +866,15 @@ export class Working {
     lineId: string,
     place: Place,
     condition: Condition,
-    goods: Goods,
+    goods: NamedGoods,
     options: {
       readonly reservation?: boolean;
       readonly moveReserved?: boolean;
       readonly fits?: (balance: BalanceState) => number;
     } = {},
   ): Taken[] {
-    const sku = this.sku(goods.skuId);
-    if (sku.pieceTracked) {
+    // Goods of Unknown SKU are counted by quantity (13.14, 13.15; DEC-137).
+    if (goods.skuId !== null && this.sku(goods.skuId).pieceTracked) {
       const taken = new Map<string, Taken>();
       for (const code of goods.pieceCodes ?? []) {
         const piece = this.piece(lineId, code);
@@ -969,10 +976,21 @@ export class Working {
     );
   }
 
-  protected checkGoodsShape(lineId: string, goods: Goods): void {
-    const sku = this.sku(goods.skuId);
+  protected checkGoodsShape(lineId: string, goods: NamedGoods): void {
     if (!Number.isInteger(goods.quantity) || goods.quantity <= 0)
       refuse('invalid-item', lineId, [{ kind: 'quantity' }]);
+    if (goods.skuId === null) {
+      // Goods of Unknown SKU are named by an origin of Unknown SKU, by quantity, with no piece codes (13.15). The type
+      // holds it; the ledger still checks every request it is given.
+      if ('pieceCodes' in goods && (goods as { readonly pieceCodes?: unknown }).pieceCodes !== undefined) {
+        refuse('invalid-item', lineId, [{ kind: 'piece-codes' }]);
+      }
+      if (this.origin(lineId, goods.receiptOriginId).skuId !== null) {
+        refuse('invalid-item', lineId, [{ kind: 'receipt-origin', receiptOriginId: goods.receiptOriginId }]);
+      }
+      return;
+    }
+    const sku = this.sku(goods.skuId);
     if (sku.pieceTracked !== (goods.pieceCodes !== undefined))
       refuse('invalid-item', lineId, [{ kind: 'piece-codes' }]);
     if (goods.pieceCodes !== undefined && new Set(goods.pieceCodes).size !== goods.quantity) {
@@ -1510,7 +1528,8 @@ export class Working {
    * Condition change (2.3, 13.4; PRD-DMG-003, PRD-DMG-010, POL-17.02): only good to damaged, wrong or unidentified.
    * Damaged goods never become good, and wrong or unidentified goods return to good only through the identity route, so
    * every change from another condition is `condition-route`. Takes free units; the hold the new condition raises is
-   * its own item in the same request (13.5).
+   * its own item in the same request (13.5). Goods of Unknown SKU are named by their origin, and the movement records
+   * the brand they were counted under (13.15).
    */
   protected conditionChange(item: ItemOf<'condition-change'>): ItemValue {
     this.checkGoodsShape(item.lineId, item.goods);
@@ -1519,9 +1538,15 @@ export class Working {
       refuse('condition-route', item.lineId, [{ kind: 'condition', from: item.from, to: item.to }]);
     }
     const taken = this.take(item.lineId, item.at, item.from, item.goods);
-    const movement = this.newMovement('condition-change', item.lineId, item.at.siteId, item.at.businessUnitId, [
-      item.goods.skuId,
-    ]);
+    const brand = this.goodsBrand(item.goods);
+    const movement = this.newMovement(
+      'condition-change',
+      item.lineId,
+      item.at.siteId,
+      item.at.businessUnitId,
+      [item.goods.skuId],
+      item.goods.skuId === null && brand !== null ? [brand] : undefined,
+    );
     this.moveUnits(item.lineId, movement, taken, {
       businessUnitId: item.at.businessUnitId,
       locationId: item.at.locationId,
@@ -1723,13 +1748,14 @@ export class Working {
       evidenceFileId: item.evidenceFileId ?? null,
       withinReservationId: item.withinReservationId ?? null,
       scope: this.headerScopeAt(item.at.siteId, item.at.businessUnitId),
-      brandIds: [...new Set(item.goods.map((goods) => this.brandOf(goods.skuId)))],
+      brandIds: [...new Set(item.goods.map((goods) => this.goodsBrand(goods)))],
       freezeScope: [],
       claims: [],
     };
     for (const goods of item.goods) {
       this.checkGoodsShape(item.lineId, goods);
-      if (this.sku(goods.skuId).pieceTracked) {
+      // Goods of Unknown SKU are named by their origin and counted by quantity (13.15; DEC-137).
+      if (goods.skuId !== null && this.sku(goods.skuId).pieceTracked) {
         for (const code of goods.pieceCodes ?? []) {
           const piece = this.piece(item.lineId, code);
           if (
@@ -1775,7 +1801,13 @@ export class Working {
         left -= take;
         if (left === 0) break;
       }
-      if (left > 0) refuse('not-in-custody', item.lineId, [{ kind: 'quantity', skuId: goods.skuId }]);
+      if (left > 0) {
+        refuse('not-in-custody', item.lineId, [
+          goods.skuId === null
+            ? { kind: 'quantity', receiptOriginId: goods.receiptOriginId }
+            : { kind: 'quantity', skuId: goods.skuId },
+        ]);
+      }
     }
     this.entries.holds.push(hold);
     return { kind: 'unknown' };

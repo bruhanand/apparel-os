@@ -660,7 +660,12 @@ async function loadSale(context: TransactionContext, saleId: string, back: 'retu
   // In the order the outflow took them, oldest origin first (PRD-STK-013; working.ts `balancesAt`): UUIDv7s made in
   // one millisecond are not ordered (PRD-MOD-008), so the legs' own identifiers cannot say (S1-F10-T06, G9).
   const legs = await context.tx
-    .select({ originId: movementLeg.receiptOriginId, quantity: movementLeg.quantity, direction: movementLeg.direction })
+    .select({
+      originId: movementLeg.receiptOriginId,
+      quantity: movementLeg.quantity,
+      direction: movementLeg.direction,
+      condition: movementLeg.condition,
+    })
     .from(movementLeg)
     .innerJoin(receiptOrigin, eq(receiptOrigin.id, movementLeg.receiptOriginId))
     .where(eq(movementLeg.movementId, saleId))
@@ -771,7 +776,12 @@ async function loadSale(context: TransactionContext, saleId: string, back: 'retu
     direction,
     siteId: sale.siteId,
     businessUnitId: sale.businessUnitId,
-    legs: legs.map((leg) => ({ originId: leg.originId, quantity: leg.quantity })),
+    legs: legs.map((leg) => ({
+      originId: leg.originId,
+      quantity: leg.quantity,
+      direction: leg.direction as 'in' | 'out',
+      condition: leg.condition as Condition,
+    })),
     pieceIds: new Set(pieces.map((row) => row.pieceId)),
     valued,
     layers: layers.map((row) => ({
