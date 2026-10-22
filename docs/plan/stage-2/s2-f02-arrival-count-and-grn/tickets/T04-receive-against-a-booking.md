@@ -1,6 +1,6 @@
 # S2-F02-T04 — Receive against a booking
 
-Status: blocked
+Status: in-progress
 Blocked by: S2-F02-T02, S2-F01-T04
 Feature: [Stage 2 first version](../../spec.md)
 

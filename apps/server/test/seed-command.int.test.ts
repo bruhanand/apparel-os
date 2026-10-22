@@ -6,11 +6,25 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { uuidv7 } from '@apparel-os/domain';
-import { migrateDatabase, migrationSetFolder, readMigrationSet } from '../src/kernel/index.js';
-import { ORGANISATION_KEYS_VARIABLE } from '../src/modules/access/index.js';
+import type { AttributeMark } from '@apparel-os/schemas';
+import {
+  CommandRunner,
+  createDb,
+  migrateDatabase,
+  migrationSetFolder,
+  newCorrelationId,
+  readMigrationSet,
+  systemClock,
+} from '../src/kernel/index.js';
+import { ORGANISATION_KEYS_VARIABLE, runSetupStep } from '../src/modules/access/index.js';
 import { configurationTimezoneSource } from '../src/modules/configuration/index.js';
+import { markedAttributeAt, vocabularyOn } from '../src/modules/merchandise/catalogue/index.js';
+import { serviceIdentitiesOf } from '../src/setup-organisation.js';
+import { jobRegistry } from '../src/worker.module.js';
 import { SYNTHETIC_ORGANISATIONS, syntheticCode, syntheticDatabaseName } from './fixtures/synthetic.js';
+import { readOrMakeFirstUsers, seedSetupRequest } from './seed/first-users.js';
 import { startAccessApp, SYNTHETIC_ORIGIN } from './support/access.js';
+import { capturingLogger } from './support/jobs.js';
 import type { SyntheticWorld } from './support/organisations.js';
 import {
   connect,
@@ -24,7 +38,35 @@ import {
 // S0-T06, S1-F01-T02, S1-F01-T24: the local seed, `pnpm seed` (node dist-seed/test/seed/seed.js), run as its own
 // process (code-house-rules 11.2). Turborepo builds the seed before the server's integration tests, so this is the
 // code under test. It creates databases with fixed synthetic names; no other test file uses them. It sets up both
-// synthetic Organisations through the setup step (DEC-118, RR-330); every value is SYNTHETIC.
+// synthetic Organisations through the setup step (DEC-118, RR-330), then gives each, finished before or not, what `dev`
+// needs and no screen sets up yet, once: the GRN, booking and damage-report series and the season and size markings
+// (DEC-143, DEC-144). Every value is SYNTHETIC.
+
+/** The series the seed gives each Organisation, by kind, with their SYNTHETIC formats (DEC-143, DEC-144). */
+const SEEDED_SERIES = [
+  { kind: 'booking.booking', state: 'Open', parts: 'SYN-BKG-#5' },
+  { kind: 'receiving.grn', state: 'Open', parts: 'SYN-GRN-#5' },
+  { kind: 'stock.damage-report', state: 'Open', parts: 'SYN-DMG-#5' },
+];
+
+/** The SYNTHETIC list attributes the seed marks as the season and the size list (DEC-144). */
+const SEEDED_MARKINGS = [
+  { mark: 'season', code: 'SYN-SEASON', valueKind: 'list', name: 'SYNTHETIC Season', origin: 'synthetic' },
+  { mark: 'size', code: 'SYN-SIZE', valueKind: 'list', name: 'SYNTHETIC Size', origin: 'synthetic' },
+];
+
+/** The SYNTHETIC values the seed gives each marked attribute, as the catalogue reads them in force (DEC-144). */
+const SEEDED_VALUES = {
+  season: [
+    { code: 'SYN-SEASON-1', name: 'SYNTHETIC Season 1' },
+    { code: 'SYN-SEASON-2', name: 'SYNTHETIC Season 2' },
+  ],
+  size: [
+    { code: 'SYN-SIZE-1', name: 'SYNTHETIC Size 1' },
+    { code: 'SYN-SIZE-2', name: 'SYNTHETIC Size 2' },
+    { code: 'SYN-SIZE-3', name: 'SYNTHETIC Size 3' },
+  ],
+};
 
 const COMMAND = fileURLToPath(new URL('../dist-seed/test/seed/seed.js', import.meta.url));
 const SEEDED = SYNTHETIC_ORGANISATIONS.map((organisation) => syntheticDatabaseName(organisation.code));
@@ -242,7 +284,7 @@ describe('pnpm seed, the local seed (code-house-rules 11.2)', () => {
     expect(await seededDatabases()).toEqual([]);
   });
 
-  it('PRD-ACS-023 PRD-ACS-020 DEC-118 sets up both Organisations through the setup step, each with its own first Admin and first approver and the SYNTHETIC GRN series, and a rerun changes nothing', async () => {
+  it('PRD-ACS-023 PRD-ACS-020 DEC-118 DEC-144 sets up both Organisations through the setup step, each with its own first Admin and first approver, the SYNTHETIC series and the season and size markings with their values, and a rerun changes nothing', async () => {
     const variables = { AOS_ENVIRONMENT: 'local', AOS_MIGRATION_DATABASE_URL: databaseUrl(directory, 'migration') };
     const first = await runSeed(variables);
     expect(first.exitCode, first.output).toBe(0);
@@ -297,18 +339,13 @@ describe('pnpm seed, the local seed (code-house-rules 11.2)', () => {
         );
         expect(logins.rows).toHaveLength(2);
         people.push(...logins.rows.map((row) => row.login));
-        // DEC-118 RR-449: the GRN series, Open, with its format labelled SYNTHETIC, so a GRN can be numbered on `dev`
-        // once receiving is available there (goods-in 4.8).
-        const grnSeries = await owner.query<{ state: string; parts: string }>(
-          `select s.state, string_agg(coalesce(p.text, '#' || p.width::text), '' order by p.position) as parts
-             from numbering.series s join numbering.number_format_part p on p.number_format_version_id = s.number_format_version_id
-            where s.kind = 'receiving.grn' and s.scope_key = 'organisation'
-            group by s.id, s.state`,
-        );
-        expect(grnSeries.rows).toEqual([{ state: 'Open', parts: 'SYN-GRN-#5' }]);
       } finally {
         await owner.end();
       }
+      // DEC-118 DEC-143 DEC-144 RR-449: the GRN, booking and damage-report series, Open, with formats labelled
+      // SYNTHETIC, and the season and size markings in force, prepared by the first Admin, so `dev` can number them
+      // and record budgets and count lines (goods-in 3.3, 3.9, 4.3, 4.8, 8.5).
+      expect(await seededSettings(database)).toEqual(await expectedSettings(database));
     }
     expect(new Set(people).size).toBe(4);
 
@@ -348,9 +385,240 @@ describe('pnpm seed, the local seed (code-house-rules 11.2)', () => {
     expect(await directoryRows(directory)).toHaveLength(SYNTHETIC_ORGANISATIONS.length);
     expect(await Promise.all(SEEDED.map((database) => footprint(database)))).toEqual(before);
   });
+
+  it('DEC-143 DEC-144 gives finished synthetic Organisations that lack them the SYNTHETIC series and the season and size markings with their values once, and leaves the rest of them as they were', async () => {
+    // Both Organisations as an earlier seed left them: set up through the setup step alone (DEC-118), before the
+    // series and the markings existed, and listed in a directory of their own.
+    for (const name of SEEDED) await dropDatabase(name);
+    const older = await createEmptyDatabase('seed_finished');
+    extra.push(older);
+    await migrateDatabase({
+      connectionString: databaseUrl(older, 'migration'),
+      folder: migrationSetFolder('directory'),
+    });
+    const secrets = readOrMakeFirstUsers(usersFile, SYNTHETIC_ORGANISATIONS);
+    for (const organisation of SYNTHETIC_ORGANISATIONS) {
+      const setUp = await runSetupStep({
+        migrationConnectionString: databaseUrl(older, 'migration'),
+        runtimeConnectionString: databaseUrl(older, 'runtime'),
+        request: seedSetupRequest(organisation, syntheticDatabaseName(organisation.code), secrets),
+        serviceIdentities: serviceIdentitiesOf(jobRegistry),
+        logger: capturingLogger().logger,
+      });
+      expect(setUp.outcome).toBe('created');
+    }
+    const untouchedBefore = await Promise.all(SEEDED.map((database) => untouchedRows(database)));
+    for (const database of SEEDED) {
+      expect(await seededSettings(database)).toEqual({ series: [], markings: [], values: [] });
+    }
+
+    // On `dev`, as the Railway dev environment runs it.
+    const variables = {
+      AOS_ENVIRONMENT: 'dev',
+      AOS_MIGRATION_DATABASE_URL: databaseUrl(older, 'migration'),
+      AOS_RUNTIME_DATABASE_URL: databaseUrl(older, 'runtime'),
+    };
+    const first = await runSeed(variables);
+    expect(first.exitCode, first.output).toBe(0);
+    for (const organisation of SYNTHETIC_ORGANISATIONS) {
+      expect(first.output).toContain(`${organisation.code} (${organisation.name}): already set up, left as it is`);
+      for (const added of [
+        'the SYNTHETIC GRN series defined',
+        'the SYNTHETIC booking series defined',
+        'the SYNTHETIC damage-report series defined',
+        'SYN-SEASON marked as the season attribute',
+        'SYN-SIZE marked as the size attribute',
+        'SYN-SEASON-1, SYN-SEASON-2 added as values of SYN-SEASON',
+        'SYN-SIZE-1, SYN-SIZE-2, SYN-SIZE-3 added as values of SYN-SIZE',
+      ]) {
+        expect(first.output).toContain(`${organisation.code} (${organisation.name}): ${added}`);
+      }
+    }
+    for (const database of SEEDED) expect(await seededSettings(database)).toEqual(await expectedSettings(database));
+    // Each marking is in force, with its values, where a budget and a count line read them: the catalogue's interface
+    // (goods-in 3.3, 4.3).
+    for (const organisation of SYNTHETIC_ORGANISATIONS) {
+      for (const mark of ['season', 'size'] as const) {
+        expect(await markedNow(organisation.code, mark)).toEqual({ marked: 'set', values: SEEDED_VALUES[mark] });
+      }
+    }
+    // Nothing else of a finished Organisation changes: its people, roles, assignments, settings and service identities
+    // stay as they were, and no approval is asked of anyone.
+    expect(await Promise.all(SEEDED.map((database) => untouchedRows(database)))).toEqual(untouchedBefore);
+
+    // A rerun adds nothing.
+    const before = await Promise.all(SEEDED.map((database) => footprint(database)));
+    const second = await runSeed(variables);
+    expect(second.exitCode, second.output).toBe(0);
+    expect(second.output).not.toMatch(/ defined| marked as| added as/);
+    expect(await Promise.all(SEEDED.map((database) => footprint(database)))).toEqual(before);
+  });
 });
 
-/** How many rows the setup step's tables hold: a rerun that changes nothing leaves them as they were. */
+/**
+ * What the seed gives an Organisation besides its setup (DEC-143, DEC-144): its series of the Organisation as a whole,
+ * by kind, with their formats; and each marking in force, with the attribute it marks, its origin, its preparer and
+ * whether an approval was asked for it.
+ */
+async function seededSettings(database: string) {
+  const owner = await connect(database, 'migration');
+  try {
+    const series = await owner.query<{ kind: string; state: string; parts: string }>(
+      `select s.kind, s.state, string_agg(coalesce(p.text, '#' || p.width::text), '' order by p.position) as parts
+         from numbering.series s join numbering.number_format_part p on p.number_format_version_id = s.number_format_version_id
+        where s.scope_key = 'organisation'
+        group by s.id, s.kind, s.state
+        order by s.kind`,
+    );
+    const markings = await owner.query<{
+      mark: string;
+      code: string;
+      valueKind: string;
+      name: string;
+      origin: string;
+      preparedBy: string;
+      requests: number;
+    }>(
+      `select m.mark, a.code, a.value_kind as "valueKind", av.name, v.origin, v.prepared_by_user_id::text as "preparedBy",
+              (select count(*)::int from access.approval_request r where r.document_version_id = v.id) as requests
+         from merchandise.marked_attribute m
+         join merchandise.marked_attribute_version v
+           on v.marked_attribute_id = m.id and v.decision = 'Approved' and pg_catalog.upper_inf(v.valid_during)
+         join merchandise.attribute a on a.id = v.attribute_id
+         join merchandise.attribute_version av on av.attribute_id = a.id and av.decision = 'Approved'
+        order by m.mark`,
+    );
+    // Each value of a marked attribute, with the proposal it came from: who proposed it, who wrote its confirmation and
+    // whether an approval was asked for it.
+    const values = await owner.query<{
+      attribute: string;
+      code: string;
+      name: string;
+      state: string;
+      proposedBy: string;
+      decidedBy: string;
+      requests: number;
+    }>(
+      `select a.code as attribute, v.code, vv.name, p.state, p.proposed_by_user_id::text as "proposedBy",
+              p.decided_by_user_id::text as "decidedBy",
+              (select count(*)::int from access.approval_request r where r.document_record_id = p.id) as requests
+         from merchandise.vocabulary_value v
+         join merchandise.vocabulary_value_version vv on vv.vocabulary_value_id = v.id and vv.decision = 'Approved'
+         join merchandise.vocabulary_proposal p on p.id = v.proposal_id
+         join merchandise.attribute a on a.id = v.attribute_id
+        order by a.code, v.code`,
+    );
+    return { series: series.rows, markings: markings.rows, values: values.rows };
+  } finally {
+    await owner.end();
+  }
+}
+
+/**
+ * What seededSettings answers once the seed has run (DEC-143, DEC-144): the three SYNTHETIC series; both markings, each
+ * prepared by the Organisation's first Admin with no approval asked; and the SYNTHETIC values, each proposed by the
+ * first Admin and written confirmed by the `setup` identity with no approval asked. The seed writes markings and values
+ * as labelled SYNTHETIC settings, since neither first user holds the right or an authenticator to approve them.
+ */
+async function expectedSettings(database: string) {
+  const owner = await connect(database, 'migration');
+  try {
+    const [record] = (
+      await owner.query<{ admin: string; setup: string }>(
+        `select first_admin_user_id::text as admin,
+                (select id::text from access.service_identity where code = 'setup') as setup
+           from access.setup_record`,
+      )
+    ).rows;
+    const valuesOf = (attribute: string, values: readonly { code: string; name: string }[]) =>
+      values.map((value) => ({
+        attribute,
+        ...value,
+        state: 'Confirmed',
+        proposedBy: record?.admin,
+        decidedBy: record?.setup,
+        requests: 0,
+      }));
+    return {
+      series: SEEDED_SERIES,
+      markings: SEEDED_MARKINGS.map((each) => ({ ...each, preparedBy: record?.admin, requests: 0 })),
+      values: [...valuesOf('SYN-SEASON', SEEDED_VALUES.season), ...valuesOf('SYN-SIZE', SEEDED_VALUES.size)],
+    };
+  } finally {
+    await owner.end();
+  }
+}
+
+/**
+ * Whether the catalogue answers an attribute marked as the mark now, and that attribute's values in force today, read
+ * as the runtime role through the catalogue's interface, as a budget and a count line read them (structure-and-masters
+ * 4.2; goods-in 3.3, 4.3).
+ */
+async function markedNow(
+  organisationCode: string,
+  mark: AttributeMark,
+): Promise<{ marked: string; values: { code: string; name: string }[] }> {
+  const database = syntheticDatabaseName(organisationCode);
+  const handle = createDb(databaseUrl(database, 'runtime'), { max: 1 });
+  try {
+    const runner = new CommandRunner({
+      clock: systemClock,
+      timezones: configurationTimezoneSource,
+      logger: capturingLogger().logger,
+    });
+    const owner = await connect(database, 'migration');
+    let admin: string | undefined;
+    try {
+      admin = (
+        await owner.query<{ admin: string }>('select first_admin_user_id::text as admin from access.setup_record')
+      ).rows[0]?.admin;
+    } finally {
+      await owner.end();
+    }
+    if (admin === undefined) throw new Error(`${organisationCode} has no first Admin`);
+    return await runner.run(
+      {
+        commandName: 'seed.read-marking',
+        organisation: { organisationCode, databaseName: database, db: handle.db },
+        correlationId: newCorrelationId(),
+        actor: { kind: 'actor', actorId: admin },
+      },
+      async (context) => {
+        const marked = await markedAttributeAt(context, mark);
+        const today = await context.businessDate();
+        if (marked.kind !== 'set' || today.kind !== 'set') return { marked: marked.kind, values: [] };
+        const values = await vocabularyOn(context, marked.attributeId, today.date);
+        return { marked: marked.kind, values: values.map(({ code, name }) => ({ code, name })) };
+      },
+    );
+  } finally {
+    await handle.close();
+  }
+}
+
+/** The rows of a finished Organisation that the seed never changes (DEC-118, DEC-143, DEC-144). */
+async function untouchedRows(database: string): Promise<Record<string, string>> {
+  const owner = await connect(database, 'migration');
+  try {
+    const [row] = (
+      await owner.query<Record<string, string>>(
+        `select (select count(*) from access.setup_record)::text as setup,
+                (select count(*) from access.app_user)::text as users,
+                (select count(*) from access.app_user_version)::text as "userVersions",
+                (select count(*) from access.role)::text as roles,
+                (select count(*) from access.role_assignment)::text as assignments,
+                (select count(*) from access.setting_version)::text as settings,
+                (select count(*) from access.service_identity)::text as "serviceIdentities",
+                (select count(*) from access.approval_request)::text as requests`,
+      )
+    ).rows;
+    return row ?? {};
+  } finally {
+    await owner.end();
+  }
+}
+
+/** How many rows the setup step's and the seed's tables hold: a rerun that changes nothing leaves them as they were. */
 async function footprint(database: string): Promise<Record<string, string>> {
   const owner = await connect(database, 'migration');
   try {
@@ -358,7 +626,12 @@ async function footprint(database: string): Promise<Record<string, string>> {
       await owner.query<Record<string, string>>(
         `select (select count(*) from access.setup_record)::text as setup,
                 (select count(*) from access.app_user)::text as users,
-                (select count(*) from audit.audit_record)::text as audit`,
+                (select count(*) from audit.audit_record)::text as audit,
+                (select count(*) from numbering.series)::text as series,
+                (select count(*) from merchandise.attribute)::text as attributes,
+                (select count(*) from merchandise.marked_attribute_version)::text as markings,
+                (select count(*) from merchandise.vocabulary_proposal)::text as proposals,
+                (select count(*) from merchandise.vocabulary_value_version)::text as "valueVersions"`,
       )
     ).rows;
     return row ?? {};
