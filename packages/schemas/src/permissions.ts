@@ -453,11 +453,18 @@ const bookingRecordTypes = [
  * approve decides it, taking the goods in or leaving them held, within the approver's limit on its cost (DM-8,
  * DEC-105). It is read with its Arrival, under view on `receiving.arrival`, so it declares no view of its own.
  * **Design choice**; who holds them is the product owner's to name (V-01).
+ *
+ * A recount (goods-in 4.7, 4.11; PRD-REC-019; S2-F02-T05), a linked recount of a GRN's lines, belongs to the GRN's
+ * place, legal entity and brand, so it carries every scope fact. Create proposes one; approve decides it, within the
+ * approver's limit on the goods' cost, Unknown before their PT (DM-8, DEC-105). It is read with its Arrival, under view
+ * on `receiving.arrival`, so it declares no view of its own. **Design choice**; who holds them is the product owner's
+ * to name (V-01).
  */
 const receivingRecordTypes = [
   declare('receiving.arrival', ['view', 'create', 'edit'], ALL),
   declare('receiving.grn', ['view', 'create'], ALL),
   declare('receiving.held_line', ['edit', 'approve'], ALL),
+  declare('receiving.recount', ['create', 'approve'], ALL),
 ] as const;
 
 /**

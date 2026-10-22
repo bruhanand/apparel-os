@@ -1,4 +1,10 @@
-import { HELD_LINE_DECISION, HELD_LINE_TYPE, type MissingItem } from '@apparel-os/schemas';
+import {
+  HELD_LINE_DECISION,
+  HELD_LINE_TYPE,
+  RECOUNT_APPROVAL,
+  RECOUNT_TYPE,
+  type MissingItem,
+} from '@apparel-os/schemas';
 import type { ApprovalRule } from '../../access/index.js';
 import type { NumberedKind } from '../../numbering/index.js';
 import type { CallerRegistration } from '../../stock/ledger/index.js';
@@ -33,6 +39,12 @@ export const MISSING_GRN_SERIES: MissingItem = { kind: 'number-series', numbered
 export const GRN_SOURCE_TYPE = 'grn';
 
 /**
+ * The record type a recount's receipt counts and reversals name as their source, each item's line one of its stock
+ * effects (stock-ledger 13.2, 13.18; goods-in 4.11).
+ */
+export const RECOUNT_SOURCE_TYPE = 'recount';
+
+/**
  * `receiving` as a stock caller (stock-ledger 13.2, 13.16): a GRN posts receipt counts and, in the same request, the
  * holds of what its count found: excess under an excess hold, wrong and unidentified goods in quarantine, damage under
  * a damage hold (goods-in 4.5, 4.9; S2-F02-T03); no import kind. Acceptance comes with the scan-in (S2-F07-T01).
@@ -40,7 +52,12 @@ export const GRN_SOURCE_TYPE = 'grn';
 export const receivingStockCaller: CallerRegistration = {
   module: RECEIVING_MODULE,
   synthetic: false,
-  recordTypes: [{ recordType: GRN_SOURCE_TYPE, itemKinds: ['receipt-count', 'place-hold'], importKinds: ['none'] }],
+  recordTypes: [
+    { recordType: GRN_SOURCE_TYPE, itemKinds: ['receipt-count', 'place-hold'], importKinds: ['none'] },
+    // A recount adds receipt counts for pieces found and reverses receipt counts for pieces counted in error
+    // (goods-in 4.11; stock-ledger 13.18; S2-F02-T05).
+    { recordType: RECOUNT_SOURCE_TYPE, itemKinds: ['receipt-count', 'reversal'], importKinds: ['none'] },
+  ],
 };
 
 /**
@@ -55,6 +72,20 @@ export const receivingApprovalRules: readonly ApprovalRule[] = [
     actionType: HELD_LINE_DECISION,
     module: RECEIVING_MODULE,
     recordType: HELD_LINE_TYPE,
+    independent: true,
+    value: 'cost',
+    freeTextReason: false,
+    decisionEvidenceClasses: [],
+    synthetic: false,
+  },
+  // A recount's approval (goods-in 4.7, 4.11; PRD-REC-019; S2-F02-T05): a different authorised person from whoever
+  // proposed it (POL-02.07) approves it, on the cost of the goods its receipt counts and reversals move, Unknown before
+  // their PT, so approving needs explicit authority over Unknown value (DM-8, DEC-105; PRD-ACS-016). Who holds it is set
+  // by roles (goods-in 11: the Owner, or whoever holds the limits), never here.
+  {
+    actionType: RECOUNT_APPROVAL,
+    module: RECEIVING_MODULE,
+    recordType: RECOUNT_TYPE,
     independent: true,
     value: 'cost',
     freeTextReason: false,

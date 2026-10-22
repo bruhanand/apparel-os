@@ -914,6 +914,45 @@ export async function planRequest(
           for (const row of carried) holdIds.add(row.id);
           return;
         }
+        if (reversed.kind === 'receipt-count') {
+          // An inflow made in error: its origin's established value changes, so the origin is locked exclusively
+          // (10.3 step 2); its units leave from the place named (7.5).
+          for (const leg of legs) {
+            originIds.set(leg.originId, 'exclusive');
+            enteredOrigins.add(leg.originId);
+          }
+          const [counted] = legs;
+          if (item.goods.skuId === null) {
+            // Goods of a product not yet set up, named by the origin the count made (13.18; goods-in 4.11): no cost is
+            // ever established on an origin of Unknown SKU (13.14), so nothing values or posts.
+            if (counted?.originId !== item.goods.receiptOriginId) {
+              throw new StockRefused(
+                refusalOf('invalid-item', item.lineId, [
+                  { kind: 'receipt-origin', receiptOriginId: item.goods.receiptOriginId },
+                ]),
+              );
+            }
+            await unknownOriginAt(item.lineId, unit, item.goods.receiptOriginId);
+            return;
+          }
+          const sku = await skuOf(item.lineId, item.goods.skuId, unit.siteId);
+          await goodsAt(item.lineId, unit, {
+            ...item.goods,
+            ...(sku.pieceTracked ? {} : { receiptOriginId: counted?.originId ?? '' }),
+          });
+          // The pool and Check postable only while the origin's cost is established: before it, the units take no value
+          // and nothing posts (7.6; 13.18), as a hold names a pool only then (13.15). A cost established between Plan and
+          // the locks finds no pool locked, `plan-stale`.
+          const [state] = await context.tx
+            .select({ valueKnown: receiptOriginState.valueKnown })
+            .from(receiptOriginState)
+            .where(eq(receiptOriginState.receiptOriginId, counted?.originId ?? ''));
+          if (state?.valueKnown === true) {
+            await poolOf(item.lineId, unit, sku);
+            probe(item.lineId, 'stock.cost-established-reversal', unit, sku);
+          }
+          return;
+        }
         if (item.goods.skuId === null) {
           throw new StockRefused(
             refusalOf('invalid-item', item.lineId, [
@@ -924,20 +963,6 @@ export async function planRequest(
         const goods: Goods = item.goods;
         const sku = await skuOf(item.lineId, goods.skuId, unit.siteId);
         await poolOf(item.lineId, unit, sku);
-        if (reversed.kind === 'receipt-count') {
-          // An inflow made in error: its origin's established value changes, so the origin is locked exclusively
-          // (10.3 step 2); its units leave from the place named (7.5).
-          for (const leg of legs) {
-            originIds.set(leg.originId, 'exclusive');
-            enteredOrigins.add(leg.originId);
-          }
-          await goodsAt(item.lineId, unit, {
-            ...goods,
-            ...(sku.pieceTracked ? {} : { receiptOriginId: legs[0]?.originId ?? '' }),
-          });
-          probe(item.lineId, 'stock.cost-established-reversal', unit, sku);
-          return;
-        }
         // An outflow brought back (7.5, 8.4): its origins only read; the units come back at the place named.
         for (const leg of legs) shared(leg.originId);
         await unitOf(item.lineId, reversed.siteId, reversed.businessUnitId);

@@ -64,6 +64,11 @@ import {
   invoiceRecordedSchema,
   photosAttachedSchema,
   photosDraftSchema,
+  RECOUNT_TYPE,
+  recountDraftSchema,
+  recountParamsSchema,
+  recountProposedSchema,
+  recountReadSchema,
 } from './receiving.js';
 import {
   DAMAGE_REPORT_TYPE,
@@ -1214,6 +1219,59 @@ const HELD_LINE_DECISION_CODES = [
 ] as const satisfies readonly ErrorCode[];
 
 /**
+ * The stock ledger's refusals a recount's receipt counts and reversals can meet (stock-ledger 13.4, 13.8, 13.18;
+ * goods-in 4.11; S2-F02-T05): read for its proposal's value and posted at its approval. A reversal takes free units
+ * only, so held, reserved or hidden units, a count freeze and more than the count moved refuse it; goods whose cost is
+ * established need their book's cost setting and posting map, and a value that does not divide (SL-2).
+ */
+const RECOUNT_LEDGER_CODES = [
+  'stock.invalid-item',
+  'stock.place-invalid',
+  'stock.plan-stale',
+  'stock.rule-not-set',
+  'stock.insufficient-available',
+  'stock.held',
+  'stock.reserved',
+  'stock.blocked',
+  'stock.count-freeze-active',
+  'stock.exceeds-source',
+  'stock.no-cost-setting',
+  'stock.posting-refused',
+] as const satisfies readonly ErrorCode[];
+
+/**
+ * The refusals of a recount's lines (goods-in 4.7, 4.11; PRD-REC-019; S2-F02-T05), at its proposal and again under the
+ * locks at its approval: the GRN's PT attached, another recount waiting, and each line a recount does not change.
+ */
+const RECOUNT_LINE_CODES = [
+  'receiving.record-not-found',
+  'receiving.pt-attached',
+  'receiving.recount-unchanged',
+  'receiving.recount-held-line',
+  'receiving.recount-not-on-invoice',
+  'receiving.recount-adds-extra',
+  'receiving.recount-below-damage',
+  'receiving.recount-linked',
+  ...RECOUNT_LEDGER_CODES,
+] as const satisfies readonly ErrorCode[];
+
+/**
+ * The codes of a recount's approval (goods-in 4.7, 4.11, 10.3; S2-F02-T05): the receiving gate at the unit, the recount
+ * decided already, its lines checked again under the locks, the decision verified under the ledger's locks on the
+ * goods' cost then (access-and-approvals 9.7), and the shortage follow-up a recount raises (goods-in 4.9).
+ */
+const RECOUNT_DECISION_CODES = [
+  'configuration.operation-unavailable',
+  'receiving.recount-decided',
+  'access.approval-value-exceeded',
+  ...RECOUNT_LINE_CODES,
+  'exceptions.no-exception-code-series',
+  'exceptions.exception-code-series-paused',
+  'exceptions.exception-code-series-exhausted',
+  'exceptions.no-routing',
+] as const satisfies readonly ErrorCode[];
+
+/**
  * The stock ledger's refusals a damage hold can meet, placed by a report or read for a request's value (stock-ledger
  * 13.8, 13.15; goods-in 8.2, 8.5; S2-F08-T01): the goods not of the line or not in custody, a cost pool that appeared
  * after Plan, and a cost that does not divide into whole paise (SL-2). A hold is stopped by no count freeze (13.9).
@@ -1866,6 +1924,8 @@ export const routes = {
       ...DAMAGE_DECISION_CODES,
       // A held line's decision (goods-in 4.6; S2-F02-T03).
       ...HELD_LINE_DECISION_CODES,
+      // A recount's approval (goods-in 4.7, 4.11; S2-F02-T05).
+      ...RECOUNT_DECISION_CODES,
       // Layout, mapping and mapping rule versions (imports-and-opening-data 6.4; S1-F06-T03).
       'files-imports.proposal-not-found',
       'files-imports.proposal-not-open',
@@ -5283,6 +5343,39 @@ export const routes = {
       'receiving.size-not-on-list',
       'receiving.sku-not-of-line',
     ],
+  }),
+  // A recount of a GRN's lines (goods-in 4.7, 4.11, section 11; PRD-REC-019; S2-F02-T05): proposed with a reason on the
+  // GRN, and read with the GRN lines it names for its approval's panel in My work; approved or rejected through the
+  // approval panel by a different person (access-and-approvals 9.5). A recount carries every scope fact of its GRN, so
+  // each route authorises in its command with the Arrival's facts (access-and-approvals 5.3). Proposing records no
+  // business effect, so it asks no gate (DEC-116).
+  proposeRecount: defineRoute({
+    method: 'POST',
+    path: '/api/receiving/grns/{grnId}/recounts',
+    params: grnParamsSchema,
+    access: { kind: 'action', action: 'create', recordType: RECOUNT_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: recountDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: recountProposedSchema,
+    codes: [
+      ...HISTORY_CODES,
+      'kernel.cross-site-request',
+      'kernel.stale-version',
+      'receiving.recount-pending',
+      ...RECOUNT_LINE_CODES,
+    ],
+  }),
+  readRecount: defineRoute({
+    method: 'GET',
+    path: '/api/receiving/recounts/{recountId}',
+    params: recountParamsSchema,
+    access: { kind: 'action', action: 'view', recordType: ARRIVAL_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: recountReadSchema,
+    codes: [...HISTORY_CODES, 'receiving.record-not-found'],
   }),
   // Booking's later link of GRN lines to the lines of one booking (goods-in 3.7, 4.10, section 11; PRD-BKG-008;
   // POL-05.08; S2-F02-T04): a GRN received without a booking, or lines sent for review. Lines within the delivery window

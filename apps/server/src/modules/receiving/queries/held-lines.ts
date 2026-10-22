@@ -16,6 +16,7 @@ import { batchOf } from '../db/columns.js';
 import { arrival, grn, grnLine, heldLine, heldLineDecision, heldLineVersion } from '../db/schema.js';
 import { GRN_SOURCE_TYPE, RECEIVING_MODULE } from '../domain/kinds.js';
 import { textKey } from '../domain/text.js';
+import { countsNowOf, originsOfLine, pendingRecountOf, recountedCounts, recountsOfGrn } from './recounts.js';
 
 // The held lines of a GRN as its readers see them, and what other modules read of them (goods-in 4.6, 4.9, 5.1, 5.4,
 // 9.3; S2-F02-T03): each GRN line with its findings and its held part's state; the resolution check of the follow-ups
@@ -123,8 +124,14 @@ export async function grnLineViews(
     return version === undefined ? [] : [version.id];
   });
   const latestRequests = await requests(latest);
+  const recounted = await recountedCounts(
+    context,
+    lines.map((line) => line.id),
+  );
   return lines.map((line) => {
     const findings = findingsOf(line);
+    const countedNow = recounted.get(line.id);
+    const recountedFindings = countedNow === undefined ? null : findingsOf({ ...line, countedQuantity: countedNow });
     const part = held.get(line.id);
     let heldView: HeldLine | null = null;
     if (part !== undefined) {
@@ -176,6 +183,18 @@ export async function grnLineViews(
       heldLine: heldView,
       batch: batchOf(line),
       countedBy: line.countedByUserIds,
+      recounted:
+        countedNow === undefined || recountedFindings === null
+          ? null
+          : {
+              countedQuantity: countedNow,
+              findings: {
+                shortage: recountedFindings.shortage,
+                extra: recountedFindings.extra,
+                received: recountedFindings.received,
+                damaged: recountedFindings.damaged,
+              },
+            },
     };
   });
 }
@@ -279,10 +298,14 @@ export interface GoodPiecesPart {
 /** What `merchandise` · PT reads of a GRN before its PT (goods-in 5.1, 5.4). */
 export interface PtBasis {
   readonly grnId: string;
-  /** The held lines and the damage reports on the GRN's lines still waiting for their decision (5.1). */
+  /**
+   * The held lines and the damage reports on the GRN's lines still waiting for their decision (5.1), and a recount of
+   * it waiting for its decision, which may still change its pieces (goods-in 4.11; S2-F02-T05).
+   */
   readonly undecided: readonly (
     | { readonly kind: 'held-line'; readonly heldLineId: string }
     | { readonly kind: 'damage-report'; readonly damageReportId: string }
+    | { readonly kind: 'recount'; readonly recountId: string }
   )[];
   /**
    * The GRN's good pieces per style and size, compared ignoring case and spaces at the ends (5.4): those received,
@@ -322,12 +345,20 @@ export async function ptBasisOf(
   for (const report of reports) {
     if (report.state === 'Submitted') undecided.push({ kind: 'damage-report', damageReportId: report.damageReportId });
   }
+  // A recount waiting for its decision may still change the GRN's pieces (goods-in 4.11).
+  const recounts = await recountsOfGrn(context, grnId);
+  const pending = pendingRecountOf(recounts);
+  if (pending !== undefined) undecided.push({ kind: 'recount', recountId: pending.row.id });
+  const countsNow = countsNowOf(recounts);
+  const movements = recounts.flatMap((record) => record.movements);
   const groups = new Map<
     string,
     { styleCode: string; size: string | null; quantity: number; parts: GoodPiecesPart[] }
   >();
   for (const line of lines) {
-    const findings = findingsOf(line);
+    const countedNow = countsNow.get(line.id);
+    // The pieces as the line's latest approved recount counts them, its findings worked out again (goods-in 4.11).
+    const findings = findingsOf(countedNow === undefined ? line : { ...line, countedQuantity: countedNow });
     const part = held.get(line.id);
     const takenIn = part?.decision?.outcome === 'taken-in';
     const confirmed = reports
@@ -339,14 +370,31 @@ export async function ptBasisOf(
     const styleCode = line.goods === 'unidentified' ? named?.styleCode : line.styleCode;
     const size = line.goods === 'unidentified' ? (named?.size?.code ?? null) : line.sizeCode;
     if (styleCode === undefined || styleCode === null) continue;
+    const key = `${textKey(styleCode)}|${size === null ? '' : textKey(size)}`;
+    const group = groups.get(key) ?? { styleCode, size, quantity: 0, parts: [] };
+    group.quantity += quantity;
+    if (movements.some((each) => each.grnLineId === line.id)) {
+      // A recounted line's goods are on the GRN's origin and on each a recount found, each with the pieces it holds
+      // still; the damage confirmed is on the GRN's (goods-in 4.9, 4.11). A recounted line has no held line.
+      const origins = await originsOfLine(context, line.id, findingsOf(line).received, movements);
+      for (const [at, origin] of origins.entries()) {
+        const pieces = origin.pieces - (at === 0 && findingsOf(line).received > 0 ? confirmed : 0);
+        if (pieces <= 0) continue;
+        group.parts.push({
+          grnLineId: line.id,
+          receiptOriginId: origin.receiptOriginId,
+          quantity: pieces,
+          releases: [],
+        });
+      }
+      groups.set(key, group);
+      continue;
+    }
     const origin =
       part?.row.receiptOriginId ??
       (await originOfSourceLine(context, { module: RECEIVING_MODULE, recordType: GRN_SOURCE_TYPE, lineId: line.id }))
         ?.receiptOriginId ??
       null;
-    const key = `${textKey(styleCode)}|${size === null ? '' : textKey(size)}`;
-    const group = groups.get(key) ?? { styleCode, size, quantity: 0, parts: [] };
-    group.quantity += quantity;
     group.parts.push({
       grnLineId: line.id,
       receiptOriginId: origin,

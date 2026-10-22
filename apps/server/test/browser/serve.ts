@@ -7,6 +7,7 @@ import { known, paise, uuidv7 } from '@apparel-os/domain';
 import {
   DAMAGE_DECISION,
   HELD_LINE_DECISION,
+  RECOUNT_APPROVAL,
   fieldClassSchema,
   permissionRegistry,
   setupRequestSchema,
@@ -153,6 +154,7 @@ import {
   receivingFixture,
   receivingGateOpen,
   receivingGranted,
+  STOCK_VIEW,
 } from '../support/receiving.js';
 import { reportedValues, signedFixture } from '../support/signed-policies.js';
 import { connect, databaseUrl, dropDatabase, usePostgresServer } from '../support/postgres.js';
@@ -2602,6 +2604,58 @@ const heldDecider = await grantSynthetic(receivingDatabase, { kind: 'user', id: 
   );
   if (decided.kind !== 'success') throw new Error(`The held-line limit was not approved: ${decided.refusal.code}`);
 }
+// The recount journey (recount.spec.ts; goods-in 4.7, 4.11, section 11; S2-F02-T05), on the held-line world's Site:
+// Warehouse (P-WHS), who counts, issues the GRN and proposes its recount; and the Owner (P-OWN), who approves recounts
+// from My work within an individual SYNTHETIC limit covering an Unknown cost, prepared and approved through `access`'s
+// commands by the setup's two people (access-and-approvals 9.2), and sees the stock the approval posts (stock-ledger
+// 14.3). Who recounts, who approves and the limit are the product owner's: SYNTHETIC here.
+const recountReceiver = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-RECOUNT-RECEIVER',
+  enrolled: true,
+  personas: ['P-WHS'],
+});
+await grantSynthetic(receivingDatabase, { kind: 'user', id: recountReceiver.id }, [
+  ...RECEIVER_AUTHORITY,
+  { recordType: 'receiving.recount', action: 'create' },
+]);
+const recountApprover = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-RECOUNT-APPROVER',
+  enrolled: true,
+  personas: ['P-OWN'],
+});
+const recountDecider = await grantSynthetic(receivingDatabase, { kind: 'user', id: recountApprover.id }, [
+  { recordType: 'receiving.arrival', action: 'view' },
+  { recordType: 'receiving.recount', action: 'approve' },
+  { recordType: 'access.approval_request', action: 'view' },
+  { recordType: 'access.approval_reason', action: 'view' },
+  ...STOCK_VIEW,
+]);
+{
+  const limitAccess = receivingStructure.accessWith({ rules: receivingApprovalRules, effects: new Map() });
+  const preparer = receivingStructure.preparer;
+  const preparing = await grantSynthetic(receivingDatabase, { kind: 'user', id: preparer.id }, LIMIT_ADMIN_AUTHORITY);
+  const prepared = await receivingStructure.run(preparer.id, (context) =>
+    limitAccess.prepareApprovalLimit(
+      context,
+      { userId: preparer.id, roleAssignmentId: preparing.assignmentId },
+      {
+        actionType: RECOUNT_APPROVAL,
+        holder: { kind: 'individual', userId: recountApprover.id, roleAssignmentId: recountDecider.assignmentId },
+        limit: { kind: 'none' },
+        coversUnknown: true,
+        origin: 'synthetic',
+        validFrom: receivingStructure.today(),
+      },
+    ),
+  );
+  if (prepared.kind !== 'success') throw new Error(`The recount limit was refused: ${prepared.refusal.code}`);
+  const decided = await receivingStructure.decideThrough(
+    limitAccess,
+    prepared.answer.requestId,
+    prepared.answer.limitId,
+  );
+  if (decided.kind !== 'success') throw new Error(`The recount limit was not approved: ${decided.refusal.code}`);
+}
 const receivingRouter = new OrganisationRouter(
   { directoryConnectionString: databaseUrl(world.directory, 'runtime'), poolMax: 2 },
   fixtureLog.logger,
@@ -2776,6 +2830,8 @@ await bookingLimitApproved(
 await grantSynthetic(receivingDatabase, { kind: 'user', id: damageReporter.id }, RECEIVING_LISTS);
 await grantSynthetic(receivingDatabase, { kind: 'user', id: heldReceiver.id }, RECEIVING_LISTS);
 await grantSynthetic(receivingDatabase, { kind: 'user', id: heldApprover.id }, RECEIVING_LISTS);
+await grantSynthetic(receivingDatabase, { kind: 'user', id: recountReceiver.id }, RECEIVING_LISTS);
+await grantSynthetic(receivingDatabase, { kind: 'user', id: recountApprover.id }, RECEIVING_LISTS);
 const damageReasonId = await writeSyntheticReason(receivingDatabase, 'approve');
 const damageRouting = await fixtureRunner.run(
   {
@@ -2840,6 +2896,37 @@ const heldRouting = await fixtureRunner.run(
     ),
 );
 if (heldRouting.kind !== 'done') throw new Error(`The excess rule was refused: ${heldRouting.refusal.code}`);
+// The recount journey's shortage routed at the held-line world's Site to the Owner who approves recounts by a SYNTHETIC
+// rule: its GRN counts short, and every follow-up needs an owner (goods-in 4.9). The routing is the product owner's:
+// SYNTHETIC here.
+const recountRouting = await fixtureRunner.run(
+  {
+    commandName: 'test-syn-recount.fixture',
+    organisation: receivingRouted.organisation,
+    correlationId: newCorrelationId(),
+    actor: { kind: 'actor', actorId: damageOperations.id },
+  },
+  (context) =>
+    new Exceptions({
+      numbering: new Numbering({ kinds: [EXCEPTION_CODE_KIND] }),
+      inbox: new Inbox(),
+      audit: new Audit(fixtureLog.logger),
+      types: [damageExceptionType, ...receivingExceptionTypes],
+    }).prepareRouting(
+      context,
+      { userId: damageOperations.id, roleAssignmentId: damageDecider.assignmentId },
+      {
+        typeCode: 'receiving.shortage',
+        siteId: heldWorld.siteId,
+        owner: { kind: 'user', userId: recountApprover.id },
+        dueRule: { format: 'elapsed-minutes-v1', minutes: 60 },
+        escalation: { kind: 'user', userId: recountApprover.id },
+        validFrom: new Date().toISOString().slice(0, 10),
+        origin: 'synthetic',
+      },
+    ),
+);
+if (recountRouting.kind !== 'done') throw new Error(`The shortage rule was refused: ${recountRouting.refusal.code}`);
 // The receive-against-booking journey's review of GRN lines routed at its world's Site to its Booking user by a
 // SYNTHETIC rule (goods-in 4.10). The routing is the product owner's: SYNTHETIC here.
 const againstRouting = await fixtureRunner.run(
@@ -2870,7 +2957,7 @@ const againstRouting = await fixtureRunner.run(
     ),
 );
 if (againstRouting.kind !== 'done') throw new Error(`The review rule was refused: ${againstRouting.refusal.code}`);
-// Both rules approved through the real commands, as Setup › Exception rules has them approved (access-and-approvals
+// The rules approved through the real commands, as Setup › Exception rules has them approved (access-and-approvals
 // 12.2; code-house-rules 11.2): each asked of `access` for a different person, the setup's approver, holding approve on
 // the rules, who decides it through Decide.
 {
@@ -2879,7 +2966,7 @@ if (againstRouting.kind !== 'done') throw new Error(`The review rule was refused
     { recordType: 'exceptions.exception_routing', action: 'view' },
     { recordType: 'exceptions.exception_routing', action: 'approve' },
   ]);
-  for (const rule of [damageRouting.value, heldRouting.value, againstRouting.value]) {
+  for (const rule of [damageRouting.value, heldRouting.value, againstRouting.value, recountRouting.value]) {
     const requestId = await receivingStructure.run(damageOperations.id, (context) =>
       routingAccess.requestApproval(context, {
         actionType: ROUTING_ACTION_TYPE,
@@ -3497,6 +3584,13 @@ writeFileSync(
       organisationCode: receivingCode,
       receiver: credentialsOf(heldReceiver),
       approver: credentialsOf(heldApprover),
+      reasonId: damageReasonId,
+      options: heldWorld.options,
+    },
+    recount: {
+      organisationCode: receivingCode,
+      receiver: credentialsOf(recountReceiver),
+      approver: credentialsOf(recountApprover),
       reasonId: damageReasonId,
       options: heldWorld.options,
     },

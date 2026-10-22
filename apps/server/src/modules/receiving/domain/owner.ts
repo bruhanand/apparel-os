@@ -39,6 +39,32 @@ export function receiptOwner(agreement: BrandAgreement | undefined, legalEntityI
   }
 }
 
+/**
+ * The owner the GRN gave its receipt counts, from what it keeps, which a recount's receipt counts give theirs too:
+ * the same goods of the same delivery, under the same Agreement version (goods-in 4.11; PRD-ORG-014). A kept owner
+ * that cannot be read back is a defect, never Unknown.
+ */
+export function ownerOfGrn(kept: {
+  readonly ownerKind: Owner['kind'];
+  readonly ownerId: string | null;
+  readonly agreementVersionId: string | null;
+}): Owner {
+  const { ownerKind, ownerId, agreementVersionId } = kept;
+  if (ownerKind === 'unknown') return { kind: 'unknown' };
+  if (ownerId === null) throw new Error('A GRN keeps an owner with no identifier');
+  if (ownerKind === 'organisation') {
+    return {
+      kind: 'organisation',
+      legalEntityId: ownerId,
+      ...(agreementVersionId === null ? {} : { agreementVersionId }),
+    };
+  }
+  if (agreementVersionId === null) throw new Error('A GRN keeps an owner by an Agreement with no Agreement version');
+  return ownerKind === 'brand'
+    ? { kind: 'brand', brandId: ownerId, agreementVersionId }
+    : { kind: 'supplier', partyId: ownerId, agreementVersionId };
+}
+
 /** The owner as the GRN keeps it: its kind and the identifier of whoever it names. */
 export function ownerColumns(owner: Owner): { readonly ownerKind: Owner['kind']; readonly ownerId: string | null } {
   switch (owner.kind) {

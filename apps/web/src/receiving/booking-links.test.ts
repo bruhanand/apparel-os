@@ -45,6 +45,7 @@ function grnLine(id: string, received: number, overrides: Partial<GrnLine> = {})
     heldLine: null,
     batch: null,
     countedBy: [],
+    recounted: null,
     ...overrides,
   };
 }
@@ -135,5 +136,18 @@ describe('a GRN line’s standing against bookings (goods-in 4.10)', () => {
       ],
     } as unknown as Grn;
     expect(linkableLines(grn).map((each) => each.id)).toEqual([ID(50), ID(51)]);
+  });
+});
+
+describe('a recounted line against bookings (goods-in 4.11; S2-F02-T05)', () => {
+  it('PRD-REC-019 a line recounted to no piece received delivers nothing; one recounted from none may be linked', () => {
+    const recounted = (received: number) => ({
+      countedQuantity: received,
+      findings: { shortage: 0, extra: 0, received, damaged: 0 },
+    });
+    expect(standingOf(grnLine(ID(1), 2, { recounted: recounted(0) }), undefined)).toEqual({
+      kind: 'nothing-received',
+    });
+    expect(standingOf(grnLine(ID(2), 0, { recounted: recounted(1) }), undefined)).toEqual({ kind: 'unbooked' });
   });
 });

@@ -26,6 +26,7 @@ import {
   MAPPING_RULE_CONFIRMATION,
   PERIOD_REOPENING_APPROVAL,
   PRODUCT_CONFIRMATION,
+  RECOUNT_APPROVAL,
   SITE_READINESS_APPROVAL,
   VOCABULARY_CONFIRMATION,
   type ApprovalRequestView,
@@ -689,6 +690,59 @@ function HeldLineFacts({ view }: { view: ApprovalRequestView }) {
   );
 }
 
+/**
+ * A recount of a GRN's lines, for its approval (goods-in 4.7, 4.11, section 11; PRD-REC-019; S2-F02-T05): the GRN, why it
+ * was recounted and by whom, and each line with its identity, its count and its count as recounted. Read with view on
+ * the Arrival, within the reader's scope; a person the reader cannot name is Unknown (PRD-MOD-015).
+ */
+function RecountFacts({ view }: { view: ApprovalRequestView }) {
+  const query = useQuery({
+    ...readQuery(api, 'readRecount', { params: { recountId: view.document.recordId } }),
+    enabled: useViewable(ARRIVAL_TYPE),
+  });
+  const read = query.data;
+  if (read === undefined) return null;
+  const { recount } = read;
+  const nameOf = (userId: string) => read.people.find((each) => each.userId === userId)?.name ?? t('receive.unknown');
+  const identity = (parts: readonly (string | null | undefined)[]) =>
+    formatList(parts.filter((part): part is string => part !== null && part !== undefined));
+  return (
+    <div className="flex flex-col gap-3">
+      <Facts>
+        <Fact label="recount.grn">{read.grnNumber}</Fact>
+        <Fact label="recount.proposed-by">{nameOf(recount.proposedBy)}</Fact>
+        <Fact label="recount.reason">{recount.reason}</Fact>
+      </Facts>
+      <table className="w-full border-collapse text-body" aria-label={t('recount.lines')}>
+        <thead>
+          <tr>
+            {(['recount.line', 'held.line', 'recount.before', 'recount.after'] as const).map((label) => (
+              <th key={label} scope="col" className="h-10 bg-sunken px-3 text-left text-body-sm font-semibold">
+                {t(label)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {recount.lines.map((each) => {
+            const line = read.lines.find((one) => one.id === each.grnLineId);
+            return (
+              <tr key={each.grnLineId} className="h-10 border-t border-border">
+                <td className="px-3 tabular-nums">{formatQuantity(each.lineNumber)}</td>
+                <td className="px-3">
+                  {line === undefined ? '' : identity([line.styleCode ?? line.description, line.colour, line.size])}
+                </td>
+                <td className="px-3 tabular-nums">{formatQuantity(each.countedBefore)}</td>
+                <td className="px-3 tabular-nums">{formatQuantity(each.countedAfter)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 /** The facts of the request's version, by its action type; nothing where the reader may not read them. */
 export function DocumentFacts({ view }: { view: ApprovalRequestView }) {
   switch (view.actionType) {
@@ -745,6 +799,9 @@ export function DocumentFacts({ view }: { view: ApprovalRequestView }) {
     // A held line's decision (goods-in 4.6; S2-F02-T03).
     case HELD_LINE_DECISION:
       return <HeldLineFacts view={view} />;
+    // A recount's approval (goods-in 4.7, 4.11; S2-F02-T05).
+    case RECOUNT_APPROVAL:
+      return <RecountFacts view={view} />;
     // The season or size attribute (structure-and-masters 4.2 "As built"; RR-550, RR-556).
     case MARKED_ATTRIBUTE_CHANGE:
       return <MarkedAttributeFacts view={view} />;

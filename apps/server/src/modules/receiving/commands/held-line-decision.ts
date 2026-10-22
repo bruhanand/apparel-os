@@ -1,11 +1,11 @@
 import { uuidv7 } from '@apparel-os/domain';
-import { HELD_LINE_DECISION, HELD_LINE_TYPE } from '@apparel-os/schemas';
+import { HELD_LINE_TYPE } from '@apparel-os/schemas';
 import { CommandDefect, type CommandRefusal, type LockTarget, type TransactionContext } from '../../../kernel/index.js';
-import type { DocumentEffect, EffectDecider, EffectOutcome, ModuleApprovals } from '../../access/index.js';
+import type { DocumentEffect, EffectDecider, EffectOutcome } from '../../access/index.js';
 import type { AuditInterface } from '../../audit/index.js';
 import type { ConfigurationInterface } from '../../configuration/index.js';
 import { heldLineDecision } from '../db/schema.js';
-import { RECEIVING_MODULE, receivingApprovalRules } from '../domain/kinds.js';
+import { RECEIVING_MODULE } from '../domain/kinds.js';
 import { heldLineDecided } from '../events.js';
 import { heldLineDecisionUnavailable } from '../queries/availability.js';
 import {
@@ -84,7 +84,7 @@ function deciding(decider: EffectDecider): { readonly actor: Actor; readonly dec
 }
 
 /** A held line's decision: approve takes the goods in, reject leaves them held (goods-in 4.6). */
-function decisionEffect(dependencies: EffectDependencies): DocumentEffect {
+export function heldLineDecisionEffect(dependencies: EffectDependencies): DocumentEffect {
   const decide = async (
     context: TransactionContext,
     decider: EffectDecider,
@@ -141,16 +141,5 @@ function decisionEffect(dependencies: EffectDependencies): DocumentEffect {
     },
     approve: (context, decider, versionId) => decide(context, decider, versionId, 'taken-in'),
     reject: (context, decider, versionId) => decide(context, decider, versionId, 'left-held'),
-  };
-}
-
-/**
- * The approval rule and decision effect `receiving` declares to `access` (access-and-approvals 8, 9.8b; module-map
- * section 3, rule 6), which the composition root hands to `access` at start.
- */
-export function receivingApprovals(dependencies: EffectDependencies): ModuleApprovals {
-  return {
-    rules: receivingApprovalRules,
-    effects: new Map<string, DocumentEffect>([[HELD_LINE_DECISION, decisionEffect(dependencies)]]),
   };
 }
