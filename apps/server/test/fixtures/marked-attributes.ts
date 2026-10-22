@@ -15,12 +15,32 @@ import { syntheticCode, syntheticName } from './synthetic.js';
 // recorded; RR-467). The marking is a labelled SYNTHETIC setting, written as the setup step writes its settings
 // (DEC-118) and as the server of the browser journeys writes its season marking: no approval is asked, since the seed
 // holds no person's authenticator to decide one with (access-and-approvals 3.3), and none is recorded. An audit record
-// names the command's actor, so the two are separate commands. Never a KDPS value.
+// names the command's actor, so the two are separate commands. The marked attribute then gets a few SYNTHETIC values
+// the same way (product owner, 22 Oct 2026, DEC-144), so a budget's season and a count line's size can be named on
+// `dev` without first giving anyone the catalogue's rights. Never a KDPS value, never a default.
 
-/** The SYNTHETIC list attribute the seed marks as each mark, by its code and name. */
-export const SYNTHETIC_MARKED_ATTRIBUTES: Readonly<Record<AttributeMark, { code: string; name: string }>> = {
-  season: { code: syntheticCode('SEASON'), name: syntheticName('Season') },
-  size: { code: syntheticCode('SIZE'), name: syntheticName('Size') },
+interface SyntheticLabel {
+  readonly code: string;
+  readonly name: string;
+}
+
+/**
+ * The SYNTHETIC list attribute the seed marks as each mark, by its code and name, and the SYNTHETIC values it gives it
+ * (DEC-144): a few, enough for a budget's season and a count line's size on `dev`. None is a default.
+ */
+export const SYNTHETIC_MARKED_ATTRIBUTES: Readonly<
+  Record<AttributeMark, SyntheticLabel & { readonly values: readonly SyntheticLabel[] }>
+> = {
+  season: {
+    code: syntheticCode('SEASON'),
+    name: syntheticName('Season'),
+    values: ['1', '2'].map((n) => ({ code: syntheticCode(`SEASON-${n}`), name: syntheticName(`Season ${n}`) })),
+  },
+  size: {
+    code: syntheticCode('SIZE'),
+    name: syntheticName('Size'),
+    values: ['1', '2', '3'].map((n) => ({ code: syntheticCode(`SIZE-${n}`), name: syntheticName(`Size ${n}`) })),
+  },
 };
 
 /** Whether an attribute is marked in force as the mark (structure-and-masters 4.2 "As built"). Reads only. */
@@ -118,6 +138,87 @@ export async function markSyntheticAttribute(
     source: { kind: 'operator-command' },
   });
   return 'marked';
+}
+
+export interface ValuesInput {
+  readonly mark: AttributeMark;
+  /** The values' proposer, a person (structure-and-masters 4.2): the one who recorded their attribute. */
+  readonly proposedBy: string;
+  /**
+   * Who writes the values, named in their audit records and as their proposals' decider: the command's actor, the
+   * seed's `setup` identity, since no person confirmed them.
+   */
+  readonly writer: AuditActor & { readonly kind: 'service-identity' };
+}
+
+/**
+ * Gives the SYNTHETIC attribute marked in force as the mark its SYNTHETIC values that are missing (DEC-144), each in
+ * force from today, as a confirmed proposal makes one (structure-and-masters 4.2): a proposal written Confirmed, the
+ * first Admin its proposer and the `setup` identity its decider, since neither first user holds the right or an
+ * authenticator to confirm it, with no approval request; the value under its code; its name's version; and an audit
+ * record. Nothing is added while another attribute is marked, or the SYNTHETIC one is not a list in force today, or to
+ * a code already a value or an open proposal of it. Answers the codes added.
+ */
+export async function addSyntheticValues(
+  context: TransactionContext,
+  dependencies: MarkingDependencies,
+  input: ValuesInput,
+): Promise<string[]> {
+  const origin = dependencies.origins.originRefusal(context, 'synthetic');
+  if (origin !== undefined) throw new Error(`SYNTHETIC ${input.mark} values are refused here: ${origin.code}`);
+  const synthetic = SYNTHETIC_MARKED_ATTRIBUTES[input.mark];
+  const today = await context.businessDate();
+  if (today.kind === 'not-set') throw new Error(`${context.organisationCode} has no timezone in force`);
+  const marked = await context.tx.execute<{ id: string }>(sql`
+    select a.id::text as id
+      from merchandise.marked_attribute m
+      join merchandise.marked_attribute_version mv on mv.marked_attribute_id = m.id
+      join merchandise.attribute a on a.id = mv.attribute_id
+     where m.mark = ${input.mark} and mv.decision = 'Approved' and pg_catalog.upper_inf(mv.valid_during)
+       and a.code = ${synthetic.code} and a.value_kind = 'list'
+       and exists (select 1 from merchandise.attribute_version v
+                    where v.attribute_id = a.id and v.decision = 'Approved' and v.valid_during @> ${today.date}::date)`);
+  const attributeId = marked.rows[0]?.id;
+  if (attributeId === undefined) return [];
+  const added: string[] = [];
+  for (const value of synthetic.values) {
+    const taken = await context.tx.execute(sql`
+      select 1 from merchandise.vocabulary_value where attribute_id = ${attributeId} and code = ${value.code}
+      union all
+      select 1 from merchandise.vocabulary_proposal
+       where attribute_id = ${attributeId} and code = ${value.code} and state = 'Proposed'`);
+    if (taken.rows.length > 0) continue;
+    const proposalId = uuidv7();
+    const valueId = uuidv7();
+    const versionId = uuidv7();
+    await context.tx.execute(sql`
+      insert into merchandise.vocabulary_proposal
+        (id, attribute_id, code, name, proposed_by_user_id, state, decided_by_user_id, decided_at)
+      values (${proposalId}, ${attributeId}, ${value.code}, ${value.name}, ${input.proposedBy}, 'Confirmed',
+              ${input.writer.id}, ${context.startedAt.toISOString()}::timestamptz)`);
+    await context.tx.execute(sql`
+      insert into merchandise.vocabulary_value (id, attribute_id, code, proposal_id)
+      values (${valueId}, ${attributeId}, ${value.code}, ${proposalId})`);
+    await context.tx.execute(sql`
+      insert into merchandise.vocabulary_value_version (id, vocabulary_value_id, name, valid_during, decision, prepared_by_user_id)
+      values (${versionId}, ${valueId}, ${value.name}, pg_catalog.daterange(${today.date}::date, null, '[)'), 'Approved',
+              ${input.proposedBy})`);
+    await dependencies.audit.record(context, {
+      actor: input.writer,
+      record: { module: 'merchandise', type: 'vocabulary_value', id: valueId, versionId },
+      operation: 'seed-vocabulary-value',
+      changes: [
+        { kind: 'value', field: 'attributeId', before: null, after: attributeId },
+        { kind: 'value', field: 'code', before: null, after: value.code },
+        { kind: 'value', field: 'name', before: null, after: value.name },
+        { kind: 'value', field: 'proposalId', before: null, after: proposalId },
+        { kind: 'value', field: 'proposedBy', before: null, after: input.proposedBy },
+      ],
+      source: { kind: 'operator-command' },
+    });
+    added.push(value.code);
+  }
+  return added;
 }
 
 /** The marking's row, locked exclusively; written when missing, which creates it locked. */

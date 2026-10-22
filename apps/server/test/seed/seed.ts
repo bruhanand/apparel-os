@@ -36,6 +36,7 @@ import { defineSyntheticBookingSeries } from '../fixtures/booking-series.js';
 import { defineSyntheticDamageReportSeries } from '../fixtures/damage-report-series.js';
 import { defineSyntheticGrnSeries } from '../fixtures/grn-series.js';
 import {
+  addSyntheticValues,
   markSyntheticAttribute,
   SYNTHETIC_MARKED_ATTRIBUTES,
   syntheticAttributeToMark,
@@ -73,7 +74,8 @@ import {
 // (goods-in 4.8; DEC-143), the booking series and the damage-report series (goods-in 3.9, 8.5; DEC-144), each defined
 // under the `setup` identity; and a SYNTHETIC list attribute marked as the season and another as the size list where
 // none is marked in force (goods-in 3.3, 4.3; DEC-144; fixtures/marked-attributes.ts), each attribute recorded by the
-// first Admin and each marking written under the `setup` identity with the first Admin as its preparer.
+// first Admin and each marking written under the `setup` identity with the first Admin as its preparer, with a few
+// SYNTHETIC values written the same way, so budgets and count lines can be made on `dev` without further role setup.
 const logger = new PinoLoggerService();
 
 interface Target {
@@ -166,7 +168,8 @@ const SEEDED_MARKS: readonly AttributeMark[] = ['season', 'size'];
  * DEC-144), and answers what was added: each SYNTHETIC series it has none of, defined under its `setup` identity as the
  * runtime role in one transaction; then each mark with nothing marked in force, its attribute recorded through the
  * catalogue's command as the first Admin, then its marking written under the `setup` identity, the first Admin its
- * preparer: two transactions, since an audit record names its command's actor.
+ * preparer: two transactions, since an audit record names its command's actor; then the SYNTHETIC values the marked
+ * SYNTHETIC attribute lacks, written under the `setup` identity, the first Admin their proposer.
  */
 async function syntheticSettingsAdded(
   target: Target,
@@ -195,24 +198,27 @@ async function syntheticSettingsAdded(
     origins,
     suppliers: partiesSupplierRoles,
   });
+  const writer = { kind: 'service-identity' as const, id: actors.setupIdentityId };
   for (const mark of SEEDED_MARKS) {
+    const { code } = SYNTHETIC_MARKED_ATTRIBUTES[mark];
     const attributeId = await runIn(target, runtime, 'seed.record-attribute', actors.firstAdmin.userId, (context) =>
       syntheticAttributeToMark(context, catalogue, actors.firstAdmin, mark),
     );
-    if (attributeId === undefined) continue;
-    const outcome = await runIn(target, runtime, 'seed.mark-attribute', actors.setupIdentityId, (context) =>
-      markSyntheticAttribute(
-        context,
-        { audit, origins },
-        {
-          mark,
-          attributeId,
-          preparedBy: actors.firstAdmin.userId,
-          writer: { kind: 'service-identity', id: actors.setupIdentityId },
-        },
-      ),
+    if (attributeId !== undefined) {
+      const outcome = await runIn(target, runtime, 'seed.mark-attribute', actors.setupIdentityId, (context) =>
+        markSyntheticAttribute(
+          context,
+          { audit, origins },
+          { mark, attributeId, preparedBy: actors.firstAdmin.userId, writer },
+        ),
+      );
+      if (outcome === 'marked') added.push(`${code} marked as the ${mark} attribute`);
+    }
+    // Its SYNTHETIC values, each where missing, while the SYNTHETIC attribute is the one marked (DEC-144).
+    const values = await runIn(target, runtime, 'seed.add-values', actors.setupIdentityId, (context) =>
+      addSyntheticValues(context, { audit, origins }, { mark, proposedBy: actors.firstAdmin.userId, writer }),
     );
-    if (outcome === 'marked') added.push(`${SYNTHETIC_MARKED_ATTRIBUTES[mark].code} marked as the ${mark} attribute`);
+    if (values.length > 0) added.push(`${values.join(', ')} added as values of ${code}`);
   }
   return added;
 }

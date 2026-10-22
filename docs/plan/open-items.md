@@ -244,7 +244,7 @@ Kept so that every RR number cited in code, designs or decisions still resolves.
 
 | RR | How it closed |
 | --- | --- |
-| RR-562 | Decided 22 Oct 2026 by the product owner (`DEC-144`): the seed marks a labelled synthetic season attribute and size attribute on its Organisations, finished ones included, where none is marked in force; a rerun adds nothing. Built: the attributes `SYN-SEASON` and `SYN-SIZE`, each marking a labelled synthetic setting with no approval request (code-house-rules 11.2 as built; structure-and-masters 4.2 as built) |
+| RR-562 | Decided 22 Oct 2026 by the product owner (`DEC-144`): the seed marks a labelled synthetic season attribute and size attribute on its Organisations, finished ones included, where none is marked in force; a rerun adds nothing. Built: the attributes `SYN-SEASON` and `SYN-SIZE`, each marking a labelled synthetic setting with no approval request, with a few synthetic values written the same way (product owner, 22 Oct 2026; code-house-rules 11.2 as built; structure-and-masters 4.2 as built) |
 | RR-564 | Decided 22 Oct 2026 by the product owner (`DEC-144`): the seed adds the labelled synthetic booking series to its Organisations, finished ones included, where missing; a rerun adds nothing. A booking's approval on `dev` still waits on policies 5 and 1 (RR-561, RR-565) |
 | RR-568 | Decided 22 Oct 2026 by the product owner (`DEC-144`): the seed adds the labelled synthetic damage-report series to its Organisations, finished ones included, where missing; a rerun adds nothing |
 | RR-548 | Decided 21 Oct 2026 (`DEC-142`): the checker cannot approve the same budget version; the approval has no value limit. Built in `S2-F01-T02`'s follow-up |

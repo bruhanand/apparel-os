@@ -18,7 +18,7 @@ import {
 } from '../src/kernel/index.js';
 import { ORGANISATION_KEYS_VARIABLE, runSetupStep } from '../src/modules/access/index.js';
 import { configurationTimezoneSource } from '../src/modules/configuration/index.js';
-import { markedAttributeAt, type MarkedAttributeAt } from '../src/modules/merchandise/catalogue/index.js';
+import { markedAttributeAt, vocabularyOn } from '../src/modules/merchandise/catalogue/index.js';
 import { serviceIdentitiesOf } from '../src/setup-organisation.js';
 import { jobRegistry } from '../src/worker.module.js';
 import { SYNTHETIC_ORGANISATIONS, syntheticCode, syntheticDatabaseName } from './fixtures/synthetic.js';
@@ -54,6 +54,19 @@ const SEEDED_MARKINGS = [
   { mark: 'season', code: 'SYN-SEASON', valueKind: 'list', name: 'SYNTHETIC Season', origin: 'synthetic' },
   { mark: 'size', code: 'SYN-SIZE', valueKind: 'list', name: 'SYNTHETIC Size', origin: 'synthetic' },
 ];
+
+/** The SYNTHETIC values the seed gives each marked attribute, as the catalogue reads them in force (DEC-144). */
+const SEEDED_VALUES = {
+  season: [
+    { code: 'SYN-SEASON-1', name: 'SYNTHETIC Season 1' },
+    { code: 'SYN-SEASON-2', name: 'SYNTHETIC Season 2' },
+  ],
+  size: [
+    { code: 'SYN-SIZE-1', name: 'SYNTHETIC Size 1' },
+    { code: 'SYN-SIZE-2', name: 'SYNTHETIC Size 2' },
+    { code: 'SYN-SIZE-3', name: 'SYNTHETIC Size 3' },
+  ],
+};
 
 const COMMAND = fileURLToPath(new URL('../dist-seed/test/seed/seed.js', import.meta.url));
 const SEEDED = SYNTHETIC_ORGANISATIONS.map((organisation) => syntheticDatabaseName(organisation.code));
@@ -271,7 +284,7 @@ describe('pnpm seed, the local seed (code-house-rules 11.2)', () => {
     expect(await seededDatabases()).toEqual([]);
   });
 
-  it('PRD-ACS-023 PRD-ACS-020 DEC-118 DEC-144 sets up both Organisations through the setup step, each with its own first Admin and first approver, the SYNTHETIC series and the season and size markings, and a rerun changes nothing', async () => {
+  it('PRD-ACS-023 PRD-ACS-020 DEC-118 DEC-144 sets up both Organisations through the setup step, each with its own first Admin and first approver, the SYNTHETIC series and the season and size markings with their values, and a rerun changes nothing', async () => {
     const variables = { AOS_ENVIRONMENT: 'local', AOS_MIGRATION_DATABASE_URL: databaseUrl(directory, 'migration') };
     const first = await runSeed(variables);
     expect(first.exitCode, first.output).toBe(0);
@@ -373,7 +386,7 @@ describe('pnpm seed, the local seed (code-house-rules 11.2)', () => {
     expect(await Promise.all(SEEDED.map((database) => footprint(database)))).toEqual(before);
   });
 
-  it('DEC-143 DEC-144 gives finished synthetic Organisations that lack them the SYNTHETIC series and the season and size markings once, and leaves the rest of them as they were', async () => {
+  it('DEC-143 DEC-144 gives finished synthetic Organisations that lack them the SYNTHETIC series and the season and size markings with their values once, and leaves the rest of them as they were', async () => {
     // Both Organisations as an earlier seed left them: set up through the setup step alone (DEC-118), before the
     // series and the markings existed, and listed in a directory of their own.
     for (const name of SEEDED) await dropDatabase(name);
@@ -395,7 +408,9 @@ describe('pnpm seed, the local seed (code-house-rules 11.2)', () => {
       expect(setUp.outcome).toBe('created');
     }
     const untouchedBefore = await Promise.all(SEEDED.map((database) => untouchedRows(database)));
-    for (const database of SEEDED) expect(await seededSettings(database)).toEqual({ series: [], markings: [] });
+    for (const database of SEEDED) {
+      expect(await seededSettings(database)).toEqual({ series: [], markings: [], values: [] });
+    }
 
     // On `dev`, as the Railway dev environment runs it.
     const variables = {
@@ -413,15 +428,18 @@ describe('pnpm seed, the local seed (code-house-rules 11.2)', () => {
         'the SYNTHETIC damage-report series defined',
         'SYN-SEASON marked as the season attribute',
         'SYN-SIZE marked as the size attribute',
+        'SYN-SEASON-1, SYN-SEASON-2 added as values of SYN-SEASON',
+        'SYN-SIZE-1, SYN-SIZE-2, SYN-SIZE-3 added as values of SYN-SIZE',
       ]) {
         expect(first.output).toContain(`${organisation.code} (${organisation.name}): ${added}`);
       }
     }
     for (const database of SEEDED) expect(await seededSettings(database)).toEqual(await expectedSettings(database));
-    // Each marking is in force where a budget and a count line read it: the catalogue's interface (goods-in 3.3, 4.3).
+    // Each marking is in force, with its values, where a budget and a count line read them: the catalogue's interface
+    // (goods-in 3.3, 4.3).
     for (const organisation of SYNTHETIC_ORGANISATIONS) {
       for (const mark of ['season', 'size'] as const) {
-        expect(await markedNow(organisation.code, mark)).toMatchObject({ kind: 'set' });
+        expect(await markedNow(organisation.code, mark)).toEqual({ marked: 'set', values: SEEDED_VALUES[mark] });
       }
     }
     // Nothing else of a finished Organisation changes: its people, roles, assignments, settings and service identities
@@ -432,7 +450,7 @@ describe('pnpm seed, the local seed (code-house-rules 11.2)', () => {
     const before = await Promise.all(SEEDED.map((database) => footprint(database)));
     const second = await runSeed(variables);
     expect(second.exitCode, second.output).toBe(0);
-    expect(second.output).not.toMatch(/ defined| marked as/);
+    expect(second.output).not.toMatch(/ defined| marked as| added as/);
     expect(await Promise.all(SEEDED.map((database) => footprint(database)))).toEqual(before);
   });
 });
@@ -470,34 +488,76 @@ async function seededSettings(database: string) {
          join merchandise.attribute_version av on av.attribute_id = a.id and av.decision = 'Approved'
         order by m.mark`,
     );
-    return { series: series.rows, markings: markings.rows };
+    // Each value of a marked attribute, with the proposal it came from: who proposed it, who wrote its confirmation and
+    // whether an approval was asked for it.
+    const values = await owner.query<{
+      attribute: string;
+      code: string;
+      name: string;
+      state: string;
+      proposedBy: string;
+      decidedBy: string;
+      requests: number;
+    }>(
+      `select a.code as attribute, v.code, vv.name, p.state, p.proposed_by_user_id::text as "proposedBy",
+              p.decided_by_user_id::text as "decidedBy",
+              (select count(*)::int from access.approval_request r where r.document_record_id = p.id) as requests
+         from merchandise.vocabulary_value v
+         join merchandise.vocabulary_value_version vv on vv.vocabulary_value_id = v.id and vv.decision = 'Approved'
+         join merchandise.vocabulary_proposal p on p.id = v.proposal_id
+         join merchandise.attribute a on a.id = v.attribute_id
+        order by a.code, v.code`,
+    );
+    return { series: series.rows, markings: markings.rows, values: values.rows };
   } finally {
     await owner.end();
   }
 }
 
 /**
- * What seededSettings answers once the seed has run (DEC-143, DEC-144): the three SYNTHETIC series and both markings,
- * each prepared by the Organisation's first Admin with no approval asked, since the seed writes it as a labelled
- * SYNTHETIC setting.
+ * What seededSettings answers once the seed has run (DEC-143, DEC-144): the three SYNTHETIC series; both markings, each
+ * prepared by the Organisation's first Admin with no approval asked; and the SYNTHETIC values, each proposed by the
+ * first Admin and written confirmed by the `setup` identity with no approval asked. The seed writes markings and values
+ * as labelled SYNTHETIC settings, since neither first user holds the right or an authenticator to approve them.
  */
 async function expectedSettings(database: string) {
   const owner = await connect(database, 'migration');
   try {
     const [record] = (
-      await owner.query<{ admin: string }>('select first_admin_user_id::text as admin from access.setup_record')
+      await owner.query<{ admin: string; setup: string }>(
+        `select first_admin_user_id::text as admin,
+                (select id::text from access.service_identity where code = 'setup') as setup
+           from access.setup_record`,
+      )
     ).rows;
+    const valuesOf = (attribute: string, values: readonly { code: string; name: string }[]) =>
+      values.map((value) => ({
+        attribute,
+        ...value,
+        state: 'Confirmed',
+        proposedBy: record?.admin,
+        decidedBy: record?.setup,
+        requests: 0,
+      }));
     return {
       series: SEEDED_SERIES,
       markings: SEEDED_MARKINGS.map((each) => ({ ...each, preparedBy: record?.admin, requests: 0 })),
+      values: [...valuesOf('SYN-SEASON', SEEDED_VALUES.season), ...valuesOf('SYN-SIZE', SEEDED_VALUES.size)],
     };
   } finally {
     await owner.end();
   }
 }
 
-/** What the catalogue answers is marked as the mark now, read as the runtime role (structure-and-masters 4.2). */
-async function markedNow(organisationCode: string, mark: AttributeMark): Promise<MarkedAttributeAt> {
+/**
+ * Whether the catalogue answers an attribute marked as the mark now, and that attribute's values in force today, read
+ * as the runtime role through the catalogue's interface, as a budget and a count line read them (structure-and-masters
+ * 4.2; goods-in 3.3, 4.3).
+ */
+async function markedNow(
+  organisationCode: string,
+  mark: AttributeMark,
+): Promise<{ marked: string; values: { code: string; name: string }[] }> {
   const database = syntheticDatabaseName(organisationCode);
   const handle = createDb(databaseUrl(database, 'runtime'), { max: 1 });
   try {
@@ -523,7 +583,13 @@ async function markedNow(organisationCode: string, mark: AttributeMark): Promise
         correlationId: newCorrelationId(),
         actor: { kind: 'actor', actorId: admin },
       },
-      (context) => markedAttributeAt(context, mark),
+      async (context) => {
+        const marked = await markedAttributeAt(context, mark);
+        const today = await context.businessDate();
+        if (marked.kind !== 'set' || today.kind !== 'set') return { marked: marked.kind, values: [] };
+        const values = await vocabularyOn(context, marked.attributeId, today.date);
+        return { marked: marked.kind, values: values.map(({ code, name }) => ({ code, name })) };
+      },
     );
   } finally {
     await handle.close();
@@ -563,7 +629,9 @@ async function footprint(database: string): Promise<Record<string, string>> {
                 (select count(*) from audit.audit_record)::text as audit,
                 (select count(*) from numbering.series)::text as series,
                 (select count(*) from merchandise.attribute)::text as attributes,
-                (select count(*) from merchandise.marked_attribute_version)::text as markings`,
+                (select count(*) from merchandise.marked_attribute_version)::text as markings,
+                (select count(*) from merchandise.vocabulary_proposal)::text as proposals,
+                (select count(*) from merchandise.vocabulary_value_version)::text as "valueVersions"`,
       )
     ).rows;
     return row ?? {};
