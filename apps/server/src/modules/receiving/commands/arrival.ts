@@ -1,6 +1,7 @@
 import { uuidv7 } from '@apparel-os/domain';
 import {
   ARRIVAL_TYPE,
+  BOOKING_TYPE,
   type ArrivalDraft,
   type ArrivalRecorded,
   type InvoiceDraft,
@@ -10,8 +11,9 @@ import {
   type PhotosDraft,
 } from '@apparel-os/schemas';
 import { and, eq, sql } from 'drizzle-orm';
-import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
+import { CommandDefect, type LockTarget, type TransactionContext } from '../../../kernel/index.js';
 import type { AuditInterface } from '../../audit/index.js';
+import type { BookingInterface } from '../../booking/index.js';
 import type { FilesImportsInterface } from '../../files-imports/index.js';
 import { brandInForce } from '../../merchandise/catalogue/index.js';
 import { brandSupplierLinkedOn } from '../../merchandise/parties/index.js';
@@ -50,6 +52,8 @@ import {
 export interface ArrivalDependencies extends AvailabilityDependencies {
   readonly audit: AuditInterface;
   readonly files: Pick<FilesImportsInterface, 'attach'>;
+  /** `booking`, which answers the booking an Arrival names (goods-in 3.7, 10.2). */
+  readonly booking: Pick<BookingInterface, 'receivableBooking'>;
 }
 
 /** The evidence kind of a supplier invoice's file on its Arrival (imports-and-opening-data 11). */
@@ -61,7 +65,9 @@ const ARRIVAL_PHOTO = { kind: 'receiving.arrival-photo', restrictedClasses: [] }
  * Records an Arrival (goods-in 4.2). The unit is one in force today at a Site, the location one of its locations in
  * force and not retired today (structure-and-masters 3.5), the brand in force and the supplier linked to it on the
  * arrival date, the arrival not later than now; the Store and legal entity come from the unit's mapping in force today,
- * whose version the Arrival keeps (PRD-MOD-010).
+ * whose version the Arrival keeps (PRD-MOD-010). Against a booking ("Receive against booking"; goods-in 3.7, 4.10;
+ * PRD-REC-002), one the receiver may see, Approved, Issued or Confirmed, of the Arrival's brand and of the supplier of
+ * its version in force; its destination may be another Site, whose GRN lines then go to Booking for review at issue.
  */
 export async function recordArrival(
   context: TransactionContext,
@@ -101,6 +107,8 @@ export async function recordArrival(
       recordItem('merchandise.brand', draft.brandId),
     ]);
   }
+  const against = await bookingRefusal(context, dependencies, draft);
+  if (against !== undefined) return against;
   const mapping = await mappingOn(context, unit.id, date);
   // Available has just asked for it: a mapping in force and verified.
   if (mapping === undefined) throw new CommandDefect('A unit receiving is available at has a mapping in force');
@@ -123,6 +131,7 @@ export async function recordArrival(
     arrivedAt,
     arrivalDate,
     recordedByUserId: actor.userId,
+    bookingId: draft.bookingId ?? null,
   };
   await context.tx.insert(arrival).values(values);
   const row: ArrivalRow = { ...values, recordedAt: context.startedAt };
@@ -141,19 +150,44 @@ export async function recordArrival(
       valueChange('ewayBillNumber', null, row.ewayBillNumber),
       valueChange('cartons', null, row.cartons),
       valueChange('arrivedAt', null, draft.arrivedAt),
+      valueChange('bookingId', null, row.bookingId),
     ],
   });
   return { kind: 'success', answer: { arrivalId: row.id, versionToken } };
 }
 
 /**
- * The Arrival under its lock for a change before its GRN, or the refusal: not found, or its GRN issued (goods-in 4.5).
+ * Why the booking an Arrival names may not be received against, or undefined (goods-in 3.4, 3.7, 4.2): one the receiver
+ * may not see is not found (code-house-rules 12.3); one with no approved version is not approved; one of another brand,
+ * or whose version in force names another supplier, is not the Arrival's. Checked again at the GRN's issue under the
+ * booking's lock, where a later change of its supplier sends the lines to review (goods-in 4.10).
+ */
+async function bookingRefusal(
+  context: TransactionContext,
+  dependencies: ArrivalDependencies,
+  draft: ArrivalDraft,
+): Promise<Outcome<never> | undefined> {
+  if (draft.bookingId === undefined) return undefined;
+  const named = await dependencies.booking.receivableBooking(context, draft.bookingId);
+  const item = recordItem(BOOKING_TYPE, draft.bookingId);
+  if (named === undefined) return refused('not-found', 'booking.record-not-found', [item]);
+  if (named.supplierPartyId === null) return refused('refused', 'booking.not-approved', [item]);
+  if (named.brandId !== draft.brandId || named.supplierPartyId !== draft.supplierPartyId) {
+    return refused('refused', 'receiving.booking-not-of-arrival', [item]);
+  }
+  return undefined;
+}
+
+/**
+ * The Arrival under its lock for a change before its GRN, with any further targets of step 1 in the same call, or the
+ * refusal: not found, or its GRN issued (goods-in 4.5).
  */
 export async function arrivalForChange(
   context: TransactionContext,
   arrivalId: string,
+  further: readonly LockTarget[] = [],
 ): Promise<{ readonly kind: 'open'; readonly row: ArrivalRow } | Outcome<never>> {
-  const row = await lockArrival(context, arrivalId);
+  const row = await lockArrival(context, arrivalId, further);
   if (row === undefined) return arrivalNotFound(arrivalId);
   const issued = await grnOf(context, arrivalId);
   if (issued !== undefined) return grnIssued(issued.id);

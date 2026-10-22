@@ -2132,6 +2132,27 @@
       "design": "goods-in 3.6, 3.7, 3.10; PRD-BKG-006 to PRD-BKG-008; code-house-rules 6.2, 7.1"
     },
     {
+      "table": "booking.booking_receipt_link_proposal",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 3.7, 4.10, 10.3; POL-05.08; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "booking.booking_receipt_link_proposal_line",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 3.7, 4.10; PRD-BKG-008, POL-05.08; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "booking.booking_receipt_link_proposal_decision",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 4.10; POL-02.07, POL-05.08; code-house-rules 6.2, 7.1"
+    },
+    {
       "table": "booking.booking_overdue",
       "class": "scoped",
       "marks": ["append-only"],
@@ -2215,6 +2236,13 @@
       "marks": ["append-only"],
       "runtime": ["INSERT", "SELECT"],
       "design": "goods-in 4.6, 4.9; PRD-REC-013, POL-17.02; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "receiving.grn_line_booking",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 3.7, 4.5, 4.10; PRD-BKG-007; code-house-rules 6.2, 7.1"
     },
     {
       "table": "merchandise.marked_attribute",

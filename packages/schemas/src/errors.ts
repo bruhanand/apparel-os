@@ -1099,6 +1099,10 @@ export const deviceCodes = declareCodes({
  *   `missing` names it, to decide first, so no proposal is dropped unseen (goods-in 3.10).
  * - `booking.goods-not-of-line`: a later receipt link names a booking line the GRN line's goods do not match: its
  *   style code, and its colour and size where the booking line gives them (goods-in 3.7, 3.10; PRD-BKG-008).
+ * - `booking.receipt-link-proposed`: the GRN line waits in a proposal to link it into a booking already; that proposal
+ *   is decided first (goods-in 4.10; POL-05.08).
+ * - `booking.link-proposal-pending`: a proposal to link late or excess goods into the booking waits for its decision
+ *   already; `missing` names it, to decide first, so no proposal is dropped unseen (goods-in 4.10).
  */
 export const bookingCodes = declareCodes({
   'booking.record-not-found': 'not-found',
@@ -1136,6 +1140,8 @@ export const bookingCodes = declareCodes({
   'booking.receipt-already-linked': 'refused',
   'booking.amendment-pending': 'refused',
   'booking.goods-not-of-line': 'refused',
+  'booking.receipt-link-proposed': 'refused',
+  'booking.link-proposal-pending': 'refused',
 });
 
 /**
@@ -1168,7 +1174,11 @@ export const bookingCodes = declareCodes({
  * - `receiving.no-grn-series`, `receiving.grn-series-paused`: no Open GRN number series (numbering-and-audit 3.2).
  * - `receiving.held-line-decided`: the held line is decided already; a decision is made once (goods-in 4.6).
  * - `receiving.not-unidentified`: only unidentified goods are named a product before they are taken in (4.6).
- * - `receiving.product-not-named`: unidentified goods are taken in only once Booking names their product (4.6).
+ * - `receiving.product-not-named`: unidentified goods are taken in only once Booking names their product (4.6), and
+ *   linked to a booking line only then (3.7, 4.10).
+ * - `receiving.booking-not-of-arrival`: the booking is of another brand, or its version in force of another supplier,
+ *   than the Arrival's; `missing` names it (goods-in 3.7, 4.2, 4.10; S2-F02-T04).
+ * - `receiving.nothing-received`: the GRN line received no piece, so it delivers nothing to link (goods-in 4.10).
  */
 export const receivingCodes = declareCodes({
   'receiving.record-not-found': 'not-found',
@@ -1193,6 +1203,8 @@ export const receivingCodes = declareCodes({
   'receiving.held-line-decided': 'refused',
   'receiving.not-unidentified': 'refused',
   'receiving.product-not-named': 'refused',
+  'receiving.booking-not-of-arrival': 'refused',
+  'receiving.nothing-received': 'refused',
 });
 
 /**

@@ -1,4 +1,12 @@
-import { ARRIVAL_TYPE, DAMAGE_REPORT_TYPE, HELD_LINE_TYPE, routes, type CommandRoute } from '@apparel-os/schemas';
+import {
+  ARRIVAL_TYPE,
+  BOOKING_TYPE,
+  DAMAGE_REPORT_TYPE,
+  GRN_TYPE,
+  HELD_LINE_TYPE,
+  routes,
+  type CommandRoute,
+} from '@apparel-os/schemas';
 import { Controller, Inject } from '@nestjs/common';
 import {
   ApiRefusal,
@@ -27,20 +35,31 @@ import {
   type SignedInUser,
 } from '../../access/index.js';
 import { BUSINESS_DATE_NOT_SET, recordNotFound, unitNotAtSite, type Actor, type Outcome } from '../commands/common.js';
-import type { IssueNeed } from '../receiving.js';
 import type { ReceivingInterface } from '../receiving.js';
 import { RECEIVING } from '../tokens.js';
 
 /** Finds the facts of the record a route acts on, in its transaction; undefined when it does not exist. */
 type FactsOf = (context: TransactionContext, today: string) => Promise<RecordFacts | undefined>;
 
-/** The further permissions a command relies on besides its route's, on the same record's facts (RR-444). */
-type AlsoNeeds = (context: TransactionContext) => Promise<readonly { action: 'create'; recordType: string }[]>;
+/**
+ * A further permission a command relies on besides its route's (RR-444): on the same record's facts, or on another
+ * record's, such as the booking an Arrival is received against (goods-in 4.10).
+ */
+interface Need {
+  readonly action: 'create' | 'view';
+  readonly recordType: string;
+  readonly facts?: RecordFacts;
+}
 
-/** The record type and action each further need of issuing a GRN is held on (goods-in 4.9, 8.5). */
-const ISSUE_NEEDS: Readonly<Record<IssueNeed, { action: 'create'; recordType: string }>> = {
-  'damage-report': { action: 'create', recordType: DAMAGE_REPORT_TYPE },
-};
+/** The further permissions a command relies on, or the refusal when a record they name is not found (12.3). */
+type AlsoNeeds = (context: TransactionContext) => Promise<readonly Need[] | { readonly refused: CommandRefusal }>;
+
+/** No booking with that identifier, or none the reader may see (code-house-rules 12.3; goods-in 4.10). */
+const bookingNotFound = (bookingId: string): CommandRefusal => ({
+  kind: 'not-found',
+  code: 'booking.record-not-found',
+  missing: [{ kind: 'record', recordType: BOOKING_TYPE, recordId: bookingId }],
+});
 
 /**
  * Receive Goods (goods-in 4.1 to 4.5, section 11; module-map section 5; code-house-rules 12.1; S2-F02-T02). An Arrival
@@ -118,7 +137,9 @@ export class ReceivingController {
 
   @ApiRoute(routes.recordArrival)
   recordArrival(@RouteInput() input: RouteInputOf<typeof routes.recordArrival>, @SignedIn() user: SignedInUser) {
-    const { businessUnitId, brandId } = input.body;
+    const { businessUnitId, brandId, bookingId } = input.body;
+    // Receiving against a booking needs a grant on it at its Site and brand: its open lines are the expected goods,
+    // and its receipt links are scoped as it is (goods-in 4.10).
     return this.command(
       routes.recordArrival,
       'receiving.record-arrival',
@@ -127,6 +148,7 @@ export class ReceivingController {
       (context, today) => this.receiving.newArrivalFacts(context, businessUnitId, brandId, today),
       unitNotAtSite(businessUnitId),
       (context, actor) => this.receiving.recordArrival(context, actor, input.body),
+      bookingId === undefined ? undefined : (context) => this.bookingNeed(context, bookingId),
     );
   }
 
@@ -171,15 +193,54 @@ export class ReceivingController {
   @ApiRoute(routes.issueGrn)
   issueGrn(@RouteInput() input: RouteInputOf<typeof routes.issueGrn>, @SignedIn() user: SignedInUser) {
     const { arrivalId } = input.params;
-    // Whoever issues a GRN whose count found damage reports it, so holds create on damage reports too (goods-in 8.5).
+    // Whoever issues a GRN whose count found damage reports it, so holds create on damage reports too (goods-in 8.5);
+    // against a booking, a grant on it at its Site and brand, since its receipt links are scoped as it is (4.10).
     return this.onArrival(
       routes.issueGrn,
       'receiving.issue-grn',
       user,
       input,
       (c, actor) => this.receiving.issueGrn(c, actor, arrivalId, input.body, input.idempotencyKey),
-      async (context) => (await this.receiving.issueAlsoNeeds(context, arrivalId)).map((need) => ISSUE_NEEDS[need]),
+      async (context) => {
+        const needs = await this.receiving.issueAlsoNeeds(context, arrivalId);
+        const damage: Need[] = needs.damageReport ? [{ action: 'create', recordType: DAMAGE_REPORT_TYPE }] : [];
+        if (needs.bookingId === null) return damage;
+        const booking = await this.bookingNeed(context, needs.bookingId);
+        return 'refused' in booking ? booking : [...damage, ...booking];
+      },
     );
+  }
+
+  @ApiRoute(routes.linkGrnToBooking)
+  linkGrnToBooking(@RouteInput() input: RouteInputOf<typeof routes.linkGrnToBooking>, @SignedIn() user: SignedInUser) {
+    const { grnId } = input.params;
+    const { bookingId } = input.body;
+    // Booking links later with edit on the booking, at its Site and brand, and reads the GRN with view on its Arrival,
+    // with the Arrival's own facts (goods-in 4.10; access-and-approvals 5.3).
+    return this.command(
+      routes.linkGrnToBooking,
+      'receiving.link-grn-to-booking',
+      user,
+      input,
+      (context) => this.receiving.bookingFacts(context, bookingId),
+      bookingNotFound(bookingId),
+      (context, actor) => this.receiving.linkToBooking(context, actor, grnId, input.body),
+      async (context) => {
+        const facts = await this.receiving.grnFacts(context, grnId);
+        if (facts === undefined) return { refused: recordNotFound(GRN_TYPE, grnId) };
+        return [{ action: 'view', recordType: ARRIVAL_TYPE, facts }];
+      },
+    );
+  }
+
+  /** View on the booking an Arrival is received against, with its facts; not found when the reader may not see it. */
+  private async bookingNeed(
+    context: TransactionContext,
+    bookingId: string,
+  ): Promise<readonly Need[] | { readonly refused: CommandRefusal }> {
+    const facts = await this.receiving.bookingFacts(context, bookingId);
+    if (facts === undefined) return { refused: bookingNotFound(bookingId) };
+    return [{ action: 'view', recordType: BOOKING_TYPE, facts }];
   }
 
   @ApiRoute(routes.readHeldLine)
@@ -298,10 +359,13 @@ export class ReceivingController {
     const authorised = await this.access.authorise(context, { actorId: user.userId, action, recordType, facts });
     if (authorised.kind === 'refused') return authorised;
     const further: HeldNeed[] = [];
-    for (const need of (await alsoNeeds?.(context)) ?? []) {
-      const also = await this.access.authorise(context, { actorId: user.userId, ...need, facts });
+    const needs = (await alsoNeeds?.(context)) ?? [];
+    if ('refused' in needs) return { kind: 'refused', refusal: needs.refused };
+    for (const need of needs) {
+      const needed = { action: need.action, recordType: need.recordType, facts: need.facts ?? facts };
+      const also = await this.access.authorise(context, { actorId: user.userId, ...needed });
       if (also.kind === 'refused') return also;
-      further.push({ roleAssignmentId: also.roleAssignmentId, need: { ...need, facts } });
+      further.push({ roleAssignmentId: also.roleAssignmentId, need: needed });
     }
     return { kind: 'allowed', roleAssignmentId: authorised.roleAssignmentId, facts, further };
   }

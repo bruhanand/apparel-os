@@ -17,7 +17,16 @@ import { stateIdOf } from '../setup/states';
 import { useTimeZone } from '../shell/session';
 import { BOOKING_READS, BookingForm } from './BookingForm';
 import { OpenToBuyFacts, referenceOf, TermsFacts, TotalsView, valueAtCostOf } from './facts';
-import { AmendmentsCard, CancelCard, ConfirmCard, ExtendCard, IssueCard, issued, useCommunication } from './Lifecycle';
+import {
+  AmendmentsCard,
+  CancelCard,
+  ConfirmCard,
+  ExtendCard,
+  IssueCard,
+  issued,
+  ReceiptLinkProposalsCard,
+  useCommunication,
+} from './Lifecycle';
 import { StatusView } from './StatusView';
 import { useBookingNames } from './names';
 
@@ -372,6 +381,7 @@ export function BookingView({ bookingId, onBack }: { bookingId: string; onBack: 
                 />
               )}
               <AmendmentsCard booking={booking} timeZone={timeZone} />
+              <ReceiptLinkProposalsCard booking={booking} timeZone={timeZone} />
               {/* Once approved, the version in force shows above; a change shows here only where it is not edited. */}
               {booking.status !== undefined &&
               (booking.change === undefined || (booking.change.state === 'Draft' && mayEdit)) ? null : draft &&

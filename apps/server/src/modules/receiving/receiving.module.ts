@@ -2,6 +2,7 @@ import { Inject, Module, type OnModuleInit } from '@nestjs/common';
 import { CommandRunnerModule } from '../../kernel/index.js';
 import { ACCESS, AccessModule, type AccessInterface } from '../access/index.js';
 import { AUDIT, AuditModule, type AuditInterface } from '../audit/index.js';
+import { BOOKING, BookingModule, type BookingInterface } from '../booking/index.js';
 import { CONFIGURATION, type ConfigurationInterface } from '../configuration/index.js';
 import { EXCEPTIONS, ExceptionsModule, type ExceptionsInterface } from '../exceptions/index.js';
 import { FILES_IMPORTS, FilesImportsModule, type FilesImportsInterface } from '../files-imports/index.js';
@@ -14,10 +15,11 @@ import { Receiving } from './receiving.js';
 import { RECEIVING } from './tokens.js';
 
 /**
- * `receiving` (module-map section 5; goods-in 10.1): tier 4, uses `stock` · documents (goods-in 10.2), `stock` · ledger,
- * `merchandise` · catalogue and parties, `organisation`, `exceptions`, `files-imports`, `numbering`, `configuration`,
- * `access`, `audit` and `kernel`. The inbox, the Arrival, the count with its findings, the GRN and the held lines
- * Booking decides (goods-in 4.1 to 4.6; S2-F02-T02, S2-F02-T03). It reads the masters of `organisation` and
+ * `receiving` (module-map section 5; goods-in 10.1): tier 4, uses `booking` and `stock` · documents (goods-in 10.2),
+ * `stock` · ledger, `merchandise` · catalogue and parties, `organisation`, `exceptions`, `files-imports`, `numbering`,
+ * `configuration`, `access`, `audit` and `kernel`. The inbox, the Arrival, the count with its findings, the GRN, the
+ * held lines Booking decides and the links of GRN lines to bookings (goods-in 3.7, 4.1 to 4.6, 4.10; S2-F02-T02 to
+ * S2-F02-T04). It reads the masters of `organisation` and
  * `merchandise` through their read functions, so it injects only the services it acts through. Its operations reach
  * the policy gate at start (goods-in 10.5), and its registration as a stock caller, its GRN number kind, its approval
  * rule and decision effect and its exception types reach the modules below through the composition root (module-map
@@ -33,6 +35,7 @@ import { RECEIVING } from './tokens.js';
     NumberingModule,
     StockLedgerModule,
     StockDocumentsModule,
+    BookingModule,
   ],
   controllers: [ReceivingController],
   providers: [
@@ -47,8 +50,19 @@ import { RECEIVING } from './tokens.js';
         ledger: StockLedgerInterface,
         exceptions: ExceptionsInterface,
         documents: StockDocumentsInterface,
-      ) => new Receiving({ audit, access, configuration, files, numbering, ledger, exceptions, documents }),
-      inject: [AUDIT, ACCESS, CONFIGURATION, FILES_IMPORTS, NUMBERING, STOCK_LEDGER, EXCEPTIONS, STOCK_DOCUMENTS],
+        booking: BookingInterface,
+      ) => new Receiving({ audit, access, configuration, files, numbering, ledger, exceptions, documents, booking }),
+      inject: [
+        AUDIT,
+        ACCESS,
+        CONFIGURATION,
+        FILES_IMPORTS,
+        NUMBERING,
+        STOCK_LEDGER,
+        EXCEPTIONS,
+        STOCK_DOCUMENTS,
+        BOOKING,
+      ],
     },
   ],
   exports: [RECEIVING],

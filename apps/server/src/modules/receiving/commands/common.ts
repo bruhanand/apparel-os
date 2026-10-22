@@ -121,12 +121,18 @@ export async function arrivalRow(context: TransactionContext, arrivalId: string)
 }
 
 /**
- * Locks an Arrival's identity row exclusively at step 1, the document step (code-house-rules 8.2), and reads it under
- * the lock; undefined when it does not exist or the actor may not see it.
+ * Locks an Arrival's identity row exclusively at step 1, the document step (code-house-rules 8.2), with any further
+ * targets of that step in the same call, such as the booking it names (goods-in 3.7, 4.10), and reads it under the
+ * lock; undefined when it does not exist or the actor may not see it.
  */
-export async function lockArrival(context: TransactionContext, arrivalId: string): Promise<ArrivalRow | undefined> {
+export async function lockArrival(
+  context: TransactionContext,
+  arrivalId: string,
+  further: readonly LockTarget[] = [],
+): Promise<ArrivalRow | undefined> {
   const locked = await context.lock(LOCK_STEP.document, [
     { table: lockTable('receiving', 'arrival'), id: arrivalId, mode: 'exclusive' },
+    ...further,
   ]);
   if (locked.missing.some((each) => each.id === arrivalId)) return undefined;
   return arrivalRow(context, arrivalId);
@@ -182,6 +188,12 @@ export async function entriesByArrival(
     .where(inArray(countEntry.arrivalId, [...arrivalIds]));
   for (const row of rows) byArrival.get(row.arrivalId)?.push(entryFacts(row));
   return byArrival;
+}
+
+/** A GRN as the actor may see it, or undefined (code-house-rules 6.2). */
+export async function grnRow(context: TransactionContext, grnId: string) {
+  const [row] = await context.tx.select().from(grn).where(eq(grn.id, grnId));
+  return row;
 }
 
 /** The Arrival's GRN, once issued. */

@@ -31,7 +31,7 @@ import { BOOKING } from './tokens.js';
         catalogue: CatalogueInterface,
         origins: ConfigurationInterface,
         files: FilesImportsInterface,
-      ) => new Booking({ audit, access, catalogue, origins, files }),
+      ) => new Booking({ audit, access, catalogue, origins, files, gate: origins }),
       inject: [AUDIT, ACCESS, CATALOGUE, CONFIGURATION, FILES_IMPORTS],
     },
   ],

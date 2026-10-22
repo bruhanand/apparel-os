@@ -22,6 +22,7 @@ import {
 } from '../db/schema.js';
 import { CONTENT_CHANGES, lifecycleOf } from '../domain/lifecycle.js';
 import { budgetOf, remainingOf } from './budgets.js';
+import { receiptLinkProposalsOf } from './receipt-links.js';
 import {
   amendmentsOf,
   approvalInForce,
@@ -312,6 +313,9 @@ export async function bookingView(
         }),
     ...(approved === undefined ? {} : { status: await statusOfVersion(context, approved, today) }),
     amendments: await amendmentsOf(context, row.id, (ids) => dependencies.access.approvalRequestsOf(context, ids)),
+    receiptLinkProposals: await receiptLinkProposalsOf(context, row.id, (ids) =>
+      dependencies.access.approvalRequestsOf(context, ids),
+    ),
   };
 }
 
@@ -336,8 +340,9 @@ const stateOfRow = sql<BookingSummary['state']>`(case
 
 /**
  * A page of the bookings the reader may see, newest first by identifier (code-house-rules 12.1 "Reads"), filtered by
- * state, brand, season, supplier and destination, each with its newest version's header and totals; the cursor, the
- * last booking read, while more follow. A cursor naming no booking reads none.
+ * state, brand, season, supplier and destination, and to those goods may be received against (S2-F02-T04), each with
+ * its newest version's header and totals; the cursor, the last booking read, while more follow. A cursor naming no
+ * booking reads none.
  */
 export async function bookingPage(
   context: TransactionContext,
@@ -354,6 +359,8 @@ export async function bookingPage(
     query.brandId === undefined ? undefined : eq(booking.brandId, query.brandId),
     query.siteId === undefined ? undefined : eq(booking.siteId, query.siteId),
     query.state === undefined ? undefined : sql`${stateOfRow} = ${query.state}`,
+    // Received against only once approved: the version in force is Approved, Issued or Confirmed (goods-in 3.4).
+    query.receivable === undefined ? undefined : sql`${approvedVersionId} is not null`,
     query.supplierPartyId === undefined ? undefined : eq(bookingVersion.supplierPartyId, query.supplierPartyId),
     query.seasonValueId === undefined ? undefined : eq(bookingVersion.seasonValueId, query.seasonValueId),
   ];
@@ -398,4 +405,23 @@ export async function bookingPage(
     };
   });
   return { bookings, next: rows.length > limit ? (read.at(-1)?.booking.id ?? null) : null };
+}
+
+/**
+ * A booking as `receiving` checks it when an Arrival names it, or links GRN lines to it later (goods-in 3.7, 4.2):
+ * its number, destination and brand, and the supplier of its approved version in force, none while it has none; or
+ * undefined when the reader may not see it.
+ */
+export async function receivableBookingOf(context: TransactionContext, bookingId: string) {
+  const row = await bookingRow(context, bookingId);
+  if (row === undefined) return undefined;
+  const approval = await approvalInForce(context, row.id);
+  const version = approval === undefined ? undefined : await versionWithLines(context, approval.bookingVersionId);
+  return {
+    bookingId: row.id,
+    number: (await numberOf(context, row.id)) ?? null,
+    siteId: row.siteId,
+    brandId: row.brandId,
+    supplierPartyId: version?.version.supplierPartyId ?? null,
+  };
 }

@@ -763,6 +763,9 @@ describe('the references inside receiving (code-house-rules 3.2; S2-F02-T02)', (
       'grn (arrival_version_id) arrival_change',
       'grn_line (count_entry_id) count_entry',
       'grn_line (grn_id) grn',
+      // A GRN line's outcome against the booking its Arrival names, at the GRN's issue (goods-in 4.10; S2-F02-T04).
+      'grn_line_booking (grn_id) grn',
+      'grn_line_booking (grn_line_id) grn_line',
       // A held line, its versions and its decision (goods-in 4.6, 4.9; S2-F02-T03).
       'held_line (grn_id) grn',
       'held_line (grn_line_id) grn_line',

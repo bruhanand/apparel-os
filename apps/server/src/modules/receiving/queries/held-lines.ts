@@ -86,6 +86,22 @@ function namedOf(version: VersionRow | undefined): NamedProduct | null {
   return { styleCode: version.namedStyleCode, colour: version.namedColour, size, skuId: version.namedSkuId };
 }
 
+/**
+ * The product Booking named for the unidentified goods of each GRN line given that has one, by GRN line (goods-in 4.6):
+ * the goods a later booking link matches them as (3.7, 4.10).
+ */
+export async function namedProductsOf(
+  context: TransactionContext,
+  grnLineIds: readonly string[],
+): Promise<ReadonlyMap<string, NamedProduct>> {
+  const named = new Map<string, NamedProduct>();
+  for (const [grnLineId, held] of await heldLinesOf(context, grnLineIds)) {
+    const product = namedOf(held.versions.filter((each) => each.kind === 'named').at(-1));
+    if (product !== null) named.set(grnLineId, product);
+  }
+  return named;
+}
+
 /** A held line's state (design-language 7): Awaiting approval, then Accepted when taken in or Held when left held. */
 function stateOf(decision: DecisionRow | undefined): HeldLineState {
   if (decision === undefined) return 'Awaiting approval';
@@ -234,6 +250,16 @@ export async function extraFollowedUp(
  * resolution and evidence (PRD-EXC-002). Decided by the product owner, 22 Oct 2026, as built (RR-572; goods-in 4.9).
  */
 export function shortageFollowedUp(): Promise<ResolutionAnswer> {
+  return Promise.resolve({ kind: 'verified' });
+}
+
+/**
+ * The resolution check of the follow-up of a GRN's lines sent to Booking for review (access-and-approvals 12.3;
+ * goods-in 3.7, 4.10): Booking links a line later, has a late or excess one approved into the booking, or finds it is
+ * no line of a booking, which no record says, so Booking resolves it when followed up, with its resolution and
+ * evidence (PRD-EXC-002), as a shortage's. **Design choice**, for the product owner (RR-581).
+ */
+export function reviewFollowedUp(): Promise<ResolutionAnswer> {
   return Promise.resolve({ kind: 'verified' });
 }
 

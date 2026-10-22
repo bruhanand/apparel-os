@@ -1,51 +1,47 @@
-import type { TransactionContext } from '../../../kernel/index.js';
+import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
 import type { AuditInterface } from '../../audit/index.js';
-import { bookingItem } from '../domain/bookings.js';
-import { matchReceipt } from '../domain/lifecycle.js';
-import { statusOfBooking } from '../queries/lifecycle.js';
-import { refusalOf, refused, today, type Outcome } from './common.js';
-import {
-  heldBooking,
-  linked,
-  writeLink,
-  type Linker,
-  type ReceiptAtIssue,
-  type ReceiptLinked,
-} from './receipt-link.js';
+import type { ReceiptAtIssue, ReceiptsAtIssue } from '../domain/receipts.js';
+import { planAtIssue } from '../queries/receipts.js';
+import { refusalOf, today, type Outcome } from './common.js';
+import { writeLink, type Linker } from './receipt-link.js';
 
 /**
- * Links a GRN line at its GRN's issue to the one line of the booking's version in force it matches (goods-in 3.7,
- * 3.10; PRD-BKG-007; DEC-130; S2-F01-T04), or answers why it goes to Booking for review; nothing is written then. A GRN
- * line already linked is refused (`booking.receipt-already-linked`). The caller holds the booking's lock at step 1
- * (receipt-link.ts).
+ * Links the counted lines of a GRN at its issue to the booking lines they match (goods-in 3.7, 4.10, 10.3;
+ * PRD-BKG-007; POL-05.08; DEC-130; S2-F02-T04), as `receiptsAtIssue` answered under the same lock before the caller's
+ * later locks (queries/receipts.ts), once the caller holds every lock (code-house-rules 8.2): each link dated and signed
+ * by whoever issues the GRN, with its audit record. A line for review writes nothing here; the caller keeps why. The
+ * caller holds the booking's lock at step 1.
  */
-export async function linkReceiptAtIssue(
+export async function linkReceiptsAtIssue(
   context: TransactionContext,
   audit: AuditInterface,
   linker: Linker,
-  receipt: ReceiptAtIssue,
-): Promise<Outcome<ReceiptLinked>> {
+  issue: ReceiptsAtIssue,
+): Promise<Outcome<readonly ReceiptAtIssue[]>> {
   const date = await today(context);
   if (typeof date !== 'string') return refusalOf(date);
-  const row = await heldBooking(context, receipt.bookingId);
-  if (row === undefined) return refused('not-found', 'booking.record-not-found', [bookingItem(receipt.bookingId)]);
-  if (await linked(context, receipt.grnLine.grnLineId)) {
-    return refused('refused', 'booking.receipt-already-linked', [bookingItem(row.id)]);
+  const plan = await planAtIssue(context, issue, date);
+  if (plan.kind !== 'planned') return plan;
+  const answers: ReceiptAtIssue[] = [];
+  for (const [index, outcome] of plan.outcomes.entries()) {
+    if (outcome.kind === 'review') {
+      answers.push(outcome);
+      continue;
+    }
+    const receipt = issue.receipts[index];
+    if (receipt === undefined || plan.inForce === undefined) {
+      throw new CommandDefect('A GRN line links to a booking with no version in force');
+    }
+    const linkId = await writeLink(context, audit, linker, plan.row, plan.inForce.status.versionId, {
+      lineKey: outcome.lineKey,
+      grnId: issue.grn.grnId,
+      grnLineId: receipt.grnLineId,
+      grnSiteId: issue.grn.siteId,
+      quantity: receipt.quantity,
+      kind: 'at-issue',
+      date,
+    });
+    answers.push({ kind: 'linked', grnLineId: outcome.grnLineId, lineKey: outcome.lineKey, linkId });
   }
-  const status = await statusOfBooking(context, row.id, date);
-  if (status === undefined) return { kind: 'success', answer: { kind: 'review', reason: 'not-approved' } };
-  // A GRN at a Site that is not the booking's destination goes to Booking for review (3.7). **Design choice.**
-  if (receipt.grnLine.siteId !== row.siteId) {
-    return { kind: 'success', answer: { kind: 'review', reason: 'other-site' } };
-  }
-  const match = matchReceipt(status.lines, receipt.goods);
-  if (match.kind === 'review') return { kind: 'success', answer: match };
-  const linkId = await writeLink(context, audit, linker, row, status.versionId, {
-    lineKey: match.lineKey,
-    grnLine: receipt.grnLine,
-    quantity: receipt.quantity,
-    kind: 'at-issue',
-    date,
-  });
-  return { kind: 'success', answer: { kind: 'linked', linkId, lineKey: match.lineKey } };
+  return { kind: 'success', answer: answers };
 }

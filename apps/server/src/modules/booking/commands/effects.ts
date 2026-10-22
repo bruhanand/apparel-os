@@ -3,6 +3,7 @@ import {
   BOOKING_APPROVAL,
   BOOKING_CANCELLATION,
   BOOKING_EXTENSION,
+  BOOKING_RECEIPT_LINK,
   OPEN_TO_BUY_APPROVAL,
   OPEN_TO_BUY_CHECK,
 } from '@apparel-os/schemas';
@@ -17,11 +18,12 @@ import type {
 } from '../../access/index.js';
 import type { AuditChange, AuditInterface } from '../../audit/index.js';
 import { openToBuyBudgetCheck, openToBuyBudgetVersion } from '../db/schema.js';
-import { amendmentApprovalRules, bookingApprovalRule } from '../domain/bookings.js';
+import { amendmentApprovalRules, bookingApprovalRule, receiptLinkApprovalRule } from '../domain/bookings.js';
 import { approvalDocument, bookingApprovalRules, budgetAuditRecord, versionItem } from '../domain/budgets.js';
 import { checkOf, versionRow } from '../queries/budgets.js';
 import { amendmentEffect } from './amendments.js';
 import { bookingApprovalEffect, type ApprovalDependencies } from './approval.js';
+import { receiptLinkEffect } from './receipt-link-proposal.js';
 import { budgetLock, refused } from './common.js';
 
 // What a decision does to an open-to-buy budget version (goods-in 3.3; module-map 6.2 flow A; access-and-approvals
@@ -234,7 +236,7 @@ function approvalEffect(dependencies: EffectDependencies): DocumentEffect {
  */
 export function bookingApprovals(dependencies: EffectDependencies): ModuleApprovals {
   return {
-    rules: [...bookingApprovalRules, bookingApprovalRule, ...amendmentApprovalRules],
+    rules: [...bookingApprovalRules, bookingApprovalRule, ...amendmentApprovalRules, receiptLinkApprovalRule],
     effects: new Map<string, DocumentEffect>([
       [OPEN_TO_BUY_CHECK, checkEffect(dependencies)],
       [OPEN_TO_BUY_APPROVAL, approvalEffect(dependencies)],
@@ -243,6 +245,8 @@ export function bookingApprovals(dependencies: EffectDependencies): ModuleApprov
       // A cancellation of an undelivered balance and an extension of the window (goods-in 3.5; S2-F01-T04).
       [BOOKING_CANCELLATION, amendmentEffect(dependencies)],
       [BOOKING_EXTENSION, amendmentEffect(dependencies)],
+      // A proposal to link late or excess goods into a booking (goods-in 4.10; POL-05.08; S2-F02-T04).
+      [BOOKING_RECEIPT_LINK, receiptLinkEffect(dependencies)],
     ]),
   };
 }
