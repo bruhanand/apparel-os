@@ -112,6 +112,9 @@ function terms(ownershipEvent: AgreementTerms['ownershipEvent']): AgreementTerms
   };
 }
 
+/** Agreement terms with every value Unknown but the ownership-transfer event given, for another brand's Agreement. */
+export const agreementTerms = terms;
+
 function ok<A>(
   outcome:
     | { kind: 'success'; answer: A }

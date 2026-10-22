@@ -1,4 +1,5 @@
 import { bigint, boolean, date, integer, jsonb, numeric, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import type { MissingItem } from '@apparel-os/schemas';
 import type { PtRowDetail } from '../domain/detail.js';
 
 // Drizzle definitions of `merchandise` · PT's tables (code-house-rules 3.4). They mirror the reviewed migration
@@ -176,7 +177,7 @@ export const ptPostingFailure = merchandise.table('pt_posting_failure', {
   ptPostRequestId: uuid('pt_post_request_id').notNull(),
   ...facts(),
   code: text('code').notNull(),
-  missing: jsonb('missing').$type<readonly Record<string, string>[]>().notNull(),
+  missing: jsonb('missing').$type<readonly MissingItem[]>().notNull(),
   failedAt: at('failed_at').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });

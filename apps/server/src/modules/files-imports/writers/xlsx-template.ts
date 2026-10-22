@@ -16,6 +16,38 @@ export interface BlankTemplate {
   readonly lists: readonly { readonly name: string; readonly values: readonly string[] }[];
 }
 
+/** A layout's sheet filled with rows, each cell a text, a number or empty (goods-in 6.5; S2-F06-T01). */
+export interface FilledSheet {
+  readonly sheet: string;
+  readonly headerRow: number;
+  readonly columns: readonly string[];
+  readonly rows: readonly (readonly (string | number | null)[])[];
+}
+
+/**
+ * A record downloaded in its layout's columns (goods-in 6.5; PRD-PTW-008, PRD-PTW-009): the layout's sheet, its header
+ * at the layout's header row, its columns in the layout's order, and the rows below it, each value as given. As the
+ * blank template, it writes no formula, link or macro. Pure: bytes in memory.
+ */
+export async function filledWorkbook(filled: FilledSheet): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet(filled.sheet);
+  const header = sheet.getRow(filled.headerRow);
+  filled.columns.forEach((name, at) => {
+    header.getCell(at + 1).value = name;
+  });
+  header.font = { bold: true };
+  header.commit();
+  filled.rows.forEach((values, index) => {
+    const row = sheet.getRow(filled.headerRow + 1 + index);
+    values.forEach((value, at) => {
+      if (value !== null) row.getCell(at + 1).value = value;
+    });
+    row.commit();
+  });
+  return Buffer.from(await workbook.xlsx.writeBuffer());
+}
+
 export async function blankWorkbook(template: BlankTemplate): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet(template.sheet);

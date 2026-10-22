@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { PT_POSTING_QUEUE, type PtPostingQueue } from '../../src/modules/merchandise/pt/index.js';
 import { Writable } from 'node:stream';
 import { uuidv7 } from '@apparel-os/domain';
 import { permissionRegistry, Secret, type PersonaId, type RecordTypeDeclaration } from '@apparel-os/schemas';
@@ -302,6 +303,11 @@ export async function startAccessApp(
      * (backup-and-restore 4.1); the world's directory on the run's server unless given.
      */
     readonly directoryRuntimeUrl?: string;
+    /**
+     * How a PT's approval posts (goods-in 6.6; S2-F06-T01): with its decision unless a test queues it above a number of
+     * rows, with the posting job composed beside the application (support/pt-approval.ts).
+     */
+    readonly ptPostingQueue?: PtPostingQueue;
   } = {},
 ): Promise<AccessTestApp> {
   const lines: string[] = [];
@@ -317,6 +323,9 @@ export async function startAccessApp(
   );
   let builder = Test.createTestingModule({ imports: [AppModule] });
   if (options.clock !== undefined) builder = builder.overrideProvider(CLOCK).useValue(options.clock);
+  if (options.ptPostingQueue !== undefined) {
+    builder = builder.overrideProvider(PT_POSTING_QUEUE).useValue(options.ptPostingQueue);
+  }
   if (options.locationInUse !== undefined) {
     builder = builder.overrideProvider(LOCATION_IN_USE).useValue(options.locationInUse);
   }

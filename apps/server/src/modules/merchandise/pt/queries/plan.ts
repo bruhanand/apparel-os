@@ -89,6 +89,23 @@ export async function uploadBlock(
 
 /** The block of 5.1 from what the GRN holds and its mark. */
 function blockOf(basis: PtBasis, mark: PtMark): CommandRefusal | undefined {
+  const open = heldLinesOpen(basis);
+  if (open !== undefined) return open;
+  if (mark.kind === 'set') {
+    return {
+      kind: 'refused',
+      code: 'merchandise.pt-already-attached',
+      missing: [recordItem(PT_REVISION_TYPE, mark.ptRevisionId)],
+    };
+  }
+  return undefined;
+}
+
+/**
+ * The refusal while a held line, a damage report on the GRN's lines or a recount of it waits for its decision (5.1;
+ * DEC-137), naming each; checked again by the PT's approval under its locks (goods-in 6.3; S2-F06-T01).
+ */
+export function heldLinesOpen(basis: PtBasis): CommandRefusal | undefined {
   if (basis.undecided.length > 0) {
     return {
       kind: 'refused',
@@ -104,13 +121,6 @@ function blockOf(basis: PtBasis, mark: PtMark): CommandRefusal | undefined {
             return recordItem(RECOUNT_TYPE, each.recountId);
         }
       }),
-    };
-  }
-  if (mark.kind === 'set') {
-    return {
-      kind: 'refused',
-      code: 'merchandise.pt-already-attached',
-      missing: [recordItem(PT_REVISION_TYPE, mark.ptRevisionId)],
     };
   }
   return undefined;

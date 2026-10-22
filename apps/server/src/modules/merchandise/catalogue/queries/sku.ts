@@ -53,6 +53,19 @@ export async function identitiesOf(
   return identities;
 }
 
+/** The codes of the SKUs given, by SKU (4.1), such as the new products a PT approval confirmed (goods-in 6.6). */
+export async function skuCodesOf(
+  context: TransactionContext,
+  skuIds: readonly string[],
+): Promise<ReadonlyMap<string, string>> {
+  if (skuIds.length === 0) return new Map();
+  const rows = await context.tx
+    .select({ id: sku.id, code: sku.code })
+    .from(sku)
+    .where(inArray(sku.id, [...new Set(skuIds)]));
+  return new Map(rows.map((row) => [row.id, row.code]));
+}
+
 export async function skuOn(
   context: TransactionContext,
   skuId: string,

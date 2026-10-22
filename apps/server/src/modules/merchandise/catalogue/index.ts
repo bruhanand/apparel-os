@@ -39,3 +39,4 @@ export { TRACKING_PROFILES_CHECK, trackingProfilesCheck } from './queries/validi
 export { checkPtProducts, confirmPtProducts, mapPtBarcodes, ptProductLockTargets } from './commands/pt-products.js';
 export type { CheckedPtProducts, PtConfirmer, PtProductRequest } from './commands/pt-products.js';
 export { SKU_CODE_KIND, SKU_CODE_SCOPE_KEY } from './domain/kinds.js';
+export { skuCodesOf } from './queries/sku.js';

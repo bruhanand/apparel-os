@@ -19,7 +19,7 @@ import {
   type LockTarget,
   type TransactionContext,
 } from '../../../../kernel/index.js';
-import type { AuditActor, AuditInterface } from '../../../audit/index.js';
+import type { AuditActor, AuditInterface, AuditSource } from '../../../audit/index.js';
 import {
   externalCode,
   externalCodeKey,
@@ -383,7 +383,9 @@ export async function confirmPtProducts(
     readonly codes: ReadonlyMap<string, string>;
     readonly proposedBy: string;
     readonly confirmer: PtConfirmer;
-    readonly source: { readonly batchId: string; readonly documentId: string; readonly batchCode: string };
+    /** The PT file's batch and document the products came from (imports-and-opening-data 5). */
+    readonly importedFrom: { readonly batchId: string; readonly documentId: string };
+    readonly source: AuditSource;
     readonly date: string;
   },
 ): Promise<{ readonly kind: 'done' } | { readonly kind: 'refused'; readonly refusal: CommandRefusal }> {
@@ -445,8 +447,8 @@ export async function confirmPtProducts(
         state: 'Confirmed',
         decidedByUserId: confirmer.userId,
         decidedAt: context.startedAt,
-        importBatchId: request.source.batchId,
-        importDocumentId: request.source.documentId,
+        importBatchId: request.importedFrom.batchId,
+        importDocumentId: request.importedFrom.documentId,
         importStagedRowIds: [...new Set(proposal.products.flatMap((product) => product.stagedRowIds))],
       });
       if (newStyle !== undefined) {
@@ -520,7 +522,7 @@ export async function confirmPtProducts(
         { kind: 'value', field: 'skuIds', before: null, after: skuIds },
         { kind: 'value', field: 'skuCodes', before: null, after: proposal.products.map((each) => codeOf(each.key)) },
       ],
-      source: { kind: 'import', reference: request.source.batchCode, row: proposal.products[0]?.rowNumber ?? 1 },
+      source: request.source,
     });
     await context.publish(productConfirmed, {
       subject: { module: 'merchandise', recordType: PRODUCT_PROPOSAL_TYPE, recordId: proposal.id },
@@ -545,7 +547,7 @@ export async function mapPtBarcodes(
     readonly date: string;
     readonly mappings: readonly { readonly code: string; readonly skuId: string; readonly rowNumber: number }[];
     readonly preparedBy: PtConfirmer;
-    readonly source: { readonly batchCode: string };
+    readonly source: AuditSource;
   },
 ): Promise<{ readonly kind: 'done' } | { readonly kind: 'refused'; readonly refusal: CommandRefusal }> {
   const wanted = new Map<string, { code: string; skuId: string; rowNumber: number }>();
@@ -615,7 +617,7 @@ export async function mapPtBarcodes(
   );
   // The same-scope conflict, held by the exclusion constraints behind the service (6.2).
   if (written.kind === 'caught') return { kind: 'refused', refusal: refusal('merchandise.code-conflict', []) };
-  const mappingIds = values.map((each) => each.id ?? '');
+  const mappingIds = values.map((each) => each.id);
   const [first] = mappingIds;
   if (first === undefined) throw new CommandDefect('A PT mapped no barcode');
   await audit.record(context, {
@@ -629,12 +631,12 @@ export async function mapPtBarcodes(
       { kind: 'value', field: 'validFrom', before: null, after: request.date },
       { kind: 'value', field: 'mappingIds', before: null, after: mappingIds },
     ],
-    source: { kind: 'import', reference: request.source.batchCode, row: [...wanted.values()][0]?.rowNumber ?? 1 },
+    source: request.source,
   });
   for (const value of values) {
     await context.publish(codeMappingChanged, {
-      subject: { module: 'merchandise', recordType: EXTERNAL_CODE_TYPE, recordId: value.id ?? '' },
-      payload: { mappingId: value.id ?? '', skuId: value.skuId },
+      subject: { module: 'merchandise', recordType: EXTERNAL_CODE_TYPE, recordId: value.id },
+      payload: { mappingId: value.id, skuId: value.skuId },
     });
   }
   return { kind: 'done' };

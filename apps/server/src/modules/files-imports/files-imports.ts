@@ -5,7 +5,7 @@ import type { PolicyEvidence } from '../configuration/index.js';
 import { attach, type Attached, type AttachRequest } from './commands/attach.js';
 import type { AttachedRecordReaders } from './contracts/record-readers.js';
 import { handlerBatch, type HandlerBatch } from './queries/handler-batch.js';
-import { blankTemplate, type TemplateList } from './queries/template.js';
+import { blankTemplate, filledTemplate, type TemplateList } from './queries/template.js';
 
 /**
  * The files-imports module's interface to other modules (module-map 4.7; imports-and-opening-data 13.1). Only Attach
@@ -38,6 +38,19 @@ export interface FilesImportsInterface {
       readonly lists: readonly TemplateList[];
     },
   ): Promise<{ readonly fileName: string; readonly bytes: Buffer } | undefined>;
+  /**
+   * A record's rows written in the columns of the layout version it was imported with, each field's value in the
+   * column the mapping version reads it from, as XLSX (goods-in 6.5; S2-F06-T01); undefined when either version is not
+   * found. The caller has authorised the reader of the record and of every value it writes.
+   */
+  filledTemplate(
+    context: TransactionContext,
+    request: {
+      readonly layoutVersionId: string;
+      readonly mappingVersionId: string;
+      readonly rows: readonly Readonly<Record<string, string | number | null>>[];
+    },
+  ): Promise<Buffer | undefined>;
 }
 
 /**
@@ -81,5 +94,16 @@ export class FilesImports implements FilesImportsInterface {
     },
   ) {
     return blankTemplate(context, request);
+  }
+
+  filledTemplate(
+    context: TransactionContext,
+    request: {
+      readonly layoutVersionId: string;
+      readonly mappingVersionId: string;
+      readonly rows: readonly Readonly<Record<string, string | number | null>>[];
+    },
+  ) {
+    return filledTemplate(context, request);
   }
 }
