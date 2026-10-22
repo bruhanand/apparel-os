@@ -1,7 +1,7 @@
 # S2-F02-T05 — Recount
 
 Status: blocked
-Blocked by: S2-F02-T03
+Blocked by: S2-F02-T03, S2-F04-T02 (the GRN's "PT attached" mark is built there)
 Feature: [Stage 2 first version](../../spec.md)
 
 ## Build
