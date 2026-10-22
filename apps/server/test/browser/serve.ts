@@ -2864,12 +2864,48 @@ const againstRouting = await fixtureRunner.run(
         owner: { kind: 'user', userId: againstBooker.id },
         dueRule: { format: 'elapsed-minutes-v1', minutes: 60 },
         escalation: { kind: 'user', userId: againstBooker.id },
-        validFrom: new Date().toISOString().slice(0, 10),
+        validFrom: receivingStructure.today(),
         origin: 'synthetic',
       },
     ),
 );
 if (againstRouting.kind !== 'done') throw new Error(`The review rule was refused: ${againstRouting.refusal.code}`);
+// A GRN received without a booking goes to Booking for review too (goods-in 4.10; 12 test 6; RR-580), so each other
+// receiving journey's Site has the review routed to the receive-against-booking journey's Booking user by a SYNTHETIC
+// rule, as a GRN with findings waits for its follow-ups' routing (goods-in 4.9). The routing is the product owner's:
+// SYNTHETIC here.
+const unbookedRoutings: { readonly routingId: string; readonly versionId: string }[] = [];
+for (const world of [receivingWorld, storeStaffWorld, damageWorld, heldWorld, ptReceivingWorld]) {
+  const routed = await fixtureRunner.run(
+    {
+      commandName: 'test-syn-unbooked-review.fixture',
+      organisation: receivingRouted.organisation,
+      correlationId: newCorrelationId(),
+      actor: { kind: 'actor', actorId: damageOperations.id },
+    },
+    (context) =>
+      new Exceptions({
+        numbering: new Numbering({ kinds: [EXCEPTION_CODE_KIND] }),
+        inbox: new Inbox(),
+        audit: new Audit(fixtureLog.logger),
+        types: [damageExceptionType, ...receivingExceptionTypes],
+      }).prepareRouting(
+        context,
+        { userId: damageOperations.id, roleAssignmentId: damageDecider.assignmentId },
+        {
+          typeCode: 'receiving.booking-review',
+          siteId: world.siteId,
+          owner: { kind: 'user', userId: againstBooker.id },
+          dueRule: { format: 'elapsed-minutes-v1', minutes: 60 },
+          escalation: { kind: 'user', userId: againstBooker.id },
+          validFrom: receivingStructure.today(),
+          origin: 'synthetic',
+        },
+      ),
+  );
+  if (routed.kind !== 'done') throw new Error(`An unbooked review rule was refused: ${routed.refusal.code}`);
+  unbookedRoutings.push(routed.value);
+}
 // Both rules approved through the real commands, as Setup › Exception rules has them approved (access-and-approvals
 // 12.2; code-house-rules 11.2): each asked of `access` for a different person, the setup's approver, holding approve on
 // the rules, who decides it through Decide.
@@ -2879,7 +2915,7 @@ if (againstRouting.kind !== 'done') throw new Error(`The review rule was refused
     { recordType: 'exceptions.exception_routing', action: 'view' },
     { recordType: 'exceptions.exception_routing', action: 'approve' },
   ]);
-  for (const rule of [damageRouting.value, heldRouting.value, againstRouting.value]) {
+  for (const rule of [damageRouting.value, heldRouting.value, againstRouting.value, ...unbookedRoutings]) {
     const requestId = await receivingStructure.run(damageOperations.id, (context) =>
       routingAccess.requestApproval(context, {
         actionType: ROUTING_ACTION_TYPE,
@@ -3195,7 +3231,7 @@ const app = await startAccessApp(
       owner: { kind: 'user', userId: exceptionsOps.id },
       dueRule: { format: 'elapsed-minutes-v1', minutes: 60 },
       escalation: { kind: 'user', userId: exceptionsOps.id },
-      validFrom: new Date().toISOString().slice(0, 10),
+      validFrom: structureFixture.today(),
       origin: 'synthetic',
     }),
   });
@@ -3241,10 +3277,7 @@ const againstBookingNumber = await (async (): Promise<string> => {
     destinationSiteId: againstWorld.siteId,
     supplierPartyId: againstWorld.supplier.id,
     seasonValueId: bookingSeason.valueId,
-    deliveryWindow: {
-      from: new Date().toISOString().slice(0, 10),
-      to: new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10),
-    },
+    deliveryWindow: { from: receivingStructure.today(), to: receivingStructure.day(30) },
     lines: [
       {
         styleCode: againstStyle,

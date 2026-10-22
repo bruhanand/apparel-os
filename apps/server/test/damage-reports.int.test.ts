@@ -260,16 +260,19 @@ async function limit(
 }
 
 /**
- * The damage exception routed at the Site to Operations, through the routing's own route, and approved by a different
- * person (access-and-approvals 12.2, 12.4; POL-02.16): a SYNTHETIC owner and due time, never KDPS's (V-03).
+ * An exception type routed at the Site to an owner, through the routing's own route, and approved by a different
+ * person (access-and-approvals 12.2, 12.4; POL-02.16): a SYNTHETIC owner and due time, never KDPS's (V-03). The damage
+ * exception to Operations; and the review of the GRN below, received without a booking, which goes to Booking for
+ * review (goods-in 4.10; RR-580), whoever prepares the rules standing in as its owner here, so Operations' My work holds
+ * only the damage.
  */
-async function routeDamageToOperations(): Promise<void> {
+async function routeTo(typeCode: 'stock.damage' | 'receiving.booking-review', owner: Person): Promise<void> {
   const prepared = await post(settingsAdmin, '/api/exceptions/routing', {
-    typeCode: 'stock.damage',
+    typeCode,
     siteId: fixture.siteId,
-    owner: { kind: 'user', userId: operations.user.id },
+    owner: { kind: 'user', userId: owner.user.id },
     dueRule: { format: 'elapsed-minutes-v1', minutes: 60 },
-    escalation: { kind: 'user', userId: operations.user.id },
+    escalation: { kind: 'user', userId: owner.user.id },
     validFrom: setup.today(),
     origin: 'synthetic',
   });
@@ -357,7 +360,8 @@ beforeAll(async () => {
   await limit(cautious, DAMAGE_DECISION, { kind: 'amount', paise: 100_000, coversUnknown: false });
   await limit(proposer, DAMAGE_REVERSAL_APPROVAL, { kind: 'unknown-only' });
   await limit(reversalApprover, DAMAGE_REVERSAL_APPROVAL, { kind: 'unknown-only' });
-  await routeDamageToOperations();
+  await routeTo('stock.damage', operations);
+  await routeTo('receiving.booking-review', settingsAdmin);
 
   // Goods in custody at the Store's receiving location, through receiving's routes (goods-in 4): 6 pieces of a product
   // not yet set up and 5 of the batch-tracked product, each line its own receipt origin.

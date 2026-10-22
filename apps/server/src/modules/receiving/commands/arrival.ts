@@ -1,7 +1,6 @@
 import { uuidv7 } from '@apparel-os/domain';
 import {
   ARRIVAL_TYPE,
-  BOOKING_TYPE,
   type ArrivalDraft,
   type ArrivalRecorded,
   type InvoiceDraft,
@@ -21,6 +20,7 @@ import { mappingOn, structureOn } from '../../organisation/index.js';
 import { arrival, arrivalInvoice, arrivalPhoto } from '../db/schema.js';
 import { textKey, trimmed } from '../domain/text.js';
 import { receivingMissing, receivingUnavailable, type AvailabilityDependencies } from '../queries/availability.js';
+import { bookingOfArrival } from './booking-of-arrival.js';
 import {
   arrivalNotFound,
   audited,
@@ -107,8 +107,10 @@ export async function recordArrival(
       recordItem('merchandise.brand', draft.brandId),
     ]);
   }
-  const against = await bookingRefusal(context, dependencies, draft);
-  if (against !== undefined) return against;
+  if (draft.bookingId !== undefined) {
+    const against = await bookingOfArrival(context, dependencies.booking, draft.bookingId, draft);
+    if (against.kind !== 'receivable') return against;
+  }
   const mapping = await mappingOn(context, unit.id, date);
   // Available has just asked for it: a mapping in force and verified.
   if (mapping === undefined) throw new CommandDefect('A unit receiving is available at has a mapping in force');
@@ -154,28 +156,6 @@ export async function recordArrival(
     ],
   });
   return { kind: 'success', answer: { arrivalId: row.id, versionToken } };
-}
-
-/**
- * Why the booking an Arrival names may not be received against, or undefined (goods-in 3.4, 3.7, 4.2): one the receiver
- * may not see is not found (code-house-rules 12.3); one with no approved version is not approved; one of another brand,
- * or whose version in force names another supplier, is not the Arrival's. Checked again at the GRN's issue under the
- * booking's lock, where a later change of its supplier sends the lines to review (goods-in 4.10).
- */
-async function bookingRefusal(
-  context: TransactionContext,
-  dependencies: ArrivalDependencies,
-  draft: ArrivalDraft,
-): Promise<Outcome<never> | undefined> {
-  if (draft.bookingId === undefined) return undefined;
-  const named = await dependencies.booking.receivableBooking(context, draft.bookingId);
-  const item = recordItem(BOOKING_TYPE, draft.bookingId);
-  if (named === undefined) return refused('not-found', 'booking.record-not-found', [item]);
-  if (named.supplierPartyId === null) return refused('refused', 'booking.not-approved', [item]);
-  if (named.brandId !== draft.brandId || named.supplierPartyId !== draft.supplierPartyId) {
-    return refused('refused', 'receiving.booking-not-of-arrival', [item]);
-  }
-  return undefined;
 }
 
 /**

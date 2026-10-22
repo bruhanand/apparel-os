@@ -7,7 +7,7 @@ import {
   bookingReceiptLinkProposalDecision,
   bookingReceiptLinkProposalLine,
 } from '../db/schema.js';
-import { bookingAuditRecord, bookingVersionItem, lineItem } from '../domain/bookings.js';
+import { bookingAuditRecord, lineItem, receiptLinkProposalItem } from '../domain/bookings.js';
 import { goodsOfLine } from '../domain/lifecycle.js';
 import { bookingLock, bookingRow, type BookingRow } from '../queries/bookings.js';
 import { decided, gateRefusal, type ApprovalDependencies } from './approval.js';
@@ -45,7 +45,7 @@ async function awaiting(context: TransactionContext, proposalId: string) {
     .from(bookingReceiptLinkProposalDecision)
     .where(eq(bookingReceiptLinkProposalDecision.proposalId, proposalId));
   if (decision !== undefined) {
-    return refused<never>('refused', 'booking.version-not-awaiting', [bookingVersionItem(row.id, proposalId)]);
+    return refused<never>('refused', 'booking.version-not-awaiting', [receiptLinkProposalItem(proposalId)]);
   }
   const lines = await context.tx
     .select()
@@ -130,7 +130,7 @@ export function receiptLinkEffect(dependencies: ApprovalDependencies): DocumentE
         lines.map((line) => line.grnLineId),
       );
       if (linked.size > 0) {
-        return refused('refused', 'booking.receipt-already-linked', [bookingVersionItem(row.id, proposalId)]);
+        return refused('refused', 'booking.receipt-already-linked', [receiptLinkProposalItem(proposalId)]);
       }
       const { decisionId, roleAssignmentId } = decided(decider);
       const linkIds: string[] = [];

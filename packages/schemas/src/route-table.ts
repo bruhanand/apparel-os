@@ -1183,6 +1183,8 @@ const GRN_ISSUE_CODES = [
   'receiving.batch-required',
   'receiving.batch-not-tracked',
   'receiving.sku-not-of-line',
+  // A line of goods on the invoice, or of wrong goods, counted without a size (goods-in 4.3; RR-586).
+  'receiving.size-required',
   'receiving.no-grn-series',
   'receiving.grn-series-paused',
   'stock.invalid-item',
@@ -1212,6 +1214,12 @@ const HELD_LINE_DECISION_CODES = [
   'receiving.held-line-decided',
   'receiving.product-not-named',
 ] as const satisfies readonly ErrorCode[];
+
+/**
+ * The codes of a PT revision's decision (goods-in 5.8, 6; S2-F04-T02): neither outcome is available until the PT
+ * approval, which makes the PT official and values the stock, is built (S2-F06-T01).
+ */
+const PT_DECISION_CODES = ['merchandise.pt-decision-not-available'] as const satisfies readonly ErrorCode[];
 
 /**
  * The stock ledger's refusals a damage hold can meet, placed by a report or read for a request's value (stock-ledger
@@ -1866,6 +1874,8 @@ export const routes = {
       ...DAMAGE_DECISION_CODES,
       // A held line's decision (goods-in 4.6; S2-F02-T03).
       ...HELD_LINE_DECISION_CODES,
+      // A PT revision's decision, unavailable until the PT approval is built (goods-in 5.8, 6; S2-F04-T02).
+      ...PT_DECISION_CODES,
       // Layout, mapping and mapping rule versions (imports-and-opening-data 6.4; S1-F06-T03).
       'files-imports.proposal-not-found',
       'files-imports.proposal-not-open',
@@ -2289,6 +2299,8 @@ export const routes = {
       'files-imports.subject-not-taken',
       'files-imports.subject-not-found',
       'files-imports.subject-refused',
+      // A layout looking for the header where the target's files never have it (6.5; goods-in 5.2).
+      'files-imports.header-rows-not-allowed',
     ],
   }),
   readImportBatch: defineRoute({
@@ -2449,6 +2461,8 @@ export const routes = {
       'files-imports.publish-queued',
       'files-imports.nothing-to-publish',
       'files-imports.several-books',
+      // A batch about one record the person may no longer see (13.1, 13.2; S2-F04-T02).
+      'files-imports.subject-not-found',
     ],
   }),
   // Withdraw a batch, which becomes Failed (3.2, 13.1; S1-F06-T04).

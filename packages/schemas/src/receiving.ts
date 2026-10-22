@@ -406,7 +406,9 @@ export type GrnLine = z.infer<typeof grnLineSchema>;
  * (`ambiguous`); it was counted at a Site that is not the booking's destination (`other-site`); the booking's version in
  * force names another supplier (`other-supplier`); the booking had no approved version (`not-approved`); it arrived
  * after the delivery window as extended (`late`), or its pieces are beyond the booking line's outstanding (`excess`),
- * which need a different person's approval before they are accepted into the booking.
+ * which need a different person's approval before they are accepted into the booking. The one list of the reasons:
+ * `booking`'s rules and `receiving`'s column take their type from it, and the check of `receiving.grn_line_booking`
+ * (migration `receiving__receiving_against_a_booking`) lists the same, which a test proves (code review 6 of stage 2).
  */
 export const reviewReasonSchema = z.enum([
   'no-match',
@@ -608,9 +610,10 @@ export const inboxEntrySchema = z.strictObject({
   grn: z.strictObject({ id: idSchema, number: z.string(), issuedAt: instantSchema }).nullable(),
   /**
    * What the delivery waits for next (goods-in 4.1): its invoice, its count, its GRN, the decisions of its held lines
-   * and damage reported at the count, or its PT.
+   * and damage reported at the count, its PT, or, once a PT file is submitted for it, that PT's approval (goods-in 4.8;
+   * the product owner, 22 Oct 2026, RR-584).
    */
-  waitingFor: z.enum(['invoice', 'count', 'grn', 'held-lines', 'pt']),
+  waitingFor: z.enum(['invoice', 'count', 'grn', 'held-lines', 'pt', 'pt-approval']),
 });
 export type InboxEntry = z.infer<typeof inboxEntrySchema>;
 

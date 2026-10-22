@@ -2098,6 +2098,7 @@
               "merchandise.office-unit-has-no-brand",
               "merchandise.party-not-supplier",
               "merchandise.proposal-not-open",
+              "merchandise.pt-decision-not-available",
               "merchandise.reference-not-in-force",
               "merchandise.size-not-in-size-set",
               "merchandise.sku-exists",
@@ -6175,6 +6176,7 @@
               "receiving.grn-issued",
               "receiving.invoice-required",
               "receiving.no-lines",
+              "receiving.size-required",
               "receiving.sku-not-of-line",
               "stock.blocked",
               "stock.count-freeze-active",
@@ -51698,6 +51700,24 @@
                           },
                           "refusalCode": {
                             "type": "string"
+                          },
+                          "missing": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "required": [
+                                "kind"
+                              ],
+                              "additionalProperties": {
+                                "type": "string"
+                              }
+                            }
                           }
                         },
                         "required": [
@@ -51776,7 +51796,8 @@
             },
             "x-error-codes": [
               "access.approval-decision-not-found",
-              "files-imports.batch-not-found"
+              "files-imports.batch-not-found",
+              "files-imports.subject-not-found"
             ]
           },
           "409": {
@@ -73940,7 +73961,8 @@
                               "count",
                               "grn",
                               "held-lines",
-                              "pt"
+                              "pt",
+                              "pt-approval"
                             ]
                           }
                         },
@@ -89602,6 +89624,7 @@
               "files-imports.document-already-published",
               "files-imports.file-already-imported",
               "files-imports.file-unreadable",
+              "files-imports.header-rows-not-allowed",
               "files-imports.layout-not-matched",
               "files-imports.layout-version-rejected",
               "files-imports.no-import-handler",

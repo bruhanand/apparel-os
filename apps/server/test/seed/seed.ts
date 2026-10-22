@@ -35,12 +35,15 @@ import { defineSyntheticBookingSeries } from '../fixtures/booking-series.js';
 import { defineSyntheticDamageReportSeries } from '../fixtures/damage-report-series.js';
 import { defineSyntheticGrnSeries } from '../fixtures/grn-series.js';
 import {
+  addSyntheticItemMap,
   addSyntheticValues,
   markSyntheticAttribute,
+  SEEDED_MARKS,
   SYNTHETIC_MARKED_ATTRIBUTES,
   syntheticAttributeToMark,
-  type SeededMark,
+  syntheticSubCategory,
 } from '../fixtures/marked-attributes.js';
+import { addSyntheticPtTemplate } from '../fixtures/pt-template.js';
 import { isSyntheticCode, SYNTHETIC_ORGANISATIONS, syntheticDatabaseName } from '../fixtures/synthetic.js';
 import { seedRefusal } from './environment.js';
 import {
@@ -68,14 +71,17 @@ import {
 // runs the setup step for each Organisation the directory does not list yet. A finished Organisation, one the
 // directory lists and whose setup record exists, is left as it is, so a second run changes nothing.
 //
-// No screen defines a number series yet (RR-449), and on `dev` nobody can mark the season and size attributes without a
-// second person to approve it, so the seed gives each of its Organisations, set up now or before, what `dev` needs as
+// No screen defines a number series yet (RR-449), and on `dev` nobody can mark the attributes or confirm a layout without
+// a second person to approve it, so the seed gives each of its Organisations, set up now or before, what `dev` needs as
 // labelled synthetic settings (DEC-118), each only where it is missing, so a rerun changes nothing: the GRN series
 // (goods-in 4.8; DEC-143), the booking series and the damage-report series (goods-in 3.9, 8.5; DEC-144), each defined
-// under the `setup` identity; and a SYNTHETIC list attribute marked as the season and another as the size list where
-// none is marked in force (goods-in 3.3, 4.3; DEC-144; fixtures/marked-attributes.ts), each attribute recorded by the
-// first Admin and each marking written under the `setup` identity with the first Admin as its preparer, with a few
-// SYNTHETIC values written the same way, so budgets and count lines can be made on `dev` without further role setup.
+// under the `setup` identity; a SYNTHETIC list attribute marked as each mark where none is marked in force: the season,
+// the size list and the PT template's colour, gender, type, item, fit and GST rate lists (goods-in 3.3, 4.3, 5.2;
+// DEC-144; fixtures/marked-attributes.ts), each attribute recorded by the first Admin and each marking written under the
+// `setup` identity with the first Admin as its preparer, with a few SYNTHETIC values written the same way; the item
+// map of the SYNTHETIC items, to a SYNTHETIC category the first Admin records (RR-583); and the PT template's SYNTHETIC
+// layout and mapping, Confirmed (fixtures/pt-template.ts), so budgets, count lines and PT files can be made on `dev`
+// without further role setup.
 const logger = new PinoLoggerService();
 
 interface Target {
@@ -160,9 +166,6 @@ const SEEDED_SERIES = [
   { label: 'damage-report', define: defineSyntheticDamageReportSeries },
 ] as const;
 
-/** The marks the seed marks a SYNTHETIC attribute as, each where none is marked in force (DEC-144). */
-const SEEDED_MARKS: readonly SeededMark[] = ['season', 'size'];
-
 /**
  * Gives one seed Organisation what `dev` needs and it lacks, as labelled synthetic settings (DEC-118, DEC-143,
  * DEC-144), and answers what was added: each SYNTHETIC series it has none of, defined under its `setup` identity as the
@@ -220,6 +223,22 @@ async function syntheticSettingsAdded(
     );
     if (values.length > 0) added.push(`${values.join(', ')} added as values of ${code}`);
   }
+  // The item map of the SYNTHETIC items, while they are the items marked (goods-in 5.2, 5.3; RR-583): its category
+  // recorded by the first Admin, then the map written under the `setup` identity, each where missing.
+  const categoryId = await runIn(target, runtime, 'seed.record-category', actors.firstAdmin.userId, (context) =>
+    syntheticSubCategory(context, catalogue, actors.firstAdmin),
+  );
+  if (categoryId !== undefined) {
+    const mapped = await runIn(target, runtime, 'seed.add-item-map', actors.setupIdentityId, (context) =>
+      addSyntheticItemMap(context, { audit, origins }, { categoryId, writer }),
+    );
+    if (mapped.length > 0) added.push(`${mapped.join(', ')} added to the item map`);
+  }
+  // The PT template's SYNTHETIC layout and mapping, Confirmed, where its layout is missing (goods-in 5.2, 5.8).
+  const template = await runIn(target, runtime, 'seed.add-pt-template', actors.setupIdentityId, (context) =>
+    addSyntheticPtTemplate(context, { audit, origins }, { proposedBy: actors.firstAdmin.userId, writer }),
+  );
+  if (template === 'written') added.push('the SYNTHETIC PT template layout and mapping defined, Confirmed');
   return added;
 }
 

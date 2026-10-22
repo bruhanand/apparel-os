@@ -1,11 +1,24 @@
 import { permissionRegistry, type AgreementTerms, type AssignmentScope, type PolicyNumber } from '@apparel-os/schemas';
 import { Audit } from '../../src/modules/audit/index.js';
 import { Configuration, type ValidityCheck } from '../../src/modules/configuration/index.js';
+import {
+  EXCEPTION_CODE_KIND,
+  Exceptions,
+  ROUTING_ACTION_TYPE,
+  routingApprovals,
+} from '../../src/modules/exceptions/index.js';
+import { Inbox } from '../../src/modules/inbox/index.js';
+import { Numbering } from '../../src/modules/numbering/index.js';
 import { taxRulesCheck } from '../../src/modules/finance/tax-rules/index.js';
 import { policyEvidence } from '../../src/modules/files-imports/index.js';
 import { trackingProfilesCheck } from '../../src/modules/merchandise/catalogue/index.js';
 import { mappingOn, verifiedMappingsCheck } from '../../src/modules/organisation/index.js';
-import { RECEIVE_GOODS, RECEIVE_GOODS_STATUTORY, RECEIVING_CAPABILITY } from '../../src/modules/receiving/index.js';
+import {
+  RECEIVE_GOODS,
+  RECEIVE_GOODS_STATUTORY,
+  RECEIVING_CAPABILITY,
+  receivingExceptionTypes,
+} from '../../src/modules/receiving/index.js';
 import { SiteLifecycle, siteLifecycleApprovals } from '../../src/modules/site-lifecycle/index.js';
 import { LocationStock } from '../../src/modules/stock/ledger/index.js';
 import { syntheticCode, syntheticName } from '../fixtures/synthetic.js';
@@ -577,4 +590,57 @@ export async function receivingGranted(
     );
     await approve(ran.readinessRecordId);
   }
+}
+
+/**
+ * Routes one of `receiving`'s follow-up types at a Site to an owner by a SYNTHETIC rule (access-and-approvals 12.2;
+ * POL-02.16), prepared by the setup's preparer and approved by its approver through Decide, as Setup › Exception rules
+ * has them approved (code-house-rules 11.2): every GRN that raises it waits for its routing at its Site (goods-in 4.9),
+ * a GRN received without a booking included, which goes to Booking for review (goods-in 4.10; RR-580). The routing is
+ * the product owner's: SYNTHETIC here.
+ */
+export async function routeSyntheticFollowUp(
+  setup: StructureSetup,
+  database: string,
+  rule: { readonly typeCode: string; readonly siteId: string; readonly ownerId: string },
+): Promise<void> {
+  const audit = new Audit(capturingLogger().logger);
+  const exceptions = new Exceptions({
+    numbering: new Numbering({ kinds: [EXCEPTION_CODE_KIND] }),
+    inbox: new Inbox(),
+    audit,
+    types: receivingExceptionTypes,
+  });
+  const prepared = await setup.asPreparerDo((context, preparer) =>
+    exceptions.prepareRouting(context, preparer, {
+      typeCode: rule.typeCode,
+      siteId: rule.siteId,
+      owner: { kind: 'user', userId: rule.ownerId },
+      dueRule: { format: 'elapsed-minutes-v1', minutes: 60 },
+      escalation: { kind: 'user', userId: rule.ownerId },
+      validFrom: setup.today(),
+      origin: 'synthetic',
+    }),
+  );
+  if (prepared.kind !== 'done') throw new Error(`The ${rule.typeCode} rule was refused: ${prepared.refusal.code}`);
+  await grantSynthetic(database, { kind: 'user', id: setup.approver.id }, [
+    { recordType: 'exceptions.exception_routing', action: 'view' },
+    { recordType: 'exceptions.exception_routing', action: 'approve' },
+  ]);
+  const routingAccess = setup.accessWith(routingApprovals(audit));
+  const requestId = await setup.asPreparerDo((context, preparer) =>
+    routingAccess.requestApproval(context, {
+      actionType: ROUTING_ACTION_TYPE,
+      document: {
+        module: 'exceptions',
+        recordType: 'exceptions.exception_routing',
+        recordId: prepared.value.routingId,
+        versionId: prepared.value.versionId,
+      },
+      value: { kind: 'none' },
+      preparers: [preparer.userId],
+      requestedBy: preparer,
+    }),
+  );
+  decided(await setup.decideThrough(routingAccess, requestId, prepared.value.versionId));
 }

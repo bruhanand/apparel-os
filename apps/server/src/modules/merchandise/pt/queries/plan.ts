@@ -1,23 +1,19 @@
-import {
-  GRN_TYPE,
-  HELD_LINE_TYPE,
-  DAMAGE_REPORT_TYPE,
-  markedAttributeSetting,
-  type MissingItem,
-} from '@apparel-os/schemas';
-import type { CommandRefusal, TransactionContext } from '../../../../kernel/index.js';
+import { HELD_LINE_TYPE, DAMAGE_REPORT_TYPE, markedAttributeSetting, type MissingItem } from '@apparel-os/schemas';
+import { CommandDefect, type CommandRefusal, type TransactionContext } from '../../../../kernel/index.js';
 import { knownValue, type HandlerDocument, type HandlerRow } from '../../../files-imports/index.js';
 import type { GrnForPt, PtBasis, PtMark, ReceivingInterface } from '../../../receiving/index.js';
 import {
   barcodeSkusOn,
   brandProductsOn,
   brandsAndCategoriesOn,
+  itemMapOf,
   markedAttributeAt,
   vocabularyOn,
 } from '../../catalogue/index.js';
 import { LIST_MARKS, PT_REVISION_TYPE } from '../domain/kinds.js';
 import { matchGrn, type Coverage } from '../domain/match.js';
 import { productsOf, type Proposal, type RowFinding, type StyleList } from '../domain/products.js';
+import { BUSINESS_DATE_NOT_SET, grnNotFound, recordItem } from '../domain/refusals.js';
 import { checkRow, PT_FIELDS, type CheckedRow, type PtIssue, type PtList, type PtLists } from '../domain/rows.js';
 
 // What a PT file would make for its GRN (goods-in 5.1 to 5.7; S2-F04-T02): the preconditions of 5.1, the lists of 5.2,
@@ -52,12 +48,22 @@ export interface PtDraft {
   };
 }
 
-export type PtPlan =
-  | { readonly kind: 'issues'; readonly issues: readonly PtIssue[] }
-  | { readonly kind: 'draft'; readonly draft: PtDraft };
+/** Every problem that stops a file, at least one. */
+export type PtIssues = readonly [PtIssue, ...PtIssue[]];
 
-/** A record named in a refusal (PRD-UXP-003). */
-const recordItem = (recordType: string, recordId: string): MissingItem => ({ kind: 'record', recordType, recordId });
+/**
+ * What a PT file makes for its GRN: a refusal of any file for it now (the GRN not found, a held line or damage report
+ * waiting, a PT standing; no business date; a list not marked); or every problem of the file, by row and column; or,
+ * with none, its draft; or, while a required value of a row is Unknown and nothing else is wrong, nothing worked out
+ * (PRD-MOD-015): the pipeline reports each such value (`files-imports.required-value-unknown`).
+ */
+export type PtPlan =
+  | { readonly kind: 'refused'; readonly refusal: CommandRefusal }
+  | { readonly kind: 'issues'; readonly issues: PtIssues }
+  | { readonly kind: 'draft'; readonly draft: PtDraft }
+  | { readonly kind: 'unknown' };
+
+const refusedPlan = (refusal: CommandRefusal): PtPlan => ({ kind: 'refused', refusal });
 
 /**
  * Whether a PT file may be uploaded for the GRN now (goods-in 5.1; DEC-137): every held line and every damage report on
@@ -70,9 +76,7 @@ export async function uploadBlock(
   grnId: string,
 ): Promise<CommandRefusal | undefined> {
   const basis = await receiving.ptBasis(context, grnId);
-  if (basis === undefined) {
-    return { kind: 'not-found', code: 'merchandise.record-not-found', missing: [recordItem(GRN_TYPE, grnId)] };
-  }
+  if (basis === undefined) return grnNotFound(grnId);
   return blockOf(basis, await receiving.ptMark(context, grnId));
 }
 
@@ -101,23 +105,26 @@ function blockOf(basis: PtBasis, mark: PtMark): CommandRefusal | undefined {
 
 /**
  * The lists a PT file's values must be on (goods-in 5.2): each list's attribute as the Organisation marks it, by the
- * codes of its approved values in force today, and the brands and categories in force today, by code. While a list is
- * not marked, every one not marked is named once (code-house-rules 12.14).
+ * codes of its approved values in force on the date, and the brands and categories in force then, by code; and the
+ * master sheet's item map, kept with the item marking in force (RR-583). While a list is not marked, every one not
+ * marked is named once (code-house-rules 12.14).
  */
 export async function listsOf(
   context: TransactionContext,
-  grnBrandId: string,
   date: string,
 ): Promise<
   | { readonly kind: 'lists'; readonly lists: PtLists; readonly attributes: Readonly<Record<PtList, string>> }
   | { readonly kind: 'refused'; readonly refusal: CommandRefusal }
 > {
   const attributes: Partial<Record<PtList, string>> = {};
+  const versions: Partial<Record<PtList, string>> = {};
   const missing: MissingItem[] = [];
   for (const [list, mark] of Object.entries(LIST_MARKS) as [PtList, (typeof LIST_MARKS)[PtList]][]) {
     const marked = await markedAttributeAt(context, mark);
-    if (marked.kind === 'set') attributes[list] = marked.attributeId;
-    else missing.push({ kind: 'setting', setting: markedAttributeSetting(mark) });
+    if (marked.kind === 'set') {
+      attributes[list] = marked.attributeId;
+      versions[list] = marked.versionId;
+    } else missing.push({ kind: 'setting', setting: markedAttributeSetting(mark) });
   }
   if (missing.length > 0) {
     return { kind: 'refused', refusal: { kind: 'unavailable', code: 'merchandise.attribute-not-marked', missing } };
@@ -126,10 +133,17 @@ export async function listsOf(
   for (const [list, attributeId] of Object.entries(attributes) as [PtList, string][]) {
     values[list] = new Map((await vocabularyOn(context, attributeId, date)).map((value) => [value.code, value.id]));
   }
+  const itemMarking = versions.item;
+  if (itemMarking === undefined) throw new CommandDefect('The item marking in force has no version');
   const { brands, categories } = await brandsAndCategoriesOn(context, date);
   return {
     kind: 'lists',
-    lists: { grnBrandId, brands, categories, attributes: values as Record<PtList, Map<string, string>> },
+    lists: {
+      brands,
+      categories,
+      attributes: values as Record<PtList, Map<string, string>>,
+      itemMap: await itemMapOf(context, itemMarking),
+    },
     attributes: attributes as Record<PtList, string>,
   };
 }
@@ -162,42 +176,26 @@ export async function ptPlanOf(
   receiving: PtReceiving,
   document: Pick<HandlerDocument, 'rows' | 'subject'>,
 ): Promise<PtPlan> {
+  // A PT file is always about its GRN: Start an import requires the subject (imports-and-opening-data 13.2).
   const grnId = document.subject?.recordId;
-  const grn = grnId === undefined ? undefined : await receiving.grnForPt(context, grnId);
-  if (grnId === undefined || grn === undefined) {
-    return {
-      kind: 'issues',
-      issues: [{ code: 'merchandise.record-not-found', missing: [recordItem(GRN_TYPE, grnId ?? '')] }],
-    };
-  }
+  if (grnId === undefined) throw new CommandDefect('A PT document names no GRN');
+  const grn = await receiving.grnForPt(context, grnId);
+  if (grn === undefined) return refusedPlan(grnNotFound(grnId));
   const basis = await receiving.ptBasis(context, grnId);
-  if (basis === undefined) {
-    return {
-      kind: 'issues',
-      issues: [{ code: 'merchandise.record-not-found', missing: [recordItem(GRN_TYPE, grnId)] }],
-    };
-  }
+  if (basis === undefined) return refusedPlan(grnNotFound(grnId));
   const blocked = blockOf(basis, await receiving.ptMark(context, grnId));
-  if (blocked !== undefined) return { kind: 'issues', issues: [{ code: blocked.code, missing: blocked.missing }] };
+  if (blocked !== undefined) return refusedPlan(blocked);
   const date = await context.businessDate();
-  if (date.kind === 'not-set') {
-    return {
-      kind: 'issues',
-      issues: [
-        { code: 'access.business-date-not-set', missing: [{ kind: 'setting', setting: 'configuration.timezone' }] },
-      ],
-    };
-  }
-  const listed = await listsOf(context, grn.brandId, date.date);
-  if (listed.kind === 'refused') {
-    return { kind: 'issues', issues: [{ code: listed.refusal.code, missing: listed.refusal.missing }] };
-  }
+  if (date.kind === 'not-set') return refusedPlan(BUSINESS_DATE_NOT_SET);
+  const listed = await listsOf(context, date.date);
+  if (listed.kind === 'refused') return refusedPlan(listed.refusal);
+  const brandId = grn.facts.brandId;
   const issues: PtIssue[] = [];
   const checked: { row: HandlerRow; checked: CheckedRow }[] = [];
   const matched = [];
   for (const row of document.rows) {
     const input = inputOf(row);
-    const result = checkRow(input, listed.lists);
+    const result = checkRow(input, listed.lists, brandId);
     issues.push(...result.issues);
     if (result.row !== undefined) checked.push({ row, checked: result.row });
     // The match reads a row's style, size and quantity wherever the row gives them, so a quantity is never lost to
@@ -218,18 +216,24 @@ export async function ptPlanOf(
   issues.push(...match.issues);
   if (document.rows.length === 0)
     issues.push({ code: 'merchandise.pt-file-refused', missing: [{ kind: 'pt-rows', rows: '0' }] });
-  if (issues.length > 0 || checked.length !== document.rows.length) return { kind: 'issues', issues };
+  const [first, ...rest] = issues;
+  if (first !== undefined) return { kind: 'issues', issues: [first, ...rest] };
+  // A row with no issue is not kept only while a value of it is Unknown, whose checks are skipped (domain/rows.ts).
+  if (checked.length !== document.rows.length) return { kind: 'unknown' };
 
-  const { brandId } = grn;
-  const products = await brandProductsOn(context, {
-    brandId,
-    styleCodes: checked.map((each) => each.checked.styleCode),
-    colourAttributeId: listed.attributes.colour,
-    date: date.date,
-  });
+  // The barcodes' products first, so the styles they name are read with the file's (goods-in 5.5).
   const barcodes = await barcodeSkusOn(context, {
     brandId,
     barcodes: checked.map((each) => each.checked.barcode),
+    date: date.date,
+  });
+  const products = await brandProductsOn(context, {
+    brandId,
+    styleCodes: [
+      ...checked.map((each) => each.checked.styleCode),
+      ...[...barcodes.values()].flatMap((skus) => skus.map((sku) => sku.styleCode)),
+    ],
+    colourAttributeId: listed.attributes.colour,
     date: date.date,
   });
   const codes = new Map<string, string>();
@@ -251,6 +255,7 @@ export async function ptPlanOf(
       colour: row.values.colour,
       barcode: row.barcode,
       categoryId: row.categoryId,
+      subCategoryCode: row.subCategoryCode,
       hsn: row.hsn,
       styleValues: styleValuesOf(row),
     })),
@@ -264,14 +269,14 @@ export async function ptPlanOf(
         ]),
       ),
       skus: products.skus,
-      barcodes,
+      barcodes: new Map([...barcodes].map(([code, skus]) => [code, skus.map((sku) => sku.skuId)])),
       codes,
     },
   );
   const byRow = new Map(found.rows.map((finding) => [finding.rowNumber, finding]));
   const rows: DraftRow[] = checked.map(({ row, checked: values }) => {
     const finding = byRow.get(row.rowNumber);
-    if (finding === undefined) throw new Error(`Row ${String(row.rowNumber)} lost its product`);
+    if (finding === undefined) throw new CommandDefect(`Row ${String(row.rowNumber)} lost its product`);
     return { checked: values, stagedRowId: row.stagedRowId, sheet: row.sheet, origins: originsOf(row), finding };
   });
   let pieces = 0;

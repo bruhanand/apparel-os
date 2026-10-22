@@ -24,12 +24,15 @@ import { unitReadiness } from '../organisation/index.js';
 import type { StockDocumentsInterface } from '../stock/documents/index.js';
 import type { StockLedgerInterface } from '../stock/ledger/index.js';
 import { attachPhotos, recordArrival, recordInvoice } from './commands/arrival.js';
-import { arrivalRow, entriesOf, factsOf, grnRow, type Actor } from './commands/common.js';
+import { arrivalRow, entriesOf, factsOf, type Actor } from './commands/common.js';
 import { removeCountLine, saveCountLine } from './commands/count.js';
 import { nameHeldLineProduct } from './commands/name-held-line-product.js';
 import { issueGrn } from './commands/issue.js';
 import { linkToBooking } from './commands/link-to-booking.js';
-import { clearPtMark, ptMarkLock, setPtMark, type PtMarkChange } from './commands/pt-mark.js';
+import { clearPtMark, type PtMarkClearReason } from './commands/clear-pt-mark.js';
+import { ptMarkLock, type PtMarkChange } from './commands/pt-mark.js';
+import { setPtMark } from './commands/set-pt-mark.js';
+import { grnRow } from './queries/grns.js';
 import { grnForPt, ptMarkOf, type GrnForPt, type PtMark } from './queries/pt-mark.js';
 import { currentLines } from './domain/lines.js';
 import { arrivalFacts, arrivalView, inboxOf, peopleOf } from './queries/arrivals.js';
@@ -267,7 +270,7 @@ export class Receiving {
   clearPtMark(
     context: TransactionContext,
     actor: Actor,
-    change: PtMarkChange & { readonly reason: 'pt-withdrawn' | 'pt-rejected' | 'pt-reversed' },
+    change: PtMarkChange & { readonly reason: PtMarkClearReason },
   ) {
     return clearPtMark(context, this.dependencies.audit, actor, change);
   }

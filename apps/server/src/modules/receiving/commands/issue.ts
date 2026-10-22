@@ -76,7 +76,9 @@ import {
 // through `access` (goods-in 4.6); the follow-ups reach Booking in My work: the GRN's shortage, each held line, and the
 // extra pieces of each kind recorded as not received (goods-in 2, 4.5, 4.9). Against a booking, each line that
 // delivers pieces links through `booking` to the booking line it matches, or goes to Booking for review, one follow-up
-// a GRN (goods-in 3.7, 4.10; PRD-BKG-007; POL-05.08; S2-F02-T04). Locks follow stock-ledger 10.3: the authority rows at
+// a GRN (goods-in 3.7, 4.10; PRD-BKG-007; POL-05.08; S2-F02-T04); a GRN received without a booking whose lines deliver
+// pieces goes to Booking for review whole, its lines to be linked later (goods-in 4.10; 12 test 6; RR-580). Locks
+// follow stock-ledger 10.3: the authority rows at
 // step 0 (the route's), the Arrival and the booking it names at step 1, the ledger's at steps 2 to 6, the GRN,
 // damage-report and exception-code series at step 8; the version, the state and the gates are read again under them
 // (PRD-INT-003).
@@ -246,6 +248,10 @@ export async function issueGrn(
     if (planned.kind === 'refusal') return planned;
     reviewed = planned.answer.some((each) => each.kind === 'review');
   }
+  // Received without a booking ("Goods arrived"), each line that delivers pieces is offered to Booking to link later
+  // (PRD-BKG-008), so the GRN goes to Booking for review, as one against a booking whose lines do not link (goods-in 2,
+  // 4.10; 12 test 6; RR-580). A GRN that received nothing delivers nothing to review.
+  const unbooked = row.bookingId === null ? issued.filter((each) => each.findings.received > 0).length : 0;
   const damaged = issued.filter((each) => each.line.entry.damage !== null);
   const held = issued.filter((each) => each.findings.held !== null);
   const short = issued.filter((each) => each.findings.shortage > 0);
@@ -268,7 +274,7 @@ export async function issueGrn(
     damageSeriesId = ready.answer.seriesId;
     stepEight.push(...ready.answer.series);
   }
-  if (held.length > 0 || short.length > 0 || notReceived.length > 0 || reviewed) {
+  if (held.length > 0 || short.length > 0 || notReceived.length > 0 || reviewed || unbooked > 0) {
     const codes = await dependencies.exceptions.codeSeriesTarget(context);
     if (codes.kind === 'refused') return refusalOf(codes.refusal);
     stepEight.push(codes.value);
@@ -432,7 +438,7 @@ export async function issueGrn(
   // Against a booking, each line that delivers pieces links to the booking line it matches through `booking`'s receipt
   // link, signed by whoever issues the GRN, or goes to Booking for review; its outcome is kept on the GRN (goods-in
   // 3.7, 4.10; PRD-BKG-007; POL-05.08).
-  let reviews = 0;
+  let reviews = unbooked;
   if (against !== undefined) {
     const linked = await dependencies.booking.linkReceiptsAtIssue(context, actor, against);
     if (linked.kind === 'refusal') return linked;
@@ -531,7 +537,8 @@ export async function issueGrn(
     });
     if (raised.kind === 'refused') return refusalOf(raised.refusal);
   }
-  // The lines sent to Booking for review, one follow-up a GRN, linking to it (goods-in 2, 3.7, 4.10).
+  // The lines sent to Booking for review, or received without a booking, one follow-up a GRN, linking to it (goods-in
+  // 2, 3.7, 4.10; RR-580).
   if (reviews > 0) {
     const raised = await dependencies.exceptions.raise(context, {
       raisingEvent: `${BOOKING_REVIEW_EXCEPTION_TYPE}:${grnId}`,

@@ -296,3 +296,15 @@ export const markedAttributeVersion = merchandise.table('marked_attribute_versio
   preparedByUserId: uuid('prepared_by_user_id').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
+/**
+ * The master sheet's item map (goods-in 5.2, 5.3; RR-583): each item's sub category and type, kept with the version of
+ * the item marking it belongs to (migration `merchandise.catalogue__template_list_marks`).
+ */
+export const itemMapEntry = merchandise.table('item_map_entry', {
+  id: uuid('id').primaryKey(),
+  markedAttributeVersionId: uuid('marked_attribute_version_id').notNull(),
+  itemValueId: uuid('item_value_id').notNull(),
+  categoryId: uuid('category_id').notNull(),
+  typeValueId: uuid('type_value_id').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});

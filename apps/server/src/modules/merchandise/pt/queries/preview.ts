@@ -52,8 +52,9 @@ export async function ptPreviewOf(
   if (blocking || document === undefined || (batch.state !== 'Staged' && batch.state !== 'Validated')) {
     return { ...base, draft: null };
   }
+  // The GRN as it stands now may refuse the file, or a problem appear since it was checked: no draft is shown.
   const plan = await ptPlanOf(context, receiving, document);
-  if (plan.kind === 'issues') return { ...base, draft: null };
+  if (plan.kind !== 'draft') return { ...base, draft: null };
   const { draft } = plan;
   const limit = Math.min(page.limit, PT_PREVIEW_PAGE_CAP);
   const after = page.after ?? 0;

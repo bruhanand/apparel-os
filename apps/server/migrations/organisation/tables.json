@@ -2310,6 +2310,14 @@
       "why": "The catalogue belongs to the Organisation as a whole: its record types carry no scope fact, so the permission on the record type decides (structure-and-masters 6.2; access-and-approvals 5.3); only merchandise code reads it"
     },
     {
+      "table": "merchandise.item_map_entry",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "structure-and-masters 4.2, 6.2; goods-in 5.2, 5.3, 5.8; code-house-rules 7.1",
+      "why": "The catalogue belongs to the Organisation as a whole: its record types carry no scope fact, so the permission on the record type decides (structure-and-masters 6.2; access-and-approvals 5.3); only merchandise code reads it"
+    },
+    {
       "table": "stock.damage_report",
       "class": "scoped",
       "marks": ["append-only", "locked"],

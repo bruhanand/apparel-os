@@ -1,13 +1,7 @@
 import { paise, uuidv7 } from '@apparel-os/domain';
 import { PT_APPROVAL, PT_TYPE, type MissingItem } from '@apparel-os/schemas';
 import { desc, eq } from 'drizzle-orm';
-import {
-  CommandDefect,
-  insertInParts,
-  lockTable,
-  type LockTarget,
-  type TransactionContext,
-} from '../../../../kernel/index.js';
+import { CommandDefect, insertInParts, type LockTarget, type TransactionContext } from '../../../../kernel/index.js';
 import type { AccessInterface } from '../../../access/index.js';
 import type { AuditInterface } from '../../../audit/index.js';
 import type { HandlerDocument, HandlerPublished, ImportPublisher, ImportSource } from '../../../files-imports/index.js';
@@ -15,14 +9,19 @@ import type { ReceivingInterface } from '../../../receiving/index.js';
 import { pt, ptCoverage, ptProposedSku, ptRevision, ptRow } from '../db/schema.js';
 import type { PtRowDetail } from '../domain/detail.js';
 import { PT_MODULE } from '../domain/kinds.js';
-import { ptPlanOf, type PtDraft } from '../queries/plan.js';
+import { BUSINESS_DATE_NOT_SET } from '../domain/refusals.js';
+import type { PtIssue } from '../domain/rows.js';
+import { ptPlanOf, type PtIssues } from '../queries/plan.js';
 import { ptOfGrn } from '../queries/pt-records.js';
+import { ptLock } from './pt-lock.js';
+import { scopeColumnsOf } from './scope-columns.js';
 
 // Submit a PT file: the publish of the PT handler (goods-in 5.6 step 3, 5.7, 10.3; imports-and-opening-data 3.1 steps
 // 7 to 9, 13.2; PRD-REC-017, PRD-REC-018, PRD-MER-013, PRD-IMP-006; S2-F04-T02). In the document's transaction, under
 // the locks Publish took at step 1 with the batch (the GRN's row and the PT's, which `lockTargets` names;
-// code-house-rules 8.2), it works the file out again against the GRN as it stands now, refusing the whole file at the
-// first problem; then it writes the PT, at its first submit, and the draft revision with its rows, the GRN's styles and
+// code-house-rules 8.2), it works the file out again against the GRN as it stands now, refusing the whole file with
+// every problem it finds, as the check lists them (5.6; PRD-IMP-007); then it writes the PT, at its first submit, and
+// the draft revision with its rows, the GRN's styles and
 // sizes it covers and the products it proposes; requests the revision's approval on its total proposed acquisition
 // cost, P RATE times QTY (goods-in 6.1; PRD-ACS-015), with every preparer of the batch; sets the GRN's "PT attached"
 // mark (goods-in 5.8); and records the audit. A draft creates no stock and no money effect (goods-in 5.7). Module-map
@@ -33,13 +32,6 @@ export interface SubmitDependencies {
   readonly access: Pick<AccessInterface, 'requestApproval'>;
   readonly receiving: Pick<ReceivingInterface, 'ptBasis' | 'grnForPt' | 'ptMark' | 'ptMarkLock' | 'setPtMark'>;
 }
-
-/** The PT's identity row as a lock target: every submit and withdrawal of it locks it at step 1 (8.2). */
-export const ptLock = (ptId: string): LockTarget => ({
-  table: lockTable('merchandise', 'pt'),
-  id: ptId,
-  mode: 'exclusive',
-});
 
 /** The rows Publish locks with the batch at step 1 (imports-and-opening-data 13.2): the GRN's row and the PT's. */
 export async function submitLockTargets(
@@ -53,9 +45,36 @@ export async function submitLockTargets(
   return [receiving.ptMarkLock(grnId), ...(existing === undefined ? [] : [ptLock(existing.id)])];
 }
 
-const refused = (code: string, missing: readonly MissingItem[]): HandlerPublished => ({
+/**
+ * What a problem of the file names in the refusal (code-house-rules 12.3 "What is missing"): its code, its row and its
+ * field, then what it names itself, identifiers and codes only. A style and size is named by its codes, never with the
+ * file's or the GRN's quantities, which the screen shows from the preview's read (code review 6 of stage 2).
+ */
+function itemsOf(issue: PtIssue): MissingItem[] {
+  const own = (issue.missing ?? []).map((item): MissingItem => {
+    if (item.kind !== 'pt-style-size') return { ...item };
+    const { styleCode, size } = item;
+    return {
+      kind: 'pt-style-size',
+      ...(styleCode === undefined ? {} : { styleCode }),
+      ...(size === undefined ? {} : { size }),
+    };
+  });
+  return [
+    {
+      kind: 'pt-issue',
+      code: issue.code,
+      ...(issue.rowNumber === undefined ? {} : { row: String(issue.rowNumber) }),
+      ...(issue.field === undefined ? {} : { field: issue.field }),
+    },
+    ...own,
+  ];
+}
+
+/** The whole file refused with every problem the check finds now, each by its code, row and field (5.6; DEC-134). */
+const fileRefused = (issues: PtIssues): HandlerPublished => ({
   kind: 'refused',
-  refusal: { kind: 'refused', code, missing },
+  refusal: { kind: 'refused', code: 'merchandise.pt-file-refused', missing: issues.flatMap(itemsOf) },
 });
 
 /** One of the draft's own identifiers, which every row it writes names; none is a defect. */
@@ -72,22 +91,15 @@ export async function submitPt(
   source: ImportSource,
 ): Promise<HandlerPublished> {
   const plan = await ptPlanOf(context, dependencies.receiving, document);
-  if (plan.kind === 'issues') {
-    const [first] = plan.issues;
-    // The whole file is refused (DEC-134): its first problem named, every one listed by validating it again.
-    return refused(
-      first?.code === 'merchandise.pt-held-lines-open' || first?.code === 'merchandise.pt-already-attached'
-        ? first.code
-        : 'merchandise.pt-file-refused',
-      first === undefined ? [] : [{ kind: 'pt-issue', code: first.code }, ...(first.missing ?? [])],
-    );
-  }
+  // A refusal of any file for the GRN now (5.1), as it stands; otherwise the whole file with every problem (DEC-134).
+  if (plan.kind === 'refused') return { kind: 'refused', refusal: plan.refusal };
+  if (plan.kind === 'issues') return fileRefused(plan.issues);
+  // Publish takes a Validated batch, every required value of it known (imports-and-opening-data 3.1).
+  if (plan.kind === 'unknown') throw new CommandDefect('A PT file was submitted with a required value Unknown');
   const { draft } = plan;
   const date = await context.businessDate();
-  if (date.kind === 'not-set') {
-    return refused('access.business-date-not-set', [{ kind: 'setting', setting: 'configuration.timezone' }]);
-  }
-  const facts = factsColumns(draft);
+  if (date.kind === 'not-set') return { kind: 'refused', refusal: BUSINESS_DATE_NOT_SET };
+  const facts = scopeColumnsOf(draft.grn.facts);
   const existing = await ptOfGrn(context, draft.grn.grnId);
   const ptId = existing?.id ?? uuidv7();
   if (existing === undefined) {
@@ -253,16 +265,4 @@ export async function submitPt(
     source: { kind: 'import', reference: source.batchCode, row: source.firstRowNumber },
   });
   return { kind: 'published', records: [{ recordType: PT_TYPE, recordId: ptId }] };
-}
-
-/** The scope columns every row of the PT carries: its GRN's (code-house-rules 6.1). */
-function factsColumns(draft: PtDraft) {
-  const { facts } = draft.grn;
-  return {
-    siteId: facts.siteId,
-    storeId: facts.storeId ?? null,
-    businessUnitId: facts.businessUnitId,
-    legalEntityId: facts.legalEntityId,
-    brandId: facts.brandId,
-  };
 }

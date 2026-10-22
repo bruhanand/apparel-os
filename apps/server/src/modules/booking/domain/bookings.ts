@@ -118,6 +118,16 @@ export const bookingItem = (bookingId: string): MissingItem => ({
   recordId: bookingId,
 });
 
+/** The record type a proposal to link late or excess goods into a booking is named by (goods-in 4.10). */
+export const RECEIPT_LINK_PROPOSAL_TYPE = 'booking.booking_receipt_link_proposal';
+
+/** A proposal to link late or excess goods into a booking, named in a refusal by itself (PRD-UXP-003; 12.3). */
+export const receiptLinkProposalItem = (proposalId: string): MissingItem => ({
+  kind: 'record',
+  recordType: RECEIPT_LINK_PROPOSAL_TYPE,
+  recordId: proposalId,
+});
+
 /** A booking version named in a refusal (PRD-UXP-003). */
 export const bookingVersionItem = (bookingId: string, versionId: string): MissingItem => ({
   kind: 'version',

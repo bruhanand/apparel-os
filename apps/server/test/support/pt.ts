@@ -7,16 +7,17 @@ import {
   SYNTHETIC_PT_MAPPING_CODE,
 } from '../fixtures/pt.js';
 import { writeSyntheticLayout } from './imports.js';
-import { writeSyntheticMarking } from './marked-attributes.js';
+import { writeSyntheticItemMap, writeSyntheticMarking } from './marked-attributes.js';
 import { decided, type StructureSetup } from './organisation.js';
 
 // The SYNTHETIC world of a PT upload (goods-in 5.2, 5.5; S2-F04-T02), made through the catalogue's real commands
 // where a person would make it (code-house-rules 11.2): a SYNTHETIC replica of the master sheet's lists, each an
 // attribute whose values a different person confirmed, marked as the Organisation's season, colour, gender, type,
-// item, fit and GST rate attributes (the size list is the receiving world's); the Sub category list as categories; and
-// the PT template's layout and mapping, Confirmed by a different person. Markings and the layout are written as
+// item, fit and GST rate attributes (the size list is the receiving world's); the Sub category list as categories; the
+// master sheet's item map, kept with the item marking (RR-583): TSHIRT is a CASUAL TOP, and SHORTS has no entry; and
+// the PT template's layout and mapping, Confirmed by a different person. Markings, the map and the layout are written as
 // fixtures, as the receiving world writes its size marking, since their own routes are proved elsewhere
-// (season-and-size-attributes.int.test.ts; imports-review.int.test.ts). Nothing here is KDPS's.
+// (season-and-size-attributes.int.test.ts; imports-review.int.test.ts) and the map has none yet. Nothing here is KDPS's.
 
 function ok<A>(
   outcome:
@@ -72,7 +73,8 @@ export async function ptWorld(
     return { id: confirmed.valueId, code };
   };
   // The attribute marked already, as another journey's season may be, takes the values; otherwise a new list attribute,
-  // which is then marked (as receivingFixture does with the size list).
+  // which is then marked (as receivingFixture does with the size list). The marking's version in force is kept.
+  const markings: Partial<Record<AttributeMark, string>> = {};
   const list = async (mark: AttributeMark, names: readonly string[]): Promise<SyntheticList> => {
     const marked = await setup.run(setup.preparer.id, (c) => setup.catalogue.markedAttributeAt(c, mark));
     const attributeId =
@@ -90,15 +92,18 @@ export async function ptWorld(
           ).recordId;
     const values: Record<string, { id: string; code: string }> = {};
     for (const name of names) values[name] = await value(attributeId, syntheticCode(`${label}-${name}`));
-    if (marked.kind !== 'set') await writeSyntheticMarking(database, mark, attributeId, setup.preparer.id);
+    markings[mark] =
+      marked.kind === 'set'
+        ? marked.versionId
+        : await writeSyntheticMarking(database, mark, attributeId, setup.preparer.id);
     return { attributeId, values };
   };
   const season = await list('season', ['SPRING']);
   // The grade tags of the colour list (DEC-138) beside a colour.
   const colour = await list('colour', ['NAVY', 'PREMIUM']);
   const gender = await list('gender', ['MALE', 'KIDS']);
-  const type = await list('type', ['TOP']);
-  const item = await list('item', ['TSHIRT']);
+  const type = await list('type', ['TOP', 'BOTTOM']);
+  const item = await list('item', ['TSHIRT', 'SHORTS']);
   const fit = await list('fit', ['SLIM']);
   const gstRate = await list('gst-rate', ['GST-5', 'GST-18']);
   const categories: Record<string, { id: string; code: string }> = {};
@@ -116,6 +121,14 @@ export async function ptWorld(
     ).recordId;
     categories[name] = { id, code };
   }
+  const itemMarking = markings.item;
+  const tshirt = item.values.TSHIRT?.id;
+  const casual = categories.CASUAL?.id;
+  const top = type.values.TOP?.id;
+  if (itemMarking === undefined || tshirt === undefined || casual === undefined || top === undefined) {
+    throw new Error('The SYNTHETIC item map lost a value');
+  }
+  await writeSyntheticItemMap(database, itemMarking, [{ itemValueId: tshirt, categoryId: casual, typeValueId: top }]);
   const layout = await writeSyntheticLayout(
     database,
     {

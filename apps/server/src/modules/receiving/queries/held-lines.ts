@@ -254,10 +254,11 @@ export function shortageFollowedUp(): Promise<ResolutionAnswer> {
 }
 
 /**
- * The resolution check of the follow-up of a GRN's lines sent to Booking for review (access-and-approvals 12.3;
- * goods-in 3.7, 4.10): Booking links a line later, has a late or excess one approved into the booking, or finds it is
- * no line of a booking, which no record says, so Booking resolves it when followed up, with its resolution and
- * evidence (PRD-EXC-002), as a shortage's. **Design choice**, for the product owner (RR-581).
+ * The resolution check of the follow-up of a GRN's lines sent to Booking for review, against a booking or received
+ * without one (access-and-approvals 12.3; goods-in 3.7, 4.10; RR-580): Booking links a line later, has a late or excess
+ * one approved into the booking, or finds it is no line of a booking, which no record says, so Booking resolves it when
+ * followed up, with its resolution and evidence (PRD-EXC-002), as a shortage's. **Design choice**, for the product owner
+ * (RR-581).
  */
 export function reviewFollowedUp(): Promise<ResolutionAnswer> {
   return Promise.resolve({ kind: 'verified' });

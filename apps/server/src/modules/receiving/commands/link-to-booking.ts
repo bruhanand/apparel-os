@@ -1,19 +1,12 @@
-import { BOOKING_TYPE, GRN_TYPE, lineFindings, type GrnBookingLinksDraft } from '@apparel-os/schemas';
+import { GRN_TYPE, lineFindings, type GrnBookingLinksDraft } from '@apparel-os/schemas';
 import { and, eq, inArray } from 'drizzle-orm';
 import type { TransactionContext } from '../../../kernel/index.js';
 import type { BookingInterface, ReceiptsLater, ReceiptsLinked } from '../../booking/index.js';
 import { grnLine } from '../db/schema.js';
+import { grnRow } from '../queries/grns.js';
+import { bookingOfArrival } from './booking-of-arrival.js';
 import { namedProductsOf } from '../queries/held-lines.js';
-import {
-  grnRow,
-  lockArrival,
-  recordItem,
-  recordNotFound,
-  refusalOf,
-  refused,
-  type Actor,
-  type Outcome,
-} from './common.js';
+import { lockArrival, recordItem, recordNotFound, refusalOf, refused, type Actor, type Outcome } from './common.js';
 
 // Booking's later link of GRN lines to the lines of one booking (goods-in 3.7, 3.10, 4.10, 10.2, 10.3; PRD-BKG-008;
 // POL-05.08; DEC-130; S2-F02-T04): a GRN received without a booking, or lines sent to Booking for review at its issue.
@@ -49,13 +42,9 @@ export async function linkToBooking(
   if (issued === undefined) return refusalOf(recordNotFound(GRN_TYPE, grnId));
   const row = await lockArrival(context, issued.arrivalId, [dependencies.booking.bookingLockTarget(draft.bookingId)]);
   if (row === undefined) return refusalOf(recordNotFound(GRN_TYPE, grnId));
-  const booking = await dependencies.booking.receivableBooking(context, draft.bookingId);
-  const item = recordItem(BOOKING_TYPE, draft.bookingId);
-  if (booking === undefined) return refused('not-found', 'booking.record-not-found', [item]);
-  if (booking.supplierPartyId === null) return refused('refused', 'booking.not-approved', [item]);
-  if (booking.brandId !== row.brandId || booking.supplierPartyId !== row.supplierPartyId) {
-    return refused('refused', 'receiving.booking-not-of-arrival', [item]);
-  }
+  const against = await bookingOfArrival(context, dependencies.booking, draft.bookingId, row);
+  if (against.kind !== 'receivable') return against;
+  const { booking } = against;
   const named = draft.lines.map((line) => line.grnLineId);
   const rows = await context.tx
     .select()
@@ -66,7 +55,7 @@ export async function linkToBooking(
   for (const line of draft.lines) {
     const found = rows.find((each) => each.id === line.grnLineId);
     if (found === undefined) return refusalOf(recordNotFound(GRN_LINE_TYPE, line.grnLineId));
-    const received = lineFindings({ ...found, damagedQuantity: found.damagedQuantity }).received;
+    const received = lineFindings(found).received;
     if (received === 0) return refused('refused', 'receiving.nothing-received', [recordItem(GRN_LINE_TYPE, found.id)]);
     let goods: ReceiptsLater['receipts'][number]['goods'];
     if (found.goods === 'unidentified' || found.styleCode === null) {

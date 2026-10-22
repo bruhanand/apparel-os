@@ -582,6 +582,8 @@ export const inboxCodes = declareCodes({
  * - `files-imports.subject-not-found`: no record of the handler's type the person may see has that identifier.
  * - `files-imports.subject-refused`: the handler refuses a file for the record now; `missing` names its reason as a
  *   code (`import-subject`) and what it names, as `files-imports.document-refused` does.
+ * - `files-imports.header-rows-not-allowed`: the layout looks for the header on a row the target's files never have
+ *   it on, such as a PT file's, on row 1 or row 2 (goods-in 5.2); `missing` names each row the target allows.
  */
 export const filesImportsCodes = declareCodes({
   'files-imports.type-not-allowed': 'refused',
@@ -659,6 +661,7 @@ export const filesImportsCodes = declareCodes({
   'files-imports.subject-not-taken': 'refused',
   'files-imports.subject-not-found': 'not-found',
   'files-imports.subject-refused': 'refused',
+  'files-imports.header-rows-not-allowed': 'refused',
 });
 
 /**
@@ -1191,6 +1194,9 @@ export const bookingCodes = declareCodes({
  * - `receiving.booking-not-of-arrival`: the booking is of another brand, or its version in force of another supplier,
  *   than the Arrival's; `missing` names it (goods-in 3.7, 4.2, 4.10; S2-F02-T04).
  * - `receiving.nothing-received`: the GRN line received no piece, so it delivers nothing to link (goods-in 4.10).
+ * - `receiving.size-required`: a line of goods on the invoice, or of wrong goods named by their product, has no size
+ *   recorded; `missing` names each such line, which is saved again with its size before the GRN is issued (goods-in
+ *   4.3, 5.4; the product owner, 22 Oct 2026, RR-586).
  */
 export const receivingCodes = declareCodes({
   'receiving.record-not-found': 'not-found',
@@ -1217,6 +1223,7 @@ export const receivingCodes = declareCodes({
   'receiving.product-not-named': 'refused',
   'receiving.booking-not-of-arrival': 'refused',
   'receiving.nothing-received': 'refused',
+  'receiving.size-required': 'refused',
   // The GRN's "PT attached" mark (goods-in 5.8; S2-F04-T02).
   'receiving.pt-attached': 'refused',
   'receiving.pt-not-attached': 'refused',
@@ -1232,19 +1239,25 @@ export const receivingCodes = declareCodes({
  * - `merchandise.pt-already-attached`: the GRN has a PT revision waiting for approval, or approved and not reversed
  *   (goods-in 5.1; one PT per GRN); `missing` names it.
  * - `merchandise.pt-file-refused`: at submit, the file no longer passes the checks of 5.3 and 5.4 against the GRN as it
- *   stands; `missing` names the first problem's code.
+ *   stands; `missing` names every problem, each by its code, row and field, as the validation report lists them
+ *   (goods-in 5.6; PRD-IMP-007).
  * - `merchandise.pt-not-a-draft`: the revision is withdrawn, decided, or not the PT's newest (goods-in 5.7).
+ * - `merchandise.pt-decision-not-available`: a PT revision is neither approved nor rejected until the PT approval is
+ *   built, since its approval makes the PT official and values the stock in one transaction (goods-in 5.8, 6;
+ *   `S2-F06-T01`); `missing` names the revision.
  *
  * The problems of a file are the issues of its validation report, by row and column (goods-in 5.3, 5.4, 5.6): a value
  * off its list, a brand not the GRN's, a barcode not digits, an HSN not of six or eight digits, a quantity not whole
  * pieces above zero, an amount not above zero, P RATE above MRP, NAG not QTY, MARGIN that disagrees, a style and size
- * whose quantity differs from the GRN's good pieces, one the GRN lacks and one the file misses.
+ * whose quantity differs from the GRN's good pieces, one the GRN lacks and one the file misses, and an ITEM the
+ * master sheet's item map does not give that SUB CATEGORY and TYPE (RR-583).
  */
 export const ptCodes = declareCodes({
   'merchandise.pt-held-lines-open': 'refused',
   'merchandise.pt-already-attached': 'refused',
   'merchandise.pt-file-refused': 'refused',
   'merchandise.pt-not-a-draft': 'refused',
+  'merchandise.pt-decision-not-available': 'refused',
 });
 
 /**

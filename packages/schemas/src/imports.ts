@@ -936,7 +936,16 @@ export const importPublishedSchema = z.strictObject({
   /** The request to post a queued publish (10.6; S1-F13-T03). */
   publishRequestId: idSchema.optional(),
   documents: z.array(
-    z.strictObject({ documentId: idSchema, result: documentResultSchema, refusalCode: z.string().optional() }),
+    z.strictObject({
+      documentId: idSchema,
+      result: documentResultSchema,
+      refusalCode: z.string().optional(),
+      /**
+       * What the handler's refusal of the document names, identifiers and codes only, such as every problem a PT file
+       * meets at its submit (goods-in 5.6, 5.8; S2-F04-T02); kept with this answer, not with the outcome.
+       */
+      missing: z.array(missingItemSchema).optional(),
+    }),
   ),
 });
 

@@ -1,16 +1,18 @@
 import type { PtField } from './rows.js';
 
-// Each PT row's product (goods-in 5.5; PRD-MER-007, PRD-MER-013, DEC-135, DEC-138; S2-F04-T02). **Design choice**
-// (goods-in 5.8): a row's product is the GRN brand's SKU of the row's style code, colour and size; failing that, the one
-// SKU its barcode names under the brand (or the Organisation) of the row's style code and size, whose colour may differ,
-// since a PT may carry a grade tag for its colour (DEC-138). A barcode naming a product of another style or size is
-// never taken for the row's: the row proposes its own product and the barcode is flagged as repeated, kept for both.
-// Otherwise the row proposes a new product, of the style when the brand has one of that code, else of a new style;
-// rows of one style, colour and size propose one SKU. A barcode is flagged as repeated, never refused, when it names
-// another product than the row's under the brand, or when the file gives it to rows of different products; the same
-// barcode on several rows of one product is ordinary. A row whose product holds another value than the row (colour, Sub
-// category, HSN, season, gender, type, item, fit) shows it as a difference; the PT keeps the file's value and the
-// product changes only through its own master change. Codes compare exactly (structure-and-masters 2.1). Pure.
+// Each PT row's product (goods-in 5.5; PRD-MER-007, PRD-MER-013, DEC-135, DEC-138; S2-F04-T02; code review 6 of
+// stage 2). "A row's product is found by its barcode's external code mapping, or by brand, style, colour and size"
+// (5.5), in that order. **Design choice** (goods-in 5.8) of how a repeated barcode is narrowed: the barcode's mapping
+// under the GRN's brand, the product's brand, comes first: one SKU it names is the row's product; several, a barcode the
+// brand repeats, are narrowed by the row's style and size, and, while more than one is left, by its colour, since a PT
+// may carry a grade tag for its colour (DEC-138); one left is the row's product. With no mapping, or none left, the
+// row's product is the brand's SKU of its style code, colour and size. Otherwise the row proposes a new product, of the
+// style when the brand has one of that code, else of a new style; rows of one style, colour and size propose one SKU. A
+// barcode is flagged as repeated, never refused, when it names another product than the row's, or when the file gives
+// it to rows of different products; the same barcode on several rows of one product is ordinary. A row whose product
+// holds another value than the row (style code, size, colour, Sub category, HSN, season, gender, type, item, fit) shows
+// it as a difference; the PT keeps the file's value and the product changes only through its own master change. Codes
+// compare exactly (structure-and-masters 2.1). Pure.
 
 /** A value of a list the row names: its code as given and the approved value it is. */
 export interface ListValue {
@@ -30,6 +32,8 @@ export interface ProductRow {
   readonly colour: ListValue;
   readonly barcode: string;
   readonly categoryId: string;
+  /** The row's SUB CATEGORY as the file gives it, the code of `categoryId`. */
+  readonly subCategoryCode: string;
   readonly hsn: string;
   readonly styleValues: Readonly<Partial<Record<StyleList, ListValue>>>;
 }
@@ -101,16 +105,8 @@ export function productsOf(
 ): { readonly rows: RowFinding[]; readonly proposals: Proposal[] } {
   const skuById = new Map(facts.skus.map((sku) => [sku.skuId, sku]));
   const found = rows.map((row) => {
-    const sameStyleAndSize = (skuId: string) => {
-      const sku = skuById.get(skuId);
-      return sku?.styleCode === row.styleCode && sku.size === row.sizeCode;
-    };
     const named = facts.barcodes.get(row.barcode) ?? [];
-    const byIdentity = facts.skus.filter(
-      (sku) => sameStyleAndSize(sku.skuId) && sku.colourValueId === row.colour.valueId,
-    );
-    const byBarcode = named.filter(sameStyleAndSize);
-    const skuId = byIdentity.length === 1 ? byIdentity[0]?.skuId : byBarcode.length === 1 ? byBarcode[0] : undefined;
+    const skuId = productOfBarcode(row, named, skuById) ?? productOfIdentity(row, facts.skus);
     const product: RowProduct =
       skuId === undefined
         ? { kind: 'proposed', key: proposalKey(row) }
@@ -144,6 +140,38 @@ export function productsOf(
   return { rows: findings, proposals: [...proposals.values()] };
 }
 
+type SkuFacts = ProductFacts['skus'][number];
+
+/**
+ * The SKU the row's barcode names under the brand (5.5): the one SKU of the brand it names; or, of several, the one left
+ * by the row's style and size, then, while more than one is left, by its colour. Undefined when it names none of the
+ * brand's, or none is left. A SKU of another brand, which a mapping for the whole Organisation may name, is never the
+ * row's: the row is the GRN's brand (5.3).
+ */
+function productOfBarcode(
+  row: ProductRow,
+  named: readonly string[],
+  skuById: ReadonlyMap<string, SkuFacts>,
+): string | undefined {
+  const ofBrand = named.filter((skuId) => skuById.has(skuId));
+  if (ofBrand.length <= 1) return ofBrand[0];
+  const ofStyleAndSize = ofBrand.filter((skuId) => {
+    const sku = skuById.get(skuId);
+    return sku?.styleCode === row.styleCode && sku.size === row.sizeCode;
+  });
+  if (ofStyleAndSize.length <= 1) return ofStyleAndSize[0];
+  const ofColour = ofStyleAndSize.filter((skuId) => skuById.get(skuId)?.colourValueId === row.colour.valueId);
+  return ofColour.length === 1 ? ofColour[0] : undefined;
+}
+
+/** The brand's one SKU of the row's style code, colour and size (5.5), or undefined. */
+function productOfIdentity(row: ProductRow, skus: readonly SkuFacts[]): string | undefined {
+  const same = skus.filter(
+    (sku) => sku.styleCode === row.styleCode && sku.size === row.sizeCode && sku.colourValueId === row.colour.valueId,
+  );
+  return same.length === 1 ? same[0]?.skuId : undefined;
+}
+
 /** Where an existing product holds another value than the row (goods-in 5.5). */
 function differencesOf(row: ProductRow, product: RowProduct, facts: ProductFacts): Difference[] {
   if (product.kind !== 'existing') return [];
@@ -151,15 +179,19 @@ function differencesOf(row: ProductRow, product: RowProduct, facts: ProductFacts
   const style = sku === undefined ? undefined : facts.styles.get(sku.styleCode);
   const code = (valueId: string) => facts.codes.get(valueId) ?? null;
   const differences: Difference[] = [];
+  // The product the barcode names may be of another style or size than the row (5.5): shown as a difference, as any
+  // value the product holds otherwise is; the PT keeps the file's value.
+  if (sku !== undefined && sku.styleCode !== row.styleCode) {
+    differences.push({ field: 'design', file: row.styleCode, product: sku.styleCode });
+  }
+  if (sku !== undefined && sku.size !== row.sizeCode) {
+    differences.push({ field: 'size', file: row.sizeCode, product: sku.size });
+  }
   if (sku?.colourValueId !== null && sku?.colourValueId !== undefined && sku.colourValueId !== row.colour.valueId) {
     differences.push({ field: 'colour', file: row.colour.code, product: code(sku.colourValueId) });
   }
   if (style !== undefined && style.categoryId !== row.categoryId) {
-    differences.push({
-      field: 'subCategory',
-      file: facts.codes.get(row.categoryId) ?? '',
-      product: code(style.categoryId),
-    });
+    differences.push({ field: 'subCategory', file: row.subCategoryCode, product: code(style.categoryId) });
   }
   if (style?.hsn !== null && style?.hsn !== undefined && style.hsn !== row.hsn) {
     differences.push({ field: 'hsn', file: row.hsn, product: style.hsn });

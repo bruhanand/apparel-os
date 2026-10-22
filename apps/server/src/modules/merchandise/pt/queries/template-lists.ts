@@ -11,7 +11,7 @@ export async function templateListsOf(
   context: TransactionContext,
   date: string,
 ): Promise<{ readonly field: string; readonly values: string[] }[] | CommandRefusal> {
-  const listed = await listsOf(context, '', date);
+  const listed = await listsOf(context, date);
   if (listed.kind === 'refused') return listed.refusal;
   const { lists } = listed;
   const sorted = (codes: Iterable<string>) => [...codes].sort();
