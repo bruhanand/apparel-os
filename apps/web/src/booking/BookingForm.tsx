@@ -260,7 +260,7 @@ export function BookingForm({
       windowTo: version?.deliveryWindow.to ?? '',
     },
   });
-  const [lines, setLines] = useState<LineInput[]>(version?.lines.map(inputOf) ?? []);
+  const [lines, setLines] = useState<LineInput[]>(version?.lines.map((line) => inputOf(line)) ?? []);
   const [problems, setProblems] = useState<LineProblems[] | undefined>(undefined);
   const record = useSubmission('recordBooking', BOOKING_READS);
   const save = useSubmission('saveBookingDraft', BOOKING_READS);

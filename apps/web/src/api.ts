@@ -1,4 +1,4 @@
-import { createApiClient, routes } from '@apparel-os/schemas';
+import { createApiClient, routes, type ApiClient } from '@apparel-os/schemas';
 import { countingRequests } from './lock/idle-lock';
 
 /**
@@ -7,7 +7,8 @@ import { countingRequests } from './lock/idle-lock';
  * the web shell exists (S1-F01-T14). Each call to a route that needs a session is noted as a request of the session, which
  * the screen's own idle lock counts as the server does (S1-F01-T30).
  */
-export const api = countingRequests(createApiClient(routes, { baseUrl: '' }), routes);
+// Named by its type, which the compiler then need not spell out in full as the route table grows (TS7056).
+export const api: ApiClient<typeof routes> = countingRequests(createApiClient(routes, { baseUrl: '' }), routes);
 
 /** Whether the server answers its health check. */
 export async function serverIsHealthy(): Promise<boolean> {

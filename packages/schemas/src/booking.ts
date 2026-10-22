@@ -193,6 +193,11 @@ const writtenText = (max: number) =>
  * for the totals and the open-to-buy check (PRD-BKG-003); a delivery date where the line arrives apart (POL-05.05).
  */
 export const bookingLineDraftSchema = z.strictObject({
+  /**
+   * The line of the booking this line continues, by its key, the identity a line keeps across versions (goods-in 3.5,
+   * 3.10; S2-F01-T04): its receipt links and cancellations follow it. Left out, the line is new.
+   */
+  lineKey: idSchema.optional(),
   styleCode: writtenText(BOOKING_CAPS.codeText),
   colour: writtenText(BOOKING_CAPS.codeText).nullable(),
   size: writtenText(BOOKING_CAPS.codeText).nullable(),
@@ -273,8 +278,14 @@ export const bookingDocumentsAttachedSchema = z.strictObject({
 });
 export type BookingDocumentsAttached = z.infer<typeof bookingDocumentsAttachedSchema>;
 
-/** Submitting the Draft as it stands, named by its version token (goods-in 3.4; code-house-rules 12.7). */
-export const bookingSubmissionSchema = z.strictObject({ versionToken: idSchema });
+/**
+ * Submitting the Draft as it stands, named by its version token (goods-in 3.4; code-house-rules 12.7). A change after
+ * the booking is Issued carries the supplier's communication with it, stored files (goods-in 3.5; POL-05.04).
+ */
+export const bookingSubmissionSchema = z.strictObject({
+  versionToken: idSchema,
+  communication: evidenceListSchema.optional(),
+});
 export type BookingSubmission = z.infer<typeof bookingSubmissionSchema>;
 
 export const bookingSubmittedSchema = z.strictObject({
@@ -286,10 +297,12 @@ export const bookingSubmittedSchema = z.strictObject({
 export type BookingSubmitted = z.infer<typeof bookingSubmittedSchema>;
 
 /**
- * A booking's state (POL-05.01; design-language 7), read from its newest change: a Draft is editable, and a rejected
- * version returns it to Draft; Awaiting approval once submitted; Approved once a different person approved it.
+ * A booking's state (POL-05.01; design-language 7). Before its first approval, read from its newest change: a Draft is
+ * editable, and a rejected version returns it to Draft; Awaiting approval once submitted. Once approved, the state of
+ * the version in force: Approved, Issued once Booking records it was sent to the supplier, Confirmed once the supplier
+ * accepted it (goods-in 3.4, 3.10; S2-F01-T04). A change after approval is shown apart (`change`).
  */
-export const bookingStateSchema = z.enum(['Draft', 'Awaiting approval', 'Approved']);
+export const bookingStateSchema = z.enum(['Draft', 'Awaiting approval', 'Approved', 'Issued', 'Confirmed']);
 export type BookingState = z.infer<typeof bookingStateSchema>;
 
 /** Pieces, indicative cost value and MRP value (goods-in 3.1; PRD-BKG-003). */
@@ -348,6 +361,8 @@ export function bookingTotals(lines: readonly Priced[]): {
 /** One saved line of a version. */
 export const bookingLineSchema = z.strictObject({
   id: idSchema,
+  /** The line's key: the identity it keeps across versions, which a later version names to continue it (3.10). */
+  lineKey: idSchema,
   lineNumber: z.int().min(1),
   styleCode: z.string().min(1),
   colour: z.string().min(1).nullable(),
@@ -379,6 +394,8 @@ export const bookingVersionSchema = z.strictObject({
   savedBy: idSchema,
   savedAt: instantSchema,
   request: latestRequestSchema.optional(),
+  /** The supplier's communication submitted with a change after issue, as attachments (goods-in 3.5; POL-05.04). */
+  communicationAttachmentIds: z.array(idSchema),
 });
 export type BookingVersion = z.infer<typeof bookingVersionSchema>;
 
@@ -430,6 +447,160 @@ export const bookingTermsSchema = z.discriminatedUnion('kind', [
 ]);
 export type BookingTerms = z.infer<typeof bookingTermsSchema>;
 
+// The lifecycle of an approved booking (goods-in 3.4 to 3.8, 3.10; PRD-BKG-005, PRD-BKG-006, PRD-BKG-008, PRD-BKG-009,
+// PRD-BKG-013; POL-05.01, POL-05.03 to POL-05.07, POL-05.10; DEC-099, DEC-132; S2-F01-T04): Issued and Confirmed,
+// recorded by Booking with their dates, since nothing is sent from the app; a change, a new version approved again; a
+// cancellation of an undelivered balance and an extension of the window, each proposed by Booking and approved by a
+// different person; the quantities of each line, delivered taken only from receipt links; and the overdue balance.
+
+/** The action type of a cancellation of an undelivered balance (goods-in 3.5; POL-05.07, POL-05.10). */
+export const BOOKING_CANCELLATION = 'booking.booking.cancel-balance';
+/** The action type of an extension of the delivery window (goods-in 3.5, 3.8; POL-05.07). */
+export const BOOKING_EXTENSION = 'booking.booking.extend-window';
+
+/** Recording that the approved version in force was sent to the supplier, on the date given (goods-in 3.4). */
+export const bookingIssueDraftSchema = z.strictObject({ versionToken: idSchema, issuedOn: businessDateSchema });
+export type BookingIssueDraft = z.infer<typeof bookingIssueDraftSchema>;
+
+/** Recording the supplier's acceptance of the version issued, with its confirmation as stored files (goods-in 3.4). */
+export const bookingConfirmationDraftSchema = z.strictObject({
+  versionToken: idSchema,
+  confirmedOn: businessDateSchema,
+  files: evidenceListSchema,
+});
+export type BookingConfirmationDraft = z.infer<typeof bookingConfirmationDraftSchema>;
+
+/** What recording Issued or Confirmed answers: the booking's new version token (code-house-rules 12.7). */
+export const bookingRecordedSchema = z.strictObject({ bookingId: idSchema, versionToken: idSchema });
+export type BookingRecorded = z.infer<typeof bookingRecordedSchema>;
+
+/**
+ * A cancellation of the undelivered balance (goods-in 3.5; POL-05.07, PRD-BKG-013): of the whole booking, every line
+ * with something outstanding, or of the lines named by their keys, each line's whole outstanding quantity. After issue
+ * it carries the supplier's communication (POL-05.04).
+ */
+export const bookingCancellationDraftSchema = z.strictObject({
+  versionToken: idSchema,
+  scope: z.discriminatedUnion('kind', [
+    z.strictObject({ kind: z.literal('whole') }),
+    z.strictObject({
+      kind: z.literal('lines'),
+      lineKeys: z
+        .array(idSchema)
+        .min(1)
+        .max(BOOKING_CAPS.lines)
+        .refine((keys) => new Set(keys).size === keys.length, { message: 'Each line is named once' }),
+    }),
+  ]),
+  communication: evidenceListSchema.optional(),
+});
+export type BookingCancellationDraft = z.infer<typeof bookingCancellationDraftSchema>;
+
+/**
+ * An extension of the delivery window (goods-in 3.5, 3.8; POL-05.07): the window's new end, and new delivery dates
+ * for lines named by their keys, each later than the date it replaces. After issue it carries the supplier's
+ * communication (POL-05.04).
+ */
+export const bookingExtensionDraftSchema = z.strictObject({
+  versionToken: idSchema,
+  windowTo: businessDateSchema,
+  lines: z
+    .array(z.strictObject({ lineKey: idSchema, deliveryDate: businessDateSchema }))
+    .max(BOOKING_CAPS.lines)
+    .refine((lines) => new Set(lines.map((line) => line.lineKey)).size === lines.length, {
+      message: 'Each line is named once',
+    }),
+  communication: evidenceListSchema.optional(),
+});
+export type BookingExtensionDraft = z.infer<typeof bookingExtensionDraftSchema>;
+
+/** What proposing a cancellation or an extension answers: it waits for approval by a different person. */
+export const bookingAmendmentProposedSchema = z.strictObject({
+  bookingId: idSchema,
+  amendmentId: idSchema,
+  requestId: idSchema,
+  versionToken: idSchema,
+});
+export type BookingAmendmentProposed = z.infer<typeof bookingAmendmentProposedSchema>;
+
+/**
+ * One line's quantities (goods-in 3.6, 3.8, 9.3; PRD-BKG-005, PRD-BKG-006): ordered, the approved version's; delivered,
+ * from its receipt links only; cancelled, its approved cancellations; outstanding, ordered less delivered less
+ * cancelled, never below zero; over-delivered, delivered beyond ordered. Its due date is its delivery date where it has
+ * one, otherwise the window's end, each as extended; it is overdue once that date has passed with something outstanding.
+ */
+export const bookingLineStatusSchema = z.strictObject({
+  lineKey: idSchema,
+  lineNumber: z.int().min(1),
+  styleCode: z.string().min(1),
+  colour: z.string().min(1).nullable(),
+  size: z.string().min(1).nullable(),
+  indicativeCost: paiseSchema,
+  deliveryDate: businessDateSchema.nullable(),
+  dueDate: businessDateSchema,
+  ordered: z.int().min(0),
+  delivered: z.int().min(0),
+  cancelled: z.int().min(0),
+  outstanding: z.int().min(0),
+  overDelivered: z.int().min(0),
+  overdue: z.boolean(),
+});
+export type BookingLineStatus = z.infer<typeof bookingLineStatusSchema>;
+
+/** The quantities of the version in force, summed over its lines. */
+export const bookingQuantitiesSchema = z.strictObject({
+  ordered: z.int().min(0),
+  delivered: z.int().min(0),
+  cancelled: z.int().min(0),
+  outstanding: z.int().min(0),
+  overDelivered: z.int().min(0),
+});
+export type BookingQuantities = z.infer<typeof bookingQuantitiesSchema>;
+
+/**
+ * The booking status read model (goods-in 3.6, 9.3; PRD-BKG-005): the approved version in force, its window as
+ * extended, and each line's quantities, as of the read's business date.
+ */
+export const bookingStatusSchema = z.strictObject({
+  versionId: idSchema,
+  versionNumber: z.int().min(1),
+  deliveryWindow: z.strictObject({ from: businessDateSchema, to: businessDateSchema }),
+  lines: z.array(bookingLineStatusSchema),
+  totals: bookingQuantitiesSchema,
+});
+export type BookingStatus = z.infer<typeof bookingStatusSchema>;
+
+/**
+ * The state of a cancellation or an extension (design-language 7): Awaiting approval, Approved, Rejected, or
+ * Superseded when a later one of its kind replaced its request before it was decided.
+ */
+export const bookingAmendmentStateSchema = z.enum(['Awaiting approval', 'Approved', 'Rejected', 'Superseded']);
+export type BookingAmendmentState = z.infer<typeof bookingAmendmentStateSchema>;
+
+/** A cancellation or an extension, as the booking shows it. */
+export const bookingAmendmentSchema = z.strictObject({
+  id: idSchema,
+  kind: z.enum(['cancellation', 'extension']),
+  state: bookingAmendmentStateSchema,
+  /** The approved version it amends. */
+  versionId: idSchema,
+  /** An extension's new end of the window. */
+  windowTo: businessDateSchema.optional(),
+  /** A cancellation's lines with the quantity it cancels, or an extension's lines with their new delivery dates. */
+  lines: z.array(
+    z.strictObject({
+      lineKey: idSchema,
+      quantity: z.int().min(1).optional(),
+      deliveryDate: businessDateSchema.optional(),
+    }),
+  ),
+  proposedBy: idSchema,
+  proposedAt: instantSchema,
+  communicationAttachmentIds: z.array(idSchema),
+  request: latestRequestSchema.optional(),
+});
+export type BookingAmendment = z.infer<typeof bookingAmendmentSchema>;
+
 /** A booking as Booking › Bookings and the approval panel show it. */
 export const bookingSchema = z.strictObject({
   id: idSchema,
@@ -448,7 +619,10 @@ export const bookingSchema = z.strictObject({
   terms: bookingTermsSchema,
   /** The remaining open-to-buy of the booking's brand and season now (goods-in 3.3). */
   openToBuy: openToBuyRemainingSchema,
-  /** The approval of the approved version: the Agreement version fixed and the value reserved (3.2 to 3.4). */
+  /**
+   * The approval of the version in force: the Agreement version it fixed, and what the booking reserves of open-to-buy
+   * now, its value at cost less what cancellations and lowering changes released (3.2 to 3.5).
+   */
   approval: z
     .strictObject({
       versionId: idSchema,
@@ -458,6 +632,23 @@ export const bookingSchema = z.strictObject({
       approvedAt: instantSchema,
     })
     .optional(),
+  /** A change after approval, a newer version than the one in force, while it is a Draft or awaits approval (3.5). */
+  change: z.strictObject({ state: z.enum(['Draft', 'Awaiting approval']), versionId: idSchema }).optional(),
+  /** When the version in force was sent to the supplier, recorded by Booking (3.4; DEC-099). */
+  issue: z.strictObject({ issuedOn: businessDateSchema, recordedBy: idSchema, recordedAt: instantSchema }).optional(),
+  /** The supplier's acceptance of the version in force, with its confirmation as attachments (3.4). */
+  confirmation: z
+    .strictObject({
+      confirmedOn: businessDateSchema,
+      recordedBy: idSchema,
+      recordedAt: instantSchema,
+      attachmentIds: z.array(idSchema),
+    })
+    .optional(),
+  /** The version in force with each line's quantities, once approved (3.6; PRD-BKG-005). */
+  status: bookingStatusSchema.optional(),
+  /** The cancellations and extensions proposed, oldest first (3.5). */
+  amendments: z.array(bookingAmendmentSchema),
 });
 export type Booking = z.infer<typeof bookingSchema>;
 

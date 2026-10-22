@@ -38,6 +38,8 @@ export const SYNTHETIC_EVERY_SECONDS: Readonly<Record<string, number>> = {
   'exceptions.escalate-overdue': 60,
   // SYNTHETIC: the escalation of overdue tasks and approvals every minute (S1-F05-T02), a test value only (CH-10).
   'inbox.escalate-overdue': 60,
+  // SYNTHETIC: the overdue follow-up of bookings every hour (goods-in 3.8; S2-F01-T04), a test value only (CH-10).
+  'booking.mark-overdue': 3600,
 };
 
 /**

@@ -8,9 +8,10 @@ import {
   assignmentChanged,
   sessionRevoked,
 } from './modules/access/index.js';
-import { auditJobKinds } from './modules/audit/index.js';
-import { exceptionsConsumers, exceptionsJobKinds } from './modules/exceptions/index.js';
-import { inboxConsumers, inboxJobKinds } from './modules/inbox/index.js';
+import { Audit, auditJobKinds } from './modules/audit/index.js';
+import { bookingJobKinds, overdueExceptionType } from './modules/booking/index.js';
+import { Exceptions, exceptionsConsumers, exceptionsJobKinds } from './modules/exceptions/index.js';
+import { Inbox, inboxConsumers, inboxJobKinds } from './modules/inbox/index.js';
 import { ConfigurationTimezoneModule } from './modules/configuration/index.js';
 import { mappingChanged } from './modules/organisation/index.js';
 import { posConsumers } from './modules/pos/index.js';
@@ -18,6 +19,17 @@ import { composedNumbering } from './numbered-kinds.js';
 
 /** `numbering` with every declared kind, handed to the consumers and job kinds that number (module-map section 3, rule 6). */
 const numbering = composedNumbering();
+
+/**
+ * The booking job kinds' dependencies (goods-in 3.8; S2-F01-T04): audit, and `exceptions` with the overdue balance's
+ * type, which the job raises to Booking, built here since `booking` is built with no module above it (module-map
+ * section 3, rule 6).
+ */
+const bookingJobs = bookingJobKinds({
+  audit: (logger) => new Audit(logger),
+  exceptions: (logger) =>
+    new Exceptions({ numbering, inbox: new Inbox(), audit: new Audit(logger), types: [overdueExceptionType] }),
+});
 
 /**
  * Everything the worker runs (code-house-rules 12.8, 12.9): the event types the units declare, their consumers and
@@ -33,7 +45,8 @@ export const jobRegistry: JobRegistry = {
   // `pos` defines a billing device's series when a unit's mapping changes (offline-counter 4.3; S1-F12-T02).
   consumers: [...inboxConsumers, ...exceptionsConsumers(numbering), ...posConsumers(numbering)],
   // The escalation of overdue tasks and approvals (access-and-approvals 11.3; S1-F05-T02).
-  jobKinds: [...auditJobKinds, ...accessJobKinds, ...exceptionsJobKinds(numbering), ...inboxJobKinds],
+  // The overdue follow-up of bookings (goods-in 3.8; S2-F01-T04).
+  jobKinds: [...auditJobKinds, ...accessJobKinds, ...exceptionsJobKinds(numbering), ...inboxJobKinds, ...bookingJobs],
 };
 
 /** The worker's composition root: the same build as the app, another start command (deployment.md section 2). */

@@ -2083,6 +2083,70 @@
       "why": "A reservation belongs to an open-to-buy budget, whose record type carries its brand and whose tables are unscoped, so whoever reads a budget's remaining amount reads every reservation of it (goods-in 3.3; structure-and-masters 6.1; access-and-approvals 5.3, 7.1 step 3); only booking code reads them"
     },
     {
+      "table": "booking.booking_issue",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 3.4, 3.10; POL-05.01; DEC-099; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "booking.booking_confirmation",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 3.4, 3.10; POL-05.01; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "booking.booking_amendment",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 3.5, 3.10, 10.3; POL-05.07, POL-05.10; code-house-rules 6.2, 7.1, 7.2"
+    },
+    {
+      "table": "booking.booking_amendment_line",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 3.5, 3.6, 3.10; PRD-BKG-013; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "booking.booking_amendment_decision",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 3.5, 3.10; POL-02.07; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "booking.booking_supplier_file",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 3.4, 3.5, 3.10; POL-05.04; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "booking.booking_receipt_link",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 3.6, 3.7, 3.10; PRD-BKG-006 to PRD-BKG-008; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "booking.booking_overdue",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 3.8, 3.10; PRD-BKG-009; POL-05.06; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "booking.open_to_buy_release",
+      "class": "unscoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 3.3, 3.5, 3.10; POL-05.02; code-house-rules 7.1",
+      "why": "A release belongs to an open-to-buy budget, as its reservations do, whose record type carries its brand and whose tables are unscoped, so whoever reads a budget's remaining amount reads every release of it (goods-in 3.3; structure-and-masters 6.1; access-and-approvals 5.3, 7.1 step 3); only booking code reads them"
+    },
+    {
       "table": "receiving.arrival",
       "class": "scoped",
       "marks": ["append-only", "locked"],

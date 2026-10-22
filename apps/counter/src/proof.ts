@@ -1,6 +1,7 @@
 import {
   createApiClient,
   deviceProofMessage,
+  type ApiClient,
   devicePublicKeySchema,
   routes,
   type DeviceProofPurpose,
@@ -12,7 +13,8 @@ import {
 // signs inside WebCrypto; no script ever reads it.
 
 /** The typed client of the API, on the page's own origin (code-house-rules 12.1, 12.2; deployment.md section 3). */
-export const api = createApiClient(routes, { baseUrl: '' });
+// Named by its type, which the compiler then need not spell out in full as the route table grows (TS7056).
+export const api: ApiClient<typeof routes> = createApiClient(routes, { baseUrl: '' });
 
 /** The public key of a pair as the server takes it: a P-256 JWK holding the public part only. */
 export async function publicKeyOf(pair: CryptoKeyPair): Promise<DevicePublicKey> {

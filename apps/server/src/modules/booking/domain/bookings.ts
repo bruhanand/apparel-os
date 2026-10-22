@@ -1,4 +1,10 @@
-import { BOOKING_APPROVAL, BOOKING_TYPE, type BookingState, type MissingItem } from '@apparel-os/schemas';
+import {
+  BOOKING_APPROVAL,
+  BOOKING_CANCELLATION,
+  BOOKING_EXTENSION,
+  BOOKING_TYPE,
+  type MissingItem,
+} from '@apparel-os/schemas';
 import type { ApprovalRule } from '../../access/index.js';
 import type { BookingChangeKind } from '../db/schema.js';
 
@@ -21,6 +27,42 @@ export const bookingApprovalRule: ApprovalRule = {
   decisionEvidenceClasses: [],
   synthetic: false,
 };
+
+/**
+ * The approval rules of a cancellation of an undelivered balance and an extension of the window (goods-in 3.5, 3.10;
+ * POL-05.07, POL-05.10; S2-F01-T04): each decided under approve on the booking by a different authorised person from
+ * its proposer, which can never be switched off (POL-02.07). Neither has a value basis: no source names one
+ * (domain-model section 5 names none for either), a cancellation releases open-to-buy and an extension moves dates
+ * only, so neither needs an approval limit (access-and-approvals 9.3). **Design choice**, for the product owner to
+ * confirm. The reasons are configured, with no default (POL-02.23).
+ */
+export const amendmentApprovalRules: readonly ApprovalRule[] = [BOOKING_CANCELLATION, BOOKING_EXTENSION].map(
+  (actionType): ApprovalRule => ({
+    actionType,
+    module: 'booking',
+    recordType: BOOKING_TYPE,
+    independent: true,
+    value: 'none',
+    freeTextReason: false,
+    decisionEvidenceClasses: [],
+    synthetic: false,
+  }),
+);
+
+/** The document an amendment's approval decides: the booking, at the amendment (module-map 6.2 flow A). */
+export const amendmentDocument = (bookingId: string, amendmentId: string) =>
+  ({ module: 'booking', recordType: BOOKING_TYPE, recordId: bookingId, versionId: amendmentId }) as const;
+
+/** The evidence kinds of the supplier's files on a booking (imports-and-opening-data 11; goods-in 3.4, 3.5). */
+export const SUPPLIER_CONFIRMATION = { kind: 'booking.supplier-confirmation', restrictedClasses: [] } as const;
+export const SUPPLIER_COMMUNICATION = { kind: 'booking.supplier-communication', restrictedClasses: [] } as const;
+
+/** A line of a booking named in a refusal, by its key (PRD-UXP-003; goods-in 3.10). */
+export const lineItem = (bookingId: string, lineKey: string): MissingItem => ({
+  kind: 'booking-line',
+  recordId: bookingId,
+  lineKey,
+});
 
 /** The evidence kind of a booking document on its booking (imports-and-opening-data 11; goods-in 3.1). */
 export const BOOKING_DOCUMENT = { kind: 'booking.booking-document', restrictedClasses: [] } as const;
@@ -47,23 +89,6 @@ export const bookingVersionItem = (bookingId: string, versionId: string): Missin
   recordId: bookingId,
   versionId,
 });
-
-/**
- * A booking's state, read from its newest change (POL-05.01; goods-in 3.4): a saved version or documents attached
- * leave a Draft; a rejection returns it to Draft; a submission awaits approval; an approval approves it.
- */
-export function stateOf(newest: BookingChangeKind): BookingState {
-  switch (newest) {
-    case 'draft':
-    case 'documents':
-    case 'rejection':
-      return 'Draft';
-    case 'submission':
-      return 'Awaiting approval';
-    case 'approval':
-      return 'Approved';
-  }
-}
 
 /** The kinds of change made by preparing the version under approval, as against deciding it (9.1; GC3-1). */
 export const PREPARING_CHANGES: readonly BookingChangeKind[] = ['draft', 'documents', 'submission'];

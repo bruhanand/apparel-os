@@ -4,15 +4,20 @@ import {
   type Booking as BookingView,
   type BookingDocumentsDraft,
   type BookingDraft,
+  type BookingCancellationDraft,
+  type BookingConfirmationDraft,
   type BookingDraftChange,
+  type BookingExtensionDraft,
+  type BookingIssueDraft,
   type BookingPageQuery,
+  type BookingStatus,
   type BookingSubmission,
   type OpenToBuyBudget,
   type OpenToBuyBudgetDraft,
   type OpenToBuyBudgetVersionDraft,
   type OpenToBuyRemaining,
 } from '@apparel-os/schemas';
-import type { TransactionContext } from '../../kernel/index.js';
+import type { LockTarget, TransactionContext } from '../../kernel/index.js';
 import type { AccessInterface, Preparer, RecordFacts } from '../access/index.js';
 import type { AuditInterface } from '../audit/index.js';
 import type { ConfigurationInterface } from '../configuration/index.js';
@@ -20,7 +25,16 @@ import type { FilesImportsInterface } from '../files-imports/index.js';
 import type { CatalogueInterface } from '../merchandise/catalogue/index.js';
 import { attachDocuments, factsOf, recordBooking, saveDraft, submitBooking, type Actor } from './commands/bookings.js';
 import { prepareBudget, prepareBudgetVersion } from './commands/budgets.js';
-import { bookingPage, bookingRow, bookingView } from './queries/bookings.js';
+import { proposeCancellation, proposeExtension, recordConfirmation, recordIssue } from './commands/lifecycle.js';
+import {
+  linkReceiptAtIssue,
+  linkReceiptLater,
+  type GrnLineRef,
+  type Linker,
+  type ReceiptAtIssue,
+} from './commands/receipts.js';
+import { bookingLock, bookingPage, bookingRow, bookingView } from './queries/bookings.js';
+import { statusOfBooking } from './queries/lifecycle.js';
 import { budgetOf, budgetPage, budgetRow, budgetRows, budgetViews, remainingOf } from './queries/budgets.js';
 
 export interface BookingDependencies {
@@ -146,6 +160,69 @@ export class Booking {
   listBookings(context: TransactionContext, query: BookingPageQuery) {
     const limit = Math.min(query.limit === undefined ? BOOKING_PAGE_CAP : Number(query.limit), BOOKING_PAGE_CAP);
     return bookingPage(context, query, limit);
+  }
+
+  /** Record that the approved version in force was sent to the supplier, on its date (goods-in 3.4; S2-F01-T04). */
+  recordIssue(context: TransactionContext, actor: Actor, bookingId: string, draft: BookingIssueDraft) {
+    return recordIssue(context, this.dependencies, actor, bookingId, draft);
+  }
+
+  /** Record the supplier's acceptance of the version issued, with its confirmation (goods-in 3.4). */
+  recordConfirmation(context: TransactionContext, actor: Actor, bookingId: string, draft: BookingConfirmationDraft) {
+    return recordConfirmation(context, this.dependencies, actor, bookingId, draft);
+  }
+
+  /** Propose cancelling an undelivered balance, for a different person to approve (goods-in 3.5). */
+  proposeCancellation(context: TransactionContext, actor: Actor, bookingId: string, draft: BookingCancellationDraft) {
+    return proposeCancellation(context, this.dependencies, actor, bookingId, draft);
+  }
+
+  /** Propose extending the delivery window, for a different person to approve (goods-in 3.5, 3.8). */
+  proposeExtension(context: TransactionContext, actor: Actor, bookingId: string, draft: BookingExtensionDraft) {
+    return proposeExtension(context, this.dependencies, actor, bookingId, draft);
+  }
+
+  /**
+   * The booking status read model (goods-in 3.6, 9.3; PRD-BKG-005): the approved version in force with each line's
+   * ordered, delivered, cancelled and outstanding quantities and whether it is overdue on the date given, or undefined
+   * while the booking has no approved version or the reader cannot see it. For the stage 2 reports (S2-F11-T02).
+   */
+  bookingStatus(context: TransactionContext, bookingId: string, today: string): Promise<BookingStatus | undefined> {
+    return statusOfBooking(context, bookingId, today);
+  }
+
+  /**
+   * The booking's identity row as a lock target for the caller's step 1 (code-house-rules 8.2): `receiving` takes it
+   * with its own records before it links a GRN line to the booking (goods-in 3.7, 10.2).
+   */
+  bookingLockTarget(bookingId: string): LockTarget {
+    return bookingLock(bookingId);
+  }
+
+  /**
+   * The receipt link `receiving` calls at a GRN's issue for each counted line of an Arrival that names the booking
+   * (goods-in 3.7; PRD-BKG-007): linked to the one line it matches, or sent to Booking for review, with why. The caller
+   * holds the booking's lock at step 1 and has authorised the person.
+   */
+  linkReceiptAtIssue(context: TransactionContext, linker: Linker, receipt: ReceiptAtIssue) {
+    return linkReceiptAtIssue(context, this.dependencies.audit, linker, receipt);
+  }
+
+  /**
+   * A later link by Booking of a GRN line received without a booking, or sent for review, to the booking line named
+   * (goods-in 3.7; PRD-BKG-008), dated and signed. The caller holds the booking's lock at step 1.
+   */
+  linkReceiptLater(
+    context: TransactionContext,
+    linker: Linker,
+    link: {
+      readonly bookingId: string;
+      readonly lineKey: string;
+      readonly grnLine: GrnLineRef;
+      readonly quantity: number;
+    },
+  ) {
+    return linkReceiptLater(context, this.dependencies.audit, linker, link);
   }
 }
 

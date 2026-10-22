@@ -6,8 +6,9 @@ import { formatPaise, paiseOfRupees } from '../setup/format';
 // across, one indicative cost and MRP for the style that each line can then change; and the draft lines the route
 // takes. Pure: no screen, no request.
 
-/** One line as the form holds it: text as typed. */
+/** One line as the form holds it: text as typed, and the key of the line it continues, if any (goods-in 3.10). */
 export interface LineInput {
+  readonly lineKey?: string | undefined;
   readonly styleCode: string;
   readonly colour: string;
   readonly size: string;
@@ -103,6 +104,8 @@ export function draftLineOf(line: LineInput): BookingLineDraft | undefined {
   if (quantity === undefined || cost === undefined || mrp === undefined) return undefined;
   const optional = (text: string) => (text.trim() === '' ? null : text.trim());
   return {
+    // The line it continues keeps its key, so its receipt links and cancellations follow it (goods-in 3.10).
+    ...(line.lineKey === undefined ? {} : { lineKey: line.lineKey }),
     styleCode: line.styleCode.trim(),
     colour: optional(line.colour),
     size: optional(line.size),
@@ -118,15 +121,19 @@ export function rupeesText(paise: number): string {
   return formatPaise(paise).replace(/^₹/, '');
 }
 
-/** A saved line, as the form holds it to change it. */
-export function inputOf(line: BookingLine): LineInput {
+/**
+ * A saved line, as the form holds it to change it, with its key, so the next version continues it (goods-in 3.10);
+ * its delivery date may be given, as an extension leaves it.
+ */
+export function inputOf(line: BookingLine, deliveryDate: string | null = line.deliveryDate): LineInput {
   return {
+    lineKey: line.lineKey,
     styleCode: line.styleCode,
     colour: line.colour ?? '',
     size: line.size ?? '',
     quantity: String(line.quantity),
     cost: rupeesText(line.indicativeCost),
     mrp: rupeesText(line.mrp),
-    deliveryDate: line.deliveryDate ?? '',
+    deliveryDate: deliveryDate ?? '',
   };
 }

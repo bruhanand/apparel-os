@@ -4,13 +4,19 @@ import { healthResponseSchema } from './health.js';
 import {
   BOOKING_DRAFT_BODY_LIMIT_BYTES,
   BOOKING_TYPE,
+  bookingAmendmentProposedSchema,
+  bookingCancellationDraftSchema,
+  bookingConfirmationDraftSchema,
   bookingDocumentsAttachedSchema,
   bookingDocumentsDraftSchema,
   bookingDraftChangeSchema,
   bookingDraftSchema,
+  bookingExtensionDraftSchema,
+  bookingIssueDraftSchema,
   bookingListSchema,
   bookingPageQuerySchema,
   bookingReadSchema,
+  bookingRecordedSchema,
   bookingSavedSchema,
   bookingSubmissionSchema,
   bookingSubmittedSchema,
@@ -1059,6 +1065,13 @@ const BOOKING_DECISION_CODES = [
   'booking.open-to-buy-short',
   'booking.no-booking-series',
   'booking.booking-series-paused',
+  // A change after approval, rechecked against what is received and cancelled (goods-in 3.5, 3.10; S2-F01-T04).
+  'booking.line-below-received',
+  'booking.line-received',
+  // A cancellation or an extension (goods-in 3.5, 3.10; S2-F01-T04).
+  'booking.version-not-in-force',
+  'booking.balance-changed',
+  'booking.not-an-extension',
 ] as const satisfies readonly ErrorCode[];
 
 /**
@@ -1082,6 +1095,36 @@ const BOOKING_CONTENT_CODES = [
   'booking.season-not-in-vocabulary',
   // No attribute is marked as the season (structure-and-masters 4.2 "As built"; RR-550).
   'merchandise.attribute-not-marked',
+  // A line naming a line it continues, which a new booking has none of (3.10; S2-F01-T04).
+  'booking.line-not-found',
+] as const satisfies readonly ErrorCode[];
+
+/** What a booking's next Draft can answer besides: its lines against what is received and cancelled (3.5, 3.10). */
+const BOOKING_NEXT_DRAFT_CODES = [
+  ...BOOKING_CONTENT_CODES,
+  'booking.line-repeated',
+  'booking.line-below-received',
+  'booking.line-received',
+] as const satisfies readonly ErrorCode[];
+
+/**
+ * What every change of an approved booking's lifecycle can answer (goods-in 3.4, 3.5, 3.10; S2-F01-T04): the booking
+ * not found or not approved, and the version token's. Recording Issued or Confirmed, and proposing a cancellation or an
+ * extension, record no business effect, so they are not policy-gated; the decisions are (DEC-116; goods-in 10.5).
+ */
+const BOOKING_LIFECYCLE_CODES = [
+  ...HISTORY_CODES,
+  'kernel.cross-site-request',
+  'kernel.stale-version',
+  'booking.record-not-found',
+  'booking.not-approved',
+] as const satisfies readonly ErrorCode[];
+
+/** What proposing a cancellation or an extension can answer besides (3.5): its lines and the communication. */
+const BOOKING_AMENDMENT_CODES = [
+  ...BOOKING_LIFECYCLE_CODES,
+  'booking.line-not-found',
+  'booking.communication-required',
 ] as const satisfies readonly ErrorCode[];
 
 /**
@@ -4923,7 +4966,7 @@ export const routes = {
     shows: 'nothing',
     bodyLimitBytes: BOOKING_DRAFT_BODY_LIMIT_BYTES,
     response: bookingSavedSchema,
-    codes: [...BOOKING_CHANGE_CODES, ...BOOKING_CONTENT_CODES],
+    codes: [...BOOKING_CHANGE_CODES, ...BOOKING_NEXT_DRAFT_CODES],
   }),
   attachBookingDocuments: defineRoute({
     method: 'POST',
@@ -4949,7 +4992,77 @@ export const routes = {
     restrictedFields: [],
     shows: 'nothing',
     response: bookingSubmittedSchema,
-    codes: [...BOOKING_CHANGE_CODES, 'booking.no-document', 'booking.no-lines'],
+    codes: [
+      ...BOOKING_CHANGE_CODES,
+      'booking.no-document',
+      'booking.no-lines',
+      // A change after approval (goods-in 3.5; S2-F01-T04).
+      'booking.no-change',
+      'booking.communication-required',
+    ],
+  }),
+  // An approved booking's lifecycle (goods-in 3.4 to 3.8, 3.10; PRD-BKG-005, PRD-BKG-013; POL-05.01, POL-05.04,
+  // POL-05.07; DEC-099; S2-F01-T04): Booking records Issued and Confirmed with their dates, since nothing is sent from
+  // the app, and proposes a cancellation of an undelivered balance or an extension of the window, which a different
+  // person approves through `access`'s decision route from My work. A change is a new Draft, saved and submitted as
+  // before.
+  recordBookingIssue: defineRoute({
+    method: 'POST',
+    path: '/api/booking/bookings/{bookingId}/issue',
+    params: z.strictObject({ bookingId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: BOOKING_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: bookingIssueDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: bookingRecordedSchema,
+    codes: [...BOOKING_LIFECYCLE_CODES, 'booking.already-issued', 'booking.date-in-future', 'booking.date-too-early'],
+  }),
+  recordBookingConfirmation: defineRoute({
+    method: 'POST',
+    path: '/api/booking/bookings/{bookingId}/confirmation',
+    params: z.strictObject({ bookingId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: BOOKING_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: bookingConfirmationDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: bookingRecordedSchema,
+    codes: [
+      ...BOOKING_LIFECYCLE_CODES,
+      'booking.not-issued',
+      'booking.already-confirmed',
+      'booking.date-in-future',
+      'booking.date-too-early',
+    ],
+  }),
+  proposeBookingCancellation: defineRoute({
+    method: 'POST',
+    path: '/api/booking/bookings/{bookingId}/cancellations',
+    params: z.strictObject({ bookingId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: BOOKING_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: bookingCancellationDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: bookingAmendmentProposedSchema,
+    codes: [...BOOKING_AMENDMENT_CODES, 'booking.nothing-outstanding'],
+  }),
+  proposeBookingExtension: defineRoute({
+    method: 'POST',
+    path: '/api/booking/bookings/{bookingId}/extensions',
+    params: z.strictObject({ bookingId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: BOOKING_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: bookingExtensionDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: bookingAmendmentProposedSchema,
+    codes: [...BOOKING_AMENDMENT_CODES, 'booking.not-an-extension'],
   }),
   // Receive Goods (goods-in 4.1 to 4.5, section 11; PRD-REC-001 to PRD-REC-008; DEC-133, DEC-138; S2-F02-T02): the
   // inbox of a Site, the Arrival with its invoices first, the count line by line and the GRN. An Arrival and a GRN carry

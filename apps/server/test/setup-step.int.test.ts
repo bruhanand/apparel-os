@@ -281,6 +281,9 @@ describe('a new Organisation (access-and-approvals 9.11; S1-F01-AT01, test 19a)'
         permissions:
           'audit.audit_partition create,audit.audit_partition view,audit.audit_seal create,audit.audit_seal view',
       },
+      // The booking job: the overdue follow-up, marking balances and raising their exceptions (goods-in 3.8;
+      // S2-F01-T04).
+      { code: 'booking', permissions: 'booking.booking edit' },
       // The exceptions job and consumer: escalation and the unfinished-operation exception (S1-F08-T02).
       { code: 'exceptions', permissions: 'exceptions.exception create,exceptions.exception edit' },
       // The inbox's consumers of access events (S1-F01-T13).

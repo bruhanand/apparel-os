@@ -25,6 +25,7 @@ import {
   bookingChange,
   bookingDocument,
   bookingLine,
+  bookingSupplierFile,
   bookingVersion,
   type BookingChangeKind,
 } from '../db/schema.js';
@@ -33,9 +34,12 @@ import {
   bookingAuditRecord,
   bookingDocument as approvalDocument,
   bookingItem,
+  lineItem,
   preparersOf,
-  stateOf,
+  SUPPLIER_COMMUNICATION,
+  SUPPLIER_CONFIRMATION,
 } from '../domain/bookings.js';
+import { changeRefusal, CONTENT_CHANGES, lifecycleOf } from '../domain/lifecycle.js';
 import {
   changesOf,
   documentsOf,
@@ -45,6 +49,14 @@ import {
   versionsOf,
   type BookingRow,
 } from '../queries/bookings.js';
+import {
+  approvalInForce,
+  communicationOfVersion,
+  confirmationOf,
+  issueOf,
+  lineKeysOf,
+  statusOfBooking,
+} from '../queries/lifecycle.js';
 import { refused, today, type Outcome } from './common.js';
 
 // Record a booking and change its Draft, attach its documents and submit it (goods-in 3.1, 3.4; PRD-BKG-001 to
@@ -54,6 +66,11 @@ import { refused, today, type Outcome } from './common.js';
 // its next version with its lines, frozen when written (7.2). Submitting binds an approval request to the newest
 // version, whose value at cost is the request's value (DM-8). None is policy-gated: they record no business effect
 // (DEC-116; goods-in 10.5).
+//
+// Once approved, a booking takes a change as its next Draft, a new version approved again (goods-in 3.5, 3.10;
+// POL-05.03, POL-05.10; S2-F01-T04): a line names, by its key, the line it continues, so its receipt links and
+// cancellations follow it; a change keeps what is delivered and cancelled of each line; after issue it is submitted
+// with the supplier's communication (POL-05.04). The version in force stays in force until the change is approved.
 
 /** Who acts: the signed-in person and the assignment Authorise used (access-and-approvals 7.1). */
 export interface Actor {
@@ -207,6 +224,8 @@ async function writeVersion(
         bookingVersionId: versionId,
         lineNumber: index + 1,
         ...factsOf(row),
+        // The line it continues, by its key, the identifier of that line as first written (goods-in 3.10).
+        firstLineId: line.lineKey ?? null,
         // Each as written: a GRN line is matched against them, ignoring case and spaces at the ends (goods-in 3.7).
         styleCode: line.styleCode,
         colour: line.colour,
@@ -253,6 +272,11 @@ export async function recordBooking(
       { kind: 'record', recordType: 'organisation.site', recordId: draft.destinationSiteId },
     ]);
   }
+  // A new booking has no line yet for a line of it to continue (goods-in 3.10).
+  const continuing = draft.lines.find((line) => line.lineKey !== undefined);
+  if (continuing?.lineKey !== undefined) {
+    return refused('refused', 'booking.line-not-found', [{ kind: 'booking-line', lineKey: continuing.lineKey }]);
+  }
   const season = await checkedSeason(context, dependencies, draft.brandId, draft, date);
   if ('kind' in season) return season;
   const values = {
@@ -268,23 +292,57 @@ export async function recordBooking(
 }
 
 /**
- * The booking under its lock for a change of its Draft, or the refusal: not found, a stale version token, or no
- * longer a Draft (goods-in 3.4, 3.5): a booking awaiting approval or approved takes no Draft change here.
+ * The booking under its lock for a change of its content, or the refusal: not found, a stale version token, or a
+ * version waiting for its decision (goods-in 3.4, 3.5). A Draft before approval takes any change; an approved booking
+ * takes a change as its next Draft (3.5), but its booking documents are fixed with its first approval (3.1).
  */
 async function draftForChange(
   context: TransactionContext,
   bookingId: string,
   versionToken: string | undefined,
+  purpose: 'content' | 'documents',
 ): Promise<{ readonly kind: 'draft'; readonly row: BookingRow } | Outcome<never>> {
   const row = await lockBooking(context, bookingId);
   if (row === undefined) return refused('not-found', 'booking.record-not-found', [bookingItem(bookingId)]);
-  const newest = (await changesOf(context, row.id)).at(-1);
-  if (newest === undefined) throw new Error(`A booking has no change: ${row.id}`);
+  const changes = await changesOf(context, row.id);
+  const newest = changes.at(-1);
+  const content = changes.filter((each) => CONTENT_CHANGES.includes(each.change)).at(-1);
+  if (newest === undefined || content === undefined) throw new Error(`A booking has no change: ${row.id}`);
   if (versionToken !== undefined && newest.id !== versionToken) {
     return refused('conflict', 'kernel.stale-version', [bookingItem(row.id)]);
   }
-  if (stateOf(newest.change) !== 'Draft') return refused('refused', 'booking.not-draft', [bookingItem(row.id)]);
+  const approved = (await approvalInForce(context, row.id)) !== undefined;
+  const state = lifecycleOf({ approved: false, issued: false, confirmed: false, newestContent: content.change });
+  if (state === 'Awaiting approval' || (purpose === 'documents' && approved)) {
+    return refused('refused', 'booking.not-draft', [bookingItem(row.id)]);
+  }
   return { kind: 'draft', row };
+}
+
+/**
+ * The lines of a next Draft checked (goods-in 3.5, 3.10): each line it continues is a line of the booking, named once
+ * (`booking.line-not-found`, `booking.line-repeated`); once approved, it keeps what is delivered and cancelled of each
+ * line of the version in force, as of the booking's date (PRD-BKG-013; changeRefusal). Undefined when they pass.
+ */
+async function linesRefusal(
+  context: TransactionContext,
+  bookingId: string,
+  lines: readonly BookingLineDraft[],
+  date: string,
+): Promise<Outcome<never> | undefined> {
+  const known = await lineKeysOf(context, bookingId);
+  const seen = new Set<string>();
+  for (const line of lines) {
+    if (line.lineKey === undefined) continue;
+    if (!known.has(line.lineKey))
+      return refused('refused', 'booking.line-not-found', [lineItem(bookingId, line.lineKey)]);
+    if (seen.has(line.lineKey)) return refused('refused', 'booking.line-repeated', [lineItem(bookingId, line.lineKey)]);
+    seen.add(line.lineKey);
+  }
+  const inForce = await statusOfBooking(context, bookingId, date);
+  if (inForce === undefined) return undefined;
+  const refusal = changeRefusal(inForce, lines);
+  return refusal === undefined ? undefined : refused('refused', refusal.code, [lineItem(bookingId, refusal.lineKey)]);
 }
 
 /** Saves a booking's next Draft (goods-in 3.1, 3.5): its brand and destination stay; the rest is checked again. */
@@ -297,10 +355,12 @@ export async function saveDraft(
 ): Promise<Outcome<BookingSaved>> {
   const date = await today(context);
   if (typeof date !== 'string') return { kind: 'refusal', refusal: date };
-  const found = await draftForChange(context, bookingId, draft.versionToken);
+  const found = await draftForChange(context, bookingId, draft.versionToken, 'content');
   if (found.kind !== 'draft') return found;
   const season = await checkedSeason(context, dependencies, found.row.brandId, draft, date);
   if ('kind' in season) return season;
+  const lines = await linesRefusal(context, found.row.id, draft.lines, date);
+  if (lines !== undefined) return lines;
   const answer = await writeVersion(context, dependencies, actor, found.row, draft, season, 'save-booking-draft');
   return { kind: 'success', answer };
 }
@@ -316,7 +376,7 @@ export async function attachDocuments(
   bookingId: string,
   draft: BookingDocumentsDraft,
 ): Promise<Outcome<BookingDocumentsAttached>> {
-  const found = await draftForChange(context, bookingId, undefined);
+  const found = await draftForChange(context, bookingId, undefined, 'documents');
   if (found.kind !== 'draft') return found;
   const { row } = found;
   const kept = await documentsOf(context, row.id);
@@ -370,7 +430,7 @@ export async function submitBooking(
   bookingId: string,
   draft: BookingSubmission,
 ): Promise<Outcome<BookingSubmitted>> {
-  const found = await draftForChange(context, bookingId, draft.versionToken);
+  const found = await draftForChange(context, bookingId, draft.versionToken, 'content');
   if (found.kind !== 'draft') return found;
   const { row } = found;
   if ((await documentsOf(context, row.id)).length === 0) {
@@ -382,6 +442,21 @@ export async function submitBooking(
   if (read === undefined || read.lines.length === 0) {
     return refused('refused', 'booking.no-lines', [bookingItem(row.id)]);
   }
+  // A change after approval (goods-in 3.5): a newer version than the one in force, and, after issue, the supplier's
+  // communication with it, unless the version carries it already from an earlier submission (POL-05.04).
+  const inForce = await approvalInForce(context, row.id);
+  if (inForce?.bookingVersionId === newestVersion.id) {
+    return refused('refused', 'booking.no-change', [bookingItem(row.id)]);
+  }
+  if (inForce !== undefined && (await issueOf(context, inForce.bookingVersionId)) !== undefined) {
+    const kept = await communicationOfVersion(context, newestVersion.id);
+    if (kept.length === 0 && draft.communication === undefined) {
+      return refused('refused', 'booking.communication-required', [bookingItem(row.id)]);
+    }
+  }
+  const communication = await attachCommunication(context, dependencies, actor, row, draft.communication ?? [], {
+    bookingVersionId: newestVersion.id,
+  });
   const valueAtCost = bookingTotals(pricedLines(read.lines)).booking.cost;
   const preparers = preparersOf(await changesOf(context, row.id));
   const requestId = await dependencies.access.requestApproval(context, {
@@ -396,7 +471,89 @@ export async function submitBooking(
   await audited(context, dependencies.audit, actor, row, {
     versionId: newestVersion.id,
     operation: 'submit-booking',
-    changes: [value('state', 'Draft', 'Awaiting approval'), value('requestId', null, requestId)],
+    changes: [
+      value('state', 'Draft', 'Awaiting approval'),
+      value('requestId', null, requestId),
+      ...(communication.length === 0 ? [] : [value('communicationAttachmentIds', null, communication)]),
+    ],
   });
   return { kind: 'success', answer: { bookingId: row.id, versionId: newestVersion.id, requestId, versionToken } };
 }
+
+/** What a supplier's file belongs to: a confirmation, a change's version or an amendment (goods-in 3.4, 3.5). */
+export type SupplierFileOwner =
+  | { readonly bookingConfirmationId: string }
+  | { readonly bookingVersionId: string }
+  | { readonly bookingAmendmentId: string };
+
+/**
+ * Attaches the supplier's files, stored first, to the booking at what they belong to, through `files-imports`
+ * (goods-in 3.4, 3.5; POL-05.04; imports-and-opening-data 11): the confirmation of the version issued, or the
+ * communication with a change, a cancellation or an extension. Each file is attached once to its owner; answers the
+ * attachments, in the order given.
+ */
+export async function attachSupplierFiles(
+  context: TransactionContext,
+  dependencies: Pick<BookingCommandDependencies, 'files'>,
+  actor: Actor,
+  row: BookingRow,
+  files: readonly { readonly storedFileId: string; readonly fileReceiptId: string }[],
+  owner: SupplierFileOwner,
+): Promise<string[]> {
+  const ownerId =
+    'bookingConfirmationId' in owner
+      ? owner.bookingConfirmationId
+      : 'bookingVersionId' in owner
+        ? owner.bookingVersionId
+        : owner.bookingAmendmentId;
+  const attachmentIds: string[] = [];
+  for (const file of files) {
+    const attached = await dependencies.files.attach(context, {
+      storedFileId: file.storedFileId,
+      fileReceiptId: file.fileReceiptId,
+      record: { module: 'booking', type: BOOKING_TYPE, id: row.id, versionId: ownerId },
+      evidence: 'bookingConfirmationId' in owner ? SUPPLIER_CONFIRMATION : SUPPLIER_COMMUNICATION,
+      scope: factsOf(row),
+      attachedBy: { kind: 'user', id: actor.userId },
+      roleAssignmentId: actor.roleAssignmentId,
+    });
+    attachmentIds.push(attached.attachmentId);
+    if (attached.alreadyAttached) continue;
+    await context.tx.insert(bookingSupplierFile).values({
+      id: uuidv7(),
+      bookingId: row.id,
+      ...factsOf(row),
+      bookingConfirmationId: 'bookingConfirmationId' in owner ? owner.bookingConfirmationId : null,
+      bookingVersionId: 'bookingVersionId' in owner ? owner.bookingVersionId : null,
+      bookingAmendmentId: 'bookingAmendmentId' in owner ? owner.bookingAmendmentId : null,
+      storedFileId: file.storedFileId,
+      attachmentId: attached.attachmentId,
+      attachedByUserId: actor.userId,
+    });
+  }
+  return attachmentIds;
+}
+
+/** The communication with a change after issue (goods-in 3.5; POL-05.04). */
+function attachCommunication(
+  context: TransactionContext,
+  dependencies: Pick<BookingCommandDependencies, 'files'>,
+  actor: Actor,
+  row: BookingRow,
+  files: readonly { readonly storedFileId: string; readonly fileReceiptId: string }[],
+  owner: { readonly bookingVersionId: string },
+): Promise<string[]> {
+  return attachSupplierFiles(context, dependencies, actor, row, files, owner);
+}
+
+/** Whether the version in force of a booking is issued, and so whether a change of it carries the communication. */
+export async function issuedInForce(context: TransactionContext, bookingId: string): Promise<boolean> {
+  const inForce = await approvalInForce(context, bookingId);
+  if (inForce === undefined) return false;
+  return (
+    (await issueOf(context, inForce.bookingVersionId)) !== undefined ||
+    (await confirmationOf(context, inForce.bookingVersionId)) !== undefined
+  );
+}
+
+export { recordChange, audited };

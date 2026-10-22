@@ -1,4 +1,4 @@
-import type { CallInput, ErrorBody, routes } from '@apparel-os/schemas';
+import type { CallInput, CallResult, ErrorBody, routes } from '@apparel-os/schemas';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { api } from '../api';
@@ -37,7 +37,17 @@ export function stateAfterRefusal(refusal: ErrorBody): SubmissionState {
  * says is locked or over goes to the lock screen or to sign-in, the screen's input kept (access-and-approvals 3.3). On
  * success the reads named in `invalidates` are read again.
  */
-export function useSubmission<K extends CommandName>(name: K, invalidates: readonly (keyof Table)[]) {
+/** What useSubmission gives a screen: the state, the submission, and a reset to ready. */
+export interface Submission<K extends CommandName> {
+  readonly state: SubmissionState;
+  readonly submit: (
+    input: Omit<CallInput<Table[K]>, 'idempotencyKey'>,
+  ) => Promise<Extract<CallResult<Table[K]>, { ok: true }>['data'] | undefined>;
+  readonly reset: () => void;
+}
+
+// Named by its type, which the compiler then need not spell out in full as the route table grows (TS7056).
+export function useSubmission<K extends CommandName>(name: K, invalidates: readonly (keyof Table)[]): Submission<K> {
   const key = useRef<string | undefined>(undefined);
   const [state, setState] = useState<SubmissionState>({ kind: 'ready' });
   const { session, setSession } = useSession();

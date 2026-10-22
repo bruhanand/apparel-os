@@ -2,7 +2,7 @@ import type { SettingOrigin } from '@apparel-os/schemas';
 import { bigint, customType, date, integer, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 // Drizzle definitions of `booking`'s tables (code-house-rules 3.4). They mirror the reviewed migrations
-// (migrations/organisation/0086, 0094) and never create or change a table; an integration test compares each with the
+// (migrations/organisation/0086, 0094, 0096) and never create or change a table; an integration test compares each with the
 // migrated database. Never exported from the unit's index.ts, so no other unit can name these tables
 // (code-house-rules 2).
 
@@ -94,6 +94,8 @@ export const bookingLine = bookingSchema.table('booking_line', {
   indicativeCostPaise: bigint('indicative_cost_paise', { mode: 'number' }).notNull(),
   mrpPaise: bigint('mrp_paise', { mode: 'number' }).notNull(),
   deliveryDate: day('delivery_date'),
+  /** The line of an earlier version this line continues, as first written; null for a new line (goods-in 3.10). */
+  firstLineId: uuid('first_line_id'),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 
@@ -109,7 +111,16 @@ export const bookingDocument = bookingSchema.table('booking_document', {
 });
 
 /** The kinds of change of a booking, each a change row under its lock (code-house-rules 12.7). */
-export type BookingChangeKind = 'draft' | 'documents' | 'submission' | 'approval' | 'rejection';
+export type BookingChangeKind =
+  | 'draft'
+  | 'documents'
+  | 'submission'
+  | 'approval'
+  | 'rejection'
+  | 'issue'
+  | 'confirmation'
+  | 'amendment'
+  | 'amendment-decision';
 
 /** Each change of a booking, numbered in the order made; the newest one's identifier is its version token. */
 export const bookingChange = bookingSchema.table('booking_change', {
@@ -156,6 +167,123 @@ export const openToBuyReservation = bookingSchema.table('open_to_buy_reservation
   openToBuyBudgetId: uuid('open_to_buy_budget_id').notNull(),
   bookingId: uuid('booking_id').notNull(),
   bookingApprovalId: uuid('booking_approval_id').notNull(),
+  amountPaise: bigint('amount_paise', { mode: 'number' }).notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** The approved version sent to the supplier, on the date Booking gives (goods-in 3.4; DEC-099). */
+export const bookingIssue = bookingSchema.table('booking_issue', {
+  id: uuid('id').primaryKey(),
+  bookingId: uuid('booking_id').notNull(),
+  bookingVersionId: uuid('booking_version_id').notNull(),
+  ...scope,
+  issuedOn: day('issued_on').notNull(),
+  recordedByUserId: uuid('recorded_by_user_id').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** The supplier's acceptance of the version issued (goods-in 3.4; POL-05.01). */
+export const bookingConfirmation = bookingSchema.table('booking_confirmation', {
+  id: uuid('id').primaryKey(),
+  bookingId: uuid('booking_id').notNull(),
+  bookingVersionId: uuid('booking_version_id').notNull(),
+  ...scope,
+  confirmedOn: day('confirmed_on').notNull(),
+  recordedByUserId: uuid('recorded_by_user_id').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** The kinds of amendment of an approved version (goods-in 3.5). */
+export type AmendmentKind = 'cancellation' | 'extension';
+
+/** A cancellation or an extension, proposed against the approved version in force (goods-in 3.5). */
+export const bookingAmendment = bookingSchema.table('booking_amendment', {
+  id: uuid('id').primaryKey(),
+  bookingId: uuid('booking_id').notNull(),
+  bookingVersionId: uuid('booking_version_id').notNull(),
+  ...scope,
+  kind: text('kind').$type<AmendmentKind>().notNull(),
+  windowTo: day('window_to'),
+  proposedByUserId: uuid('proposed_by_user_id').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** A line an amendment names, by its key: a cancelled quantity, or a new delivery date. */
+export const bookingAmendmentLine = bookingSchema.table('booking_amendment_line', {
+  id: uuid('id').primaryKey(),
+  bookingAmendmentId: uuid('booking_amendment_id').notNull(),
+  bookingLineId: uuid('booking_line_id').notNull(),
+  ...scope,
+  quantity: integer('quantity'),
+  deliveryDate: day('delivery_date'),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** An amendment's decision, made once through `access` (goods-in 3.5). */
+export const bookingAmendmentDecision = bookingSchema.table('booking_amendment_decision', {
+  id: uuid('id').primaryKey(),
+  bookingAmendmentId: uuid('booking_amendment_id').notNull(),
+  ...scope,
+  decision: text('decision').$type<'Approved' | 'Rejected'>().notNull(),
+  approvalDecisionId: uuid('approval_decision_id').notNull(),
+  decidedByUserId: uuid('decided_by_user_id').notNull(),
+  decidedAt: at('decided_at').notNull(),
+  businessDate: day('business_date').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** A file from the supplier: a confirmation, or the communication with a change or an amendment (3.4, 3.5). */
+export const bookingSupplierFile = bookingSchema.table('booking_supplier_file', {
+  id: uuid('id').primaryKey(),
+  bookingId: uuid('booking_id').notNull(),
+  ...scope,
+  bookingConfirmationId: uuid('booking_confirmation_id'),
+  bookingVersionId: uuid('booking_version_id'),
+  bookingAmendmentId: uuid('booking_amendment_id'),
+  storedFileId: uuid('stored_file_id').notNull(),
+  attachmentId: uuid('attachment_id').notNull(),
+  attachedByUserId: uuid('attached_by_user_id').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** A GRN line linked to a booking line by its key, at the GRN's issue or later (goods-in 3.6, 3.7). */
+export const bookingReceiptLink = bookingSchema.table('booking_receipt_link', {
+  id: uuid('id').primaryKey(),
+  bookingId: uuid('booking_id').notNull(),
+  bookingLineId: uuid('booking_line_id').notNull(),
+  ...scope,
+  grnId: uuid('grn_id').notNull(),
+  grnLineId: uuid('grn_line_id').notNull(),
+  grnSiteId: uuid('grn_site_id').notNull(),
+  quantity: integer('quantity').notNull(),
+  kind: text('kind').$type<'at-issue' | 'later'>().notNull(),
+  linkedByUserId: uuid('linked_by_user_id').notNull(),
+  linkedAt: at('linked_at').notNull(),
+  businessDate: day('business_date').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** A line's balance marked overdue on its due date, with the exception raised (goods-in 3.8; POL-05.06). */
+export const bookingOverdue = bookingSchema.table('booking_overdue', {
+  id: uuid('id').primaryKey(),
+  bookingId: uuid('booking_id').notNull(),
+  bookingLineId: uuid('booking_line_id').notNull(),
+  ...scope,
+  dueDate: day('due_date').notNull(),
+  outstanding: integer('outstanding').notNull(),
+  exceptionId: uuid('exception_id').notNull(),
+  markedByServiceIdentityId: uuid('marked_by_service_identity_id').notNull(),
+  markedAt: at('marked_at').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** What a cancellation or a lowering change releases of the open-to-buy a booking reserves (goods-in 3.3, 3.5). */
+export const openToBuyRelease = bookingSchema.table('open_to_buy_release', {
+  id: uuid('id').primaryKey(),
+  openToBuyBudgetId: uuid('open_to_buy_budget_id').notNull(),
+  bookingId: uuid('booking_id').notNull(),
+  bookingApprovalId: uuid('booking_approval_id'),
+  bookingAmendmentId: uuid('booking_amendment_id'),
   amountPaise: bigint('amount_paise', { mode: 'number' }).notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
