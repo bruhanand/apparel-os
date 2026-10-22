@@ -425,6 +425,11 @@ export type BookingTerms = z.infer<typeof bookingTermsSchema>;
 export const BOOKING_CANCELLATION = 'booking.booking.cancel-balance';
 /** The action type of an extension of the delivery window (goods-in 3.5, 3.8; POL-05.07). */
 export const BOOKING_EXTENSION = 'booking.booking.extend-window';
+/**
+ * The action type of a proposal to link late or excess goods into the booking (goods-in 3.7, 4.10; PRD-BKG-008;
+ * POL-05.08; S2-F02-T04): Booking proposes, a different authorised person approves under approve on the booking.
+ */
+export const BOOKING_RECEIPT_LINK = 'booking.booking.link-receipt';
 
 /** Recording that the approved version in force was sent to the supplier, on the date given (goods-in 3.4). */
 export const bookingIssueDraftSchema = z.strictObject({ versionToken: idSchema, issuedOn: businessDateSchema });
@@ -571,6 +576,39 @@ export const bookingAmendmentSchema = z.strictObject({
 });
 export type BookingAmendment = z.infer<typeof bookingAmendmentSchema>;
 
+/**
+ * A proposal to link late or excess goods into the booking, as the booking and its approval panel show it (goods-in
+ * 3.7, 4.10; POL-05.08; S2-F02-T04): Awaiting approval, then Approved, which linked its GRN lines, or Rejected. Each
+ * line names the GRN line, its goods and pieces, its arrival date, the booking line it links to by its key, and why it
+ * needs approval as when proposed: it arrived after the window as extended (`late`), or beyond the line's outstanding
+ * (`excess`). A later proposal of the booking is refused while one waits (`booking.link-proposal-pending`).
+ */
+export const bookingReceiptLinkProposalSchema = z.strictObject({
+  id: idSchema,
+  state: bookingAmendmentStateSchema,
+  /** The approved version in force when it was proposed. */
+  versionId: idSchema,
+  lines: z.array(
+    z.strictObject({
+      grnId: idSchema,
+      grnNumber: z.string().min(1),
+      grnLineId: idSchema,
+      lineKey: idSchema,
+      styleCode: z.string().min(1),
+      colour: z.string().min(1).nullable(),
+      size: z.string().min(1).nullable(),
+      quantity: z.int().min(1),
+      arrivalDate: businessDateSchema,
+      late: z.boolean(),
+      excess: z.boolean(),
+    }),
+  ),
+  proposedBy: idSchema,
+  proposedAt: instantSchema,
+  request: latestRequestSchema.optional(),
+});
+export type BookingReceiptLinkProposal = z.infer<typeof bookingReceiptLinkProposalSchema>;
+
 /** A booking as Booking › Bookings and the approval panel show it. */
 export const bookingSchema = z.strictObject({
   id: idSchema,
@@ -619,6 +657,8 @@ export const bookingSchema = z.strictObject({
   status: bookingStatusSchema.optional(),
   /** The cancellations and extensions proposed, oldest first (3.5). */
   amendments: z.array(bookingAmendmentSchema),
+  /** The proposals to link late or excess goods into it, oldest first (3.7, 4.10; POL-05.08). */
+  receiptLinkProposals: z.array(bookingReceiptLinkProposalSchema),
 });
 export type Booking = z.infer<typeof bookingSchema>;
 
@@ -657,6 +697,11 @@ export const bookingPageQuerySchema = z.strictObject({
   seasonValueId: idSchema.optional(),
   supplierPartyId: idSchema.optional(),
   siteId: idSchema.optional(),
+  /**
+   * Only bookings goods may be received against: Approved, Issued or Confirmed, the state of the version in force
+   * (goods-in 3.4, 3.7; S2-F02-T04). The supplier filter reads the newest version, as every filter does.
+   */
+  receivable: z.literal('true').optional(),
 });
 export type BookingPageQuery = z.infer<typeof bookingPageQuerySchema>;
 

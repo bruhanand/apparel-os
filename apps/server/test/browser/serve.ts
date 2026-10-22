@@ -110,6 +110,7 @@ import { writeSyntheticMarking } from '../support/marked-attributes.js';
 import { capturingLogger, writeSyntheticServiceIdentity } from '../support/jobs.js';
 import { startTestFileStore } from '../support/minio.js';
 import { approved, approvedGeography, structureSetup, writeSyntheticSites } from '../support/organisation.js';
+import { STORE_FILE_PATH, syntheticPdfUpload } from '../support/opening-app.js';
 import { masterKinds, recordTypeOf as organisationRecordType } from '../../src/modules/organisation/index.js';
 import {
   createTestExceptionsSchema,
@@ -2420,12 +2421,15 @@ const damageWorld = await receivingFixture(receivingStructure, receivingDatabase
 // The held-line journey's world (held-lines.spec.ts; S2-F02-T03), its own so its deliveries and decisions change no
 // other journey's lists.
 const heldWorld = await receivingFixture(receivingStructure, receivingDatabase, 'JOURNEY-HLD');
+// The receive-against-booking journey's world (receive-against-booking.spec.ts; S2-F02-T04), its own so its booking,
+// deliveries and links change no other journey's lists.
+const againstWorld = await receivingFixture(receivingStructure, receivingDatabase, 'JOURNEY-RAB');
 // The PT file journey's world (pt-upload.spec.ts; S2-F04-T02), its own so its GRN and PT change no other journey's lists.
 const ptReceivingWorld = await receivingFixture(receivingStructure, receivingDatabase, 'JOURNEY-PTF');
 // Policies 4 and 10 validated on the values the modules report, the receiving worlds', and on the readiness journey's
 // SYNTHETIC value of policy 4, which the application registers for every Organisation.
 await receivingGateOpen(receivingStructure, receivingDatabase, [readinessValuesCheck]);
-for (const each of [receivingWorld, storeStaffWorld, damageWorld, heldWorld, ptReceivingWorld]) {
+for (const each of [receivingWorld, storeStaffWorld, damageWorld, heldWorld, againstWorld, ptReceivingWorld]) {
   await receivingGranted(
     receivingStructure,
     receivingDatabase,
@@ -2474,6 +2478,16 @@ const bookingSeason = await (async () => {
 })();
 await writeSyntheticBudget(receivingDatabase, {
   brandId: receivingWorld.brand.id,
+  seasonAttributeId: bookingSeason.attributeId,
+  seasonValueId: bookingSeason.valueId,
+  markingVersionId: bookingSeason.markingVersionId,
+  // A SYNTHETIC ₹10,00,000.00.
+  amountPaise: 100_000_000,
+  preparedBy: receivingStructure.preparer.id,
+});
+// And for the receive-against-booking journey's brand and the same season, a SYNTHETIC budget of its own (S2-F02-T04).
+await writeSyntheticBudget(receivingDatabase, {
+  brandId: againstWorld.brand.id,
   seasonAttributeId: bookingSeason.attributeId,
   seasonValueId: bookingSeason.valueId,
   markingVersionId: bookingSeason.markingVersionId,
@@ -2679,6 +2693,82 @@ await fixtureRunner.run(
   },
   (context) => defineSyntheticBookingSeries(context, new Numbering({ kinds: [BOOKING_KIND] })),
 );
+// The receive-against-booking journey's people (receive-against-booking.spec.ts; goods-in 4.10; S2-F02-T04): Warehouse
+// (P-WHS), who receives against the booking and so sees bookings; Booking (P-BKG), who reviews the GRN's lines,
+// proposes the excess into the booking and owns the review follow-up at the world's Site; and the Owner (P-OWN), who
+// approves the excess from My work, with no limit since it has no value. Two more, who record and approve the booking
+// the journey receives against through the API once the server listens (below), the Owner within a SYNTHETIC limit, so
+// the journey's people sign in with authenticator codes nobody used. SYNTHETIC grants and limit: who holds them is the
+// product owner's.
+const againstReceiver = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-RAB-RECEIVER',
+  enrolled: true,
+  personas: ['P-WHS'],
+});
+await grantSynthetic(receivingDatabase, { kind: 'user', id: againstReceiver.id }, [
+  ...RECEIVER_AUTHORITY,
+  ...RECEIVING_LISTS,
+  { recordType: 'booking.booking', action: 'view' },
+]);
+const againstBooker = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-RAB-BOOKING',
+  enrolled: true,
+  personas: ['P-BKG'],
+});
+await grantSynthetic(receivingDatabase, { kind: 'user', id: againstBooker.id }, [
+  ...BOOKING_LISTS,
+  { recordType: 'booking.booking', action: 'view' },
+  { recordType: 'booking.booking', action: 'create' },
+  { recordType: 'booking.booking', action: 'edit' },
+  { recordType: 'files_imports.stored_file', action: 'create' },
+  { recordType: 'receiving.arrival', action: 'view' },
+  { recordType: 'receiving.grn', action: 'view' },
+  { recordType: 'exceptions.exception', action: 'view' },
+]);
+const againstOwner = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-RAB-OWNER',
+  enrolled: true,
+  personas: ['P-OWN'],
+});
+await grantSynthetic(receivingDatabase, { kind: 'user', id: againstOwner.id }, [
+  ...BOOKING_LISTS,
+  { recordType: 'booking.booking', action: 'view' },
+  { recordType: 'booking.booking', action: 'approve' },
+  { recordType: 'access.approval_reason', action: 'view' },
+]);
+const againstFixtureBooker = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-RAB-FIXTURE-BOOKING',
+  enrolled: true,
+  personas: ['P-BKG'],
+});
+await grantSynthetic(receivingDatabase, { kind: 'user', id: againstFixtureBooker.id }, [
+  ...BOOKING_LISTS,
+  { recordType: 'booking.booking', action: 'view' },
+  { recordType: 'booking.booking', action: 'create' },
+  { recordType: 'booking.booking', action: 'edit' },
+  { recordType: 'files_imports.stored_file', action: 'create' },
+]);
+const againstFixtureOwner = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-RAB-FIXTURE-OWNER',
+  enrolled: true,
+  personas: ['P-OWN'],
+});
+const againstFixtureOwnerAssignment = await grantSynthetic(
+  receivingDatabase,
+  { kind: 'user', id: againstFixtureOwner.id },
+  [
+    ...BOOKING_LISTS,
+    { recordType: 'booking.booking', action: 'view' },
+    { recordType: 'booking.booking', action: 'approve' },
+    { recordType: 'access.approval_reason', action: 'view' },
+  ],
+);
+await bookingLimitApproved(
+  receivingStructure,
+  receivingDatabase,
+  { userId: againstFixtureOwner.id, roleAssignmentId: againstFixtureOwnerAssignment.assignmentId },
+  100_000_000,
+);
 // And for the damage journey: the reporter's lists of masters; an approve reason; the exception-code series and the damage-report series with SYNTHETIC
 // formats (RR-449; DEC-118); and the damage exception routed at the world's Site to Operations by a SYNTHETIC rule
 // approved here as a fixture (code-house-rules 11.2), as the other journeys' rules are. The routing is the product
@@ -2750,6 +2840,36 @@ const heldRouting = await fixtureRunner.run(
     ),
 );
 if (heldRouting.kind !== 'done') throw new Error(`The excess rule was refused: ${heldRouting.refusal.code}`);
+// The receive-against-booking journey's review of GRN lines routed at its world's Site to its Booking user by a
+// SYNTHETIC rule (goods-in 4.10). The routing is the product owner's: SYNTHETIC here.
+const againstRouting = await fixtureRunner.run(
+  {
+    commandName: 'test-syn-against-booking.fixture',
+    organisation: receivingRouted.organisation,
+    correlationId: newCorrelationId(),
+    actor: { kind: 'actor', actorId: damageOperations.id },
+  },
+  (context) =>
+    new Exceptions({
+      numbering: new Numbering({ kinds: [EXCEPTION_CODE_KIND] }),
+      inbox: new Inbox(),
+      audit: new Audit(fixtureLog.logger),
+      types: [damageExceptionType, ...receivingExceptionTypes],
+    }).prepareRouting(
+      context,
+      { userId: damageOperations.id, roleAssignmentId: damageDecider.assignmentId },
+      {
+        typeCode: 'receiving.booking-review',
+        siteId: againstWorld.siteId,
+        owner: { kind: 'user', userId: againstBooker.id },
+        dueRule: { format: 'elapsed-minutes-v1', minutes: 60 },
+        escalation: { kind: 'user', userId: againstBooker.id },
+        validFrom: new Date().toISOString().slice(0, 10),
+        origin: 'synthetic',
+      },
+    ),
+);
+if (againstRouting.kind !== 'done') throw new Error(`The review rule was refused: ${againstRouting.refusal.code}`);
 // Both rules approved through the real commands, as Setup › Exception rules has them approved (access-and-approvals
 // 12.2; code-house-rules 11.2): each asked of `access` for a different person, the setup's approver, holding approve on
 // the rules, who decides it through Decide.
@@ -2759,7 +2879,7 @@ if (heldRouting.kind !== 'done') throw new Error(`The excess rule was refused: $
     { recordType: 'exceptions.exception_routing', action: 'view' },
     { recordType: 'exceptions.exception_routing', action: 'approve' },
   ]);
-  for (const rule of [damageRouting.value, heldRouting.value]) {
+  for (const rule of [damageRouting.value, heldRouting.value, againstRouting.value]) {
     const requestId = await receivingStructure.run(damageOperations.id, (context) =>
       routingAccess.requestApproval(context, {
         actionType: ROUTING_ACTION_TYPE,
@@ -3082,6 +3202,82 @@ const app = await startAccessApp(
   if (prepared.status !== 200) throw new Error(`The evidence rule change was refused: ${await prepared.text()}`);
 }
 
+// The booking the receive-against-booking journey receives against (S2-F02-T04): recorded with its document and
+// submitted by the fixture's Booking user, and approved by the fixture's Owner, through the API once the server listens, as the booking
+// journey proves on screen (booking.spec.ts): two pieces of one style and size, so a delivery of three is excess
+// (POL-05.08). Each authenticator code is for a step not used before: sign-in one step back, the decision now, both
+// within the step either side of now the server accepts (access-and-approvals 3.1). Every value is SYNTHETIC.
+const againstStyle = syntheticCode('JOURNEY-RAB-STYLE');
+const againstBookingNumber = await (async (): Promise<string> => {
+  const at = { 'content-type': 'application/json', origin, 'x-forwarded-for': '10.8.8.51' };
+  const signIn = async (user: SyntheticUser) => {
+    const signedIn = await fetch(`${app.baseUrl}/api/access/sign-in`, {
+      method: 'POST',
+      headers: at,
+      body: JSON.stringify({
+        organisationCode: receivingCode,
+        login: user.login,
+        password: user.password,
+        totpCode: codeFor(user.factorSecret ?? Buffer.alloc(0), -1),
+      }),
+    });
+    if (signedIn.status !== 200)
+      throw new Error(`A booking fixture user was not signed in: ${String(signedIn.status)}`);
+    return (signedIn.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+  };
+  const call = async (cookie: string, path: string, body: unknown) => {
+    const answer = await fetch(`${app.baseUrl}${path}`, {
+      method: 'POST',
+      headers: { ...at, cookie, 'idempotency-key': crypto.randomUUID() },
+      body: JSON.stringify(body),
+    });
+    if (answer.status !== 200) throw new Error(`The booking fixture was refused at ${path}: ${await answer.text()}`);
+    return (await answer.json()) as Record<string, string>;
+  };
+  const booker = await signIn(againstFixtureBooker);
+  const stored = await call(booker, STORE_FILE_PATH, syntheticPdfUpload('BOOKING', 'JOURNEY-RAB'));
+  const made = await call(booker, '/api/booking/bookings', {
+    brandId: againstWorld.brand.id,
+    destinationSiteId: againstWorld.siteId,
+    supplierPartyId: againstWorld.supplier.id,
+    seasonValueId: bookingSeason.valueId,
+    deliveryWindow: {
+      from: new Date().toISOString().slice(0, 10),
+      to: new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10),
+    },
+    lines: [
+      {
+        styleCode: againstStyle,
+        colour: 'SYNTHETIC NAVY',
+        size: againstWorld.sizes.values[0]?.code ?? null,
+        quantity: 2,
+        indicativeCost: 50_000,
+        mrp: 99_900,
+        deliveryDate: null,
+      },
+    ],
+  });
+  const bookingId = made.bookingId ?? '';
+  const attached = await call(booker, `/api/booking/bookings/${bookingId}/documents`, {
+    files: [{ storedFileId: stored.storedFileId, fileReceiptId: stored.receiptId }],
+    versionToken: made.versionToken,
+  });
+  const submitted = await call(booker, `/api/booking/bookings/${bookingId}/submission`, {
+    versionToken: attached.versionToken,
+  });
+  const owner = await signIn(againstFixtureOwner);
+  await call(owner, `/api/access/approval-requests/${submitted.requestId ?? ''}/decision`, {
+    versionId: submitted.versionId,
+    outcome: 'approve',
+    reason: { kind: 'listed', reasonId: bookingReasonId },
+    totpCode: codeFor(againstFixtureOwner.factorSecret ?? Buffer.alloc(0)),
+  });
+  const read = await fetch(`${app.baseUrl}/api/booking/bookings/${bookingId}`, { headers: { cookie: owner } });
+  const number = ((await read.json()) as { booking: { number?: string } }).booking.number;
+  if (number === undefined) throw new Error('The booking of the receive-against-booking journey has no number');
+  return number;
+})();
+
 // The import outcomes report journey's two batches, one in each Store, started through the API by the seeding
 // importer once the server listens (imports-and-opening-data 13.1; S1-F06-T04). Every value is SYNTHETIC.
 const outcomesBatchCodes: string[] = [];
@@ -3303,6 +3499,16 @@ writeFileSync(
       approver: credentialsOf(heldApprover),
       reasonId: damageReasonId,
       options: heldWorld.options,
+    },
+    againstBooking: {
+      organisationCode: receivingCode,
+      receiver: credentialsOf(againstReceiver),
+      booker: credentialsOf(againstBooker),
+      owner: credentialsOf(againstOwner),
+      reasonId: bookingReasonId,
+      options: againstWorld.options,
+      bookingNumber: againstBookingNumber,
+      styleCode: againstStyle,
     },
     ptUpload: {
       organisationCode: receivingCode,

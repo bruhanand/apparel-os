@@ -29,15 +29,19 @@ import { recordBooking } from './commands/record-booking.js';
 import { saveDraft } from './commands/save-draft.js';
 import { submitBooking } from './commands/submit-booking.js';
 import { prepareBudget, prepareBudgetVersion } from './commands/budgets.js';
-import { linkReceiptAtIssue } from './commands/link-receipt-at-issue.js';
-import { linkReceiptLater } from './commands/link-receipt-later.js';
+import { linkReceiptsAtIssue } from './commands/link-receipt-at-issue.js';
+import { linkReceiptsLater } from './commands/link-receipt-later.js';
 import { proposeCancellation } from './commands/propose-cancellation.js';
 import { proposeExtension } from './commands/propose-extension.js';
-import type { Linker, ReceiptAtIssue, ReceiptLater } from './commands/receipt-link.js';
+import type { Linker } from './commands/receipt-link.js';
+import type { PlannedAtIssue, ReceivableBooking, ReceiptsAtIssue, ReceiptsLater } from './domain/receipts.js';
 import { recordConfirmation } from './commands/record-confirmation.js';
 import { recordIssue } from './commands/record-issue.js';
-import { bookingLock, bookingPage, bookingRow, bookingView } from './queries/bookings.js';
+import { bookingLock, bookingPage, bookingRow, bookingView, receivableBookingOf } from './queries/bookings.js';
 import { statusOfBooking } from './queries/lifecycle.js';
+import { receiptsOfGrnLines, type GrnLineReceipt } from './queries/receipt-links.js';
+import { planAtIssue } from './queries/receipts.js';
+import { refusalOf, today, type Outcome } from './commands/common.js';
 import { budgetOf, budgetPage, budgetRow, budgetRows, budgetViews, remainingOf } from './queries/budgets.js';
 
 export interface BookingDependencies {
@@ -50,6 +54,8 @@ export interface BookingDependencies {
   readonly origins: Pick<ConfigurationInterface, 'originRefusal'>;
   /** Where a booking's documents are attached (goods-in 3.1; S2-F01-T03). */
   readonly files: Pick<FilesImportsInterface, 'attach'>;
+  /** The policy gate Booking's later receipt link asks, as a booking's approval does (goods-in 10.5; S2-F02-T04). */
+  readonly gate: Pick<ConfigurationInterface, 'checkAvailability'>;
 }
 
 /**
@@ -203,21 +209,60 @@ export class Booking {
   }
 
   /**
-   * The receipt link `receiving` calls at a GRN's issue for each counted line of an Arrival that names the booking
-   * (goods-in 3.7; PRD-BKG-007): linked to the one line it matches, or sent to Booking for review, with why. The caller
-   * holds the booking's lock at step 1 and has authorised the person.
+   * A booking as `receiving` checks it when an Arrival names it, or links GRN lines to it later (goods-in 3.7, 4.2):
+   * its number, destination, brand and the supplier of its version in force; undefined when the reader may not see it.
    */
-  linkReceiptAtIssue(context: TransactionContext, linker: Linker, receipt: ReceiptAtIssue) {
-    return linkReceiptAtIssue(context, this.dependencies.audit, linker, receipt);
+  receivableBooking(context: TransactionContext, bookingId: string): Promise<ReceivableBooking | undefined> {
+    return receivableBookingOf(context, bookingId);
   }
 
   /**
-   * A later link by Booking of a GRN line received without a booking, or sent for review, to the booking line named
-   * (goods-in 3.7, 3.10; PRD-BKG-008), dated and signed, refused when the GRN line's goods are not that line's. The
-   * caller holds the booking's lock at step 1.
+   * What a GRN's issue does with its counted lines against the booking its Arrival names, read and not written
+   * (goods-in 3.7; PRD-BKG-007; POL-05.08): each links to the one line it matches, or goes to Booking for review, with
+   * why. `receiving` asks it before its later locks, holding the booking's lock at step 1, then links them with
+   * linkReceiptsAtIssue once every lock is held (code-house-rules 8.2).
    */
-  linkReceiptLater(context: TransactionContext, linker: Linker, link: ReceiptLater) {
-    return linkReceiptLater(context, this.dependencies.audit, linker, link);
+  async receiptsAtIssue(
+    context: TransactionContext,
+    issue: ReceiptsAtIssue,
+  ): Promise<Outcome<readonly PlannedAtIssue[]>> {
+    const date = await today(context);
+    if (typeof date !== 'string') return refusalOf(date);
+    const plan = await planAtIssue(context, issue, date);
+    return plan.kind === 'planned' ? { kind: 'success', answer: plan.outcomes } : plan;
+  }
+
+  /**
+   * Links the counted lines of a GRN at its issue to the booking lines they match, as receiptsAtIssue answers
+   * (goods-in 3.7, 10.3; PRD-BKG-007). The caller holds the booking's lock at step 1 and has authorised the person.
+   */
+  linkReceiptsAtIssue(context: TransactionContext, linker: Linker, issue: ReceiptsAtIssue) {
+    return linkReceiptsAtIssue(context, this.dependencies.audit, linker, issue);
+  }
+
+  /**
+   * Booking's later link of GRN lines, received without a booking or sent for review, to the lines of one booking
+   * (goods-in 3.7, 4.10; PRD-BKG-008; POL-05.08): those within the window and the outstanding link now; late or excess
+   * ones make one proposal for a different person's approval. The caller holds the booking's lock at step 1.
+   */
+  linkReceiptsLater(context: TransactionContext, linker: Linker, later: ReceiptsLater) {
+    return linkReceiptsLater(
+      context,
+      { audit: this.dependencies.audit, access: this.dependencies.access, gate: this.dependencies.gate },
+      linker,
+      later,
+    );
+  }
+
+  /**
+   * For each GRN line given, its receipt link and a proposal of it still waiting, of the bookings the reader may see
+   * (goods-in 3.7, 4.10): `receiving` shows them on the GRN.
+   */
+  receiptsOfGrnLines(
+    context: TransactionContext,
+    grnLineIds: readonly string[],
+  ): Promise<ReadonlyMap<string, GrnLineReceipt>> {
+    return receiptsOfGrnLines(context, grnLineIds);
   }
 }
 

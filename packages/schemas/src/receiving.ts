@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { approvalRequestStateSchema } from './approvals.js';
+import { BOOKING_CAPS } from './booking.js';
 import { businessDateSchema, idSchema } from './common.js';
 import { DAMAGE_CAPS } from './damage.js';
 import { evidenceFileSchema, evidenceListSchema } from './files.js';
@@ -67,6 +68,11 @@ export const arrivalDraftSchema = z.strictObject({
   cartons: z.int().min(1).max(RECEIVING_CAPS.cartons),
   /** When the goods arrived; the recording time is kept apart (PRD-MOD-009). */
   arrivedAt: instantSchema,
+  /**
+   * The one booking the goods come against ("Receive against booking"), of the same supplier and brand, Approved,
+   * Issued or Confirmed; none for "Goods arrived" (goods-in 3.7, 4.2; PRD-REC-002; S2-F02-T04).
+   */
+  bookingId: idSchema.optional(),
 });
 export type ArrivalDraft = z.infer<typeof arrivalDraftSchema>;
 
@@ -394,6 +400,60 @@ export const grnLineSchema = z.strictObject({
 });
 export type GrnLine = z.infer<typeof grnLineSchema>;
 
+/**
+ * Why a GRN line went to Booking for review at its GRN's issue rather than linking to a booking line (goods-in 3.7,
+ * 4.10; PRD-BKG-007; POL-05.08): it matched no booking line, or had no identity (`no-match`), or more than one
+ * (`ambiguous`); it was counted at a Site that is not the booking's destination (`other-site`); the booking's version in
+ * force names another supplier (`other-supplier`); the booking had no approved version (`not-approved`); it arrived
+ * after the delivery window as extended (`late`), or its pieces are beyond the booking line's outstanding (`excess`),
+ * which need a different person's approval before they are accepted into the booking.
+ */
+export const reviewReasonSchema = z.enum([
+  'no-match',
+  'ambiguous',
+  'other-site',
+  'other-supplier',
+  'not-approved',
+  'late',
+  'excess',
+]);
+export type ReviewReason = z.infer<typeof reviewReasonSchema>;
+
+/**
+ * Where a GRN line stands against bookings (goods-in 3.6, 3.7, 4.10): what its GRN's issue did with it when its Arrival
+ * named a booking and it delivered pieces, linked or sent for review, or nothing otherwise (`atIssue` null); and, as far
+ * as the reader may see bookings, the receipt link that gives it its booking line now, made at issue, later by Booking,
+ * or by an approved proposal, and a proposal of it still waiting for its decision.
+ */
+export const grnLineBookingSchema = z.strictObject({
+  grnLineId: idSchema,
+  atIssue: z
+    .discriminatedUnion('outcome', [
+      z.strictObject({ outcome: z.literal('linked'), bookingId: idSchema, lineKey: idSchema }),
+      z.strictObject({
+        outcome: z.literal('review'),
+        bookingId: idSchema,
+        reason: reviewReasonSchema,
+        /** The booking line a late or excess line matches, which a proposal links it to; none otherwise. */
+        lineKey: idSchema.nullable(),
+      }),
+    ])
+    .nullable(),
+  link: z
+    .strictObject({
+      bookingId: idSchema,
+      lineKey: idSchema,
+      kind: z.enum(['at-issue', 'later']),
+      /** The approved proposal a later link of late or excess goods came from (POL-05.08); none otherwise. */
+      proposalId: idSchema.nullable(),
+      linkedBy: idSchema,
+      linkedAt: instantSchema,
+    })
+    .nullable(),
+  proposal: z.strictObject({ bookingId: idSchema, proposalId: idSchema, lineKey: idSchema }).nullable(),
+});
+export type GrnLineBooking = z.infer<typeof grnLineBookingSchema>;
+
 /** The GRN, as printed: quantities and findings only, never a price, tax or value (goods-in 4.5). */
 export const grnSchema = z.strictObject({
   id: idSchema,
@@ -405,8 +465,41 @@ export const grnSchema = z.strictObject({
   /** Who counted it: everyone who saved a line (goods-in 4.3). */
   countedBy: z.array(idSchema),
   lines: z.array(grnLineSchema),
+  /** Each line's place against bookings, in the lines' order (goods-in 3.7, 4.10; S2-F02-T04). */
+  bookingLinks: z.array(grnLineBookingSchema),
 });
 export type Grn = z.infer<typeof grnSchema>;
+
+/**
+ * Booking links GRN lines to the lines of one booking later (goods-in 3.7, 4.10; PRD-BKG-008; POL-05.08): a GRN
+ * received without a booking, or lines sent for review. Each names its GRN line once and the booking line it delivers
+ * by its key; at most `BOOKING_CAPS.lines` of them, a technical cap (goods-in 3.9 "Input caps").
+ */
+export const grnBookingLinksDraftSchema = z.strictObject({
+  bookingId: idSchema,
+  lines: z
+    .array(z.strictObject({ grnLineId: idSchema, lineKey: idSchema }))
+    .min(1)
+    .max(BOOKING_CAPS.lines)
+    .refine((lines) => new Set(lines.map((line) => line.grnLineId)).size === lines.length, {
+      message: 'Name each GRN line once',
+    }),
+});
+export type GrnBookingLinksDraft = z.infer<typeof grnBookingLinksDraftSchema>;
+
+/**
+ * What the later link answers: the lines linked now, and the proposal of those that need a different person's
+ * approval first, late or excess goods (POL-05.08), or none.
+ */
+export const grnBookingLinkedSchema = z.strictObject({
+  linked: z.array(z.strictObject({ grnLineId: idSchema, linkId: idSchema, lineKey: idSchema })),
+  proposal: z
+    .strictObject({ proposalId: idSchema, requestId: idSchema, grnLineIds: z.array(idSchema).min(1) })
+    .nullable(),
+});
+export type GrnBookingLinked = z.infer<typeof grnBookingLinkedSchema>;
+
+export const grnParamsSchema = z.strictObject({ grnId: idSchema });
 
 /**
  * Naming the product of unidentified goods before they are taken in (goods-in 4.6): by style code, colour and size
@@ -459,6 +552,8 @@ export const arrivalSchema = z.strictObject({
   ewayBillNumber: z.string().nullable(),
   cartons: z.int().min(1),
   arrivedAt: instantSchema,
+  /** The booking the goods come against, whose open lines are the expected goods, or none (goods-in 3.7, 4.1). */
+  bookingId: idSchema.nullable(),
   recordedBy: idSchema,
   recordedAt: instantSchema,
   /** The latest change of the Arrival, which issuing the GRN names (code-house-rules 12.7). */

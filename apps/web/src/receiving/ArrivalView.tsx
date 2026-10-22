@@ -40,6 +40,14 @@ import { formatDate, formatList, formatQuantity } from '../setup/format';
 import { Card, GrantedButton, inputClass, ListRead, SubmissionBanner, Th, Toolbar, useGranted } from '../setup/parts';
 import { stateIdOf } from '../setup/states';
 import { useTimeZone } from '../shell/session';
+import {
+  BookingStanding,
+  bookingField,
+  ExpectedGoods,
+  LinkToBooking,
+  useBookings,
+  type Bookings,
+} from './BookingLinks';
 import { optionText, unknownText, useMasterNames, useProducts } from './names';
 import { PtFile } from './PtFile';
 
@@ -866,11 +874,13 @@ function GrnPrint({
   unit,
   location,
   reading,
+  bookings,
 }: {
   arrival: Arrival;
   unit: string;
   location: string;
   reading: Reading;
+  bookings: Bookings;
 }) {
   const timeZone = useTimeZone();
   const names = useMasterNames();
@@ -912,6 +922,10 @@ function GrnPrint({
           ['receive.eway-bill-number', arrival.ewayBillNumber ?? t('receive.none')],
           ['receive.cartons', formatQuantity(arrival.cartons)],
           ['receive.arrived-at', formatDateTime(arrival.arrivedAt, timeZone)],
+          [
+            'receive.booking',
+            arrival.bookingId === null ? t('receive.none') : bookingField(bookings, arrival.bookingId),
+          ],
           ['receive.grn.counted-by', peopleOf(arrival, grn.countedBy)],
           [
             'receive.grn.entered-by',
@@ -938,6 +952,7 @@ function GrnPrint({
               <Th label="receive.received" />
               <Th label="receive.findings" />
               <Th label="receive.held" />
+              <Th label="receive.booking-link" />
               {mayReportDamage && <Th label="receive.damage" />}
             </tr>
           </thead>
@@ -971,6 +986,9 @@ function GrnPrint({
                     </span>
                   )}
                 </td>
+                <td className="px-3">
+                  <BookingStanding line={line} grn={grn} bookings={bookings} />
+                </td>
                 {mayReportDamage && (
                   <td className="px-3">
                     <Button
@@ -992,6 +1010,7 @@ function GrnPrint({
       )}
       <CountDamage lines={grn.lines} />
       <NameProducts lines={grn.lines} reading={reading} />
+      <LinkToBooking arrival={arrival} grn={grn} reading={reading} named={bookings} />
       <p className="m-0 text-caption text-text-2">{t('receive.grn.note')}</p>
     </section>
   );
@@ -1166,6 +1185,20 @@ export function ArrivalView({
     shown: query.isFetching,
     now: () => queryClient.isFetching({ queryKey: read.queryKey }) > 0,
   };
+  // The bookings the Arrival and its GRN name, read as the person may (goods-in 3.7, 4.10).
+  const named = query.data?.arrival;
+  const bookings = useBookings(
+    named === undefined
+      ? []
+      : [
+          ...(named.bookingId === null ? [] : [named.bookingId]),
+          ...(named.grn?.bookingLinks ?? []).flatMap((each) => [
+            ...(each.link === null ? [] : [each.link.bookingId]),
+            ...(each.proposal === null ? [] : [each.proposal.bookingId]),
+            ...(each.atIssue === null ? [] : [each.atIssue.bookingId]),
+          ]),
+        ],
+  );
   return (
     <div className="flex flex-col gap-4">
       <Toolbar>
@@ -1210,6 +1243,10 @@ export function ArrivalView({
                     ['receive.cartons', formatQuantity(arrival.cartons)],
                     ['receive.arrived-at', formatDateTime(arrival.arrivedAt, timeZone)],
                     [
+                      'receive.booking',
+                      arrival.bookingId === null ? t('receive.none') : bookingField(bookings, arrival.bookingId),
+                    ],
+                    [
                       'receive.recorded-by',
                       t('receive.recorded-at', {
                         name: personOf(arrival, arrival.recordedBy),
@@ -1219,6 +1256,12 @@ export function ArrivalView({
                   ]}
                 />
               </Card>
+              {open && arrival.bookingId !== null && (
+                <ExpectedGoods
+                  booking={bookings.get(arrival.bookingId)}
+                  reading={bookings.reading(arrival.bookingId)}
+                />
+              )}
               <Card title="receive.invoices">
                 {arrival.invoices.length === 0 ? (
                   <Banner tone="warning" role="status" message="receive.invoices.first" />
@@ -1254,7 +1297,13 @@ export function ArrivalView({
               {open ? (
                 <IssueGrn arrival={arrival} reading={reading} />
               ) : (
-                <GrnPrint arrival={arrival} unit={unitText} location={locationText} reading={reading} />
+                <GrnPrint
+                  arrival={arrival}
+                  unit={unitText}
+                  location={locationText}
+                  reading={reading}
+                  bookings={bookings}
+                />
               )}
               {arrival.grn !== null && <PtFile grnId={arrival.grn.id} />}
             </div>

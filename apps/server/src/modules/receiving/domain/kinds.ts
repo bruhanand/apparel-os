@@ -78,6 +78,14 @@ export const EXTRA_EXCEPTION_TYPES = {
 } as const;
 
 /**
+ * The exception type of the GRN lines an Arrival against a booking sends to Booking for review at its GRN's issue
+ * (goods-in 2, 3.7, 4.5, 4.10; access-and-approvals 12.1; PRD-BKG-007; POL-05.08): one a GRN, of the category mismatch,
+ * linking to the GRN, whose lines show why each went to review. Its owner is whoever the routing of the type at the Site
+ * names (POL-02.16), Booking by the grill's routing, never set here.
+ */
+export const BOOKING_REVIEW_EXCEPTION_TYPE = 'receiving.booking-review';
+
+/**
  * The reason each hold of a GRN's held part records (stock-ledger 6.1, 13.16; goods-in 4.4): a code, which a screen
  * names from the message catalogue, never stored text (code-house-rules 12.13).
  */

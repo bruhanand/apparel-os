@@ -2,12 +2,13 @@
 export { ReceivingModule } from './receiving.module.js';
 export { RECEIVING } from './tokens.js';
 export { Receiving } from './receiving.js';
-export type { IssueNeed, ReceivingDependencies, ReceivingInterface } from './receiving.js';
+export type { IssueNeeds, ReceivingDependencies, ReceivingInterface } from './receiving.js';
 export { GRN_KIND, GRN_SCOPE_KEY, receivingStockCaller } from './domain/kinds.js';
 export { HELD_LINE_DECISIONS, RECEIVE_GOODS, RECEIVE_GOODS_STATUTORY, RECEIVING_CAPABILITY } from './domain/gate.js';
 export { receivingApprovals } from './commands/held-line-decision.js';
 export type { EffectServices as HeldLineEffectServices } from './commands/held-line-decision.js';
 export { receivingExceptionTypes } from './exception-types.js';
+export { BOOKING_REVIEW_EXCEPTION_TYPE } from './domain/kinds.js';
 export type { GoodPiecesPart, PtBasis, ReceiptProblem, ReceiptProblemsQuery } from './queries/held-lines.js';
 // The GRN's "PT attached" mark, which `merchandise` · PT sets and clears (goods-in 5.8; S2-F04-T02).
 export type { PtMarkChange } from './commands/pt-mark.js';

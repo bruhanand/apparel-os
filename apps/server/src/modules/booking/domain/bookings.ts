@@ -2,6 +2,7 @@ import {
   BOOKING_APPROVAL,
   BOOKING_CANCELLATION,
   BOOKING_EXTENSION,
+  BOOKING_RECEIPT_LINK,
   BOOKING_TYPE,
   type MissingItem,
 } from '@apparel-os/schemas';
@@ -49,6 +50,29 @@ export const amendmentApprovalRules: readonly ApprovalRule[] = [BOOKING_CANCELLA
     synthetic: false,
   }),
 );
+
+/**
+ * The approval rule of a proposal to link late or excess goods into a booking (goods-in 3.7, 4.10; POL-05.08; RR-577,
+ * decided by the product owner on 22 Oct 2026; S2-F02-T04): decided under approve on the booking by a different
+ * authorised person from its proposer, which can never be switched off (POL-02.07), as a cancellation and an extension
+ * are. No value basis: no source names one (domain-model section 5 names none), and a link moves no money and reserves
+ * no open-to-buy, so no approval limit applies (access-and-approvals 9.3). **Design choice**, as RR-574 decided for a
+ * cancellation. The reasons are configured, with no default (POL-02.23).
+ */
+export const receiptLinkApprovalRule: ApprovalRule = {
+  actionType: BOOKING_RECEIPT_LINK,
+  module: 'booking',
+  recordType: BOOKING_TYPE,
+  independent: true,
+  value: 'none',
+  freeTextReason: false,
+  decisionEvidenceClasses: [],
+  synthetic: false,
+};
+
+/** The document a proposal's approval decides: the booking, at the proposal (module-map 6.2 flow A). */
+export const receiptLinkDocument = (bookingId: string, proposalId: string) =>
+  ({ module: 'booking', recordType: BOOKING_TYPE, recordId: bookingId, versionId: proposalId }) as const;
 
 /** The document an amendment's approval decides: the booking, at the amendment (module-map 6.2 flow A). */
 export const amendmentDocument = (bookingId: string, amendmentId: string) =>

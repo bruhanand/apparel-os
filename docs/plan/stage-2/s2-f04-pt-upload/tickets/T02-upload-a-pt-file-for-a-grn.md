@@ -1,6 +1,6 @@
 # S2-F04-T02 — Upload a PT file for a GRN
 
-Status: blocked
+Status: in-progress
 Blocked by: S2-F02-T03, S2-F04-T01
 Feature: [Stage 2 first version](../../spec.md)
 

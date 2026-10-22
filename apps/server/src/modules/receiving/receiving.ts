@@ -3,6 +3,7 @@ import type {
   ArrivalDraft,
   CountLineDraft,
   CountLineRemoval,
+  GrnBookingLinksDraft,
   GrnIssue,
   HeldLineProductDraft,
   HeldLineRead,
@@ -14,6 +15,7 @@ import type {
 import type { LockTarget, TransactionContext } from '../../kernel/index.js';
 import type { AccessInterface, RecordFacts } from '../access/index.js';
 import type { AuditInterface } from '../audit/index.js';
+import type { BookingInterface } from '../booking/index.js';
 import type { ConfigurationInterface } from '../configuration/index.js';
 import type { ExceptionsInterface } from '../exceptions/index.js';
 import type { FilesImportsInterface } from '../files-imports/index.js';
@@ -22,10 +24,11 @@ import { unitReadiness } from '../organisation/index.js';
 import type { StockDocumentsInterface } from '../stock/documents/index.js';
 import type { StockLedgerInterface } from '../stock/ledger/index.js';
 import { attachPhotos, recordArrival, recordInvoice } from './commands/arrival.js';
-import { arrivalRow, entriesOf, type Actor } from './commands/common.js';
+import { arrivalRow, entriesOf, factsOf, grnRow, type Actor } from './commands/common.js';
 import { removeCountLine, saveCountLine } from './commands/count.js';
 import { nameHeldLineProduct } from './commands/name-held-line-product.js';
 import { issueGrn } from './commands/issue.js';
+import { linkToBooking } from './commands/link-to-booking.js';
 import { clearPtMark, ptMarkLock, setPtMark, type PtMarkChange } from './commands/pt-mark.js';
 import { grnForPt, ptMarkOf, type GrnForPt, type PtMark } from './queries/pt-mark.js';
 import { currentLines } from './domain/lines.js';
@@ -53,10 +56,28 @@ export interface ReceivingDependencies {
     StockDocumentsInterface,
     'countDamageReady' | 'countDamageHold' | 'recordCountDamage' | 'damageOfGrnLines'
   >;
+  /** `booking`, whose bookings an Arrival is received against and whose receipt links its GRN lines take (10.2). */
+  readonly booking: Pick<
+    BookingInterface,
+    | 'bookingFacts'
+    | 'bookingLockTarget'
+    | 'receivableBooking'
+    | 'receiptsAtIssue'
+    | 'linkReceiptsAtIssue'
+    | 'linkReceiptsLater'
+    | 'receiptsOfGrnLines'
+  >;
 }
 
-/** What issuing a GRN needs besides create on the GRN itself (goods-in 4.9, 8.5). */
-export type IssueNeed = 'damage-report';
+/**
+ * What issuing a GRN needs besides create on the GRN itself (goods-in 4.9, 4.10, 8.5): create on damage reports while
+ * the count holds damage, since the issuer reports it; and a grant on the booking the Arrival names, at its Site and
+ * brand, since its receipt links are scoped as the booking is (3.10).
+ */
+export interface IssueNeeds {
+  readonly damageReport: boolean;
+  readonly bookingId: string | null;
+}
 
 /**
  * `receiving`'s interface (module-map section 5; goods-in 10.1): the Receive Goods inbox, the Arrival with its invoices
@@ -123,16 +144,41 @@ export class Receiving {
   }
 
   /**
-   * What issuing the Arrival's GRN needs besides create on the GRN (goods-in 4.9, 8.5): create on damage reports while
-   * the count holds damage, since the issuer reports it. Read before any lock, for the route to authorise and hold: a
-   * line saved after this read changes the Arrival's version, so the command refuses the issue as stale under the lock
-   * (code-house-rules 12.7), and the count it issues is the one read here.
+   * What issuing the Arrival's GRN needs besides create on the GRN (goods-in 4.9, 4.10, 8.5): create on damage reports
+   * while the count holds damage, since the issuer reports it; and the booking it names, fixed when it was recorded.
+   * Read before any lock, for the route to authorise and hold: a line saved after this read changes the Arrival's
+   * version, so the command refuses the issue as stale under the lock (code-house-rules 12.7), and the count it issues
+   * is the one read here.
    */
-  async issueAlsoNeeds(context: TransactionContext, arrivalId: string): Promise<readonly IssueNeed[]> {
+  async issueAlsoNeeds(context: TransactionContext, arrivalId: string): Promise<IssueNeeds> {
     const row = await arrivalRow(context, arrivalId);
-    if (row === undefined) return [];
+    if (row === undefined) return { damageReport: false, bookingId: null };
     const lines = currentLines(await entriesOf(context, row.id));
-    return lines.some((line) => line.entry.damage !== null) ? ['damage-report'] : [];
+    return { damageReport: lines.some((line) => line.entry.damage !== null), bookingId: row.bookingId };
+  }
+
+  /**
+   * The scope facts of a booking the reader may see, which receiving against it, and linking GRN lines to it later,
+   * authorise with (goods-in 3.7, 4.10; access-and-approvals 5.3); undefined when the reader may not see it.
+   */
+  bookingFacts(context: TransactionContext, bookingId: string): Promise<RecordFacts | undefined> {
+    return this.dependencies.booking.bookingFacts(context, bookingId);
+  }
+
+  /** The facts of a GRN's Arrival the reader may see, which a later booking link authorises with; else undefined. */
+  async grnFacts(context: TransactionContext, grnId: string): Promise<RecordFacts | undefined> {
+    const issued = await grnRow(context, grnId);
+    if (issued === undefined) return undefined;
+    const row = await arrivalRow(context, issued.arrivalId);
+    return row === undefined ? undefined : factsOf(row);
+  }
+
+  /**
+   * Booking's later link of GRN lines to the lines of one booking (goods-in 3.7, 4.10; PRD-BKG-008; POL-05.08): those
+   * within the window and the outstanding link now; late or excess ones are proposed for a different person's approval.
+   */
+  linkToBooking(context: TransactionContext, actor: Actor, grnId: string, draft: GrnBookingLinksDraft) {
+    return linkToBooking(context, this.dependencies, actor, grnId, draft);
   }
 
   /** The facts of a held line the reader may see, which its routes authorise with (5.3); else undefined. */
@@ -159,7 +205,9 @@ export class Receiving {
   ): Promise<Arrival | undefined> {
     const row = await arrivalRow(context, arrivalId);
     if (row === undefined) return undefined;
-    const arrival = await arrivalView(context, this.dependencies, row, today, requests);
+    const arrival = await arrivalView(context, this.dependencies, row, today, requests, (lineIds) =>
+      this.dependencies.booking.receiptsOfGrnLines(context, lineIds),
+    );
     const names = await named(peopleOf(arrival));
     return { ...arrival, people: [...names].map(([userId, name]) => ({ userId, name })) };
   }

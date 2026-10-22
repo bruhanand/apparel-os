@@ -260,6 +260,22 @@ export interface SyntheticWorld {
     readonly options: ReceivingOptions;
   };
   /**
+   * The receive-against-booking journey (S2-F02-T04), in the receiving Organisation, in a world of its own: Warehouse
+   * (P-WHS), who receives against the booking; Booking (P-BKG), who proposes the excess into it; the Owner (P-OWN), who
+   * approves that from My work; the approve reason in force; how the screens name the world's records; and the number and
+   * style of the approved booking, two pieces of the first size, the server recorded through the API.
+   */
+  readonly againstBooking: {
+    readonly organisationCode: string;
+    readonly receiver: EnrolledUser;
+    readonly booker: EnrolledUser;
+    readonly owner: EnrolledUser;
+    readonly reasonId: string;
+    readonly options: ReceivingOptions;
+    readonly bookingNumber: string;
+    readonly styleCode: string;
+  };
+  /**
    * The PT file journey (S2-F04-T02), in the receiving Organisation, in a world of its own: Warehouse (P-WHS), also
    * assigned to make PTs, who counts, issues the GRN and uploads its PT file; the GRN's style code; and two SYNTHETIC
    * PT files of that style and the world's first size: one the check refuses, one it passes.

@@ -18,6 +18,7 @@ import { formatDate, formatQuantity } from '../setup/format';
 import { Card, GrantedButton, inputClass, SubmissionBanner } from '../setup/parts';
 import { stateIdOf } from '../setup/states';
 import { AmendmentLines, extensionEnd } from './AmendmentLines';
+import { ReceiptLinkLines } from './ReceiptLinkLines';
 import { BOOKING_READS } from './BookingForm';
 import { given } from './StatusView';
 
@@ -365,6 +366,41 @@ export function AmendmentsCard({ booking, timeZone }: { booking: Booking; timeZo
             </li>
           );
         })}
+      </ul>
+      {panel !== null && <ApprovalPanel requestId={panel} />}
+    </Card>
+  );
+}
+
+/**
+ * The proposals to link late or excess goods into the booking, each with its state and lines, and its approval panel
+ * while it waits (goods-in 3.7, 4.10; POL-05.08; S2-F02-T04). Booking proposes them from the GRN.
+ */
+export function ReceiptLinkProposalsCard({ booking, timeZone }: { booking: Booking; timeZone: string }) {
+  const [panel, setPanel] = useState<string | null>(null);
+  if (booking.receiptLinkProposals.length === 0) return null;
+  return (
+    <Card title="booking.receipt-links">
+      <p className="m-0 text-body-sm text-text-2">{t('booking.receipt-links.intro')}</p>
+      <ul aria-label={t('booking.receipt-links')} className="m-0 flex list-none flex-col gap-3 p-0">
+        {[...booking.receiptLinkProposals].reverse().map((proposal) => (
+          <li key={proposal.id} className="flex flex-col gap-1 text-body-sm">
+            <span className="flex flex-wrap items-center gap-2">
+              <span>{t('booking.receipt-link.proposed', { at: formatDateTime(proposal.proposedAt, timeZone) })}</span>
+              <StatusBadge state={stateIdOf(proposal.state)} />
+              {proposal.state === 'Awaiting approval' && proposal.request !== undefined && (
+                <Button
+                  size="small"
+                  label="setup.open-approval"
+                  onClick={() => {
+                    setPanel(proposal.request?.id ?? null);
+                  }}
+                />
+              )}
+            </span>
+            <ReceiptLinkLines proposal={proposal} status={booking.status} />
+          </li>
+        ))}
       </ul>
       {panel !== null && <ApprovalPanel requestId={panel} />}
     </Card>
