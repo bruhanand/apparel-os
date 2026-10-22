@@ -1,9 +1,16 @@
 import { uuidv7 } from '@apparel-os/domain';
-import { ARRIVAL_TYPE, GRN_TYPE, type MissingItem } from '@apparel-os/schemas';
+import { ARRIVAL_TYPE, GRN_TYPE, HELD_LINE_TYPE, type MissingItem } from '@apparel-os/schemas';
 import { desc, eq, inArray } from 'drizzle-orm';
-import { LOCK_STEP, lockTable, type CommandRefusal, type TransactionContext } from '../../../kernel/index.js';
+import {
+  LOCK_STEP,
+  lockTable,
+  type CommandRefusal,
+  type LockTarget,
+  type TransactionContext,
+} from '../../../kernel/index.js';
 import type { RecordFacts } from '../../access/index.js';
 import type { AuditChange, AuditInterface, AuditScope } from '../../audit/index.js';
+import type { ExceptionFacts } from '../../exceptions/index.js';
 import { entryFacts } from '../db/columns.js';
 import { arrival, arrivalChange, countEntry, grn, type ArrivalChangeKind } from '../db/schema.js';
 import type { CountEntryFacts } from '../domain/lines.js';
@@ -88,6 +95,24 @@ export function factsOf(row: Scoped): RecordFacts & AuditScope {
   const { storeId, ...facts } = scopeColumns(row);
   return storeId === null ? facts : { ...facts, storeId };
 }
+
+/**
+ * The facts of an exception about an Arrival's goods (access-and-approvals 12.1; goods-in 4.9): its Site, Store,
+ * business unit and brand, so the routing in force at the Site names its owner.
+ */
+export function exceptionFactsOf(row: Scoped): ExceptionFacts {
+  return { siteId: row.siteId, storeId: row.storeId, businessUnitId: row.businessUnitId, brandId: row.brandId };
+}
+
+/** The held line's identity row as a lock target: every change of it locks it at step 1 (code-house-rules 8.2). */
+export const heldLineLock = (heldLineId: string): LockTarget => ({
+  table: lockTable('receiving', 'held_line'),
+  id: heldLineId,
+  mode: 'exclusive',
+});
+
+/** No held line with that identifier, or none the actor may see (code-house-rules 6.2, 12.3). */
+export const heldLineNotFound = (heldLineId: string): CommandRefusal => recordNotFound(HELD_LINE_TYPE, heldLineId);
 
 /** The Arrival as the actor may see it, or undefined (code-house-rules 6.2). */
 export async function arrivalRow(context: TransactionContext, arrivalId: string): Promise<ArrivalRow | undefined> {

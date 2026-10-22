@@ -1,4 +1,5 @@
 import { paise, type Paise } from '@apparel-os/domain';
+import { textKey } from './text.js';
 
 // A booking's totals (goods-in 3.1, 3.9; PRD-BKG-003; S2-F01-T03): one rule, shared by `booking` on the server and the
 // web app's booking screens, so the screen shows as typed what the server records (shared-calculations 2.1, 2.2).
@@ -38,7 +39,7 @@ export function bookingTotals(lines: readonly BookingTotalsLine[]): {
   let cost = 0;
   let mrp = 0;
   for (const line of lines) {
-    const key = line.styleCode.trim().toUpperCase();
+    const key = textKey(line.styleCode);
     const style = styles.get(key) ?? { styleCode: line.styleCode.trim(), pieces: 0, cost: 0, mrp: 0 };
     style.pieces += line.quantity;
     style.cost = paise(style.cost + line.quantity * line.indicativeCost);

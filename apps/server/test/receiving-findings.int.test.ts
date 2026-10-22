@@ -50,6 +50,7 @@ import { structureSetup, type StructureSetup } from './support/organisation.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { allowVerifier, connect, databaseUrl } from './support/postgres.js';
 import {
+  placeScope,
   RECEIVER_AUTHORITY,
   receivingFixture,
   receivingGateOpen,
@@ -615,12 +616,19 @@ describe('a GRN with clean, short, excess, wrong, unidentified and damaged lines
     const grnId = (await readArrival(receiver, mixed)).grn?.id ?? '';
     const held = [...lines.values()].flatMap((line) => (line.heldLine === null ? [] : [line.heldLine.id]));
     const raised = await exceptionsOn([grnId, ...held]);
-    expect(raised.map((each) => [each.type, each.owner_user_id])).toEqual([
-      ['receiving.excess', bookingApprover.user.id],
-      ['receiving.shortage', bookingApprover.user.id],
-      ['receiving.unidentified-goods', bookingApprover.user.id],
-      ['receiving.wrong-goods', bookingApprover.user.id],
-    ]);
+    // Each held line's, and those of the GRN: its shortage and the extra pieces it records as not received.
+    expect(
+      raised.map((each) => [each.type, each.record_id === grnId ? 'grn' : 'held-line', each.owner_user_id]).sort(),
+    ).toEqual(
+      [
+        ['receiving.excess', 'grn', bookingApprover.user.id],
+        ['receiving.excess', 'held-line', bookingApprover.user.id],
+        ['receiving.shortage', 'grn', bookingApprover.user.id],
+        ['receiving.unidentified-goods', 'grn', bookingApprover.user.id],
+        ['receiving.unidentified-goods', 'held-line', bookingApprover.user.id],
+        ['receiving.wrong-goods', 'held-line', bookingApprover.user.id],
+      ].sort(),
+    );
     const report = lines.get('SYN-T2-SHORT')?.damage?.damageReportId ?? '';
     expect(await exceptionsOn([report])).toEqual([
       expect.objectContaining({ type: 'stock.damage', owner_user_id: operations.user.id }),
@@ -630,6 +638,51 @@ describe('a GRN with clean, short, excess, wrong, unidentified and damaged lines
       (await get(receiver, `/api/receiving/sites/${fixture.siteId}/inbox?view=pending`)).body,
     );
     expect(inbox.entries.find((each) => each.arrivalId === mixed)?.waitingFor).toBe('held-lines');
+  });
+
+  it('PRD-EXC-001 POL-02.16 extra pieces recorded as not received reach Booking, one follow-up a kind linking to the GRN, which Booking resolves', async () => {
+    const arrivalId = await arrivalWithInvoice();
+    await saveLines(arrivalId, [
+      onInvoice('SYN-NR-OVER-1', 2, 3, { extra: 'not-received' }),
+      onInvoice('SYN-NR-OVER-2', 1, 2, { extra: 'not-received' }),
+      {
+        goods: 'wrong',
+        styleCode: fixture.batchSku.styleCode,
+        colour: null,
+        sizeValueId: null,
+        skuId: fixture.batchSku.id,
+        description: null,
+        invoiceQuantity: 0,
+        countedQuantity: 1,
+        extra: 'not-received',
+        damage: null,
+        batch: { code: 'SYN-BATCH-NR', expiryDate: setup.day(90) },
+      },
+    ]);
+    const issued = await issue(arrivalId);
+    expect(issued.status, JSON.stringify(issued.body)).toBe(200);
+    const grnId = (issued.body as { grnId: string }).grnId;
+    // Nothing of them is in custody or held, but each kind reaches Booking (goods-in 4.4, 4.5).
+    for (const line of (await grnLines(arrivalId)).values()) {
+      expect(line.heldLine).toBeNull();
+      expect(await custodyOfLine(line.id)).toEqual(
+        line.styleCode === fixture.batchSku.styleCode
+          ? {}
+          : {
+              good: line.invoiceQuantity,
+            },
+      );
+    }
+    const raised = await exceptionsOn([grnId]);
+    expect(raised.map((each) => [each.type, each.owner_user_id])).toEqual([
+      ['receiving.excess', bookingApprover.user.id],
+      ['receiving.wrong-goods', bookingApprover.user.id],
+    ]);
+    // Nothing in the app settles goods sent back before supplier returns (stage 3): Booking resolves it (RR-572).
+    for (const each of raised) {
+      const closed = await post(bookingApprover, `/api/exceptions/exceptions/${each.id}/close`, {});
+      expect(closed.status, JSON.stringify(closed.body)).toBe(200);
+    }
   });
 });
 
@@ -733,13 +786,67 @@ describe('deciding the held lines (goods-in 4.6; PRD-REC-013, POL-17.02, POL-17.
     expect(await holdsOfLine(line?.id ?? '')).toEqual([{ kind: 'quarantine', condition: 'wrong', quantity: 2 }]);
   });
 
-  it('PRD-EXC-002 each held line’s follow-up closes once it is decided', async () => {
+  it('PRD-EXC-002 a held line’s follow-up closes once its goods are taken in; goods left held keep it open', async () => {
+    const wrongLine = lines.get(fixture.batchSku.styleCode)?.heldLine?.id;
     const held = [...lines.values()].flatMap((line) => (line.heldLine === null ? [] : [line.heldLine.id]));
     const raised = await exceptionsOn(held);
+    expect(raised).toHaveLength(3);
     for (const each of raised) {
       const closed = await post(bookingApprover, `/api/exceptions/exceptions/${each.id}/close`, {});
-      expect(closed.status, JSON.stringify(closed.body)).toBe(200);
+      if (each.record_id === wrongLine) {
+        // Left held, the wrong goods wait for their supplier return (stage 3): the outcome is not verified yet.
+        expect(closed.status).toBe(422);
+        expect(errorOf(closed)?.code).toBe('exceptions.resolution-not-verified');
+        expect(errorOf(closed)?.missing).toContainEqual({
+          kind: 'record',
+          recordType: 'receiving.held_line',
+          recordId: wrongLine,
+        });
+      } else {
+        expect(closed.status, JSON.stringify(closed.body)).toBe(200);
+      }
     }
+  });
+});
+
+describe('a held line the reader may not see (code-house-rules 12.3, 12.4)', () => {
+  it('PRD-SEC-005 a held line hidden from the reader, or not there, is not found, never not authorised; and so is a replay', async () => {
+    const otherStore = await enrolled(
+      'FND-OTHER-STORE',
+      [
+        { recordType: 'receiving.arrival', action: 'view' },
+        { recordType: 'receiving.held_line', action: 'edit' },
+        { recordType: 'merchandise.vocabulary_value', action: 'view' },
+      ],
+      placeScope([{ type: 'store', id: fixture.otherStoreId }]),
+    );
+    const excess = lines.get('SYN-T2-EXCESS')?.heldLine;
+    if (excess == null) throw new Error('no held line');
+    for (const heldLineId of [excess.id, uuidv7()]) {
+      const read = await get(otherStore, `/api/receiving/held-lines/${heldLineId}`);
+      expect(read.status).toBe(404);
+      expect(errorOf(read)).toMatchObject({
+        code: 'receiving.record-not-found',
+        missing: [{ kind: 'record', recordType: 'receiving.held_line', recordId: heldLineId }],
+      });
+    }
+    // Naming a product of it is not found too, and its replay under the same key answers as any request failing the
+    // same checks would: not found again, never not authorised (12.4 "Replay").
+    const key = uuidv7();
+    const body = {
+      versionToken: excess.versionToken,
+      styleCode: 'SYN-HIDDEN',
+      colour: null,
+      sizeValueId: null,
+      skuId: null,
+    };
+    for (const attempt of ['first', 'replay']) {
+      const named = await post(otherStore, `/api/receiving/held-lines/${excess.id}/product`, body, key);
+      expect([attempt, named.status, errorOf(named)?.code]).toEqual([attempt, 404, 'receiving.record-not-found']);
+    }
+    // The Arrival it belongs to is hidden from them alike.
+    const arrival = await get(otherStore, `/api/receiving/arrivals/${mixed}`);
+    expect([arrival.status, errorOf(arrival)?.code]).toEqual([404, 'receiving.record-not-found']);
   });
 });
 

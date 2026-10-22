@@ -1,4 +1,4 @@
-import type { Batch, CountEntryFacts, LineDamage, Size } from '../domain/lines.js';
+import type { Batch, CountEntryFacts, LineContent, LineDamage, Size } from '../domain/lines.js';
 import type { countEntry } from './schema.js';
 
 // The count's values as `receiving`'s tables keep them (goods-in 4.3; S2-F02-T02): a size as its attribute, value, code
@@ -104,5 +104,26 @@ export function entryFacts(row: typeof countEntry.$inferSelect): CountEntryFacts
     batch: batchOf(row),
     enteredByUserId: row.enteredByUserId,
     recordedAt: row.recordedAt,
+  };
+}
+
+/**
+ * A line's content as a GRN line's row keeps it (goods-in 4.5, 4.9; migration 0096): the size by its code and the
+ * damage by its quantity and what is wrong, the report it raised and the photo kept on that report.
+ */
+export function grnLineContentColumns(content: LineContent) {
+  return {
+    goods: content.goods,
+    styleCode: content.styleCode,
+    colour: content.colour,
+    sizeCode: content.size?.code ?? null,
+    skuId: content.skuId,
+    description: content.description,
+    invoiceQuantity: content.invoiceQuantity,
+    countedQuantity: content.countedQuantity,
+    extra: content.extra,
+    damagedQuantity: content.damage?.quantity ?? null,
+    damageDescription: content.damage?.description ?? null,
+    ...batchColumns(content.batch),
   };
 }

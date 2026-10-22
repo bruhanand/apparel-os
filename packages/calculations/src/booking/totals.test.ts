@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bookingTotals } from './index.js';
+import { bookingTotals, textKey } from './index.js';
 
 // goods-in 3.1 and 3.9: a booking's totals. Every line here is SYNTHETIC.
 
@@ -22,5 +22,13 @@ describe('a booking’s totals (goods-in 3.1)', () => {
 
   it('PRD-BKG-003 a Draft with no line yet totals no pieces and no value', () => {
     expect(bookingTotals([])).toEqual({ booking: { pieces: 0, cost: 0, mrp: 0 }, styles: [] });
+  });
+});
+
+describe('how a booking’s and a GRN’s text is compared (goods-in 3.7)', () => {
+  it('DEC-130 ignores case and spaces at the ends, and nothing else', () => {
+    expect(textKey(' syn-st-1 ')).toBe(textKey('SYN-ST-1'));
+    expect(textKey('SYN NAVY')).not.toBe(textKey('SYNNAVY'));
+    expect(textKey('SYN-ST-1')).not.toBe(textKey('SYN-ST-2'));
   });
 });

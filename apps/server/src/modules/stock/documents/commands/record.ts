@@ -19,6 +19,7 @@ import { DAMAGE_PHOTO } from '../domain/items.js';
 import { damageReported } from '../events.js';
 import {
   audited,
+  exceptionFactsOf,
   factsOf,
   refusalOf,
   refused,
@@ -34,7 +35,7 @@ import {
 // the hold; its photos, attached through `files-imports`; its decision requested from a different authorised person on
 // the goods' cost; the exception to Operations as its routing at the Site says (POL-02.16); its audit record and event.
 // A report made on its own posts its hold first (report.ts); damage the count finds has its hold written by the GRN's
-// own ledger request, so the GRN records its reports after it (count-damage.ts; goods-in 4.9). Takes no lock.
+// own ledger request, so the GRN records its reports after it (record-count-damage.ts; goods-in 4.9). Takes no lock.
 
 export interface RecordDependencies {
   readonly audit: AuditInterface;
@@ -156,12 +157,7 @@ export async function recordReport(
   const raised = await dependencies.exceptions.raise(context, {
     raisingEvent: `${DAMAGE_EXCEPTION_TYPE}:${reportId}`,
     typeCode: DAMAGE_EXCEPTION_TYPE,
-    facts: {
-      siteId: scope.siteId,
-      storeId: scope.storeId,
-      businessUnitId: scope.businessUnitId,
-      brandId: scope.brandId,
-    },
+    facts: exceptionFactsOf(scope),
     links: [{ module: DOCUMENTS_MODULE, recordType: DAMAGE_REPORT_TYPE, recordId: reportId, versionId: roundId }],
     exposure: report.value.kind === 'known' ? { kind: 'known', amount: report.value.amountPaise } : { kind: 'unknown' },
     raisedBy: { kind: 'user', id: reporter.userId },

@@ -17,7 +17,14 @@ import {
   type RouteInputOf,
   type TransactionContext,
 } from '../../../../kernel/index.js';
-import { ACCESS, SignedIn, type AccessInterface, type RecordFacts, type SignedInUser } from '../../../access/index.js';
+import {
+  ACCESS,
+  replayRefusal,
+  SignedIn,
+  type AccessInterface,
+  type RecordFacts,
+  type SignedInUser,
+} from '../../../access/index.js';
 import { BUSINESS_DATE_NOT_SET, reportNotFound, type Actor, type Outcome } from '../commands/common.js';
 import type { StockDocumentsInterface } from '../documents.js';
 import { STOCK_DOCUMENTS } from '../tokens.js';
@@ -193,13 +200,11 @@ export class DamageController {
     factsOf: FactsOf,
     work: (context: TransactionContext, actor: Actor) => Promise<Outcome<object>>,
   ) {
+    // A replay answers as any request failing the same checks would: a report not found stays not found (12.3, 12.4).
     const authoriseReplay: ReplayAuthorisation = async (context) => {
       const authorised = await this.authoriseIn(context, user, route, factsOf);
       if (authorised.kind === 'allowed') return { kind: 'allowed' };
-      return {
-        kind: 'refused',
-        refusal: { kind: 'not-authorised', code: authorised.refusal.code, missing: authorised.refusal.missing },
-      };
+      return { kind: 'refused', refusal: replayRefusal(authorised.refusal) };
     };
     const answer = await this.helper.run(
       {

@@ -6,7 +6,16 @@ import type { AuditInterface } from '../../audit/index.js';
 import { markedAttributeAt, skuOn, vocabularyOn } from '../../merchandise/catalogue/index.js';
 import { batchColumns, damageColumns, sizeColumns } from '../db/columns.js';
 import { arrivalInvoice, countEntry } from '../db/schema.js';
-import { currentLines, lineCounting, lineItem, newestEntry, type CountEntryFacts, type Size } from '../domain/lines.js';
+import {
+  contentOf,
+  currentLines,
+  lineCounting,
+  lineItem,
+  newestEntry,
+  type CountEntryFacts,
+  type LineContent,
+  type Size,
+} from '../domain/lines.js';
 import { textKey, trimmed } from '../domain/text.js';
 import { arrivalForChange } from './arrival.js';
 import {
@@ -54,28 +63,46 @@ function lineInForce(
   return { kind: 'found', entry: newest };
 }
 
-/** The entry's audited fields; a damage photo by its stored file. */
+/** The entry's audited fields: its content, a size by its code and a damage photo by its stored file. */
 function fieldsOf(entry: NewEntry) {
+  const { size, damage, batch, ...content } = contentOf(entry);
   return {
     removed: entry.removed,
-    goods: entry.goods,
-    styleCode: entry.styleCode,
-    colour: entry.colour,
-    size: entry.size?.code ?? null,
-    skuId: entry.skuId,
-    description: entry.description,
-    invoiceQuantity: entry.invoiceQuantity,
-    countedQuantity: entry.countedQuantity,
-    extra: entry.extra,
+    ...content,
+    size: size?.code ?? null,
     damage:
-      entry.damage === null
+      damage === null
         ? null
         : {
-            quantity: entry.damage.quantity,
-            description: entry.damage.description,
-            photoStoredFileId: entry.damage.photo?.storedFileId ?? null,
+            quantity: damage.quantity,
+            description: damage.description,
+            photoStoredFileId: damage.photo?.storedFileId ?? null,
           },
-    batch: entry.batch === null ? null : { ...entry.batch },
+    batch: batch === null ? null : { ...batch },
+  };
+}
+
+/** A draft's content as its line records it, its text without spaces at the ends (goods-in 4.3, 4.4). */
+function draftContent(draft: CountLineDraft, size: Size | null): LineContent {
+  return {
+    goods: draft.goods,
+    styleCode: draft.styleCode === null ? null : trimmed(draft.styleCode),
+    colour: draft.colour === null ? null : trimmed(draft.colour),
+    size,
+    skuId: draft.skuId,
+    description: draft.description === null ? null : trimmed(draft.description),
+    invoiceQuantity: draft.invoiceQuantity,
+    countedQuantity: draft.countedQuantity,
+    extra: draft.extra,
+    damage:
+      draft.damage === null
+        ? null
+        : {
+            quantity: draft.damage.quantity,
+            description: trimmed(draft.damage.description),
+            photo: draft.damage.photo,
+          },
+    batch: draft.batch === null ? null : { code: trimmed(draft.batch.code), expiryDate: draft.batch.expiryDate },
   };
 }
 
@@ -194,24 +221,7 @@ export async function saveCountLine(
       lineId: draft.line?.lineId ?? id,
       replacesEntryId: replaced?.id ?? null,
       removed: false,
-      goods: draft.goods,
-      styleCode: draft.styleCode === null ? null : trimmed(draft.styleCode),
-      colour: draft.colour === null ? null : trimmed(draft.colour),
-      size,
-      skuId: draft.skuId,
-      description: draft.description === null ? null : trimmed(draft.description),
-      invoiceQuantity: draft.invoiceQuantity,
-      countedQuantity: draft.countedQuantity,
-      extra: draft.extra,
-      damage:
-        draft.damage === null
-          ? null
-          : {
-              quantity: draft.damage.quantity,
-              description: trimmed(draft.damage.description),
-              photo: draft.damage.photo,
-            },
-      batch: draft.batch === null ? null : { code: trimmed(draft.batch.code), expiryDate: draft.batch.expiryDate },
+      ...draftContent(draft, size),
     },
     replaced,
   );
@@ -238,23 +248,7 @@ export async function removeCountLine(
     dependencies,
     actor,
     row,
-    {
-      id: uuidv7(),
-      lineId,
-      replacesEntryId: entry.id,
-      removed: true,
-      goods: entry.goods,
-      styleCode: entry.styleCode,
-      colour: entry.colour,
-      size: entry.size,
-      skuId: entry.skuId,
-      description: entry.description,
-      invoiceQuantity: entry.invoiceQuantity,
-      countedQuantity: entry.countedQuantity,
-      extra: entry.extra,
-      damage: entry.damage,
-      batch: entry.batch,
-    },
+    { id: uuidv7(), lineId, replacesEntryId: entry.id, removed: true, ...contentOf(entry) },
     entry,
   );
   return { kind: 'success', answer };

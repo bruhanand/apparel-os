@@ -1,4 +1,11 @@
-import { lineFindings, type GrnLine, type HeldLine, type HeldLineState, type NamedProduct } from '@apparel-os/schemas';
+import {
+  HELD_LINE_TYPE,
+  lineFindings,
+  type GrnLine,
+  type HeldLine,
+  type HeldLineState,
+  type NamedProduct,
+} from '@apparel-os/schemas';
 import { and, asc, desc, eq, gte, inArray, isNotNull, lt, lte, ne, or, type SQL } from 'drizzle-orm';
 import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
 import type { LatestRequest } from '../../access/index.js';
@@ -196,24 +203,29 @@ export async function heldLineFacts(context: TransactionContext, heldLineId: str
 }
 
 /**
- * The resolution check of a held line's follow-up (access-and-approvals 12.3; PRD-EXC-002): verified once Booking has
- * decided it, taken in or left held; otherwise not verified, naming the held line still waiting.
+ * The resolution check of a follow-up of extra pieces (access-and-approvals 12.3; PRD-EXC-002: "verify the linked
+ * business outcome before closure"; goods-in 4.9). A held line's is verified once Booking has taken its goods in;
+ * goods left held stay held until their supplier return, which comes with stage 3, so their follow-up stays open, and
+ * so does one Booking has not decided yet, naming the held line. Extra pieces a GRN records as not received, linked to
+ * the GRN, are not at the Site and nothing in the app settles them before supplier returns and claims, so Booking
+ * resolves that one when followed up, with its resolution and evidence, as a shortage's (**Design choice**, RR-572).
  */
-export async function heldLineDecided(
+export async function extraFollowedUp(
   context: TransactionContext,
   subject: ResolutionSubject,
 ): Promise<ResolutionAnswer> {
-  const undecided = [];
+  const open = [];
   for (const link of subject.links) {
+    if (link.recordType !== HELD_LINE_TYPE) continue;
     const [decided] = await context.tx
-      .select({ id: heldLineDecision.id })
+      .select({ outcome: heldLineDecision.outcome })
       .from(heldLineDecision)
       .where(eq(heldLineDecision.heldLineId, link.recordId));
-    if (decided === undefined) {
-      undecided.push({ kind: 'record' as const, recordType: link.recordType, recordId: link.recordId });
+    if (decided?.outcome !== 'taken-in') {
+      open.push({ kind: 'record' as const, recordType: link.recordType, recordId: link.recordId });
     }
   }
-  return undecided.length === 0 ? { kind: 'verified' } : { kind: 'not-verified', missing: undecided };
+  return open.length === 0 ? { kind: 'verified' } : { kind: 'not-verified', missing: open };
 }
 
 /**

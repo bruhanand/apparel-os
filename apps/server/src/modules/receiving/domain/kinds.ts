@@ -64,14 +64,25 @@ export const receivingApprovalRules: readonly ApprovalRule[] = [
 ];
 
 /**
- * The exception types the findings at the count raise to Booking in My work (goods-in 2, 4.5; access-and-approvals
- * 12.1; PRD-EXC-001): a GRN's shortage, of the category shortage, linking to the GRN; and each held line, excess of the
- * category excess, wrong and unidentified goods of the category mismatch, linking to the held line. Their owner is
+ * The exception types the findings at the count raise to Booking in My work (goods-in 2, 4.5, 4.9;
+ * access-and-approvals 12.1; PRD-EXC-001): a GRN's shortage, of the category shortage, linking to the GRN; and extra
+ * pieces, excess of the category excess, wrong and unidentified goods of the category mismatch: each held line,
+ * linking to it, and the extra pieces of each kind a GRN records as not received, linking to the GRN. Their owner is
  * whoever the routing of each type at the Site names (POL-02.16), never set here.
  */
 export const SHORTAGE_EXCEPTION_TYPE = 'receiving.shortage';
-export const HELD_LINE_EXCEPTION_TYPES = {
+export const EXTRA_EXCEPTION_TYPES = {
   excess: 'receiving.excess',
   wrong: 'receiving.wrong-goods',
   unidentified: 'receiving.unidentified-goods',
+} as const;
+
+/**
+ * The reason each hold of a GRN's held part records (stock-ledger 6.1, 13.16; goods-in 4.4): a code, which a screen
+ * names from the message catalogue, never stored text (code-house-rules 12.13).
+ */
+export const HOLD_REASONS = {
+  excess: 'receiving.excess-at-count',
+  wrong: 'receiving.wrong-goods-at-count',
+  unidentified: 'receiving.unidentified-goods-at-count',
 } as const;

@@ -27,18 +27,19 @@ import type {
   Owner,
   StockLedgerInterface,
 } from '../../stock/ledger/index.js';
-import { batchColumns } from '../db/columns.js';
+import { grnLineContentColumns } from '../db/columns.js';
 import { arrivalInvoice, grn, grnLine, heldLine, heldLineVersion } from '../db/schema.js';
 import {
+  EXTRA_EXCEPTION_TYPES,
   GRN_KIND,
   GRN_SCOPE_KEY,
   GRN_SOURCE_TYPE,
-  HELD_LINE_EXCEPTION_TYPES,
+  HOLD_REASONS,
   MISSING_GRN_SERIES,
   RECEIVING_MODULE,
   SHORTAGE_EXCEPTION_TYPE,
 } from '../domain/kinds.js';
-import { currentLines, grnBlockers, lineItem, type CurrentLine } from '../domain/lines.js';
+import { contentOf, currentLines, grnBlockers, lineItem, type CurrentLine } from '../domain/lines.js';
 import { ownerColumns, receiptOwner } from '../domain/owner.js';
 import { grnIssued as grnIssuedEvent } from '../events.js';
 import { receivingMissing, receivingUnavailable, type AvailabilityDependencies } from '../queries/availability.js';
@@ -46,6 +47,7 @@ import { arrivalForChange } from './arrival.js';
 import {
   audited,
   entriesOf,
+  exceptionFactsOf,
   factsOf,
   newestChange,
   recordItem,
@@ -68,10 +70,10 @@ import {
 // under an excess hold, wrong goods in the wrong condition and unidentified goods in the unidentified condition, each in
 // quarantine, damage under a damage hold; pieces not received create no custody. Then each damaged line's report is
 // recorded on its hold by `stock` · documents (goods-in 8.5); each held line asks a Booking approver for its decision
-// through `access` (goods-in 4.6); the follow-ups reach Booking in My work: the GRN's shortage, and each held line
-// (goods-in 2, 4.5). Locks follow stock-ledger 10.3: the authority rows at step 0 (the route's), the Arrival at step 1,
-// the ledger's at steps 2 to 6, the GRN, damage-report and exception-code series at step 8; the version, the state and
-// the gates are read again under them (PRD-INT-003).
+// through `access` (goods-in 4.6); the follow-ups reach Booking in My work: the GRN's shortage, each held line, and the
+// extra pieces of each kind recorded as not received (goods-in 2, 4.5, 4.9). Locks follow stock-ledger 10.3: the
+// authority rows at step 0 (the route's), the Arrival at step 1, the ledger's at steps 2 to 6, the GRN, damage-report
+// and exception-code series at step 8; the version, the state and the gates are read again under them (PRD-INT-003).
 
 export interface IssueDependencies extends AvailabilityDependencies {
   readonly audit: AuditInterface;
@@ -84,13 +86,6 @@ export interface IssueDependencies extends AvailabilityDependencies {
 
 /** The GRN reads only an Agreement's ownership: it holds no value, so an Agreement's margins are never shown to it. */
 const SHOW_MARGINS = false;
-
-/** The reasons the ledger's holds of a GRN record (stock-ledger 6.1; goods-in 4.4). */
-const HOLD_REASONS = {
-  excess: 'Excess at the count, held for Booking’s decision',
-  wrong: 'Wrong goods at the count, quarantined for Booking’s decision',
-  unidentified: 'Unidentified goods at the count, quarantined for Booking’s decision',
-} as const;
 
 /**
  * What the lines' products ask of them on the issue date (PRD-MER-011): a batch and expiry exactly where the
@@ -230,6 +225,14 @@ export async function issueGrn(
   const damaged = issued.filter((each) => each.line.entry.damage !== null);
   const held = issued.filter((each) => each.findings.held !== null);
   const short = issued.filter((each) => each.findings.shortage > 0);
+  // The kinds of extra pieces the count records as not received: no custody, but a follow-up all the same (4.4, 4.5).
+  const notReceived = [
+    ...new Set(
+      issued
+        .filter((each) => each.findings.extra > 0 && each.findings.held === null)
+        .map((each) => extraKindOf(each.line)),
+    ),
+  ];
 
   // Before any lock above step 1: damage reports available at the unit, with their series (goods-in 4.9, 8.5), and
   // the exception-code series of the follow-ups (access-and-approvals 12.1).
@@ -241,7 +244,7 @@ export async function issueGrn(
     damageSeriesId = ready.answer.seriesId;
     stepEight.push(...ready.answer.series);
   }
-  if (held.length > 0 || short.length > 0) {
+  if (held.length > 0 || short.length > 0 || notReceived.length > 0) {
     const codes = await dependencies.exceptions.codeSeriesTarget(context);
     if (codes.kind === 'refused') return refusalOf(codes.refusal);
     stepEight.push(codes.value);
@@ -387,19 +390,8 @@ export async function issueGrn(
       lineNumber,
       countEntryId: line.entry.id,
       ...scopeColumns(row),
-      goods: line.entry.goods,
-      styleCode: line.entry.styleCode,
-      colour: line.entry.colour,
-      sizeCode: line.entry.size?.code ?? null,
-      skuId: line.entry.skuId,
-      description: line.entry.description,
-      invoiceQuantity: line.entry.invoiceQuantity,
-      countedQuantity: line.entry.countedQuantity,
-      extra: line.entry.extra,
-      damagedQuantity: line.entry.damage?.quantity ?? null,
-      damageDescription: line.entry.damage?.description ?? null,
+      ...grnLineContentColumns(contentOf(line.entry)),
       damageReportId: reports.get(id) ?? null,
-      ...batchColumns(line.entry.batch),
       countedByUserIds: [...line.countedBy],
     })),
   );
@@ -410,7 +402,7 @@ export async function issueGrn(
   const facts = factsOf(row);
   const heldLines: {
     readonly id: string;
-    readonly kind: keyof typeof HELD_LINE_EXCEPTION_TYPES;
+    readonly kind: keyof typeof EXTRA_EXCEPTION_TYPES;
     readonly versionId: string;
   }[] = [];
   for (const each of holdItems.filter((item) => item.kind === 'held')) {
@@ -441,21 +433,17 @@ export async function issueGrn(
       actionType: HELD_LINE_DECISION,
       document: { module: RECEIVING_MODULE, recordType: HELD_LINE_TYPE, recordId: heldLineId, versionId },
       value: { kind: 'unknown' },
-      preparers: receiversOf(line.line, actor),
+      preparers: receiversOfCountLine(line.line, actor),
       requestedBy: actor,
       facts,
     });
     heldLines.push({ id: heldLineId, kind: heldPart.kind, versionId });
   }
 
-  // The follow-ups to Booking in My work, as the routing of each type at the Site names them (goods-in 2, 4.5;
-  // POL-02.16): the GRN's shortage, and each held line until it is decided (PRD-EXC-001).
-  const exceptionFacts = {
-    siteId: row.siteId,
-    storeId: row.storeId,
-    businessUnitId: row.businessUnitId,
-    brandId: row.brandId,
-  };
+  // The follow-ups to Booking in My work, as the routing of each type at the Site names them (goods-in 2, 4.5, 4.9;
+  // POL-02.16; PRD-EXC-001): the GRN's shortage; each held line, until its goods are taken in; and the extra pieces of
+  // each kind recorded as not received, which stay on the GRN as a record.
+  const exceptionFacts = exceptionFactsOf(row);
   const raisedBy = { kind: 'user' as const, id: actor.userId };
   if (short.length > 0) {
     const raised = await dependencies.exceptions.raise(context, {
@@ -469,8 +457,21 @@ export async function issueGrn(
     });
     if (raised.kind === 'refused') return refusalOf(raised.refusal);
   }
+  for (const kind of notReceived) {
+    const typeCode = EXTRA_EXCEPTION_TYPES[kind];
+    const raised = await dependencies.exceptions.raise(context, {
+      raisingEvent: `${typeCode}:${grnId}`,
+      typeCode,
+      facts: exceptionFacts,
+      links: [{ module: RECEIVING_MODULE, recordType: GRN_TYPE, recordId: grnId, versionId: null }],
+      exposure: { kind: 'unknown' },
+      raisedBy,
+      roleAssignmentId: actor.roleAssignmentId,
+    });
+    if (raised.kind === 'refused') return refusalOf(raised.refusal);
+  }
   for (const each of heldLines) {
-    const typeCode = HELD_LINE_EXCEPTION_TYPES[each.kind];
+    const typeCode = EXTRA_EXCEPTION_TYPES[each.kind];
     const raised = await dependencies.exceptions.raise(context, {
       raisingEvent: `${typeCode}:${each.id}`,
       typeCode,
@@ -511,7 +512,15 @@ export async function issueGrn(
   return { kind: 'success', answer: { grnId, number: allocated.value.formattedText } };
 }
 
-/** Whoever received a line: everyone who counted it, and whoever issues the GRN (goods-in 4.3, 4.6; PRD-REC-013). */
-function receiversOf(line: CurrentLine, actor: Actor): string[] {
+/**
+ * Whoever received a count line's goods: everyone who counted it, and whoever issues the GRN (goods-in 4.3, 4.6;
+ * PRD-REC-013).
+ */
+function receiversOfCountLine(line: CurrentLine, actor: Actor): string[] {
   return [...new Set([...line.countedBy, actor.userId])];
+}
+
+/** The kind of a line's extra pieces: excess for goods on the invoice, else what the goods are (goods-in 4.4). */
+function extraKindOf(line: CurrentLine): keyof typeof EXTRA_EXCEPTION_TYPES {
+  return line.entry.goods === 'on-invoice' ? 'excess' : line.entry.goods;
 }
