@@ -4,6 +4,7 @@ import {
   DAMAGE_REPORT_TYPE,
   GRN_TYPE,
   HELD_LINE_TYPE,
+  RECOUNT_TYPE,
   routes,
   type CommandRoute,
 } from '@apparel-os/schemas';
@@ -231,6 +232,50 @@ export class ReceivingController {
         return [{ action: 'view', recordType: ARRIVAL_TYPE, facts }];
       },
     );
+  }
+
+  @ApiRoute(routes.proposeRecount)
+  proposeRecount(@RouteInput() input: RouteInputOf<typeof routes.proposeRecount>, @SignedIn() user: SignedInUser) {
+    const { grnId } = input.params;
+    // A recount carries its GRN's facts, so it authorises with them; a GRN the proposer may not see is not found
+    // (goods-in 4.11; code-house-rules 12.3).
+    return this.command(
+      routes.proposeRecount,
+      'receiving.propose-recount',
+      user,
+      input,
+      (context) => this.receiving.grnFacts(context, grnId),
+      recordNotFound(GRN_TYPE, grnId),
+      (context, actor) => this.receiving.proposeRecount(context, actor, grnId, input.body),
+    );
+  }
+
+  @ApiRoute(routes.readRecount)
+  async readRecount(@RouteInput() input: RouteInputOf<typeof routes.readRecount>, @SignedIn() user: SignedInUser) {
+    const { recountId } = input.params;
+    const answer = await this.read(user, 'receiving.read-recount', async (context) => {
+      // A recount the reader's scope does not cover is hidden by row-level security, so it carries no fact: it is not
+      // found, never refused as not authorised, which would say it exists (code-house-rules 12.3; PRD-SEC-005).
+      const facts = await this.receiving.recountFacts(context, recountId);
+      if (facts === undefined) return { refused: recordNotFound(RECOUNT_TYPE, recountId) };
+      const authorised = await this.access.authorise(context, {
+        actorId: user.userId,
+        action: 'view',
+        recordType: ARRIVAL_TYPE,
+        facts,
+      });
+      if (authorised.kind === 'refused') return { refused: authorised.refusal };
+      const recount = await this.receiving.readRecount(
+        context,
+        recountId,
+        async (userIds) => (await this.access.partyNames(context, userIds, [])).users,
+        (versionIds) => this.access.approvalRequestsOf(context, versionIds),
+      );
+      if (recount === undefined) return { refused: recordNotFound(RECOUNT_TYPE, recountId) };
+      return { asOf: context.startedAt.toISOString(), ...recount };
+    });
+    if ('refused' in answer) throw new ApiRefusal({ ...answer.refused, missing: [...answer.refused.missing] });
+    return answer;
   }
 
   /** View on the booking an Arrival is received against, with its facts; not found when the reader may not see it. */

@@ -1,6 +1,6 @@
 import { paise } from '@apparel-os/domain';
 import { freeUnits } from '../availability.js';
-import { refuse, type Goods, type ItemValue, type ValuedItem } from '../request.js';
+import { refuse, type Goods, type ItemValue, type OriginGoods, type ValuedItem } from '../request.js';
 import { negate, oldestFirst, share, sumPaise, takeInOrder } from '../valuation.js';
 import type { ClaimState, OriginState, PieceState } from '../working.js';
 import { SaleItems } from './sale.js';
@@ -195,9 +195,11 @@ export abstract class Corrections extends SaleItems {
     if (reversed === undefined)
       refuse('invalid-item', item.lineId, [{ kind: 'movement', movementId: item.movementId }]);
     if (reversed.kind === 'condition-change') return this.reverseConditionChange(item, reversed);
-    // Goods of Unknown SKU are named by their origin only for a condition change's reversal (13.15).
+    // Goods of Unknown SKU are named by their origin only for a condition change's reversal (13.15) and a receipt
+    // count's (13.18).
     const { goods } = item;
     if (goods.skuId === null) {
+      if (reversed.kind === 'receipt-count') return this.reverseUnknownInflow({ ...item, goods }, reversed);
       refuse('invalid-item', item.lineId, [{ kind: 'receipt-origin', receiptOriginId: goods.receiptOriginId }]);
     }
     const ofSku = { ...item, goods };
@@ -282,6 +284,46 @@ export abstract class Corrections extends SaleItems {
       reversed.returned.set(originId, { quantity: done.quantity + each.quantity, value: done.value });
     }
     return this.costOfUnits(item.lineId, item.at, this.unitsLeaving(movement));
+  }
+
+  /**
+   * A receipt count of goods of a product not yet set up made in error (13.18; goods-in 4.11; PRD-REC-019, S2-F02-T05):
+   * its units, free at the place in good condition, of the origin the count made, which the item names, leave custody,
+   * within what the count moved and was not reversed (`exceeds-source`). No cost is ever established on an origin of
+   * Unknown SKU (13.14), so no value moves and nothing posts; the movement's brand set is the brand they were counted
+   * under (14.1; RR-555).
+   */
+  private reverseUnknownInflow(
+    item: ItemOf<'reversal'> & { readonly goods: OriginGoods },
+    reversed: SaleState,
+  ): ItemValue {
+    const [leg] = reversed.legs;
+    if (leg === undefined) throw new Error('A receipt count without its leg');
+    if (item.goods.receiptOriginId !== leg.originId) {
+      refuse('invalid-item', item.lineId, [{ kind: 'receipt-origin', receiptOriginId: item.goods.receiptOriginId }]);
+    }
+    const done = reversed.returned.get(leg.originId)?.quantity ?? 0;
+    if (item.goods.quantity > leg.quantity - done) {
+      refuse('exceeds-source', item.lineId, [{ kind: 'movement', movementId: reversed.id }]);
+    }
+    const units: Moved[] = this.take(item.lineId, item.at, 'good', item.goods).map((each) => ({
+      balance: each.balance,
+      quantity: each.quantity,
+      pieces: each.pieces,
+    }));
+    const brand = this.goodsBrand(item.goods);
+    const movement = this.newMovement(
+      'reversal',
+      item.lineId,
+      item.at.siteId,
+      item.at.businessUnitId,
+      [null],
+      brand === null ? undefined : [brand],
+    );
+    movement.reversesMovementId = reversed.id;
+    this.moveTo(movement, units, { kind: 'gone' });
+    reversed.returned.set(leg.originId, { quantity: done + item.goods.quantity, value: 0 });
+    return { kind: 'unknown' };
   }
 
   /**

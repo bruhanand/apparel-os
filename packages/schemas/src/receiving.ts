@@ -26,6 +26,16 @@ export const HELD_LINE_TYPE = 'receiving.held_line';
  * in, reject leaves them held. Decided by a Booking approver, never by whoever received them.
  */
 export const HELD_LINE_DECISION = 'receiving.held_line.decision';
+/**
+ * The record type of a recount of a GRN's lines (goods-in 4.7, 4.11; PRD-REC-019; S2-F02-T05): create proposes one,
+ * approve decides it. It is read with its Arrival, under view on `receiving.arrival`, so it declares no view of its own.
+ */
+export const RECOUNT_TYPE = 'receiving.recount';
+/**
+ * The action type of a recount's approval (goods-in 4.7, 4.11; PRD-REC-019): approve corrects custody by the
+ * difference, keeping the original count; reject changes nothing. Never decided by whoever proposed it (POL-02.07).
+ */
+export const RECOUNT_APPROVAL = 'receiving.recount.approval';
 
 const instantSchema = z.iso.datetime({ offset: true });
 
@@ -45,6 +55,10 @@ export const RECEIVING_CAPS = {
   codeText: 60,
   /** The transporter. */
   longText: 200,
+  /** Why a GRN is recounted (goods-in 4.11), as long as why a damage confirmation is reversed (`DAMAGE_CAPS.text`). */
+  reason: 500,
+  /** The lines one recount names (goods-in 4.11). */
+  recountLines: 1_000,
 } as const;
 
 /** Text as the receiver types it: at least one character that is not a space, at most `max` characters. */
@@ -397,8 +411,56 @@ export const grnLineSchema = z.strictObject({
   heldLine: heldLineSchema.nullable(),
   batch: z.strictObject({ code: z.string(), expiryDate: businessDateSchema }).nullable(),
   countedBy: z.array(idSchema),
+  /**
+   * The line as its latest approved recount counts it, with the findings worked out again from that count, or null
+   * while no recount of it is approved (goods-in 4.7, 4.11; PRD-REC-019). The line itself keeps the original count.
+   */
+  recounted: z
+    .strictObject({
+      countedQuantity: piecesSchema,
+      findings: z.strictObject({
+        shortage: piecesSchema,
+        extra: piecesSchema,
+        received: piecesSchema,
+        damaged: piecesSchema,
+      }),
+    })
+    .nullable(),
 });
 export type GrnLine = z.infer<typeof grnLineSchema>;
+
+/**
+ * Where a recount stands (design-language 7): Awaiting approval while its approval waits in My work; Approved once a
+ * different person approves it, custody corrected by the difference; Rejected otherwise, nothing changed.
+ */
+export const recountStateSchema = z.enum(['Awaiting approval', 'Approved', 'Rejected']);
+export type RecountState = z.infer<typeof recountStateSchema>;
+
+/** A recount of a GRN's lines, as a reader of its Arrival sees it (goods-in 4.7, 4.11). */
+export const recountSchema = z.strictObject({
+  id: idSchema,
+  state: recountStateSchema,
+  /** Why the lines were recounted, as the proposer wrote it. */
+  reason: z.string(),
+  proposedBy: idSchema,
+  proposedAt: instantSchema,
+  /** Each line recounted: its count when the recount was proposed and its count as recounted. */
+  lines: z.array(
+    z.strictObject({
+      grnLineId: idSchema,
+      lineNumber: z.int().min(1),
+      countedBefore: piecesSchema,
+      countedAfter: piecesSchema,
+    }),
+  ),
+  /** Its approval's latest request and that request's state, where the reader may see it. */
+  requestId: idSchema.nullable(),
+  requestState: approvalRequestStateSchema.nullable(),
+  decision: z
+    .strictObject({ outcome: z.enum(['approved', 'rejected']), decidedBy: idSchema, decidedAt: instantSchema })
+    .nullable(),
+});
+export type Recount = z.infer<typeof recountSchema>;
 
 /**
  * Why a GRN line went to Booking for review at its GRN's issue rather than linking to a booking line (goods-in 3.7,
@@ -469,8 +531,56 @@ export const grnSchema = z.strictObject({
   lines: z.array(grnLineSchema),
   /** Each line's place against bookings, in the lines' order (goods-in 3.7, 4.10; S2-F02-T04). */
   bookingLinks: z.array(grnLineBookingSchema),
+  /** Its recounts, oldest first (goods-in 4.7, 4.11; S2-F02-T05). */
+  recounts: z.array(recountSchema),
+  /**
+   * The version a recount's proposal names (code-house-rules 12.7): the GRN's newest recount, or the GRN itself while it
+   * has none, so a proposal never rests on counts a later recount changed.
+   */
+  recountVersionToken: idSchema,
 });
 export type Grn = z.infer<typeof grnSchema>;
+
+/**
+ * A recount of a GRN's lines (goods-in 4.7, 4.11; PRD-REC-019): each line named once with the pieces counted again,
+ * and why, naming the GRN's recount version the proposer saw (code-house-rules 12.7). A different person approves it.
+ */
+export const recountDraftSchema = z.strictObject({
+  versionToken: idSchema,
+  reason: text(RECEIVING_CAPS.reason),
+  lines: z
+    .array(z.strictObject({ grnLineId: idSchema, countedQuantity: piecesSchema }))
+    .min(1)
+    .max(RECEIVING_CAPS.recountLines)
+    .refine((lines) => new Set(lines.map((line) => line.grnLineId)).size === lines.length, {
+      message: 'Name each GRN line once',
+    }),
+});
+export type RecountDraft = z.infer<typeof recountDraftSchema>;
+
+export const recountProposedSchema = z.strictObject({ recountId: idSchema, requestId: idSchema });
+export type RecountProposed = z.infer<typeof recountProposedSchema>;
+
+export const recountParamsSchema = z.strictObject({ recountId: idSchema });
+
+/**
+ * A recount with the GRN lines it names and where they are, as its approval's panel in My work shows it (goods-in 4.11,
+ * section 11): read with view on the Arrival.
+ */
+export const recountReadSchema = z.strictObject({
+  asOf: instantSchema,
+  arrivalId: idSchema,
+  grnId: idSchema,
+  grnNumber: z.string(),
+  supplierPartyId: idSchema,
+  brandId: idSchema,
+  businessUnitId: idSchema,
+  recount: recountSchema,
+  /** The GRN lines it names, as counted and as recounted now. */
+  lines: z.array(grnLineSchema),
+  people: z.array(z.strictObject({ userId: idSchema, name: z.string() })),
+});
+export type RecountRead = z.infer<typeof recountReadSchema>;
 
 /**
  * Booking links GRN lines to the lines of one booking later (goods-in 3.7, 4.10; PRD-BKG-008; POL-05.08): a GRN

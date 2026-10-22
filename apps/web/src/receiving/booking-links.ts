@@ -54,7 +54,8 @@ export type Standing =
 
 /**
  * A GRN line's standing (goods-in 3.7, 4.10): its link now, as far as the reader may see bookings, then a proposal of it
- * waiting, then what its GRN's issue did with it; a line that received nothing delivers nothing.
+ * waiting, then what its GRN's issue did with it; a line that received nothing, as recounted where it is, delivers
+ * nothing.
  */
 export function standingOf(line: GrnLine, links: GrnLineBooking | undefined): Standing {
   const link = links?.link ?? null;
@@ -68,7 +69,9 @@ export function standingOf(line: GrnLine, links: GrnLineBooking | undefined): St
     return { kind: 'review', bookingId: atIssue.bookingId, reason: atIssue.reason, lineKey: atIssue.lineKey };
   }
   if (atIssue?.outcome === 'linked') return { kind: 'linked-unseen', bookingId: atIssue.bookingId };
-  return line.findings.received === 0 ? { kind: 'nothing-received' } : { kind: 'unbooked' };
+  // The pieces as the line's latest approved recount counts them, as the later link takes them (goods-in 4.11).
+  const received = line.recounted?.findings.received ?? line.findings.received;
+  return received === 0 ? { kind: 'nothing-received' } : { kind: 'unbooked' };
 }
 
 /**

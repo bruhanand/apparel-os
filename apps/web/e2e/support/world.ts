@@ -260,6 +260,18 @@ export interface SyntheticWorld {
     readonly options: ReceivingOptions;
   };
   /**
+   * The recount journey (S2-F02-T05), in the receiving Organisation, on the held-line world's Site: Warehouse (P-WHS),
+   * who counts short, issues the GRN and proposes its recount; the Owner (P-OWN), who approves it from My work and owns
+   * the shortage; the approve reason in force; and how the screens name the world's records.
+   */
+  readonly recount: {
+    readonly organisationCode: string;
+    readonly receiver: EnrolledUser;
+    readonly approver: EnrolledUser;
+    readonly reasonId: string;
+    readonly options: ReceivingOptions;
+  };
+  /**
    * The receive-against-booking journey (S2-F02-T04), in the receiving Organisation, in a world of its own: Warehouse
    * (P-WHS), who receives against the booking; Booking (P-BKG), who proposes the excess into it; the Owner (P-OWN), who
    * approves that from My work; the approve reason in force; how the screens name the world's records; and the number and

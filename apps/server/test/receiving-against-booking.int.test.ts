@@ -3,6 +3,7 @@ import { uuidv7 } from '@apparel-os/domain';
 import {
   BOOKING_APPROVAL,
   BOOKING_RECEIPT_LINK,
+  RECOUNT_APPROVAL,
   arrivalReadSchema,
   bookingReadSchema,
   myWorkSchema,
@@ -49,6 +50,7 @@ import {
   receivingFixture,
   receivingGateOpen,
   receivingGranted,
+  STOCK_VIEW,
   type ReceivingFixture,
 } from './support/receiving.js';
 
@@ -108,6 +110,10 @@ let plainReceiver: Person;
 let blindBooker: Person;
 let settingsAdmin: Person;
 let settingsApprover: Person;
+/** A receiver who proposes recounts and holds no permission on bookings (goods-in 4.11). */
+let recounter: Person;
+/** Whoever approves recounts, with authority over Unknown cost (goods-in 4.11, section 11). */
+let recountApprover: Person;
 
 interface Call {
   readonly status: number;
@@ -461,6 +467,17 @@ beforeAll(async () => {
   ]);
   receiver = await enrolled('RAB-RECEIVER', [...RECEIVER_AUTHORITY, { recordType: BOOKING_TYPE, action: 'view' }]);
   plainReceiver = await enrolled('RAB-PLAIN-RECEIVER', RECEIVER_AUTHORITY);
+  recounter = await enrolled('RAB-RECOUNTER', [
+    ...RECEIVER_AUTHORITY,
+    { recordType: 'receiving.recount', action: 'create' },
+  ]);
+  recountApprover = await enrolled('RAB-RECOUNT-APPROVER', [
+    ARRIVAL_VIEW,
+    { recordType: 'receiving.recount', action: 'approve' },
+    { recordType: 'access.approval_reason', action: 'view' },
+    PANEL,
+    ...STOCK_VIEW,
+  ]);
   blindBooker = await enrolled('RAB-BLIND-BOOKER', [
     { recordType: BOOKING_TYPE, action: 'view' },
     { recordType: BOOKING_TYPE, action: 'edit' },
@@ -489,6 +506,18 @@ beforeAll(async () => {
     }),
   );
   ok(await decide(settingsApprover, limit.requestId as string, limit.limitId as string));
+  // A SYNTHETIC limit over Unknown cost for whoever approves recounts (V-02; goods-in 4.11).
+  const recountLimit = ok(
+    await post(settingsAdmin, '/api/access/approval-limits', {
+      actionType: RECOUNT_APPROVAL,
+      holder: { kind: 'individual', userId: recountApprover.user.id, roleAssignmentId: recountApprover.assignmentId },
+      limit: { kind: 'none' },
+      coversUnknown: true,
+      origin: 'synthetic',
+      validFrom: setup.today(),
+    }),
+  );
+  ok(await decide(settingsApprover, recountLimit.requestId as string, recountLimit.limitId as string));
   // A SYNTHETIC budget for the brand and season: prepared, checked and approved by three people (goods-in 3.3).
   const prepared = ok(
     await post(booker, '/api/booking/open-to-buy-budgets', {
@@ -677,6 +706,48 @@ describe('GRN lines linked or sent to Booking for review (goods-in 3.7, 4.10; 12
     const absent = await post(booker, `/api/receiving/grns/${grnId}/booking-links`, { ...body, bookingId: uuidv7() });
     expect(absent.status).toBe(404);
     expect(errorOf(absent)?.code).toBe('booking.record-not-found');
+  });
+});
+
+describe('a recount and the booking a GRN line delivers to (goods-in 3.6, 4.11; S2-F02-T05)', () => {
+  /** Proposes a recount of the GRN line at the pieces given, as the recounter, naming the GRN's recount version. */
+  async function recount(arrivalId: string, grnLineId: string, countedQuantity: number): Promise<Call> {
+    const grn = (await readArrival(recounter, arrivalId)).grn;
+    return post(recounter, `/api/receiving/grns/${grn?.id ?? ''}/recounts`, {
+      versionToken: grn?.recountVersionToken,
+      reason: 'SYNTHETIC recounted at the shelf',
+      lines: [{ grnLineId, countedQuantity }],
+    });
+  }
+
+  it('PRD-BKG-006 PRD-REC-019 a line delivering to a booking is not recounted, whatever the recounter sees; a line received without one is, and links later at its recounted pieces', async () => {
+    const target = await approvedBooking([line(STYLE, 10, { size: size('L').code })]);
+    const against = await received(target.id, [{ styleCode: STYLE, size: 'L', quantity: 4 }]);
+    const linkedLine = against.arrival.grn?.lines[0]?.id ?? '';
+    expect(against.arrival.grn?.bookingLinks[0]?.atIssue).toMatchObject({ outcome: 'linked' });
+    // The recounter may not see bookings, yet the link is known: a narrowly authorised read (DEC-117).
+    const refused = await recount(against.arrival.id, linkedLine, 3);
+    expect(refused.status).toBe(422);
+    expect(errorOf(refused)).toMatchObject({
+      code: 'receiving.recount-linked',
+      missing: [{ kind: 'record', recordType: 'receiving.grn_line', recordId: linkedLine }],
+    });
+    // Received without a booking, recounted, then linked: the booking's delivered pieces follow the recount.
+    const unbooked = await received(undefined, [{ styleCode: STYLE, size: 'L', quantity: 4 }]);
+    const grnLineId = unbooked.arrival.grn?.lines[0]?.id ?? '';
+    const proposed = ok(await recount(unbooked.arrival.id, grnLineId, 2));
+    // The recount finds a shortage, which reaches Booking as the GRN's own would (goods-in 4.9, 4.11; POL-02.16).
+    await route('receiving.shortage', fixture.siteId);
+    ok(await decide(recountApprover, proposed.requestId as string, proposed.recountId as string));
+    ok(
+      await post(booker, `/api/receiving/grns/${unbooked.grnId}/booking-links`, {
+        bookingId: target.id,
+        lines: [{ grnLineId, lineKey: keyOf(target, 'L') }],
+      }),
+    );
+    expect((await readBooking(booker, target.id)).status?.lines[0]).toMatchObject({ delivered: 6, outstanding: 4 });
+    // Linked now, it is not recounted again.
+    expect(errorOf(await recount(unbooked.arrival.id, grnLineId, 3))?.code).toBe('receiving.recount-linked');
   });
 });
 

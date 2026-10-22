@@ -6,6 +6,7 @@ import { grnLine } from '../db/schema.js';
 import { grnRow } from '../queries/grns.js';
 import { bookingOfArrival } from './booking-of-arrival.js';
 import { namedProductsOf } from '../queries/held-lines.js';
+import { recountedCounts } from '../queries/recounts.js';
 import { lockArrival, recordItem, recordNotFound, refusalOf, refused, type Actor, type Outcome } from './common.js';
 
 // Booking's later link of GRN lines to the lines of one booking (goods-in 3.7, 3.10, 4.10, 10.2, 10.3; PRD-BKG-008;
@@ -29,7 +30,8 @@ const GRN_LINE_TYPE = 'receiving.grn_line';
  * and of the supplier of its version in force (`receiving.booking-not-of-arrival`), at any Site (3.7); each line named
  * a line of the GRN that received pieces (`receiving.nothing-received`), its goods those it counted, or, for
  * unidentified goods, the product Booking named for them (`receiving.product-not-named`; 4.6), and its pieces those
- * received in any condition, never those recorded as not received (3.6). `booking` does the rest.
+ * received in any condition, never those recorded as not received (3.6), as the line's latest approved recount counts
+ * them (4.11). `booking` does the rest.
  */
 export async function linkToBooking(
   context: TransactionContext,
@@ -51,11 +53,17 @@ export async function linkToBooking(
     .from(grnLine)
     .where(and(eq(grnLine.grnId, grnId), inArray(grnLine.id, named)));
   const products = await namedProductsOf(context, named);
+  // The pieces as the line's latest approved recount counts them: delivered quantities follow the count (goods-in
+  // 4.11; S2-F02-T05).
+  const recounted = await recountedCounts(context, named);
   const receipts: ReceiptsLater['receipts'][number][] = [];
   for (const line of draft.lines) {
     const found = rows.find((each) => each.id === line.grnLineId);
     if (found === undefined) return refusalOf(recordNotFound(GRN_LINE_TYPE, line.grnLineId));
-    const received = lineFindings(found).received;
+    const received = lineFindings({
+      ...found,
+      countedQuantity: recounted.get(found.id) ?? found.countedQuantity,
+    }).received;
     if (received === 0) return refused('refused', 'receiving.nothing-received', [recordItem(GRN_LINE_TYPE, found.id)]);
     let goods: ReceiptsLater['receipts'][number]['goods'];
     if (found.goods === 'unidentified' || found.styleCode === null) {

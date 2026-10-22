@@ -6,6 +6,7 @@ import {
   HELD_LINE_DECISION,
   inboxSchema,
   PT_APPROVAL,
+  RECOUNT_APPROVAL,
   ptPreviewSchema,
   type AssignmentScope,
   type FieldClass,
@@ -93,6 +94,8 @@ interface Person {
 let receiver: Person;
 /** A Booking approver (P-BKG), who decides held lines. */
 let bookingApprover: Person;
+/** Whoever approves recounts (goods-in 4.11, section 11), a different person from the receiver who proposes them. */
+let recountApprover: Person;
 /** Whoever is assigned to make PTs: uploads, submits and withdraws, and sees costs. */
 let ptMaker: Person;
 /** A reader of PTs who is not granted cost or margin. */
@@ -381,14 +384,14 @@ function decide(person: Person, requestId: string, versionId: string, outcome: '
 }
 
 /** A SYNTHETIC limit covering Unknown value only, prepared and approved by two different people (9.2; V-02). */
-async function unknownOnlyLimit(person: Person): Promise<void> {
+async function unknownOnlyLimit(person: Person, actionType: string = HELD_LINE_DECISION): Promise<void> {
   const access = api.app.get<AccessInterface>(ACCESS);
   const prepared = await asUserIn(api.app, organisation, settingsAdmin.user.id, (context) =>
     access.prepareApprovalLimit(
       context,
       { userId: settingsAdmin.user.id, roleAssignmentId: settingsAdmin.assignmentId },
       {
-        actionType: HELD_LINE_DECISION,
+        actionType,
         holder: { kind: 'individual', userId: person.user.id, roleAssignmentId: person.assignmentId },
         limit: { kind: 'none' },
         coversUnknown: true,
@@ -569,8 +572,19 @@ beforeAll(async () => {
     ),
   );
 
-  // Warehouse (P-WHS), who counts, reports damage found at the count and issues the GRN (goods-in 4.9, 8.5).
-  receiver = await enrolled('PTU-RECEIVER', RECEIVER_REPORTER_AUTHORITY);
+  // Warehouse (P-WHS), who counts, reports damage found at the count, issues the GRN and proposes a recount (goods-in 4.7,
+  // 4.9, 8.5).
+  receiver = await enrolled('PTU-RECEIVER', [
+    ...RECEIVER_REPORTER_AUTHORITY,
+    { recordType: 'receiving.recount', action: 'create' },
+  ]);
+  recountApprover = await enrolled('PTU-RECOUNT-APPROVER', [
+    { recordType: 'receiving.arrival', action: 'view' },
+    { recordType: 'receiving.recount', action: 'approve' },
+    { recordType: 'access.approval_request', action: 'view' },
+    { recordType: 'access.approval_reason', action: 'view' },
+    ...STOCK_VIEW,
+  ]);
   bookingApprover = await enrolled('PTU-BOOKING-APPROVER', BOOKING_APPROVER_AUTHORITY);
   ptMaker = await enrolled('PTU-MAKER', PT_MAKER_AUTHORITY, { fieldClasses: ['cost', 'margin'] });
   ptReader = await enrolled('PTU-READER', [
@@ -604,6 +618,7 @@ beforeAll(async () => {
   ]);
   await unknownOnlyLimit(bookingApprover);
   await ptApprovalLimit(ptApprover);
+  await unknownOnlyLimit(recountApprover, RECOUNT_APPROVAL);
   // A GRN received without a booking goes to Booking for review (goods-in 4.10; RR-580); damage found at the count goes
   // to Operations, here the Booking approver (goods-in 8.5): every follow-up routed by a SYNTHETIC rule (V-03).
   for (const type of [
@@ -857,6 +872,65 @@ describe('the Receive Goods inbox once a PT file is submitted (goods-in 4.1, 4.8
     );
     expect(withdrawn.status, JSON.stringify(withdrawn.body)).toBe(200);
     expect(await waitingFor()).toBe('pt');
+  });
+});
+
+describe('a recount and the GRN’s PT (goods-in 4.7, 4.11, 5.1; PRD-REC-019, DEC-137; S2-F02-T05)', () => {
+  /** Proposes a recount of the GRN's first line at the pieces given, as the receiver. */
+  async function recount(arrivalId: string, grnId: string, countedQuantity: number): Promise<Call> {
+    const read = arrivalReadSchema.parse((await get(receiver, `/api/receiving/arrivals/${arrivalId}`)).body).arrival;
+    return post(receiver, `/api/receiving/grns/${grnId}/recounts`, {
+      versionToken: read.grn?.recountVersionToken,
+      reason: 'SYNTHETIC one carton counted twice',
+      lines: [{ grnLineId: read.grn?.lines[0]?.id, countedQuantity }],
+    });
+  }
+
+  it('PRD-REC-019 a recount is refused while the GRN’s PT is attached, and proposed once its draft is withdrawn', async () => {
+    const style = syntheticCode('PTU-RC-MARK');
+    const { arrivalId, grnId } = await issuedGrn([{ style, sizeAt: 0, counted: 2 }]);
+    const { batchId } = await uploaded(grnId, [ptRow(style, 0), ptRow(style, 0)]);
+    expect((await submitted(batchId)).status).toBe(200);
+    const attached = await grnPt(grnId);
+    const refused = await recount(arrivalId, grnId, 1);
+    expect(refused.status).toBe(422);
+    expect(errorOf(refused)).toMatchObject({
+      code: 'receiving.pt-attached',
+      missing: [
+        { kind: 'record', recordType: 'receiving.grn', recordId: grnId },
+        { kind: 'record', recordType: 'merchandise.pt_revision', recordId: attached.pt?.revisions[0]?.revisionId },
+      ],
+    });
+    // The PT is reversed or withdrawn first (goods-in 4.7): once the draft is withdrawn, the GRN is recounted.
+    const withdrawn = await post(
+      ptMaker,
+      `/api/merchandise/pt/revisions/${attached.pt?.revisions[0]?.revisionId ?? ''}/withdraw`,
+      { versionToken: attached.pt?.versionToken },
+    );
+    expect(withdrawn.status, JSON.stringify(withdrawn.body)).toBe(200);
+    const proposed = await recount(arrivalId, grnId, 1);
+    expect(proposed.status, JSON.stringify(proposed.body)).toBe(200);
+  });
+
+  it('DEC-137 the PT upload waits for a recount of its GRN, then covers its pieces as recounted', async () => {
+    const style = syntheticCode('PTU-RC-WAIT');
+    const { arrivalId, grnId } = await issuedGrn([{ style, sizeAt: 0, invoice: 3, counted: 2 }]);
+    const proposed = await recount(arrivalId, grnId, 3);
+    expect(proposed.status, JSON.stringify(proposed.body)).toBe(200);
+    const { recountId, requestId } = proposed.body as { recountId: string; requestId: string };
+    expect((await grnPt(grnId)).upload).toMatchObject({
+      kind: 'blocked',
+      code: 'merchandise.pt-held-lines-open',
+      missing: [{ kind: 'record', recordType: 'receiving.recount', recordId: recountId }],
+    });
+    const approved = await decide(recountApprover, requestId, recountId);
+    expect(approved.status, JSON.stringify(approved.body)).toBe(200);
+    // The GRN's good pieces are those recounted: 3, on the GRN's receipt origin and the recount's (goods-in 4.11).
+    const short = await uploaded(grnId, [ptRow(style, 0), ptRow(style, 0)]);
+    expect(short.validated).not.toBe('Validated');
+    const { batchId, validated } = await uploaded(grnId, [ptRow(style, 0, { QTY: 3, NAG: 3 })]);
+    expect(validated).toBe('Validated');
+    expect((await submitted(batchId)).status).toBe(200);
   });
 });
 

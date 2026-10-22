@@ -1197,6 +1197,21 @@ export const bookingCodes = declareCodes({
  * - `receiving.size-required`: a line of goods on the invoice, or of wrong goods named by their product, has no size
  *   recorded; `missing` names each such line, which is saved again with its size before the GRN is issued (goods-in
  *   4.3, 5.4; the product owner, 22 Oct 2026, RR-586).
+ * - `receiving.pt-attached`: the GRN has its PT attached; a recount waits until it is withdrawn, rejected or reversed
+ *   (goods-in 4.7, 5.8); `missing` names the GRN and the PT revision.
+ *
+ * A recount (goods-in 4.7, 4.11; PRD-REC-019; S2-F02-T05):
+ *
+ * - `receiving.recount-pending`: another recount of the GRN waits for its decision; `missing` names it.
+ * - `receiving.recount-decided`: the recount is decided already; a decision is made once.
+ * - `receiving.recount-unchanged`: a line is recounted at the pieces it counts now.
+ * - `receiving.recount-held-line`: the line's extra pieces are held as a held line, whose hold only the PT route or its
+ *   decision ends; `missing` names the held line.
+ * - `receiving.recount-not-on-invoice`: the line counts wrong or unidentified goods, which a recount does not change.
+ * - `receiving.recount-adds-extra`: the recount would count pieces beyond the invoice on a line whose count recorded
+ *   none, so what happens to them is not recorded.
+ * - `receiving.recount-below-damage`: the recount would count fewer pieces than the count found damaged.
+ * - `receiving.recount-linked`: the line delivers its pieces to a booking, linked or proposed (goods-in 3.7, 4.10).
  */
 export const receivingCodes = declareCodes({
   'receiving.record-not-found': 'not-found',
@@ -1227,6 +1242,15 @@ export const receivingCodes = declareCodes({
   // The GRN's "PT attached" mark (goods-in 5.8; S2-F04-T02).
   'receiving.pt-attached': 'refused',
   'receiving.pt-not-attached': 'refused',
+  // A recount (goods-in 4.7, 4.11; S2-F02-T05).
+  'receiving.recount-pending': 'refused',
+  'receiving.recount-decided': 'refused',
+  'receiving.recount-unchanged': 'refused',
+  'receiving.recount-held-line': 'refused',
+  'receiving.recount-not-on-invoice': 'refused',
+  'receiving.recount-adds-extra': 'refused',
+  'receiving.recount-below-damage': 'refused',
+  'receiving.recount-linked': 'refused',
 });
 
 /**
@@ -1234,8 +1258,8 @@ export const receivingCodes = declareCodes({
  * the handler's reasons that `files-imports.subject-refused` names, and, at its submit, by those that
  * `files-imports.document-refused` names (imports-and-opening-data 13.1):
  *
- * - `merchandise.pt-held-lines-open`: a held line or a damage report on the GRN's lines waits for its decision
- *   (goods-in 5.1, 4.6; DEC-137); `missing` names each.
+ * - `merchandise.pt-held-lines-open`: a held line or a damage report on the GRN's lines, or a recount of the GRN, waits
+ *   for its decision (goods-in 5.1, 4.6, 4.11; DEC-137); `missing` names each.
  * - `merchandise.pt-already-attached`: the GRN has a PT revision waiting for approval, or approved and not reversed
  *   (goods-in 5.1; one PT per GRN); `missing` names it.
  * - `merchandise.pt-file-refused`: at submit, the file no longer passes the checks of 5.3 and 5.4 against the GRN as it
