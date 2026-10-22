@@ -6,7 +6,6 @@ export type { IssueNeeds, ReceivingDependencies, ReceivingInterface } from './re
 export { GRN_KIND, GRN_SCOPE_KEY, receivingStockCaller } from './domain/kinds.js';
 export { HELD_LINE_DECISIONS, RECEIVE_GOODS, RECEIVE_GOODS_STATUTORY, RECEIVING_CAPABILITY } from './domain/gate.js';
 export { receivingApprovals } from './commands/approvals.js';
-export type { EffectServices as ReceivingEffectServices } from './commands/approvals.js';
 export { receivingExceptionTypes } from './exception-types.js';
 export { BOOKING_REVIEW_EXCEPTION_TYPE } from './domain/kinds.js';
 export type { GoodPiecesPart, PtBasis, ReceiptProblem, ReceiptProblemsQuery } from './queries/held-lines.js';

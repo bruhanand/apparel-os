@@ -730,7 +730,11 @@ function RecountFacts({ view }: { view: ApprovalRequestView }) {
               <tr key={each.grnLineId} className="h-10 border-t border-border">
                 <td className="px-3 tabular-nums">{formatQuantity(each.lineNumber)}</td>
                 <td className="px-3">
-                  {line === undefined ? '' : identity([line.styleCode ?? line.description, line.colour, line.size])}
+                  {line === undefined ? (
+                    <span className="sr-only">{t('receive.unknown')}</span>
+                  ) : (
+                    identity([line.styleCode ?? line.description, line.colour, line.size])
+                  )}
                 </td>
                 <td className="px-3 tabular-nums">{formatQuantity(each.countedBefore)}</td>
                 <td className="px-3 tabular-nums">{formatQuantity(each.countedAfter)}</td>
