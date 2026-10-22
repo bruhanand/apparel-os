@@ -239,7 +239,7 @@ Names follow the PRD and the KDPS policies. The state names for Site, Store and 
 | # | State | Family | Glyph | Where it appears |
 |---|---|---|---|---|
 | 1 | Draft | Neutral | ○ | Booking, PT, adjustment, offer, count, transfer request, supplier return |
-| 2 | Cancelled | Neutral | ○ | Booking, transfer before dispatch, held cart, refund request |
+| 2 | Cancelled | Neutral | ○ | Transfer before dispatch, held cart, refund request |
 | 3 | Cancelled before departure | Neutral | ○ | Supplier return |
 | 4 | Closed | Neutral | ○ | Booking, count, exception; Site, Store and business unit; number series |
 | 5 | Closed—partially returned | Neutral | ○ | Supplier return |
@@ -309,6 +309,7 @@ Rules:
 - A record shows **one** status badge: its lifecycle state. Line-level conditions (short, excess, damaged, wrong, unidentified) appear as chips in the line’s Disposition cell, with counts beside the badge, because conditions can coexist (`PRD-REC-006`). Short and excess are never a record's status. A delivery record never takes Damaged, Wrong or Unidentified as its badge.
 - A written-off piece that is still present keeps its Quarantine or Damaged state (`PRD-DMG-011`, `POL-17.05`). A write-off record itself uses Draft, Awaiting approval, Approved or Rejected.
 - A completed bill is never Cancelled or Reversed. A return is its own record, and a tax-invoice cancellation is a separate tax-document state, names **OPEN** (`PRD-TAX-004`, see Proposed states).
+- A booking is never Cancelled: `POL-05.01` names its states Draft, Approved, Issued and Confirmed, so a booking whose every balance is cancelled keeps its state, its lines showing what is cancelled (product owner, 22 Oct 2026; RR-578; goods-in 3.10).
 - Unknown is for a value. Outcome unknown is for a result from an outside system: payment provider, GST, Tally or bank.
 - New states must join an existing family. Adding a family needs a design review.
 

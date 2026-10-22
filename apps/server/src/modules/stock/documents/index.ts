@@ -8,7 +8,8 @@ export type {
   StockDocumentsDependencies,
   StockDocumentsInterface,
 } from './documents.js';
-export type { CountDamagePlace, CountDamageReady, CountDamageWritten } from './commands/count-damage.js';
+export type { CountDamageReady } from './commands/count-damage-ready.js';
+export type { CountDamagePlace, CountDamageWritten } from './commands/record-count-damage.js';
 export type { GrnLineDamage } from './queries/grn-lines.js';
 export {
   DAMAGE_CAPABILITY,

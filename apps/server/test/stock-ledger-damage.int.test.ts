@@ -76,20 +76,22 @@ const ofOrigin = (receiptOriginId: string, quantity: number): NamedGoods => ({
   quantity,
 });
 
-const damageHold = (at: At, goods: NamedGoods): LedgerItem => ({
+type HeldCondition = 'good' | 'wrong' | 'unidentified';
+
+const damageHold = (at: At, goods: NamedGoods, condition: HeldCondition = 'good'): LedgerItem => ({
   kind: 'place-hold',
   lineId: line(),
   holdKind: 'damage',
   reason: 'SYNTHETIC damage seen at the count',
   at,
-  condition: 'good',
+  condition,
   goods: [goods],
 });
 
 /** A confirmation's items: the damage hold ends by its own event; the goods become damaged and are quarantined (6.1). */
-const confirmation = (at: At, holdId: string, goods: NamedGoods): LedgerItem[] => [
+const confirmation = (at: At, holdId: string, goods: NamedGoods, from: HeldCondition = 'good'): LedgerItem[] => [
   { kind: 'release-hold', lineId: line(), holdId, event: 'damage-confirmed' },
-  { kind: 'condition-change', lineId: line(), at, from: 'good', to: 'damaged', goods },
+  { kind: 'condition-change', lineId: line(), at, from, to: 'damaged', goods },
   {
     kind: 'place-hold',
     lineId: line(),
@@ -382,5 +384,151 @@ describe('the value of a damage hold and a condition change for their approval (
     ).toEqual([{ kind: 'unknown' }]);
     const unknownOrigin = await countedUnknown(at, 2);
     expect(await valuesOf([damageHold(at, ofOrigin(unknownOrigin, 1))])).toEqual([{ kind: 'unknown' }]);
+  });
+});
+
+/** A hold of the count's findings on goods counted in a condition (13.16): an excess hold or a quarantine. */
+const findingHold = (
+  at: At,
+  holdKind: 'excess' | 'quarantine',
+  condition: HeldCondition,
+  goods: NamedGoods,
+): LedgerItem => ({
+  kind: 'place-hold',
+  lineId: line(),
+  holdKind,
+  reason: `SYNTHETIC ${holdKind} at the count`,
+  at,
+  condition,
+  goods: [goods],
+});
+
+/** The units a hold still claims, by condition, all its claims together. */
+async function claimedBy(holdId: string): Promise<Record<string, number>> {
+  const claims = (await holdState(holdId)).claims;
+  const totals: Record<string, number> = {};
+  for (const claim of claims) totals[claim.condition] = (totals[claim.condition] ?? 0) + claim.quantity;
+  return totals;
+}
+
+describe('damage on held goods: the condition change carries their holds (stock-ledger 13.17; RR-571)', () => {
+  it('PRD-REC-006 RR-571 excess goods become damaged, their excess hold carried on the units it holds, apart from the quarantine', async () => {
+    const at = await freshUnit();
+    const originId = await countedUnknown(at, 6);
+    const excess = written(await world.post(world.poster, [findingHold(at, 'excess', 'good', ofOrigin(originId, 2))]))
+      .holdIds[0];
+    const damage = written(await world.post(world.poster, [damageHold(at, ofOrigin(originId, 5))])).holdIds[0];
+    if (excess === undefined || damage === undefined) throw new Error('no hold');
+    // A damage hold is never carried: its goods change condition only once it ends by its own event (6.2).
+    const held = await world.post(world.poster, [
+      { kind: 'condition-change', lineId: line(), at, from: 'good', to: 'damaged', goods: ofOrigin(originId, 5) },
+    ]);
+    expect(held.kind === 'refused' ? held.refusal.code : 'written').toBe('stock.held');
+    const confirmed = written(await world.post(world.poster, confirmation(at, damage, ofOrigin(originId, 5))));
+    // Four free units first, then one the excess hold holds, its claim carried with it (6.2; POL-17.01).
+    expect(await custodyOf(at, originId)).toEqual({ good: 1, damaged: 5 });
+    expect(await claimedBy(excess)).toEqual({ good: 1, damaged: 1 });
+    const quarantine = confirmed.holdIds.find((id) => id !== damage) ?? '';
+    expect(await claimedBy(quarantine)).toEqual({ damaged: 5 });
+    expect(await rebuild()).toEqual([]);
+  });
+
+  it('PRD-REC-006 RR-571 wrong goods become damaged, their quarantine carried; they never return to good but by the identity route', async () => {
+    const at = await freshUnit();
+    const sku = world.sku(false);
+    const counted = written(
+      await world.post(world.poster, [
+        { kind: 'receipt-count', lineId: line(), skuId: sku.skuId, quantity: 3, to: at, condition: 'wrong', owner },
+      ]),
+    );
+    const originId = counted.receiptOriginIds[0] ?? '';
+    const goods = (quantity: number): NamedGoods => ({ skuId: sku.skuId, receiptOriginId: originId, quantity });
+    const wrong = written(await world.post(world.poster, [findingHold(at, 'quarantine', 'wrong', goods(3))]))
+      .holdIds[0];
+    const damage = written(await world.post(world.poster, [damageHold(at, goods(2), 'wrong')])).holdIds[0];
+    if (wrong === undefined || damage === undefined) throw new Error('no hold');
+    const confirmed = written(await world.post(world.poster, confirmation(at, damage, goods(2), 'wrong')));
+    expect(await custodyOf(at, originId)).toEqual({ wrong: 1, damaged: 2 });
+    expect(await claimedBy(wrong)).toEqual({ wrong: 1, damaged: 2 });
+    expect(await claimedBy(confirmed.holdIds.find((id) => id !== damage) ?? '')).toEqual({ damaged: 2 });
+    const toGood = await world.post(world.poster, [
+      { kind: 'condition-change', lineId: line(), at, from: 'wrong', to: 'good', goods: goods(1) },
+    ]);
+    expect(toGood.kind === 'refused' ? toGood.refusal.code : 'written').toBe('stock.condition-route');
+    expect(await rebuild()).toEqual([]);
+  });
+
+  it('PRD-REC-006 RR-571 unidentified goods become damaged, their quarantine carried, their identity still Unknown', async () => {
+    const at = await freshUnit();
+    const originId = uuidv7();
+    written(
+      await world.post(world.poster, [
+        {
+          kind: 'receipt-count',
+          lineId: line(),
+          receiptOriginId: originId,
+          skuId: null,
+          described: null,
+          brandId: BRAND,
+          quantity: 4,
+          to: at,
+          condition: 'unidentified',
+          owner,
+        },
+      ]),
+    );
+    const unidentified = written(
+      await world.post(world.poster, [findingHold(at, 'quarantine', 'unidentified', ofOrigin(originId, 4))]),
+    ).holdIds[0];
+    const damage = written(await world.post(world.poster, [damageHold(at, ofOrigin(originId, 1), 'unidentified')]))
+      .holdIds[0];
+    if (unidentified === undefined || damage === undefined) throw new Error('no hold');
+    written(await world.post(world.poster, confirmation(at, damage, ofOrigin(originId, 1), 'unidentified')));
+    expect(await custodyOf(at, originId)).toEqual({ unidentified: 3, damaged: 1 });
+    expect(await claimedBy(unidentified)).toEqual({ unidentified: 3, damaged: 1 });
+    expect(await rebuild()).toEqual([]);
+  });
+
+  it('PRD-STK-017 RR-571 a confirmation’s reversal carries back exactly the holds its change carried, and restores the damage hold', async () => {
+    const at = await freshUnit();
+    const originId = await countedUnknown(at, 4);
+    const excess = written(await world.post(world.poster, [findingHold(at, 'excess', 'good', ofOrigin(originId, 2))]))
+      .holdIds[0];
+    const damage = written(await world.post(world.poster, [damageHold(at, ofOrigin(originId, 3))])).holdIds[0];
+    if (excess === undefined || damage === undefined) throw new Error('no hold');
+    const confirmed = written(await world.post(world.poster, confirmation(at, damage, ofOrigin(originId, 3))));
+    expect(await claimedBy(excess)).toEqual({ good: 1, damaged: 1 });
+    const changeId = confirmed.movementIds[0] ?? '';
+    const quarantine = confirmed.holdIds.find((id) => id !== damage) ?? '';
+    // An ordinary hold placed on the damaged units after the change is not the change's to carry back (6.2).
+    const ordinary = written(
+      await world.post(world.poster, [
+        {
+          kind: 'place-hold',
+          lineId: line(),
+          holdKind: 'ordinary',
+          reason: 'SYNTHETIC question',
+          at,
+          condition: 'damaged',
+          goods: [ofOrigin(originId, 1)],
+        },
+      ]),
+    ).holdIds[0];
+    const restore: LedgerItem[] = [
+      { kind: 'release-hold', lineId: line(), holdId: quarantine, event: 'approved-decision' },
+      { kind: 'reversal', lineId: line(), movementId: changeId, at, goods: ofOrigin(originId, 3) },
+      damageHold(at, ofOrigin(originId, 3)),
+    ];
+    const stillHeld = await world.post(world.poster, restore, await approvedDocument());
+    expect(stillHeld.kind === 'refused' ? stillHeld.refusal.code : 'written').toBe('stock.held');
+    written(
+      await world.post(world.poster, [
+        { kind: 'release-hold', lineId: line(), holdId: ordinary ?? '', event: 'released' },
+      ]),
+    );
+    written(await world.post(world.poster, restore, await approvedDocument()));
+    expect(await custodyOf(at, originId)).toEqual({ good: 4 });
+    expect(await claimedBy(excess)).toEqual({ good: 2 });
+    expect(await rebuild()).toEqual([]);
   });
 });

@@ -1095,6 +1095,10 @@ export const deviceCodes = declareCodes({
  * - `booking.version-not-in-force`: the cancellation or extension amends a version a change has since replaced.
  * - `booking.not-an-extension`: a date given is not later than the one it replaces, or nothing is extended.
  * - `booking.receipt-already-linked`: the GRN line is linked to a booking line already (goods-in 3.7; PRD-BKG-008).
+ * - `booking.amendment-pending`: a cancellation, or an extension, of the booking waits for its decision already;
+ *   `missing` names it, to decide first, so no proposal is dropped unseen (goods-in 3.10).
+ * - `booking.goods-not-of-line`: a later receipt link names a booking line the GRN line's goods do not match: its
+ *   style code, and its colour and size where the booking line gives them (goods-in 3.7, 3.10; PRD-BKG-008).
  */
 export const bookingCodes = declareCodes({
   'booking.record-not-found': 'not-found',
@@ -1130,6 +1134,8 @@ export const bookingCodes = declareCodes({
   'booking.version-not-in-force': 'refused',
   'booking.not-an-extension': 'refused',
   'booking.receipt-already-linked': 'refused',
+  'booking.amendment-pending': 'refused',
+  'booking.goods-not-of-line': 'refused',
 });
 
 /**

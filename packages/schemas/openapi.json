@@ -48984,6 +48984,7 @@
               }
             },
             "x-error-codes": [
+              "booking.amendment-pending",
               "booking.communication-required",
               "booking.line-not-found",
               "booking.not-approved",
@@ -49260,6 +49261,7 @@
               }
             },
             "x-error-codes": [
+              "booking.amendment-pending",
               "booking.communication-required",
               "booking.line-not-found",
               "booking.not-an-extension",

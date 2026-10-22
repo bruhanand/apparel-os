@@ -24,9 +24,12 @@ import {
 import { proposeReversal } from './commands/propose-reversal.js';
 import { renewDecision } from './commands/renew-decision.js';
 import type { Actor } from './commands/common.js';
-import { countDamageHold, countDamageReady, recordCountDamage } from './commands/count-damage.js';
+import { countDamageReady } from './commands/count-damage-ready.js';
+import { recordCountDamage } from './commands/record-count-damage.js';
 import { newReportFacts, reportDamage, type ReportOptions } from './commands/report.js';
 import { damageOfGrnLines, type GrnLineDamage } from './queries/grn-lines.js';
+import type { ReportedCondition } from './domain/goods.js';
+import { damageHoldItem } from './domain/items.js';
 import { DAMAGE_EXCEPTION_TYPE, DOCUMENTS_MODULE } from './domain/kinds.js';
 import { damageDecided, reportFacts, reportOfReversal, reportView } from './queries/reports.js';
 
@@ -109,9 +112,19 @@ export class StockDocuments {
     return countDamageReady(context, this.dependencies, place);
   }
 
-  /** Damage the count finds, step 2: a damaged line's damage hold, an item of the GRN's own ledger request. */
-  countDamageHold(lineId: string, at: Place, goods: NamedGoods, description: string): LedgerItem {
-    return countDamageHold(lineId, at, goods, description);
+  /**
+   * Damage the count finds, step 2: a damaged line's damage hold, an item of the GRN's own ledger request, on the goods
+   * its count makes in the condition it counts them in, held or not (stock-ledger 6.1, 13.16, 13.17; RR-571), as a
+   * report's own hold is.
+   */
+  countDamageHold(
+    lineId: string,
+    at: Place,
+    goods: NamedGoods,
+    description: string,
+    condition: ReportedCondition,
+  ): LedgerItem {
+    return damageHoldItem(lineId, at, goods, description, condition);
   }
 
   /** Damage the count finds, step 3: once the GRN's request is written, each line's report on its hold. */

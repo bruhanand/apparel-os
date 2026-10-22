@@ -54,8 +54,8 @@ describe('entry points (shared-calculations 2.1, 2.3)', () => {
     expect(Object.keys(costing).sort()).toEqual(['costLine', 'matchCost', 'ticketMargin']);
   });
 
-  it('PRD-BKG-003 the booking entry point holds a booking’s totals, apart from selling and costing', () => {
-    expect(Object.keys(booking)).toEqual(['bookingTotals']);
+  it('PRD-BKG-003 DEC-130 the booking entry point holds a booking’s totals and its text comparison, apart from selling and costing', () => {
+    expect(Object.keys(booking).sort()).toEqual(['bookingTotals', 'textKey']);
     const reached = [...graphFrom(join(src, 'booking/index.ts'))].map((f) => relative(src, f));
     expect(reached.filter((f) => !f.startsWith('booking'))).toEqual([]);
     const fromOthers = [...graphFrom(join(src, 'index.ts')), ...graphFrom(join(src, 'costing/index.ts'))];

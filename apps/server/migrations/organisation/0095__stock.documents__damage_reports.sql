@@ -14,9 +14,10 @@
 -- other modules' records keep their identifiers with no foreign key; every foreign key and scope column has an index.
 
 -- A damage report (goods-in 8.2): its number from the damage-report series (10.4), where the goods are, which goods (a
--- GRN line's, whose receipt origin it names, or a product's at the location), how many, what is wrong, and who reported
--- it when, from their sign-in. The unit's mapping version in force when it was reported gives its legal entity
--- (PRD-MOD-010).
+-- GRN line's, whose receipt origin it names, or a product's at the location), the condition they were in when reported
+-- (good, or for damage found at the count also held wrong or unidentified: goods-in 4.9; RR-571), how many, what is
+-- wrong, and who reported it when, from their sign-in. The unit's mapping version in force when it was reported gives
+-- its legal entity (PRD-MOD-010).
 create table stock.damage_report (
   id uuid primary key,
   number text not null,
@@ -32,6 +33,7 @@ create table stock.damage_report (
   grn_line_id uuid,
   sku_id uuid,
   receipt_origin_id uuid references stock.receipt_origin (id),
+  goods_condition text not null,
   quantity integer not null,
   description text not null,
   reported_by_user_id uuid not null,
@@ -44,6 +46,8 @@ create table stock.damage_report (
     and (goods_kind = 'grn-line') = (grn_line_id is not null)
     and (goods_kind = 'grn-line') = (receipt_origin_id is not null)
     and (goods_kind = 'grn-line' or sku_id is not null)),
+  constraint damage_report_goods_condition check (goods_condition in ('good', 'wrong', 'unidentified')
+    and (goods_kind = 'grn-line' or goods_condition = 'good')),
   constraint damage_report_quantity check (quantity > 0),
   constraint damage_report_texts check (number <> '' and description <> '')
 );

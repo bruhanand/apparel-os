@@ -51,12 +51,16 @@ alter table receiving.count_entry add constraint count_entry_kind check (
   end);
 alter table receiving.count_entry add constraint count_entry_extra check (extra is null
   or (extra in ('received', 'not-received') and (goods <> 'on-invoice' or counted_quantity > invoice_quantity)));
--- Damage at the count is of pieces on the invoice, held apart from any excess (goods-in 4.9): at most the pieces both
--- counted and invoiced; with what is wrong, and at most one photo, as a stored file and the receipt it was stored with.
+-- Damage at the count is of any piece received, excess, wrong or unidentified goods held too (goods-in 4.4, 4.9;
+-- PRD-REC-006; RR-571, decided by the product owner on 22 Oct 2026): at most the pieces counted less the extra pieces
+-- recorded as not received; with what is wrong, and at most one photo, as a stored file and the receipt it was stored
+-- with.
 alter table receiving.count_entry add constraint count_entry_damage check (
   num_nulls(damaged_quantity, damage_description) in (0, 2)
-  and (damaged_quantity is null or (goods = 'on-invoice' and damaged_quantity > 0
-    and damaged_quantity <= least(invoice_quantity, counted_quantity)))
+  and (damaged_quantity is null or (damaged_quantity > 0
+    and damaged_quantity <= counted_quantity - case when extra = 'not-received' then
+      case goods when 'on-invoice' then greatest(0, counted_quantity - invoice_quantity) else counted_quantity end
+      else 0 end))
   and num_nulls(damage_photo_stored_file_id, damage_photo_file_receipt_id) in (0, 2)
   and (damage_photo_stored_file_id is null or damaged_quantity is not null));
 alter table receiving.count_entry add constraint count_entry_finding_texts
@@ -87,8 +91,10 @@ alter table receiving.grn_line add constraint grn_line_extra check (extra in ('r
 -- damage (stock-ledger 14.1 "Unknown and none").
 alter table receiving.grn_line add constraint grn_line_damage check (
   num_nulls(damaged_quantity, damage_description, damage_report_id) in (0, 3)
-  and (damaged_quantity is null or (goods = 'on-invoice' and damaged_quantity > 0
-    and damaged_quantity <= least(invoice_quantity, counted_quantity))));
+  and (damaged_quantity is null or (damaged_quantity > 0
+    and damaged_quantity <= counted_quantity - case when extra = 'not-received' then
+      case goods when 'on-invoice' then greatest(0, counted_quantity - invoice_quantity) else counted_quantity end
+      else 0 end)));
 alter table receiving.grn_line add constraint grn_line_finding_texts check (description <> '' and damage_description <> '');
 
 -- A held line (goods-in 4.6): the extra pieces of a GRN line received and held, excess under an excess hold, wrong or

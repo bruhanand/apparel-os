@@ -494,8 +494,9 @@ export type BookingAmendmentProposed = z.infer<typeof bookingAmendmentProposedSc
 /**
  * One line's quantities (goods-in 3.6, 3.8, 9.3; PRD-BKG-005, PRD-BKG-006): ordered, the approved version's; delivered,
  * from its receipt links only; cancelled, its approved cancellations; outstanding, ordered less delivered less
- * cancelled, never below zero; over-delivered, delivered beyond ordered. Its due date is its delivery date where it has
- * one, otherwise the window's end, each as extended; it is overdue once that date has passed with something outstanding.
+ * cancelled, never below zero; over-delivered, delivered beyond ordered. Its delivery date is its own, as extended,
+ * where it has one, shown only; its due date is the window's end as extended, and it is overdue once that date has
+ * passed with something outstanding (POL-05.06; goods-in 3.10).
  */
 export const bookingLineStatusSchema = z.strictObject({
   lineKey: idSchema,
@@ -540,7 +541,8 @@ export type BookingStatus = z.infer<typeof bookingStatusSchema>;
 
 /**
  * The state of a cancellation or an extension (design-language 7): Awaiting approval, Approved, Rejected, or
- * Superseded when a later one of its kind replaced its request before it was decided.
+ * Superseded should its request be superseded before it was decided (access-and-approvals 9.6). A later one of its
+ * kind is refused while it waits (`booking.amendment-pending`; goods-in 3.10), so none replaces it.
  */
 export const bookingAmendmentStateSchema = z.enum(['Awaiting approval', 'Approved', 'Rejected', 'Superseded']);
 export type BookingAmendmentState = z.infer<typeof bookingAmendmentStateSchema>;

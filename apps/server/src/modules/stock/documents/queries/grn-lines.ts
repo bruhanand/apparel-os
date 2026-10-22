@@ -22,12 +22,14 @@ export async function damageOfGrnLines(
   grnLineIds: readonly string[],
 ): Promise<readonly GrnLineDamage[]> {
   if (grnLineIds.length === 0) return [];
+  // One bound parameter holding the array, which the driver writes as a PostgreSQL array, as the ledger's stock presence
+  // passes its own (code-house-rules 3.4).
   const rows = await context.tx.execute<{
     damage_report_id: string;
     grn_line_id: string;
     quantity: number;
     state: string;
-  }>(sql`select * from stock.damage_of_grn_lines(${`{${grnLineIds.join(',')}}`}::uuid[])`);
+  }>(sql`select * from stock.damage_of_grn_lines(${sql.param([...grnLineIds])}::uuid[])`);
   return rows.rows.map((row) => {
     if (!STATES.includes(row.state)) throw new CommandDefect(`A damage report in no known state: ${row.state}`);
     return {

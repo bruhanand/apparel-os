@@ -60,6 +60,8 @@ export type { ApprovalCheck, ApprovalUseRecord, PostedDocument, PostingActor } f
 export type { ModuleApprovalRequest, RequestValue } from './commands/request-approval.js';
 export type { WithdrawnDocument } from './commands/withdraw-request.js';
 export type { Authorisation, AuthoriseRequest, FieldClassUse } from './queries/authorise.js';
+// A route's refusal as its replay answers it, keeping its kind (code-house-rules 12.3, 12.4; CH-14).
+export { replayRefusal } from './queries/authorise.js';
 export type { HeldNeed } from './commands/authority.js';
 export type { RecordFacts, UncoveredFact } from './domain/scope.js';
 export { SCOPE_MEMBERS } from './contracts/scope-members.js';

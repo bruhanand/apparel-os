@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   changeRefusal,
   committedValue,
+  extendableDateOf,
+  goodsOfLine,
   lifecycleOf,
   matchReceipt,
   statusOf,
@@ -72,15 +74,17 @@ describe('the quantities of a line (goods-in 3.6)', () => {
 });
 
 describe('the overdue balance (goods-in 3.8)', () => {
-  it('POL-05.06 PRD-BKG-009 a line is due on its own date, else on the window’s end, and overdue once that has passed', () => {
-    const status = statusOf(
-      inputs({ lines: [line(KEY_S, 'S', { deliveryDate: '2026-10-05' }), line(KEY_M, 'M')] }),
-      '2026-10-06',
-    );
-    expect(status.lines.map((each) => [each.dueDate, each.overdue])).toEqual([
-      ['2026-10-05', true],
-      ['2026-10-31', false],
+  it('POL-05.06 PRD-BKG-009 a balance is overdue once the window has passed; a line’s own date is shown, not deciding it', () => {
+    const lines = [line(KEY_S, 'S', { deliveryDate: '2026-10-05' }), line(KEY_M, 'M', { deliveryDate: '2026-11-05' })];
+    // The line's own date passed, the window not: nothing is overdue yet (POL-05.06; RR-576).
+    expect(
+      statusOf(inputs({ lines }), '2026-10-06').lines.map((each) => [each.deliveryDate, each.dueDate, each.overdue]),
+    ).toEqual([
+      ['2026-10-05', '2026-10-31', false],
+      ['2026-11-05', '2026-10-31', false],
     ]);
+    // The window passed: every balance is overdue, a line whose own date is later too.
+    expect(statusOf(inputs({ lines }), '2026-11-01').lines.map((each) => each.overdue)).toEqual([true, true]);
     // On the due date itself it is not overdue yet; with nothing outstanding it never is.
     expect(statusOf(inputs(), '2026-10-31').lines.some((each) => each.overdue)).toBe(false);
     expect(
@@ -97,7 +101,7 @@ describe('the overdue balance (goods-in 3.8)', () => {
     ).toBe(false);
   });
 
-  it('POL-05.07 an approved extension moves the window’s end and the dates of the lines it names', () => {
+  it('POL-05.07 POL-05.06 an approved extension moves the window’s end, which decides overdue, and the dates of the lines it names', () => {
     const status = statusOf(
       inputs({
         lines: [line(KEY_S, 'S', { deliveryDate: '2026-10-05' }), line(KEY_M, 'M')],
@@ -110,9 +114,11 @@ describe('the overdue balance (goods-in 3.8)', () => {
     );
     expect(status.deliveryWindow).toEqual({ from: '2026-10-01', to: '2026-11-20' });
     expect(status.lines.map((each) => [each.deliveryDate, each.dueDate, each.overdue])).toEqual([
-      ['2026-11-01', '2026-11-01', true],
+      ['2026-11-01', '2026-11-20', false],
       [null, '2026-11-20', false],
     ]);
+    // An extension moves a line past its own date where it has one, otherwise past the window's end.
+    expect(status.lines.map(extendableDateOf)).toEqual(['2026-11-01', '2026-11-20']);
   });
 });
 
@@ -183,6 +189,12 @@ describe('a GRN line matched to the booking line it delivers (goods-in 3.7)', ()
       kind: 'matched',
       lineKey: KEY_L,
     });
+  });
+
+  it('PRD-BKG-008 DEC-130 a GRN line’s goods are a booking line’s by the same comparison, for a later link too', () => {
+    expect(goodsOfLine(line(KEY_S, 'S'), { styleCode: 'syn-st ', colour: ' SYN navy', size: 's' })).toBe(true);
+    expect(goodsOfLine(line(KEY_S, 'S'), { styleCode: 'SYN-ST', colour: 'SYN NAVY', size: 'M' })).toBe(false);
+    expect(goodsOfLine(line(KEY_S, null), { styleCode: 'SYN-ST', colour: 'SYN NAVY', size: 'M' })).toBe(true);
   });
 
   it('PRD-BKG-007 a line that matches none, or more than one, goes to Booking for review', () => {

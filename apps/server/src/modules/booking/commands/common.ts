@@ -17,6 +17,9 @@ export function refused<Answer>(
   return { kind: 'refusal', refusal: { kind, code, missing } };
 }
 
+/** A refusal outcome from a refusal (code-house-rules 12.3), which a decision effect answers too. */
+export const refusalOf = (refusal: CommandRefusal): Outcome<never> => ({ kind: 'refusal', refusal });
+
 export type ValueChange = Extract<AuditChange, { kind: 'value' }>;
 
 /** A field's value before and after a change, as its audit record keeps it (numbering-and-audit 4.1). */

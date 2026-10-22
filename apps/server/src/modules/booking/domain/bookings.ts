@@ -6,6 +6,7 @@ import {
   type MissingItem,
 } from '@apparel-os/schemas';
 import type { ApprovalRule } from '../../access/index.js';
+import type { ExceptionFacts } from '../../exceptions/index.js';
 import type { BookingChangeKind } from '../db/schema.js';
 
 // The rules of a booking (goods-in 3.1 to 3.4; PRD-BKG-001 to PRD-BKG-004; POL-05.01, POL-02.07, POL-02.09;
@@ -33,8 +34,8 @@ export const bookingApprovalRule: ApprovalRule = {
  * POL-05.07, POL-05.10; S2-F01-T04): each decided under approve on the booking by a different authorised person from
  * its proposer, which can never be switched off (POL-02.07). Neither has a value basis: no source names one
  * (domain-model section 5 names none for either), a cancellation releases open-to-buy and an extension moves dates
- * only, so neither needs an approval limit (access-and-approvals 9.3). **Design choice**, for the product owner to
- * confirm. The reasons are configured, with no default (POL-02.23).
+ * only, so neither needs an approval limit (access-and-approvals 9.3). Decided by the product owner, 22 Oct 2026, as
+ * built (RR-574). The reasons are configured, with no default (POL-02.23).
  */
 export const amendmentApprovalRules: readonly ApprovalRule[] = [BOOKING_CANCELLATION, BOOKING_EXTENSION].map(
   (actionType): ApprovalRule => ({
@@ -74,6 +75,17 @@ export const bookingDocument = (bookingId: string, versionId: string) =>
 /** The record a booking's audit record names (numbering-and-audit 4.1). */
 export const bookingAuditRecord = (bookingId: string, versionId?: string) =>
   ({ module: 'booking', type: 'booking', id: bookingId, ...(versionId === undefined ? {} : { versionId }) }) as const;
+
+/**
+ * The facts of an exception about a booking (access-and-approvals 12.1; goods-in 3.10): its destination Site and its
+ * brand. A booking names no Store or business unit (3.9), so neither is a fact of it.
+ */
+export const exceptionFactsOf = (row: { readonly siteId: string; readonly brandId: string }): ExceptionFacts => ({
+  siteId: row.siteId,
+  storeId: null,
+  businessUnitId: null,
+  brandId: row.brandId,
+});
 
 /** A booking named in a refusal (PRD-UXP-003). */
 export const bookingItem = (bookingId: string): MissingItem => ({

@@ -55,7 +55,12 @@ import { jobIdentities } from '../../src/modules/access/commands/job-identities.
 import { FIRST_ADMIN_ROLE, FIRST_APPROVER_ROLE } from '../../src/modules/access/domain/first-roles.js';
 import { Audit } from '../../src/modules/audit/index.js';
 import type { GatedOperation, ValidityCheck } from '../../src/modules/configuration/index.js';
-import { EXCEPTION_CODE_KIND, Exceptions } from '../../src/modules/exceptions/index.js';
+import {
+  EXCEPTION_CODE_KIND,
+  Exceptions,
+  ROUTING_ACTION_TYPE,
+  routingApprovals,
+} from '../../src/modules/exceptions/index.js';
 import { Inbox, inboxConsumers } from '../../src/modules/inbox/index.js';
 import { Numbering } from '../../src/modules/numbering/index.js';
 import { IMPORT_BATCH_KIND, IMPORT_HANDLERS, type ImportHandlers } from '../../src/modules/files-imports/index.js';
@@ -117,7 +122,7 @@ import {
 import { createSyntheticOrganisations } from '../support/organisations.js';
 import { GRN_KIND, receivingExceptionTypes } from '../../src/modules/receiving/index.js';
 import { receivingApprovalRules } from '../../src/modules/receiving/domain/kinds.js';
-import { BOOKING_KIND } from '../../src/modules/booking/index.js';
+import { BOOKING_KIND, overdueExceptionType } from '../../src/modules/booking/index.js';
 import { defineSyntheticGrnSeries } from '../fixtures/grn-series.js';
 import { defineSyntheticBookingSeries } from '../fixtures/booking-series.js';
 import {
@@ -2660,7 +2665,6 @@ await bookingLimitApproved(
   { userId: bookingOwner.id, roleAssignmentId: bookingOwnerAssignment.assignmentId },
   100_000_000,
 );
-await receivingStructure.close();
 const bookingReasonId = await writeSyntheticReason(receivingDatabase, 'approve');
 await fixtureRunner.run(
   {
@@ -2712,8 +2716,8 @@ const damageRouting = await fixtureRunner.run(
   },
 );
 if (damageRouting.kind !== 'done') throw new Error(`The damage rule was refused: ${damageRouting.refusal.code}`);
-// The held-line journey's excess routed at its world's Site to the Booking approver by a SYNTHETIC rule, approved here
-// as a fixture as the damage rule is (code-house-rules 11.2). The routing is the product owner's: SYNTHETIC here.
+// The held-line journey's excess routed at its world's Site to the Booking approver by a SYNTHETIC rule. The routing is
+// the product owner's: SYNTHETIC here.
 const heldRouting = await fixtureRunner.run(
   {
     commandName: 'test-syn-held-lines.fixture',
@@ -2742,18 +2746,36 @@ const heldRouting = await fixtureRunner.run(
     ),
 );
 if (heldRouting.kind !== 'done') throw new Error(`The excess rule was refused: ${heldRouting.refusal.code}`);
+// Both rules approved through the real commands, as Setup › Exception rules has them approved (access-and-approvals
+// 12.2; code-house-rules 11.2): each asked of `access` for a different person, the setup's approver, holding approve on
+// the rules, who decides it through Decide.
 {
-  const owner = await connect(receivingDatabase, 'migration');
-  try {
-    for (const versionId of [damageRouting.value.versionId, heldRouting.value.versionId]) {
-      await owner.query(`update exceptions.exception_routing_version set decision = 'Approved' where id = $1`, [
-        versionId,
-      ]);
-    }
-  } finally {
-    await owner.end();
+  const routingAccess = receivingStructure.accessWith(routingApprovals(new Audit(fixtureLog.logger)));
+  await grantSynthetic(receivingDatabase, { kind: 'user', id: receivingStructure.approver.id }, [
+    { recordType: 'exceptions.exception_routing', action: 'view' },
+    { recordType: 'exceptions.exception_routing', action: 'approve' },
+  ]);
+  for (const rule of [damageRouting.value, heldRouting.value]) {
+    const requestId = await receivingStructure.run(damageOperations.id, (context) =>
+      routingAccess.requestApproval(context, {
+        actionType: ROUTING_ACTION_TYPE,
+        document: {
+          module: 'exceptions',
+          recordType: 'exceptions.exception_routing',
+          recordId: rule.routingId,
+          versionId: rule.versionId,
+        },
+        value: { kind: 'none' },
+        preparers: [damageOperations.id],
+        requestedBy: { userId: damageOperations.id, roleAssignmentId: damageDecider.assignmentId },
+      }),
+    );
+    const decided = await receivingStructure.decideThrough(routingAccess, requestId, rule.versionId);
+    if (decided.kind !== 'success') throw new Error(`An exception rule was not approved: ${decided.refusal.code}`);
   }
 }
+// The setup's people approved the exception rules above, so its connections end only now.
+await receivingStructure.close();
 await receivingRouter.close();
 
 // The readiness journey's world (site-readiness.spec.ts; S1-F04-T02), in its own Organisation made by the setup step:
@@ -2920,8 +2942,9 @@ const app = await startAccessApp(
     webApp,
     counterApp,
     fileStoreEnvironment: fileStore.environment,
-    // And the damage exception and receiving's follow-ups the application registers (S2-F08-T01, S2-F02-T03).
-    exceptionTypes: [syntheticMismatch, damageExceptionType, ...receivingExceptionTypes],
+    // And the damage exception, receiving's follow-ups and the overdue booking balance the application registers
+    // (S2-F08-T01, S2-F02-T03, S2-F01-T04).
+    exceptionTypes: [syntheticMismatch, damageExceptionType, ...receivingExceptionTypes, overdueExceptionType],
     // The approval limits journey's test-only valued action type (S1-F05-T01; code-house-rules 11.4).
     extraRecordTypes: [limitsBookingType, bulkBookingType],
     extraApprovalRules: [limitsBookingRule, bulkBookingRule],

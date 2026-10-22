@@ -1,12 +1,12 @@
+import { textKey } from '@apparel-os/calculations/booking';
 import { paise } from '@apparel-os/domain';
 import type { BookingLineStatus, BookingState, BookingStatus } from '@apparel-os/schemas';
 import type { BookingChangeKind } from '../db/schema.js';
 
 // The rules of an approved booking's lifecycle (goods-in 3.4 to 3.8, 3.10; PRD-BKG-005 to PRD-BKG-009, PRD-BKG-013;
 // POL-05.01, POL-05.02, POL-05.04 to POL-05.07; DEC-130; S2-F01-T04). Pure: no database, no clock (code-house-rules 2).
-
-/** Text compared ignoring case and spaces at the ends, as a GRN line is matched (goods-in 3.7). */
-export const textKey = (text: string): string => text.trim().toUpperCase();
+// Text is compared as a GRN line is matched, by the shared calculations' `textKey`, which `receiving` applies too
+// (goods-in 3.7).
 
 /** One line of the approved version in force, by its key (goods-in 3.10). */
 export interface StatusLine {
@@ -48,9 +48,10 @@ const later = (a: string, b: string): string => (a > b ? a : b);
 /**
  * The booking status of the version in force on a business date (goods-in 3.6, 3.8, 9.3; PRD-BKG-005): for each line,
  * ordered, delivered, cancelled, outstanding (ordered less delivered less cancelled, never below zero) and
- * over-delivered (delivered beyond ordered); its due date, its delivery date where it has one, otherwise the window's
- * end, each as the latest approved extension left it; and overdue once that date has passed with something
- * outstanding (POL-05.06). **Design choice** for the due date of a line with its own date: that date alone.
+ * over-delivered (delivered beyond ordered); its own delivery date, where it has one, as the latest approved extension
+ * naming it left it, shown only; its due date, the window's end as the approved extensions left it; and overdue once
+ * the window has passed with something outstanding: "When the delivery window expires, mark the remaining balance
+ * overdue" (POL-05.06), as the product owner decided on 22 Oct 2026 (RR-576).
  */
 export function statusOf(inputs: StatusInputs, today: string): BookingStatus {
   let windowTo = inputs.version.windowTo;
@@ -64,7 +65,6 @@ export function statusOf(inputs: StatusInputs, today: string): BookingStatus {
     const cancelled = inputs.cancelled.get(line.lineKey) ?? 0;
     const outstanding = Math.max(0, line.quantity - delivered - cancelled);
     const deliveryDate = dates.get(line.lineKey) ?? line.deliveryDate;
-    const dueDate = deliveryDate ?? windowTo;
     return {
       lineKey: line.lineKey,
       lineNumber: line.lineNumber,
@@ -73,13 +73,13 @@ export function statusOf(inputs: StatusInputs, today: string): BookingStatus {
       size: line.size,
       indicativeCost: paise(line.indicativeCost),
       deliveryDate,
-      dueDate,
+      dueDate: windowTo,
       ordered: line.quantity,
       delivered,
       cancelled,
       outstanding,
       overDelivered: Math.max(0, delivered - line.quantity),
-      overdue: outstanding > 0 && dueDate < today,
+      overdue: outstanding > 0 && windowTo < today,
     };
   });
   const sum = (field: 'ordered' | 'delivered' | 'cancelled' | 'outstanding' | 'overDelivered') =>
@@ -98,6 +98,13 @@ export function statusOf(inputs: StatusInputs, today: string): BookingStatus {
     },
   };
 }
+
+/**
+ * The date an extension must move a line past (goods-in 3.5, 3.10): its own delivery date now, as extended, where it
+ * has one, otherwise the window's end now. An extension names a line only to give it a later date.
+ */
+export const extendableDateOf = (line: Pick<BookingLineStatus, 'deliveryDate' | 'dueDate'>): string =>
+  line.deliveryDate ?? line.dueDate;
 
 /** A line of a change, as it is checked against the version in force. */
 export interface ChangedLine {
@@ -197,10 +204,24 @@ export interface ReceivedGoods {
 }
 
 /**
- * The one line of the version in force a GRN line delivers (goods-in 3.7; PRD-BKG-007; DEC-130): its style code
- * matches, and its colour and size match where the booking line gives them, text compared ignoring case and spaces at
- * the ends; a booking line that gives a colour or a size matches no GRN line without one. None, or more than one, goes
- * to Booking for review. **Design choice** for the comparison.
+ * Whether a GRN line's goods are the goods of a booking line (goods-in 3.7, 3.10; PRD-BKG-007, PRD-BKG-008; DEC-130):
+ * its style code matches, and its colour and size match where the booking line gives them, text compared ignoring case
+ * and spaces at the ends; a booking line that gives a colour or a size matches no GRN line without one. **Design
+ * choice** for the comparison.
+ */
+export function goodsOfLine(line: Pick<StatusLine, 'styleCode' | 'colour' | 'size'>, goods: ReceivedGoods): boolean {
+  const given = (booked: string | null, received: string | null) =>
+    booked === null || (received !== null && textKey(booked) === textKey(received));
+  return (
+    textKey(line.styleCode) === textKey(goods.styleCode) &&
+    given(line.colour, goods.colour) &&
+    given(line.size, goods.size)
+  );
+}
+
+/**
+ * The one line of the version in force a GRN line delivers (goods-in 3.7; PRD-BKG-007; DEC-130): the line whose goods
+ * it is (goodsOfLine). None, or more than one, goes to Booking for review.
  */
 export function matchReceipt(
   lines: readonly Pick<StatusLine, 'lineKey' | 'styleCode' | 'colour' | 'size'>[],
@@ -208,14 +229,7 @@ export function matchReceipt(
 ):
   | { readonly kind: 'matched'; readonly lineKey: string }
   | { readonly kind: 'review'; readonly reason: 'no-match' | 'ambiguous' } {
-  const given = (booked: string | null, received: string | null) =>
-    booked === null || (received !== null && textKey(booked) === textKey(received));
-  const candidates = lines.filter(
-    (line) =>
-      textKey(line.styleCode) === textKey(goods.styleCode) &&
-      given(line.colour, goods.colour) &&
-      given(line.size, goods.size),
-  );
+  const candidates = lines.filter((line) => goodsOfLine(line, goods));
   const [only] = candidates;
   if (only === undefined) return { kind: 'review', reason: 'no-match' };
   if (candidates.length > 1) return { kind: 'review', reason: 'ambiguous' };

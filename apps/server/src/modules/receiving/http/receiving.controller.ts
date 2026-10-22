@@ -19,6 +19,7 @@ import {
 } from '../../../kernel/index.js';
 import {
   ACCESS,
+  replayRefusal,
   SignedIn,
   type AccessInterface,
   type HeldNeed,
@@ -90,9 +91,10 @@ export class ReceivingController {
   async readArrival(@RouteInput() input: RouteInputOf<typeof routes.readArrival>, @SignedIn() user: SignedInUser) {
     const { arrivalId } = input.params;
     const answer = await this.read(user, 'receiving.read-arrival', async (context, today) => {
-      // An Arrival the reader's scope does not cover is hidden by row-level security, so it carries no fact, which only
-      // all-members scope covers (5.3; PRD-MOD-015); it is then not found.
-      const facts = (await this.receiving.arrivalFacts(context, arrivalId)) ?? {};
+      // An Arrival the reader's scope does not cover is hidden by row-level security, so it carries no fact: it is not
+      // found, never refused as not authorised, which would say it exists (code-house-rules 12.3; PRD-SEC-005).
+      const facts = await this.receiving.arrivalFacts(context, arrivalId);
+      if (facts === undefined) return { refused: recordNotFound(ARRIVAL_TYPE, arrivalId) };
       const authorised = await this.access.authorise(context, {
         actorId: user.userId,
         action: 'view',
@@ -184,9 +186,10 @@ export class ReceivingController {
   async readHeldLine(@RouteInput() input: RouteInputOf<typeof routes.readHeldLine>, @SignedIn() user: SignedInUser) {
     const { heldLineId } = input.params;
     const answer = await this.read(user, 'receiving.read-held-line', async (context) => {
-      // A held line the reader's scope does not cover is hidden by row-level security, so it carries no fact, which
-      // only all-members scope covers (5.3; PRD-MOD-015); it is then not found.
-      const facts = (await this.receiving.heldLineFacts(context, heldLineId)) ?? {};
+      // A held line the reader's scope does not cover is hidden by row-level security, so it carries no fact: it is
+      // not found, never refused as not authorised, which would say it exists (code-house-rules 12.3; PRD-SEC-005).
+      const facts = await this.receiving.heldLineFacts(context, heldLineId);
+      if (facts === undefined) return { refused: recordNotFound(HELD_LINE_TYPE, heldLineId) };
       const authorised = await this.access.authorise(context, {
         actorId: user.userId,
         action: 'view',
@@ -313,13 +316,11 @@ export class ReceivingController {
     work: (context: TransactionContext, actor: Actor) => Promise<Outcome<object>>,
     alsoNeeds?: AlsoNeeds,
   ) {
+    // A replay answers as any request failing the same checks would: a record not found stays not found (12.3, 12.4).
     const authoriseReplay: ReplayAuthorisation = async (context) => {
       const authorised = await this.authoriseIn(context, user, route, factsOf, notFoundRefusal, alsoNeeds);
       if (authorised.kind === 'allowed') return { kind: 'allowed' };
-      return {
-        kind: 'refused',
-        refusal: { kind: 'not-authorised', code: authorised.refusal.code, missing: authorised.refusal.missing },
-      };
+      return { kind: 'refused', refusal: replayRefusal(authorised.refusal) };
     };
     const answer = await this.helper.run(
       {

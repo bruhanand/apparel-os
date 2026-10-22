@@ -69,6 +69,43 @@ export interface CountEntryFacts {
   readonly recordedAt: Date;
 }
 
+/**
+ * What a count line records of its goods, apart from its chain of entries and who saved them (goods-in 4.3, 4.4, 4.9):
+ * what it counts, its identity, its quantities, what happens to its extra pieces, its damage and its batch. A GRN line
+ * freezes the same (goods-in 4.5).
+ */
+export type LineContent = Pick<
+  CountEntryFacts,
+  | 'goods'
+  | 'styleCode'
+  | 'colour'
+  | 'size'
+  | 'skuId'
+  | 'description'
+  | 'invoiceQuantity'
+  | 'countedQuantity'
+  | 'extra'
+  | 'damage'
+  | 'batch'
+>;
+
+/** The content of an entry, the one mapping every copy of a line's content goes through. */
+export function contentOf(entry: LineContent): LineContent {
+  return {
+    goods: entry.goods,
+    styleCode: entry.styleCode,
+    colour: entry.colour,
+    size: entry.size,
+    skuId: entry.skuId,
+    description: entry.description,
+    invoiceQuantity: entry.invoiceQuantity,
+    countedQuantity: entry.countedQuantity,
+    extra: entry.extra,
+    damage: entry.damage,
+    batch: entry.batch,
+  };
+}
+
 /** A line of the count with its newest entry and who counted it. */
 export interface CurrentLine {
   readonly lineId: string;

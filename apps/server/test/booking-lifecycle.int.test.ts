@@ -7,6 +7,7 @@ import {
   myWorkSchema,
   openToBuyBudgetReadSchema,
   type AgreementTerms,
+  type AssignmentScope,
   type Booking,
 } from '@apparel-os/schemas';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -34,6 +35,8 @@ import {
   type BookingInterface,
   type ReceiptLinked,
 } from '../src/modules/booking/index.js';
+// The overdue job's selection, which only this test reads apart from the job (goods-in 3.10).
+import { overdueCandidates } from '../src/modules/booking/queries/overdue.js';
 import { Exceptions } from '../src/modules/exceptions/index.js';
 import { Inbox } from '../src/modules/inbox/index.js';
 import { NUMBERING, type NumberingInterface } from '../src/modules/numbering/index.js';
@@ -64,7 +67,7 @@ import { STORE_FILE_PATH, syntheticPdfUpload } from './support/opening-app.js';
 import { decided, structureSetup, type StructureSetup } from './support/organisation.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { databaseUrl } from './support/postgres.js';
-import { receivingFixture, type ReceivingFixture } from './support/receiving.js';
+import { placeScope, receivingFixture, type ReceivingFixture } from './support/receiving.js';
 
 // S2-F01-T04: an approved booking's lifecycle through the whole application, on real PostgreSQL (goods-in 3.4 to 3.8,
 // 3.10, 10.3, 12 tests 4, 5 and 7; PRD-BKG-005, PRD-BKG-006, PRD-BKG-008, PRD-BKG-009, PRD-BKG-013; POL-05.01,
@@ -136,12 +139,21 @@ async function signIn(user: SyntheticUser): Promise<void> {
   cookies.set(user.id, (response.headers.get('set-cookie') ?? '').split(';')[0] ?? '');
 }
 
-async function enrolled(label: string, authorities: readonly SyntheticAuthority[]): Promise<SyntheticUser> {
+async function enrolled(
+  label: string,
+  authorities: readonly SyntheticAuthority[],
+  scope?: AssignmentScope,
+): Promise<SyntheticUser> {
   const user = await writeSyntheticUser(database, organisationCode, keys, {
     label: `${label}${String(randomInt(1_000_000))}`,
     enrolled: true,
   });
-  const granted = await grantSynthetic(database, { kind: 'user', id: user.id }, authorities);
+  const granted = await grantSynthetic(
+    database,
+    { kind: 'user', id: user.id },
+    authorities,
+    scope === undefined ? {} : { scope },
+  );
   assignments.set(user.id, granted.assignmentId);
   await signIn(user);
   return user;
@@ -493,6 +505,37 @@ afterAll(async () => {
   await (world as SyntheticWorld | undefined)?.reset();
 });
 
+describe('a booking the reader may not see (code-house-rules 12.3, 12.4)', () => {
+  it('PRD-SEC-005 a booking hidden from the reader, or not there, is not found, never not authorised; and so is its replay', async () => {
+    const booking = await approvedBooking([line('SYN-HIDDEN', 1, { size: 'S' })]);
+    // Scoped to one Store, whose Site the booking's destination is: a Store's scope does not cover its Site (3.9).
+    const storeReader = await enrolled(
+      'LIF-STORE-READER',
+      [
+        { recordType: BOOKING_TYPE, action: 'view' },
+        { recordType: BOOKING_TYPE, action: 'edit' },
+      ],
+      placeScope([{ type: 'store', id: fixture.storeId }]),
+    );
+    for (const bookingId of [booking.id, uuidv7()]) {
+      const read = await get(storeReader, `/api/booking/bookings/${bookingId}`);
+      expect(read.status).toBe(404);
+      expect(errorOf(read)).toMatchObject({
+        code: 'booking.record-not-found',
+        missing: [{ kind: 'record', recordType: BOOKING_TYPE, recordId: bookingId }],
+      });
+    }
+    // A command on it is not found too, and its replay under the same key answers as any request failing the same
+    // checks would: not found again, never not authorised (12.4 "Replay").
+    const key = uuidv7();
+    const body = { versionToken: booking.versionToken, issuedOn: setup.today() };
+    for (const attempt of ['first', 'replay']) {
+      const issued = await post(storeReader, `/api/booking/bookings/${booking.id}/issue`, body, key);
+      expect([attempt, issued.status, errorOf(issued)?.code]).toEqual([attempt, 404, 'booking.record-not-found']);
+    }
+  });
+});
+
 describe('Issued and Confirmed (goods-in 3.4; POL-05.01, DEC-099)', () => {
   let booking: Booking;
 
@@ -608,10 +651,10 @@ describe('quantities from receipt links (goods-in 3.6, 3.7; 12 test 5)', () => {
     expect((await readBooking(booker, booking.id)).status?.totals.delivered).toBe(30);
   });
 
-  it('PRD-BKG-008 a later link by Booking names the line, is dated and signed, and shows beyond ordered as over-delivered', async () => {
+  it('PRD-BKG-008 DEC-130 a later link names a line its goods match, is dated and signed, and shows beyond ordered as over-delivered', async () => {
     const service = api.app.get<BookingInterface>(BOOKING);
     const grnLineId = uuidv7();
-    const link = () =>
+    const link = (size: string) =>
       api.app.get<CommandRunner>(COMMAND_RUNNER).run(
         {
           commandName: 'test.link-later',
@@ -628,13 +671,21 @@ describe('quantities from receipt links (goods-in 3.6, 3.7; 12 test 5)', () => {
               bookingId: booking.id,
               lineKey: keyOf(booking, 'M'),
               grnLine: { grnId: uuidv7(), grnLineId, siteId: fixture.siteId },
+              goods: { styleCode: ' syn-life', colour: 'syn navy', size },
               quantity: 2,
             },
           );
         },
       );
-    expect((await link()).kind).toBe('success');
-    const again = await link();
+    // Goods of another size are not the line's: a receipt link always names a line its goods match (goods-in 3.10).
+    const otherGoods = await link('L');
+    expect(otherGoods.kind === 'refusal' ? otherGoods.refusal : otherGoods.kind).toEqual({
+      kind: 'refused',
+      code: 'booking.goods-not-of-line',
+      missing: [{ kind: 'booking-line', recordId: booking.id, lineKey: keyOf(booking, 'M') }],
+    });
+    expect((await link('m ')).kind).toBe('success');
+    const again = await link('M');
     expect(again.kind === 'refusal' ? again.refusal.code : again.kind).toBe('booking.receipt-already-linked');
     const read = await readBooking(booker, booking.id);
     expect(read.status?.lines.find((each) => each.size === 'M')).toMatchObject({
@@ -890,14 +941,91 @@ describe('extending the window (goods-in 3.5, 3.8)', () => {
     ok(await decide(owner, proposed.requestId as string, proposed.amendmentId as string));
     const extended = await readBooking(booker, booking.id);
     expect(extended.status?.deliveryWindow).toEqual({ from: setup.day(-10), to: setup.day(20) });
-    expect(extended.status?.lines.map((each) => [each.dueDate, each.overdue])).toEqual([
-      [setup.day(10), false],
-      [setup.day(20), false],
+    expect(extended.status?.lines.map((each) => [each.deliveryDate, each.dueDate, each.overdue])).toEqual([
+      [setup.day(10), setup.day(20), false],
+      [null, setup.day(20), false],
     ]);
+  });
+
+  it('POL-05.07 a second cancellation, or extension, proposed while one waits is refused, naming it, so none is dropped unseen', async () => {
+    const booking = await approvedBooking([line('SYN-WAIT', 5, { size: 'S' }), line('SYN-WAIT', 5, { size: 'M' })]);
+    const path = `/api/booking/bookings/${booking.id}`;
+    const first = ok(
+      await post(booker, `${path}/cancellations`, {
+        versionToken: booking.versionToken,
+        scope: { kind: 'lines', lineKeys: [keyOf(booking, 'S')] },
+      }),
+    );
+    const waiting = await readBooking(booker, booking.id);
+    const second = await post(booker, `${path}/cancellations`, {
+      versionToken: waiting.versionToken,
+      scope: { kind: 'lines', lineKeys: [keyOf(booking, 'M')] },
+    });
+    expect(second.status).toBe(422);
+    expect(errorOf(second)).toMatchObject({
+      code: 'booking.amendment-pending',
+      missing: [{ kind: 'version', recordType: BOOKING_TYPE, recordId: booking.id, versionId: first.amendmentId }],
+    });
+    // The first still waits for its decision, its request open (access-and-approvals 9.6).
+    const still = await readBooking(booker, booking.id);
+    expect(still.amendments.map((each) => [each.id, each.state, each.request?.state])).toEqual([
+      [first.amendmentId, 'Awaiting approval', 'Awaiting approval'],
+    ]);
+    // An extension is of another kind, so it may wait beside it; a second extension may not.
+    const extension = ok(
+      await post(booker, `${path}/extensions`, {
+        versionToken: still.versionToken,
+        windowTo: setup.day(40),
+        lines: [],
+      }),
+    );
+    const another = await post(booker, `${path}/extensions`, {
+      versionToken: extension.versionToken,
+      windowTo: setup.day(50),
+      lines: [],
+    });
+    expect(errorOf(another)).toMatchObject({
+      code: 'booking.amendment-pending',
+      missing: [{ kind: 'version', versionId: extension.amendmentId }],
+    });
+    // Decided, the first no longer waits, and the next cancellation is proposed.
+    ok(await decide(owner, first.requestId as string, first.amendmentId as string, 'reject'));
+    const after = await readBooking(booker, booking.id);
+    ok(
+      await post(booker, `${path}/cancellations`, {
+        versionToken: after.versionToken,
+        scope: { kind: 'lines', lineKeys: [keyOf(booking, 'M')] },
+      }),
+    );
   });
 });
 
 describe('the overdue balance (goods-in 3.8; 12 test 7)', () => {
+  it('POL-05.06 RR-576 the window decides overdue: a line’s own date passing does not, the window passing does, whatever its own date', async () => {
+    const running = await approvedBooking(
+      [
+        line('SYN-WINDOW', 3, { size: 'S', deliveryDate: setup.day(-2) }),
+        line('SYN-WINDOW', 3, { size: 'M', deliveryDate: setup.day(10) }),
+      ],
+      { from: setup.day(-20), to: setup.day(5) },
+    );
+    expect(running.status?.lines.map((each) => [each.deliveryDate, each.dueDate, each.overdue])).toEqual([
+      [setup.day(-2), setup.day(5), false],
+      [setup.day(10), setup.day(5), false],
+    ]);
+    const expired = await approvedBooking(
+      [
+        line('SYN-WINDOW', 3, { size: 'S', deliveryDate: setup.day(-2) }),
+        line('SYN-WINDOW', 3, { size: 'M', deliveryDate: setup.day(10) }),
+      ],
+      { from: setup.day(-20), to: setup.day(-1) },
+    );
+    expect(expired.status?.lines.map((each) => [each.deliveryDate, each.dueDate, each.overdue])).toEqual([
+      [setup.day(-2), setup.day(-1), true],
+      [setup.day(10), setup.day(-1), true],
+    ]);
+  });
+
   it('POL-05.06 PRD-BKG-009 the window passes with pieces outstanding: the balance is marked overdue and reaches Booking; nothing is cancelled', async () => {
     const booking = await approvedBooking([line('SYN-LATE', 8, { size: 'S' }), line('SYN-LATE', 2, { size: 'M' })], {
       from: setup.day(-20),
@@ -919,11 +1047,8 @@ describe('the overdue balance (goods-in 3.8; 12 test 7)', () => {
           new Exceptions({ numbering, inbox: new Inbox(), audit: new Audit(logger), types: [overdueExceptionType] }),
       }),
     };
-    const runner = new CommandRunner({
-      clock: { now: () => new Date() },
-      timezones: syntheticTimezone,
-      logger: log.logger,
-    });
+    // The worker runs on the application's synthetic clock, as everything here does (code-house-rules 9).
+    const runner = new CommandRunner({ clock, timezones: syntheticTimezone, logger: log.logger });
     const worker = new Worker({
       router,
       runner,
@@ -985,6 +1110,61 @@ describe('the overdue balance (goods-in 3.8; 12 test 7)', () => {
     } finally {
       await worker.stop();
     }
+  });
+
+  it('POL-05.06 PRD-BKG-009 the overdue job’s selection agrees with the booking status, the one rule of what is overdue', async () => {
+    const expired = { from: setup.day(-20), to: setup.day(-1) };
+    const outstanding = await approvedBooking([line('SYN-AGREE', 4, { size: 'S' })], expired);
+    const delivered = await approvedBooking([line('SYN-AGREE', 4, { size: 'S' })], expired);
+    await receive(delivered.id, [{ size: 'S', quantity: 4, styleCode: 'SYN-AGREE', colour: null }]);
+    const cancelled = await approvedBooking([line('SYN-AGREE', 4, { size: 'S' })], expired);
+    const cancel = ok(
+      await post(booker, `/api/booking/bookings/${cancelled.id}/cancellations`, {
+        versionToken: cancelled.versionToken,
+        scope: { kind: 'whole' },
+      }),
+    );
+    ok(await decide(owner, cancel.requestId as string, cancel.amendmentId as string));
+    const extended = await approvedBooking([line('SYN-AGREE', 4, { size: 'S' })], expired);
+    const extend = ok(
+      await post(booker, `/api/booking/bookings/${extended.id}/extensions`, {
+        versionToken: extended.versionToken,
+        windowTo: setup.day(5),
+        lines: [],
+      }),
+    );
+    ok(await decide(owner, extend.requestId as string, extend.amendmentId as string));
+    const ownDatePassed = await approvedBooking([line('SYN-AGREE', 4, { size: 'S', deliveryDate: setup.day(-3) })], {
+      from: setup.day(-20),
+      to: setup.day(5),
+    });
+    const ownDateLater = await approvedBooking(
+      [line('SYN-AGREE', 4, { size: 'S', deliveryDate: setup.day(10) })],
+      expired,
+    );
+    const mine = [outstanding, delivered, cancelled, extended, ownDatePassed, ownDateLater].map((each) => each.id);
+    // What the booking status says is overdue, read through the route, none of these marked yet.
+    const byStatus: string[] = [];
+    for (const bookingId of mine) {
+      const read = await readBooking(booker, bookingId);
+      if (read.status?.lines.some((each) => each.overdue) === true) byStatus.push(bookingId);
+    }
+    expect(byStatus.sort()).toEqual([outstanding.id, ownDateLater.id].sort());
+    // What the job's selection takes, on the same business date, as the job's service identity sees every booking.
+    const selected = await api.app.get<CommandRunner>(COMMAND_RUNNER).run(
+      {
+        commandName: 'test.overdue-candidates',
+        organisation,
+        correlationId: uuidv7(),
+        actor: { kind: 'actor', actorId: owner.id },
+      },
+      async (context) => {
+        const date = await context.businessDate();
+        if (date.kind !== 'set') throw new Error('no business date');
+        return overdueCandidates(context, date.date, 10_000);
+      },
+    );
+    expect(selected.filter((bookingId) => mine.includes(bookingId)).sort()).toEqual(byStatus.sort());
   });
 });
 

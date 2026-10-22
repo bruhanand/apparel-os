@@ -196,7 +196,13 @@ function decisionEffect(dependencies: EffectDependencies): DocumentEffect {
       const decided = deciding(decider);
       const { actor, decisionId } = decided;
       const services = dependencies.services();
-      const { items, valuedLineId } = confirmationItems(lines, placeOfReport(report), goodsOf(report), round.holdId);
+      const { items, valuedLineId } = confirmationItems(
+        lines,
+        placeOfReport(report),
+        goodsOf(report),
+        round.holdId,
+        report.goodsCondition,
+      );
       const posted = await post(context, services, {
         source: ledgerSource(DAMAGE_SOURCE_TYPE, report.id, round.id),
         actor,
@@ -334,7 +340,7 @@ function reversalEffect(dependencies: EffectDependencies): DocumentEffect {
         placeOfReport(report),
         goods,
         confirmation,
-        report.description,
+        { reason: report.description, condition: report.goodsCondition },
       );
       const posted = await post(context, services, {
         source: ledgerSource(REVERSAL_SOURCE_TYPE, reversal.id, reversal.id),

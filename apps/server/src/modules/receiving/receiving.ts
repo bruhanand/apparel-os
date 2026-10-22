@@ -24,7 +24,7 @@ import type { StockLedgerInterface } from '../stock/ledger/index.js';
 import { attachPhotos, recordArrival, recordInvoice } from './commands/arrival.js';
 import { arrivalRow, entriesOf, type Actor } from './commands/common.js';
 import { removeCountLine, saveCountLine } from './commands/count.js';
-import { nameHeldLineProduct } from './commands/held-lines.js';
+import { nameHeldLineProduct } from './commands/name-held-line-product.js';
 import { issueGrn } from './commands/issue.js';
 import { currentLines } from './domain/lines.js';
 import { arrivalFacts, arrivalView, inboxOf, peopleOf } from './queries/arrivals.js';

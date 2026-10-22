@@ -451,6 +451,27 @@ export async function writeRequest(
       })),
     );
   }
+  // The hold claims carried with their goods to another balance: each ends where it was by `moved`, naming the movement
+  // (13.17; 14.2 `hold_release`); the new claims at the balances the goods moved to are among the new claims above.
+  if (entries.holdMoves.length > 0) {
+    await insertInParts(
+      context,
+      holdRelease,
+      entries.holdMoves.map((row) => ({
+        id: row.id,
+        holdId: row.holdId,
+        holdKind: row.holdKind,
+        holdClaimId: row.claimId,
+        releaseEvent: 'moved',
+        quantity: row.quantity,
+        pieceId: null,
+        movementId: row.movementId,
+        ...sourceColumns(row.lineId),
+        ...status,
+        ...row.scope,
+      })),
+    );
+  }
   // The reservations the movements consumed (13.5 "End reservation"; 14.2 `reservation_event` `consumed`).
   for (const each of working.consumed) {
     entries.reservationEvents.push({

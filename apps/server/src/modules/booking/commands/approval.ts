@@ -38,7 +38,7 @@ import {
 } from '../queries/bookings.js';
 import { budgetOf, remainingOf } from '../queries/budgets.js';
 import { cancelledOf, reservedByBudget, statusLines, statusOfBooking } from '../queries/lifecycle.js';
-import { budgetLock, refused, today, valueChange as value } from './common.js';
+import { budgetLock, refusalOf, refused, today, valueChange as value } from './common.js';
 
 // What a decision does to a booking version (goods-in 3.2 to 3.5, 10.3, 10.5; module-map 6.2 flow A;
 // access-and-approvals 9.8b; PRD-BKG-002, PRD-BKG-004, PRD-SEC-017; POL-05.02, POL-05.03, POL-01.04, POL-02.07,
@@ -69,8 +69,6 @@ export interface ApprovalDependencies {
 
 /** Agreement margins are never read by a booking's approval: it fixes the version, not its margins (goods-in 3.2). */
 const SHOW_MARGINS = false;
-
-const refusalOf = (refusal: CommandRefusal): EffectOutcome => ({ kind: 'refusal', refusal });
 
 /** A version and its booking, or undefined when either is not there for the actor. */
 async function versionAndBooking(

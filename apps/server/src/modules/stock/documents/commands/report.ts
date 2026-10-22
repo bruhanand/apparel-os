@@ -59,6 +59,17 @@ const refusalOfCode = (code: string, item: CommandRefusal['missing'][number]): C
 });
 
 /**
+ * A line of a source named in a refusal (PRD-UXP-003), by the source the caller names, when it names one: documents
+ * keeps no identity of another module's records (goods-in 8.5, 10.1), so the line is named as the ledger keeps it, a
+ * source line (stock-ledger 13.6).
+ */
+function sourceLineItem(lineSource: LineSource | undefined, lineId: string): CommandRefusal['missing'][number] {
+  return lineSource === undefined
+    ? { kind: 'source-line', lineId }
+    : { kind: 'source-line', module: lineSource.module, recordType: lineSource.recordType, lineId };
+}
+
+/**
  * How a report is made: the source whose line the draft's GRN line is, which the caller names (`receiving` its own
  * GRN; the damage route the source the line's receipt origin names), and the request's idempotency key (goods-in 8.5).
  */
@@ -106,9 +117,7 @@ async function placeOf(
         ? undefined
         : await originOfSourceLine(context, { ...lineSource, lineId: draft.goods.grnLineId });
     if (origin === undefined) {
-      return {
-        refusal: refusalOfCode('stock.goods-not-found', recordItem('receiving.grn_line', draft.goods.grnLineId)),
-      };
+      return { refusal: refusalOfCode('stock.goods-not-found', sourceLineItem(lineSource, draft.goods.grnLineId)) };
     }
     receiptOriginId = origin.receiptOriginId;
     skuId = origin.skuId;
@@ -221,6 +230,8 @@ export async function reportDamage(
       goods: draft.goods,
       skuId: placed.skuId,
       receiptOriginId: placed.receiptOriginId,
+      // A report made on its own names goods in good condition, where its damage hold falls (goods-in 8.2).
+      goodsCondition: 'good',
       quantity: draft.quantity,
       description: draft.description,
       photos: draft.photos ?? [],

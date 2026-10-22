@@ -45,6 +45,7 @@ import { formatDateTime } from '../history/format';
 import { missingText } from '../components/UnavailableState';
 import { AttributeName } from '../merchandise/AttributeName';
 import { MARK_LABEL } from '../merchandise/marked';
+import { AmendmentLines, extensionEnd } from '../booking/AmendmentLines';
 import { OpenToBuyFacts, TermsFacts, TotalsView, valueAtCostOf } from '../booking/facts';
 import { StatusView } from '../booking/StatusView';
 import { useBookingNames } from '../booking/names';
@@ -542,31 +543,17 @@ function AmendmentFacts({ view }: { view: ApprovalRequestView }) {
   const booking = query.data?.booking;
   const amendment = booking?.amendments.find((each) => each.id === view.document.versionId);
   if (booking === undefined || amendment === undefined) return null;
-  const numberOf = (lineKey: string) => booking.status?.lines.find((line) => line.lineKey === lineKey)?.lineNumber;
   return (
     <div className="flex flex-col gap-3">
       <Facts>
         <Fact label="booking.brand">{names.brand.field(booking.brandId)}</Fact>
         <Fact label="booking.supplier">{names.party.field(booking.version.supplierPartyId)}</Fact>
         <Fact label="booking.destination">{names.site.field(booking.destinationSiteId)}</Fact>
-        {amendment.windowTo !== undefined && (
-          <Fact label="booking.extend.window-to">{formatDate(amendment.windowTo)}</Fact>
+        {amendment.kind === 'extension' && (
+          <Fact label="booking.extend.window-to">{formatDate(extensionEnd(amendment))}</Fact>
         )}
         <Fact label="booking.amendments">
-          <ul className="m-0 list-disc pl-5">
-            {amendment.lines.map((line) => {
-              const number = numberOf(line.lineKey);
-              if (number === undefined) return <li key={line.lineKey}>{t('booking.amendment.line-unknown')}</li>;
-              return (
-                <li key={line.lineKey}>
-                  {line.quantity !== undefined &&
-                    t('booking.amendment.line-quantity', { number, quantity: String(line.quantity) })}
-                  {line.deliveryDate !== undefined &&
-                    t('booking.amendment.line-date', { number, date: formatDate(line.deliveryDate) })}
-                </li>
-              );
-            })}
-          </ul>
+          <AmendmentLines amendment={amendment} status={booking.status} />
         </Fact>
       </Facts>
       {booking.status !== undefined && <StatusView status={booking.status} />}

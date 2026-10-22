@@ -118,26 +118,31 @@ describe('a count line as the receiver records it (goods-in 4.4, 4.9)', () => {
     expect(issues({ description: 'SYNTHETIC words' })).toEqual(['description']);
   });
 
-  it('PRD-DMG-001 damage at the count is of pieces on the invoice that were counted, never of goods held wrong or unidentified', () => {
+  it('PRD-REC-006 RR-571 damage at the count is of any piece received, excess, wrong or unidentified goods held too, never of pieces not received', () => {
     expect(issues({ countedQuantity: 3, damage: { quantity: 4, description: 'SYNTHETIC', photo: null } })).toEqual([
       'damage',
     ]);
+    // Excess received: every counted piece may be damaged; not received, only those kept.
+    expect(
+      issues({ countedQuantity: 7, extra: 'received', damage: { quantity: 7, description: 'SYNTHETIC', photo: null } }),
+    ).toEqual([]);
     expect(
       issues({
         countedQuantity: 7,
-        extra: 'received',
+        extra: 'not-received',
         damage: { quantity: 6, description: 'SYNTHETIC', photo: null },
       }),
     ).toEqual(['damage']);
-    expect(
+    const held = (goods: 'wrong' | 'unidentified', extra: 'received' | 'not-received') =>
       issues({
-        goods: 'wrong',
-        skuId: SKU,
+        goods,
+        ...(goods === 'wrong' ? { skuId: SKU } : { styleCode: null, description: 'SYNTHETIC blue jacket, no tag' }),
         invoiceQuantity: 0,
         countedQuantity: 2,
-        extra: 'received',
-        damage: { quantity: 1, description: 'SYNTHETIC', photo: null },
-      }),
-    ).toEqual(['damage']);
+        extra,
+        damage: { quantity: 2, description: 'SYNTHETIC', photo: null },
+      });
+    expect([held('wrong', 'received'), held('unidentified', 'received')]).toEqual([[], []]);
+    expect([held('wrong', 'not-received'), held('unidentified', 'not-received')]).toEqual([['damage'], ['damage']]);
   });
 });

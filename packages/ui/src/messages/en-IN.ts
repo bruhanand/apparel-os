@@ -3120,6 +3120,10 @@ export const englishIndia = {
     'A change of the booking was approved since this was proposed. Reject it, and propose it again.',
   'error.booking.not-an-extension': 'Each date must be later than the date it replaces.',
   'error.booking.receipt-already-linked': 'This GRN line is linked to a booking line already.',
+  'error.booking.amendment-pending':
+    'One of this kind waits for its decision already. Have it approved or rejected before proposing another.',
+  'error.booking.goods-not-of-line':
+    'The goods on this GRN line are not the goods of that booking line: its style code, colour or size differs.',
   'missing.booking-line': 'A line of the booking.',
   'history.operation.record-booking-issue': 'Recorded that a booking was issued to the supplier',
   'history.operation.record-booking-confirmation': 'Recorded the supplier’s confirmation of a booking',
@@ -3238,6 +3242,7 @@ export const englishIndia = {
   'history.operation.issue-grn': 'Issued the GRN',
   'missing.invoice': 'A supplier invoice recorded on the Arrival.',
   'missing.count-line': 'A line of the count.',
+  'missing.source-line': 'The goods received on this line, where you may see them.',
   'missing.possible-duplicate-elsewhere': 'Another Arrival you cannot see holds this invoice number.',
   'missing.number-series.receiving.grn': 'An open number series for GRNs.',
   'error.receiving.record-not-found': 'The Arrival, the line of its count or the Site named does not exist.',
@@ -3418,11 +3423,11 @@ export const englishIndia = {
   'receive.extra.required': 'Say whether the extra pieces are received or not received.',
   'receive.damage-quantity': 'Damaged pieces',
   'receive.damage-quantity.help':
-    'Pieces on the invoice found damaged. Issuing the GRN reports the damage and holds them at once.',
+    'Pieces received found damaged, whatever else the line shows. Issuing the GRN reports the damage and holds them at once.',
   'receive.damage-description': 'What is wrong',
   'receive.damage-photo': 'Photo of the damage',
   'receive.damage.both': 'Enter both the damaged pieces and what is wrong.',
-  'receive.damage.too-many': 'Damaged pieces are among those on the invoice and counted.',
+  'receive.damage.too-many': 'Damaged pieces are among those received.',
   'receive.findings': 'Findings',
   'receive.received': 'Received',
   'receive.finding.short': { one: 'Short {count}', other: 'Short {count}' },

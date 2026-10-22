@@ -1,4 +1,5 @@
 import { date, integer, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import type { ReportedCondition } from '../domain/goods.js';
 
 // Drizzle definitions of `stock` · documents' tables (goods-in 8.5; code-house-rules 3.4), in the schema `stock` the
 // ledger's part shares (stock-ledger 14.1). They mirror the reviewed migration (migrations/organisation/0095) and never
@@ -31,6 +32,8 @@ export const damageReport = stock.table('damage_report', {
   grnLineId: uuid('grn_line_id'),
   skuId: uuid('sku_id'),
   receiptOriginId: uuid('receipt_origin_id'),
+  // The condition the goods were in when reported (0095; goods-in 4.9; RR-571).
+  goodsCondition: text('goods_condition').$type<ReportedCondition>().notNull(),
   quantity: integer('quantity').notNull(),
   description: text('description').notNull(),
   reportedByUserId: uuid('reported_by_user_id').notNull(),

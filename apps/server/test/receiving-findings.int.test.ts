@@ -50,6 +50,7 @@ import { structureSetup, type StructureSetup } from './support/organisation.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { allowVerifier, connect, databaseUrl } from './support/postgres.js';
 import {
+  placeScope,
   RECEIVER_AUTHORITY,
   receivingFixture,
   receivingGateOpen,
@@ -615,12 +616,19 @@ describe('a GRN with clean, short, excess, wrong, unidentified and damaged lines
     const grnId = (await readArrival(receiver, mixed)).grn?.id ?? '';
     const held = [...lines.values()].flatMap((line) => (line.heldLine === null ? [] : [line.heldLine.id]));
     const raised = await exceptionsOn([grnId, ...held]);
-    expect(raised.map((each) => [each.type, each.owner_user_id])).toEqual([
-      ['receiving.excess', bookingApprover.user.id],
-      ['receiving.shortage', bookingApprover.user.id],
-      ['receiving.unidentified-goods', bookingApprover.user.id],
-      ['receiving.wrong-goods', bookingApprover.user.id],
-    ]);
+    // Each held line's, and those of the GRN: its shortage and the extra pieces it records as not received.
+    expect(
+      raised.map((each) => [each.type, each.record_id === grnId ? 'grn' : 'held-line', each.owner_user_id]).sort(),
+    ).toEqual(
+      [
+        ['receiving.excess', 'grn', bookingApprover.user.id],
+        ['receiving.excess', 'held-line', bookingApprover.user.id],
+        ['receiving.shortage', 'grn', bookingApprover.user.id],
+        ['receiving.unidentified-goods', 'grn', bookingApprover.user.id],
+        ['receiving.unidentified-goods', 'held-line', bookingApprover.user.id],
+        ['receiving.wrong-goods', 'held-line', bookingApprover.user.id],
+      ].sort(),
+    );
     const report = lines.get('SYN-T2-SHORT')?.damage?.damageReportId ?? '';
     expect(await exceptionsOn([report])).toEqual([
       expect.objectContaining({ type: 'stock.damage', owner_user_id: operations.user.id }),
@@ -630,6 +638,51 @@ describe('a GRN with clean, short, excess, wrong, unidentified and damaged lines
       (await get(receiver, `/api/receiving/sites/${fixture.siteId}/inbox?view=pending`)).body,
     );
     expect(inbox.entries.find((each) => each.arrivalId === mixed)?.waitingFor).toBe('held-lines');
+  });
+
+  it('PRD-EXC-001 POL-02.16 extra pieces recorded as not received reach Booking, one follow-up a kind linking to the GRN, which Booking resolves', async () => {
+    const arrivalId = await arrivalWithInvoice();
+    await saveLines(arrivalId, [
+      onInvoice('SYN-NR-OVER-1', 2, 3, { extra: 'not-received' }),
+      onInvoice('SYN-NR-OVER-2', 1, 2, { extra: 'not-received' }),
+      {
+        goods: 'wrong',
+        styleCode: fixture.batchSku.styleCode,
+        colour: null,
+        sizeValueId: null,
+        skuId: fixture.batchSku.id,
+        description: null,
+        invoiceQuantity: 0,
+        countedQuantity: 1,
+        extra: 'not-received',
+        damage: null,
+        batch: { code: 'SYN-BATCH-NR', expiryDate: setup.day(90) },
+      },
+    ]);
+    const issued = await issue(arrivalId);
+    expect(issued.status, JSON.stringify(issued.body)).toBe(200);
+    const grnId = (issued.body as { grnId: string }).grnId;
+    // Nothing of them is in custody or held, but each kind reaches Booking (goods-in 4.4, 4.5).
+    for (const line of (await grnLines(arrivalId)).values()) {
+      expect(line.heldLine).toBeNull();
+      expect(await custodyOfLine(line.id)).toEqual(
+        line.styleCode === fixture.batchSku.styleCode
+          ? {}
+          : {
+              good: line.invoiceQuantity,
+            },
+      );
+    }
+    const raised = await exceptionsOn([grnId]);
+    expect(raised.map((each) => [each.type, each.owner_user_id])).toEqual([
+      ['receiving.excess', bookingApprover.user.id],
+      ['receiving.wrong-goods', bookingApprover.user.id],
+    ]);
+    // Nothing in the app settles goods sent back before supplier returns (stage 3): Booking resolves it (RR-572).
+    for (const each of raised) {
+      const closed = await post(bookingApprover, `/api/exceptions/exceptions/${each.id}/close`, {});
+      expect(closed.status, JSON.stringify(closed.body)).toBe(200);
+    }
   });
 });
 
@@ -733,13 +786,67 @@ describe('deciding the held lines (goods-in 4.6; PRD-REC-013, POL-17.02, POL-17.
     expect(await holdsOfLine(line?.id ?? '')).toEqual([{ kind: 'quarantine', condition: 'wrong', quantity: 2 }]);
   });
 
-  it('PRD-EXC-002 each held line’s follow-up closes once it is decided', async () => {
+  it('PRD-EXC-002 a held line’s follow-up closes once its goods are taken in; goods left held keep it open', async () => {
+    const wrongLine = lines.get(fixture.batchSku.styleCode)?.heldLine?.id;
     const held = [...lines.values()].flatMap((line) => (line.heldLine === null ? [] : [line.heldLine.id]));
     const raised = await exceptionsOn(held);
+    expect(raised).toHaveLength(3);
     for (const each of raised) {
       const closed = await post(bookingApprover, `/api/exceptions/exceptions/${each.id}/close`, {});
-      expect(closed.status, JSON.stringify(closed.body)).toBe(200);
+      if (each.record_id === wrongLine) {
+        // Left held, the wrong goods wait for their supplier return (stage 3): the outcome is not verified yet.
+        expect(closed.status).toBe(422);
+        expect(errorOf(closed)?.code).toBe('exceptions.resolution-not-verified');
+        expect(errorOf(closed)?.missing).toContainEqual({
+          kind: 'record',
+          recordType: 'receiving.held_line',
+          recordId: wrongLine,
+        });
+      } else {
+        expect(closed.status, JSON.stringify(closed.body)).toBe(200);
+      }
     }
+  });
+});
+
+describe('a held line the reader may not see (code-house-rules 12.3, 12.4)', () => {
+  it('PRD-SEC-005 a held line hidden from the reader, or not there, is not found, never not authorised; and so is a replay', async () => {
+    const otherStore = await enrolled(
+      'FND-OTHER-STORE',
+      [
+        { recordType: 'receiving.arrival', action: 'view' },
+        { recordType: 'receiving.held_line', action: 'edit' },
+        { recordType: 'merchandise.vocabulary_value', action: 'view' },
+      ],
+      placeScope([{ type: 'store', id: fixture.otherStoreId }]),
+    );
+    const excess = lines.get('SYN-T2-EXCESS')?.heldLine;
+    if (excess == null) throw new Error('no held line');
+    for (const heldLineId of [excess.id, uuidv7()]) {
+      const read = await get(otherStore, `/api/receiving/held-lines/${heldLineId}`);
+      expect(read.status).toBe(404);
+      expect(errorOf(read)).toMatchObject({
+        code: 'receiving.record-not-found',
+        missing: [{ kind: 'record', recordType: 'receiving.held_line', recordId: heldLineId }],
+      });
+    }
+    // Naming a product of it is not found too, and its replay under the same key answers as any request failing the
+    // same checks would: not found again, never not authorised (12.4 "Replay").
+    const key = uuidv7();
+    const body = {
+      versionToken: excess.versionToken,
+      styleCode: 'SYN-HIDDEN',
+      colour: null,
+      sizeValueId: null,
+      skuId: null,
+    };
+    for (const attempt of ['first', 'replay']) {
+      const named = await post(otherStore, `/api/receiving/held-lines/${excess.id}/product`, body, key);
+      expect([attempt, named.status, errorOf(named)?.code]).toEqual([attempt, 404, 'receiving.record-not-found']);
+    }
+    // The Arrival it belongs to is hidden from them alike.
+    const arrival = await get(otherStore, `/api/receiving/arrivals/${mixed}`);
+    expect([arrival.status, errorOf(arrival)?.code]).toEqual([404, 'receiving.record-not-found']);
   });
 });
 
@@ -818,5 +925,117 @@ describe('the receipt problems read model (goods-in 9.3)', () => {
     );
     expect(page.rows).toHaveLength(2);
     expect(page.next).toBe(page.rows[1]?.line.id);
+  });
+});
+
+/** Operations confirms a damage report through the approval route, as My work does (goods-in 8.3). */
+async function confirmDamage(reportId: string): Promise<void> {
+  const read = await get(operations, `/api/stock/damage-reports/${reportId}`);
+  expect(read.status, JSON.stringify(read.body)).toBe(200);
+  const { versionToken, rounds } = read.body.report as { versionToken: string; rounds: { requestId: string }[] };
+  const confirmed = await decide(operations, rounds[0]?.requestId ?? '', versionToken, 'approve');
+  expect(confirmed.status, JSON.stringify(confirmed.body)).toBe(200);
+}
+
+/** The lines of the GRN whose excess, wrong and unidentified goods were found damaged; issued in the first test. */
+let damagedLines: Map<string, GrnLine>;
+const damagedLine = (key: string): GrnLine => {
+  const line = damagedLines.get(key);
+  if (line?.damage == null) throw new Error(`no damaged line ${key}`);
+  return line;
+};
+
+describe('damage at the count on any piece received (goods-in 4.4, 4.9; stock-ledger 13.17; RR-571)', () => {
+  it('PRD-REC-006 PRD-DMG-001 RR-571 damage on excess, wrong and unidentified goods is reported at the count, held beside their own holds', async () => {
+    const arrivalId = await arrivalWithInvoice();
+    const unidentified = (extra: 'received' | 'not-received', quantity: number) => ({
+      goods: 'unidentified',
+      styleCode: null,
+      colour: null,
+      sizeValueId: null,
+      skuId: null,
+      description: 'SYNTHETIC green shawl, no tag',
+      invoiceQuantity: 0,
+      countedQuantity: 3,
+      extra,
+      damage: { quantity, description: 'SYNTHETIC stained', photo: null },
+      batch: null,
+    });
+    // Never on pieces not received, which are not at the Site (goods-in 4.4).
+    const notReceived = await post(
+      receiver,
+      `/api/receiving/arrivals/${arrivalId}/count-lines`,
+      unidentified('not-received', 1),
+    );
+    expect(notReceived.status).toBe(400);
+    await saveLines(arrivalId, [
+      onInvoice('SYN-DMG-EXCESS', 2, 4, {
+        extra: 'received',
+        damage: { quantity: 3, description: 'SYNTHETIC torn, excess pieces among them', photo: null },
+      }),
+      {
+        goods: 'wrong',
+        styleCode: fixture.batchSku.styleCode,
+        colour: null,
+        sizeValueId: null,
+        skuId: fixture.batchSku.id,
+        description: null,
+        invoiceQuantity: 0,
+        countedQuantity: 2,
+        extra: 'received',
+        damage: { quantity: 1, description: 'SYNTHETIC crushed', photo: null },
+        batch: { code: 'SYN-BATCH-DMG', expiryDate: setup.day(90) },
+      },
+      unidentified('received', 2),
+    ]);
+    const issued = await issue(arrivalId);
+    expect(issued.status, JSON.stringify(issued.body)).toBe(200);
+    damagedLines = await grnLines(arrivalId);
+    // Each damage hold on the goods in the condition the count received them in, beside their excess hold or
+    // quarantine (stock-ledger 6.2, 13.16).
+    expect(await holdsOfLine(damagedLine('SYN-DMG-EXCESS').id)).toEqual([
+      { kind: 'damage', condition: 'good', quantity: 3 },
+      { kind: 'excess', condition: 'good', quantity: 2 },
+    ]);
+    expect(await holdsOfLine(damagedLine(fixture.batchSku.styleCode).id)).toEqual([
+      { kind: 'damage', condition: 'wrong', quantity: 1 },
+      { kind: 'quarantine', condition: 'wrong', quantity: 2 },
+    ]);
+    expect(await holdsOfLine(damagedLine('SYNTHETIC green shawl, no tag').id)).toEqual([
+      { kind: 'damage', condition: 'unidentified', quantity: 2 },
+      { kind: 'quarantine', condition: 'unidentified', quantity: 3 },
+    ]);
+  });
+
+  it('PRD-DMG-006 RR-571 confirmed damage on excess goods: damaged, the excess hold carried with the excess pieces it holds', async () => {
+    const line = damagedLine('SYN-DMG-EXCESS');
+    await confirmDamage(line.damage?.damageReportId ?? '');
+    // Two free pieces first, then one the excess hold holds, its claim carried (stock-ledger 13.17).
+    expect(await custodyOfLine(line.id)).toEqual({ good: 1, damaged: 3 });
+    expect(await holdsOfLine(line.id)).toEqual([
+      { kind: 'excess', condition: 'damaged', quantity: 1 },
+      { kind: 'excess', condition: 'good', quantity: 1 },
+      { kind: 'quarantine', condition: 'damaged', quantity: 3 },
+    ]);
+  });
+
+  it('PRD-DMG-006 RR-571 confirmed damage on wrong goods: damaged, still quarantined as wrong besides', async () => {
+    const line = damagedLine(fixture.batchSku.styleCode);
+    await confirmDamage(line.damage?.damageReportId ?? '');
+    expect(await custodyOfLine(line.id)).toEqual({ wrong: 1, damaged: 1 });
+    expect(await holdsOfLine(line.id)).toEqual([
+      { kind: 'quarantine', condition: 'damaged', quantity: 2 },
+      { kind: 'quarantine', condition: 'wrong', quantity: 1 },
+    ]);
+  });
+
+  it('PRD-DMG-006 RR-571 confirmed damage on unidentified goods: damaged, their identity still Unknown and quarantined', async () => {
+    const line = damagedLine('SYNTHETIC green shawl, no tag');
+    await confirmDamage(line.damage?.damageReportId ?? '');
+    expect(await custodyOfLine(line.id)).toEqual({ unidentified: 1, damaged: 2 });
+    expect(await holdsOfLine(line.id)).toEqual([
+      { kind: 'quarantine', condition: 'damaged', quantity: 4 },
+      { kind: 'quarantine', condition: 'unidentified', quantity: 1 },
+    ]);
   });
 });

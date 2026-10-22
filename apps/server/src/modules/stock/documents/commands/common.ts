@@ -10,6 +10,7 @@ import {
 } from '../../../../kernel/index.js';
 import type { RecordFacts } from '../../../access/index.js';
 import type { AuditChange, AuditInterface, AuditScope } from '../../../audit/index.js';
+import type { ExceptionFacts } from '../../../exceptions/index.js';
 import type { ItemValue, LedgerSource } from '../../ledger/index.js';
 import { damageDecision, damageReport, damageReversal, damageReversalDecision, damageRound } from '../db/schema.js';
 import { DOCUMENTS_MODULE } from '../domain/kinds.js';
@@ -96,6 +97,14 @@ export function scopeColumns(row: Scoped): Scoped {
     legalEntityId: row.legalEntityId,
     brandId: row.brandId,
   };
+}
+
+/**
+ * The facts of the exception a report raises (access-and-approvals 12.1; goods-in 8.2): its Site, Store, business
+ * unit and brand, so the routing in force at the Site names its owner.
+ */
+export function exceptionFactsOf(row: Scoped): ExceptionFacts {
+  return { siteId: row.siteId, storeId: row.storeId, businessUnitId: row.businessUnitId, brandId: row.brandId };
 }
 
 /** The same as scope facts, which its routes authorise with (access-and-approvals 5.3), a Store only when it has one. */

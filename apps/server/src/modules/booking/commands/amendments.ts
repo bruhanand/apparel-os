@@ -1,22 +1,16 @@
 import { paise, uuidv7 } from '@apparel-os/domain';
 import { BOOKING_TYPE } from '@apparel-os/schemas';
-import {
-  CommandDefect,
-  lockTable,
-  type CommandRefusal,
-  type LockTarget,
-  type TransactionContext,
-} from '../../../kernel/index.js';
-import type { DocumentEffect, EffectDecider, EffectOutcome } from '../../access/index.js';
-import type { AuditChange } from '../../audit/index.js';
+import { CommandDefect, lockTable, type LockTarget, type TransactionContext } from '../../../kernel/index.js';
+import type { DocumentEffect, EffectDecider } from '../../access/index.js';
 import { bookingAmendmentDecision, openToBuyRelease } from '../db/schema.js';
 import { bookingAuditRecord, bookingVersionItem, lineItem } from '../domain/bookings.js';
+import { extendableDateOf } from '../domain/lifecycle.js';
 import { bookingAmended } from '../events.js';
 import { bookingLock, bookingRow, changesOf, versionWithLines, type BookingRow } from '../queries/bookings.js';
 import { budgetOf } from '../queries/budgets.js';
 import { amendmentRow, approvalInForce, reservedByBudget, statusOfBooking } from '../queries/lifecycle.js';
 import { decided, gateRefusal, recordDecision, type ApprovalDependencies } from './approval.js';
-import { budgetLock, refused, today } from './common.js';
+import { budgetLock, refusalOf, refused, today, valueChange as value, type ValueChange } from './common.js';
 
 // What a decision does to a cancellation of an undelivered balance or an extension of the window (goods-in 3.5, 3.8,
 // 3.10, 10.3, 10.5; access-and-approvals 9.8b; PRD-BKG-013; POL-05.02, POL-05.07, POL-05.10, POL-02.07; S2-F01-T04),
@@ -27,19 +21,10 @@ import { budgetLock, refused, today } from './common.js';
 //   force (`booking.version-not-in-force`); the policy gate under policies 5 and 1, as a booking's approval asks it
 //   (goods-in 10.5); for a cancellation, each line's outstanding balance still the quantity proposed
 //   (`booking.balance-changed`), then the cancelled quantities, and the open-to-buy they held at each line's cost,
-//   released; for an extension, each date still later than the one it replaces (`booking.not-an-extension`); the
-//   decision, the booking's change row, its audit record and `booking.booking-amended`.
+//   released; for an extension, each date still later than the one it replaces, a line's own date or, where it has
+//   none, the window's end (`booking.not-an-extension`); the decision, the booking's change row, its audit record and
+//   `booking.booking-amended`.
 // - Rejected: the decision, the change row and the audit record; nothing else changes.
-
-type ValueChange = Extract<AuditChange, { kind: 'value' }>;
-const value = (field: string, before: ValueChange['before'], after: ValueChange['after']): ValueChange => ({
-  kind: 'value',
-  field,
-  before,
-  after,
-});
-
-const refusalOf = (refusal: CommandRefusal): EffectOutcome => ({ kind: 'refusal', refusal });
 
 /** The amendment and its booking under the lock, still awaiting its decision; or the refusal. */
 async function awaiting(context: TransactionContext, amendmentId: string) {
@@ -179,7 +164,7 @@ export function amendmentEffect(dependencies: ApprovalDependencies): DocumentEff
       } else {
         for (const extended of lines) {
           const line = status.lines.find((each) => each.lineKey === extended.bookingLineId);
-          if (line === undefined || extended.deliveryDate === null || extended.deliveryDate <= line.dueDate) {
+          if (line === undefined || extended.deliveryDate === null || extended.deliveryDate <= extendableDateOf(line)) {
             return refused('refused', 'booking.not-an-extension', [lineItem(row.id, extended.bookingLineId)]);
           }
         }

@@ -75,6 +75,11 @@ export interface SaleState {
   /** What returns brought back already: by origin, and by the sale's layer (FIFO). */
   readonly returned: Map<string, { quantity: number; value: number }>;
   readonly returnedFromLayer: Map<string, { quantity: number; value: number }>;
+  /**
+   * For a condition change, the units of each hold it carried with its goods that no reversal of it has carried back
+   * yet, by hold (13.17): what a reversal of it may carry back.
+   */
+  readonly carried: Map<string, number>;
 }
 
 /** What the valuing state needs beyond the quantity state (13.1), read under the locks. */

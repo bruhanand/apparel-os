@@ -880,11 +880,11 @@ describe('who sees receipts (goods-in 12 test 20; access-and-approvals 5.3)', ()
     const shown = inboxSchema.parse(read.body).entries.map((entry) => entry.arrivalId);
     expect(shown).toContain(own);
     expect(shown).not.toContain(other);
-    // An Arrival outside the reader's scope is hidden, so it carries no fact their scope covers: refused, naming nothing
-    // of it (access-and-approvals 5.3; PRD-MOD-015).
+    // An Arrival outside the reader's scope is hidden, so it is not found, never refused as not authorised, which would
+    // say it exists (code-house-rules 12.3; access-and-approvals 5.3).
     const hidden = await get(otherStoreReader, `/api/receiving/arrivals/${other}`);
-    expect(hidden.status).toBe(403);
-    expect(errorOf(hidden)?.code).toBe('access.not-authorised');
+    expect(hidden.status).toBe(404);
+    expect(errorOf(hidden)?.code).toBe('receiving.record-not-found');
     expect((await get(otherStoreReader, `/api/receiving/arrivals/${own}`)).status).toBe(200);
     // Someone with no receiving permission reads no inbox.
     expect((await get(outsider, `/api/receiving/sites/${fixture.siteId}/inbox?view=pending`)).status).toBe(403);
