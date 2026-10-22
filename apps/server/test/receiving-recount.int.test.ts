@@ -196,13 +196,13 @@ function onInvoice(styleCode: string, invoice: number, counted: number, extra: R
   };
 }
 
-/** A line of the batch-tracked product, on the invoice (goods-in 4.3; PRD-MER-011). */
+/** A line of the batch-tracked product, on the invoice, its size recorded (goods-in 4.3; PRD-MER-011; RR-586). */
 function ofProduct(invoice: number, counted: number) {
   return {
     goods: 'on-invoice',
     styleCode: fixture.batchSku.styleCode,
     colour: null,
-    sizeValueId: null,
+    sizeValueId: fixture.sizes.values[0]?.id ?? null,
     skuId: fixture.batchSku.id,
     description: null,
     invoiceQuantity: invoice,
@@ -445,12 +445,14 @@ beforeAll(async () => {
   // SYNTHETIC limits over Unknown cost (V-02): the approver, and the receiver, who holds approve too.
   for (const person of [approver, receiver]) await unknownOnlyLimit(person, RECOUNT_APPROVAL);
   await unknownOnlyLimit(receiver, DAMAGE_DECISION);
-  // The follow-ups' SYNTHETIC routings: the findings to the approver, damage too (POL-02.16; V-03).
+  // The follow-ups' SYNTHETIC routings: the findings to the approver, damage too, and the review of a GRN received
+  // without a booking (goods-in 4.10; RR-580) (POL-02.16; V-03).
   for (const type of [
     'receiving.shortage',
     'receiving.excess',
     'receiving.wrong-goods',
     'receiving.unidentified-goods',
+    'receiving.booking-review',
     'stock.damage',
   ]) {
     await route(type, approver);

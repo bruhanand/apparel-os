@@ -8,14 +8,17 @@ import {
   type LockTarget,
   type TransactionContext,
 } from '../../../kernel/index.js';
-import type { RecordFacts } from '../../access/index.js';
-import type { AuditChange, AuditInterface, AuditScope } from '../../audit/index.js';
+import type { AuditChange, AuditInterface } from '../../audit/index.js';
 import type { ExceptionFacts } from '../../exceptions/index.js';
 import { entryFacts } from '../db/columns.js';
 import { arrival, arrivalChange, countEntry, grn, type ArrivalChangeKind } from '../db/schema.js';
+import { factsOf, scopeColumns, type ScopeColumns } from '../domain/facts.js';
 import type { CountEntryFacts } from '../domain/lines.js';
 
-// What every command and read of `receiving` shares (code-house-rules 8.1, 8.2, 12.3, 12.7).
+// What every command and read of `receiving` shares (code-house-rules 8.1, 8.2, 12.3, 12.7). The scope's mappings are
+// the domain's (domain/facts.ts), named here too for the commands that write rows with them.
+
+export { factsOf, scopeColumns };
 
 /** A command's answer: its success, or a refusal naming what is missing (PRD-UXP-003). */
 export type Outcome<Answer> =
@@ -77,24 +80,7 @@ export const unitNotAtSite = (businessUnitId: string): CommandRefusal => ({
 });
 
 export type ArrivalRow = typeof arrival.$inferSelect;
-type Scoped = Pick<ArrivalRow, 'siteId' | 'storeId' | 'businessUnitId' | 'legalEntityId' | 'brandId'>;
-
-/** The scope columns every row of an Arrival carries: its place, legal entity and brand (code-house-rules 6.1). */
-export function scopeColumns(row: Scoped): Scoped {
-  return {
-    siteId: row.siteId,
-    storeId: row.storeId,
-    businessUnitId: row.businessUnitId,
-    legalEntityId: row.legalEntityId,
-    brandId: row.brandId,
-  };
-}
-
-/** The same as scope facts, which its routes authorise with (access-and-approvals 5.3), a Store only when it has one. */
-export function factsOf(row: Scoped): RecordFacts & AuditScope {
-  const { storeId, ...facts } = scopeColumns(row);
-  return storeId === null ? facts : { ...facts, storeId };
-}
+type Scoped = ScopeColumns;
 
 /**
  * The facts of an exception about an Arrival's goods (access-and-approvals 12.1; goods-in 4.9): its Site, Store,
@@ -188,12 +174,6 @@ export async function entriesByArrival(
     .where(inArray(countEntry.arrivalId, [...arrivalIds]));
   for (const row of rows) byArrival.get(row.arrivalId)?.push(entryFacts(row));
   return byArrival;
-}
-
-/** A GRN as the actor may see it, or undefined (code-house-rules 6.2). */
-export async function grnRow(context: TransactionContext, grnId: string) {
-  const [row] = await context.tx.select().from(grn).where(eq(grn.id, grnId));
-  return row;
 }
 
 /** The Arrival's GRN, once issued. */

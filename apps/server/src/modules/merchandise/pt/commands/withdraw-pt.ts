@@ -1,14 +1,16 @@
 import { uuidv7 } from '@apparel-os/domain';
-import { PT_APPROVAL, PT_TYPE, type MissingItem } from '@apparel-os/schemas';
+import { PT_APPROVAL, PT_TYPE } from '@apparel-os/schemas';
 import { eq } from 'drizzle-orm';
-import { LOCK_STEP, type CommandRefusal, type TransactionContext } from '../../../../kernel/index.js';
+import { CommandDefect, LOCK_STEP, type TransactionContext } from '../../../../kernel/index.js';
 import type { AccessInterface } from '../../../access/index.js';
 import type { AuditInterface } from '../../../audit/index.js';
 import type { ReceivingInterface } from '../../../receiving/index.js';
 import { pt, ptRevisionWithdrawal } from '../db/schema.js';
 import { PT_MODULE, PT_REVISION_TYPE } from '../domain/kinds.js';
+import { BUSINESS_DATE_NOT_SET, recordItem, revisionNotFound, type Outcome } from '../domain/refusals.js';
 import { ptVersionToken, revisionFacts } from '../queries/pt-records.js';
-import { ptLock } from './submit-pt.js';
+import { ptLock } from './pt-lock.js';
+import { scopeColumnsOf } from './scope-columns.js';
 
 // Withdraw a draft PT revision (goods-in 5.7, 5.8, section 11; S2-F04-T02): a draft is never edited; a wrong file is
 // withdrawn and a corrected one uploaded. In one transaction: the PT's row, the GRN's row and the revision's open
@@ -27,18 +29,6 @@ export interface Actor {
   readonly userId: string;
   readonly roleAssignmentId: string;
 }
-
-type Outcome<Answer> =
-  | { readonly kind: 'success'; readonly answer: Answer }
-  | { readonly kind: 'refusal'; readonly refusal: CommandRefusal };
-
-const recordItem = (recordType: string, recordId: string): MissingItem => ({ kind: 'record', recordType, recordId });
-
-export const revisionNotFound = (revisionId: string): CommandRefusal => ({
-  kind: 'not-found',
-  code: 'merchandise.record-not-found',
-  missing: [recordItem(PT_REVISION_TYPE, revisionId)],
-});
 
 export async function withdrawPt(
   context: TransactionContext,
@@ -63,15 +53,16 @@ export async function withdrawPt(
     dependencies.receiving.ptMarkLock(owner.grnId),
     ...(await dependencies.access.requestLockTargets(context, document)),
   ]);
-  // Rechecked under the locks (code-house-rules 8.1, 12.7).
+  // Rechecked under the locks (code-house-rules 8.1, 12.7). The PT holds the revision found, so it has a token.
   const token = await ptVersionToken(context, owner.id);
+  if (token === undefined) throw new CommandDefect(`A PT with a revision has no version token: ${owner.id}`);
   if (token !== versionToken) {
     return {
       kind: 'refusal',
       refusal: {
         kind: 'conflict',
         code: 'kernel.stale-version',
-        missing: [{ kind: 'version', recordType: PT_TYPE, recordId: owner.id, versionId: token ?? '' }],
+        missing: [{ kind: 'version', recordType: PT_TYPE, recordId: owner.id, versionId: token }],
       },
     };
   }
@@ -87,25 +78,12 @@ export async function withdrawPt(
   const by = { userId: actor.userId, roleAssignmentId: actor.roleAssignmentId };
   if ((await dependencies.access.withdrawRequest(context, document, by)) !== 'withdrawn') return notADraft;
   const date = await context.businessDate();
-  if (date.kind === 'not-set') {
-    return {
-      kind: 'refusal',
-      refusal: {
-        kind: 'unavailable',
-        code: 'access.business-date-not-set',
-        missing: [{ kind: 'setting', setting: 'configuration.timezone' }],
-      },
-    };
-  }
+  if (date.kind === 'not-set') return { kind: 'refusal', refusal: BUSINESS_DATE_NOT_SET };
   const withdrawalId = uuidv7();
   await context.tx.insert(ptRevisionWithdrawal).values({
     id: withdrawalId,
     ptRevisionId: revisionId,
-    siteId: owner.siteId,
-    storeId: owner.storeId,
-    businessUnitId: owner.businessUnitId,
-    legalEntityId: owner.legalEntityId,
-    brandId: owner.brandId,
+    ...scopeColumnsOf(owner),
     withdrawnByUserId: actor.userId,
     roleAssignmentId: actor.roleAssignmentId,
     occurredAt: context.startedAt,

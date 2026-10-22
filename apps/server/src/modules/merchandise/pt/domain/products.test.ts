@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { productsOf, type ProductFacts, type ProductRow } from './products.js';
 
 // S2-F04-T02: each row's product (goods-in 5.5; PRD-MER-007, PRD-MER-013, DEC-135; goods-in 12 test 10, the proposal
-// part): an existing product found by the row's barcode or by brand, style, colour and size; otherwise a new product
-// proposed from the row; a barcode on several products flagged, never refused; a row that differs from its product in
-// a value the product holds shown as a difference. Every identifier and code here is SYNTHETIC.
+// part): an existing product found by the row's barcode's mapping first, a repeated barcode narrowed by style, size and
+// colour, then by brand, style, colour and size (code review 6 of stage 2); otherwise a new product proposed from the
+// row; a barcode on several products flagged, never refused; a row that differs from its product in a value the product
+// holds shown as a difference. Every identifier and code here is SYNTHETIC.
 
 const id = (n: number) => `01900000-0000-7000-8000-${String(n).padStart(12, '0')}`;
 const COLOUR = id(900);
@@ -19,14 +20,19 @@ const facts: ProductFacts = {
   skus: [
     { skuId: id(1), styleCode: 'SYN-OLD', size: 'M', colourValueId: id(31) },
     { skuId: id(2), styleCode: 'SYN-OLD', size: 'L', colourValueId: id(31) },
+    { skuId: id(3), styleCode: 'SYN-OLD', size: 'L', colourValueId: id(33) },
   ],
   barcodes: new Map([
     ['111', [id(1)]],
     ['222', [id(1), id(2)]],
+    ['333', [id(2), id(3)]],
+    // A SKU of another brand, named by a mapping for the whole Organisation: never the row's (5.3).
+    ['444', [id(99)]],
   ]),
   codes: new Map([
     [id(31), 'SYN NAVY'],
     [id(32), 'PREMIUM'],
+    [id(33), 'SYN RED'],
     [id(51), 'SYN MALE'],
     [id(52), 'SYN KIDS'],
     [id(20), 'SYN CASUAL'],
@@ -41,6 +47,7 @@ const row = (rowNumber: number, values: Partial<ProductRow> = {}): ProductRow =>
   colour: { code: 'SYN NAVY', valueId: id(31) },
   barcode: '111',
   categoryId: id(20),
+  subCategoryCode: 'SYN CASUAL',
   hsn: '61091000',
   styleValues: { gender: { code: 'SYN MALE', valueId: id(51) } },
   ...values,
@@ -121,6 +128,7 @@ describe('the product of each PT row (goods-in 5.5)', () => {
         row(3, {
           colour: { code: 'PREMIUM', valueId: id(32) },
           categoryId: id(21),
+          subCategoryCode: 'SYN FORMAL',
           hsn: '61099000',
           styleValues: { gender: { code: 'SYN KIDS', valueId: id(52) } },
         }),
@@ -140,8 +148,49 @@ describe('the product of each PT row (goods-in 5.5)', () => {
     });
   });
 
-  it('PRD-MER-007 does not take a product of another style or size by a barcode it shares: the row proposes its own', () => {
-    const found = productsOf([row(3, { styleCode: 'SYN-OTHER', barcode: '111' })], facts);
-    expect(found.rows[0]).toMatchObject({ product: { kind: 'proposed' }, repeated: true });
+  it('PRD-MER-007 takes the product its barcode maps to first, even of another style or size, showing the difference', () => {
+    // Goods-in 5.5: "found by its barcode's external code mapping, or by brand, style, colour and size", in that order.
+    const found = productsOf([row(3, { styleCode: 'SYN-OTHER', sizeCode: 'S', barcode: '111' })], facts);
+    expect(found.rows[0]).toEqual({
+      rowNumber: 3,
+      product: { kind: 'existing', skuId: id(1), barcodeMapped: true },
+      repeated: false,
+      differences: [
+        { field: 'design', file: 'SYN-OTHER', product: 'SYN-OLD' },
+        { field: 'size', file: 'S', product: 'M' },
+      ],
+    });
+    expect(found.proposals).toEqual([]);
+    // The barcode's mapping comes before the row's identity: a row of SKU 2's identity takes SKU 1 by its barcode.
+    expect(productsOf([row(4, { sizeCode: 'L' })], facts).rows[0]?.product).toEqual({
+      kind: 'existing',
+      skuId: id(1),
+      barcodeMapped: true,
+    });
+  });
+
+  it('PRD-MER-007 DEC-135 narrows a barcode the brand repeats by style and size, then colour; with none left it proposes', () => {
+    // 222 names SKU 1 (M) and SKU 2 (L): the row's size narrows it to SKU 2.
+    expect(productsOf([row(3, { sizeCode: 'L', barcode: '222' })], facts).rows[0]).toMatchObject({
+      product: { kind: 'existing', skuId: id(2), barcodeMapped: true },
+      repeated: true,
+    });
+    // 333 names two SKUs of size L, navy and red: the row's colour narrows it to SKU 3.
+    expect(
+      productsOf([row(3, { sizeCode: 'L', barcode: '333', colour: { code: 'SYN RED', valueId: id(33) } })], facts)
+        .rows[0]?.product,
+    ).toEqual({ kind: 'existing', skuId: id(3), barcodeMapped: true });
+    // Of size XL none is left, and no SKU of the style has it: a new product, the barcode flagged and kept for both.
+    expect(productsOf([row(3, { sizeCode: 'XL', barcode: '222' })], facts).rows[0]).toMatchObject({
+      product: { kind: 'proposed', key: 'SYN-OLD|SYN NAVY|XL' },
+      repeated: true,
+    });
+  });
+
+  it('PRD-MER-007 never takes a SKU of another brand a barcode names: the row is found by its identity instead', () => {
+    expect(productsOf([row(3, { barcode: '444' })], facts).rows[0]).toMatchObject({
+      product: { kind: 'existing', skuId: id(1), barcodeMapped: false },
+      repeated: true,
+    });
   });
 });

@@ -7,6 +7,7 @@ import {
   arrivalReadSchema,
   bookingReadSchema,
   myWorkSchema,
+  reviewReasonSchema,
   type Arrival,
   type AssignmentScope,
   type Booking,
@@ -654,14 +655,15 @@ describe('GRN lines linked or sent to Booking for review (goods-in 3.7, 4.10; 12
     expect(await exceptionsOn([grnId])).toEqual([{ type: 'receiving.booking-review', owner_user_id: booker.user.id }]);
   });
 
-  it('PRD-BKG-008 an unbooked GRN goes to Booking, who links it later, dated and signed; the later link changes nothing on the GRN', async () => {
+  it('PRD-BKG-008 goods-in 12 test 6 an unbooked GRN goes to Booking for review in My work, who links it later, dated and signed; the later link changes nothing on the GRN', async () => {
     const target = await approvedBooking([line(STYLE, 10, { size: size('M').code })]);
     const { grnId, arrival } = await received(undefined, [{ styleCode: STYLE, size: 'M', quantity: 4 }]);
     expect(arrival.bookingId).toBeNull();
     const [only] = arrival.grn?.bookingLinks ?? [];
     expect(only).toMatchObject({ atIssue: null, link: null, proposal: null });
-    // Nothing is linked at issue, so no review is raised: the GRN is offered to Booking to link (goods-in 4.10).
-    expect(await exceptionsOn([grnId])).toEqual([]);
+    // Nothing is linked at issue: the GRN goes to Booking for review, one follow-up linking to it, to link its lines
+    // later (goods-in 4.10; RR-580, following design test 6).
+    expect(await exceptionsOn([grnId])).toEqual([{ type: 'receiving.booking-review', owner_user_id: booker.user.id }]);
     const grnLineId = only?.grnLineId ?? '';
     // Goods of another size are not the line's: a receipt link always names a line its goods match (goods-in 3.10).
     const wrong = await post(booker, `/api/receiving/grns/${grnId}/booking-links`, {
@@ -832,9 +834,16 @@ describe('late or excess goods, approved before acceptance into the booking (goo
         lines: [{ grnLineId: of.arrival.grn?.lines[0]?.id, lineKey: keyOf(booking, 'S') }],
       });
     const proposed = ok(await propose(first)) as { proposal: { proposalId: string; requestId: string } };
+    // The proposal waiting is named by itself (code-house-rules 12.3).
     expect(errorOf(await propose(second))).toMatchObject({
       code: 'booking.link-proposal-pending',
-      missing: [{ kind: 'version', recordId: booking.id, versionId: proposed.proposal.proposalId }],
+      missing: [
+        {
+          kind: 'record',
+          recordType: 'booking.booking_receipt_link_proposal',
+          recordId: proposed.proposal.proposalId,
+        },
+      ],
     });
     expect(errorOf(await propose(first))?.code).toBe('booking.receipt-link-proposed');
     ok(await decide(owner, proposed.proposal.requestId, proposed.proposal.proposalId, 'reject'));
@@ -845,6 +854,24 @@ describe('late or excess goods, approved before acceptance into the booking (goo
     const again = ok(await propose(first)) as { proposal: { proposalId: string; requestId: string } };
     ok(await decide(owner, again.proposal.requestId, again.proposal.proposalId));
     expect((await readBooking(booker, booking.id)).status?.lines[0]).toMatchObject({ delivered: 2, outstanding: 8 });
+  });
+});
+
+describe('one list of review reasons (goods-in 3.7, 4.10; code review 6 of stage 2)', () => {
+  it("PRD-BKG-007 the database's check of a GRN line's review takes the reasons the shared schema names", async () => {
+    const verify = await connect(database, 'verify');
+    try {
+      const found = await verify.query<{ definition: string }>(
+        `select pg_catalog.pg_get_constraintdef(oid) as definition from pg_catalog.pg_constraint
+          where conname = 'grn_line_booking_reason'`,
+      );
+      const definition = found.rows[0]?.definition ?? '';
+      const listed = [...definition.matchAll(/'([a-z-]+)'::text/g)].map((match) => match[1]);
+      // The reasons of the review, and the two outcomes the check names besides.
+      expect(new Set(listed)).toEqual(new Set([...reviewReasonSchema.options, 'linked', 'review']));
+    } finally {
+      await verify.end();
+    }
   });
 });
 

@@ -7,9 +7,9 @@ import { bookingReceiptLinkProposal, bookingReceiptLinkProposalLine } from '../d
 import {
   bookingAuditRecord,
   bookingItem,
-  bookingVersionItem,
   lineItem,
   receiptLinkDocument,
+  receiptLinkProposalItem,
 } from '../domain/bookings.js';
 import { laterLinks, type ReceiptsLater, type ReceiptsLinked } from '../domain/receipts.js';
 import { inForceOf, linkedOf, pendingProposalOf, proposedOf } from '../queries/receipts.js';
@@ -69,7 +69,7 @@ export async function linkReceiptsLater(
   if (needing.length > 0) {
     const pending = await pendingProposalOf(context, row.id);
     if (pending !== undefined) {
-      return refused('refused', 'booking.link-proposal-pending', [bookingVersionItem(row.id, pending.id)]);
+      return refused('refused', 'booking.link-proposal-pending', [receiptLinkProposalItem(pending.id)]);
     }
   }
   const linked: { grnLineId: string; linkId: string; lineKey: string }[] = [];

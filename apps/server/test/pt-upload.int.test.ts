@@ -4,6 +4,8 @@ import {
   arrivalReadSchema,
   grnPtReadSchema,
   HELD_LINE_DECISION,
+  inboxSchema,
+  PT_APPROVAL,
   RECOUNT_APPROVAL,
   ptPreviewSchema,
   type AssignmentScope,
@@ -39,7 +41,7 @@ import {
   type AccessTestApp,
   type SyntheticUser,
 } from './support/access.js';
-import { asUserIn, damageGateOpen, SYNTHETIC_POLICY_17_VALUES } from './support/damage.js';
+import { asUserIn, damageGateOpen, RECEIVER_REPORTER_AUTHORITY, SYNTHETIC_POLICY_17_VALUES } from './support/damage.js';
 import { defineSyntheticCodeSeries } from './support/exceptions.js';
 import { grantSynthetic, type SyntheticAuthority } from './support/grants.js';
 import { defineSyntheticImportBatchSeries } from './support/imports.js';
@@ -49,9 +51,9 @@ import { STORE_FILE_PATH, syntheticPdfUpload } from './support/opening-app.js';
 import { decided, structureSetup, type StructureSetup } from './support/organisation.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { databaseUrl } from './support/postgres.js';
+import { writeSyntheticItemMap, writeSyntheticMarkingFrom } from './support/marked-attributes.js';
 import { ptWorld, type PtWorld } from './support/pt.js';
 import {
-  RECEIVER_AUTHORITY,
   receivingFixture,
   receivingGateOpen,
   receivingGranted,
@@ -82,6 +84,7 @@ let fixture: ReceivingFixture;
 let lists: PtWorld;
 const cookies = new Map<string, string>();
 let approveReason: string;
+let rejectReason: string;
 
 interface Person {
   readonly user: SyntheticUser;
@@ -97,6 +100,8 @@ let recountApprover: Person;
 let ptMaker: Person;
 /** A reader of PTs who is not granted cost or margin. */
 let ptReader: Person;
+/** A PT approver, with a SYNTHETIC limit on PT approval (goods-in 6.1). */
+let ptApprover: Person;
 /** Someone who may stage imports but not prepare PTs. */
 let notAPtMaker: Person;
 let settingsAdmin: Person;
@@ -229,6 +234,7 @@ async function issuedGrn(
     readonly invoice?: number;
     readonly colour?: string | null;
     readonly extra?: 'received' | 'not-received';
+    readonly damaged?: number;
   }[],
 ): Promise<{ readonly arrivalId: string; readonly grnId: string }> {
   const made = await post(receiver, '/api/receiving/arrivals', {
@@ -260,7 +266,10 @@ async function issuedGrn(
       invoiceQuantity: line.invoice ?? line.counted,
       countedQuantity: line.counted,
       extra: line.extra ?? null,
-      damage: null,
+      damage:
+        line.damaged === undefined
+          ? null
+          : { quantity: line.damaged, description: 'SYNTHETIC tear seen at the count', photo: null },
       batch: null,
     });
     expect(saved.status, JSON.stringify(saved.body)).toBe(200);
@@ -365,11 +374,11 @@ const PT_MAKER_AUTHORITY: readonly SyntheticAuthority[] = [
 ];
 
 /** Decides a request through `access`'s approval route, as the approval panel in My work does (9.5). */
-function decide(person: Person, requestId: string, versionId: string) {
+function decide(person: Person, requestId: string, versionId: string, outcome: 'approve' | 'reject' = 'approve') {
   return post(person, `/api/access/approval-requests/${requestId}/decision`, {
     versionId,
-    outcome: 'approve',
-    reason: { kind: 'listed', reasonId: approveReason },
+    outcome,
+    reason: { kind: 'listed', reasonId: outcome === 'approve' ? approveReason : rejectReason },
     totpCode: freshCode(person.user),
   });
 }
@@ -393,6 +402,22 @@ async function unknownOnlyLimit(person: Person, actionType: string = HELD_LINE_D
   );
   if (prepared.kind !== 'success') throw new Error(`limit refused: ${prepared.refusal.code}`);
   const done = await decide(settingsApprover, prepared.answer.requestId, prepared.answer.limitId);
+  expect(done.status, JSON.stringify(done.body)).toBe(200);
+}
+
+/** A SYNTHETIC limit on PT approval, on its value at cost, prepared and approved by two other people (9.2; V-02). */
+async function ptApprovalLimit(person: Person): Promise<void> {
+  const prepared = await post(settingsAdmin, '/api/access/approval-limits', {
+    actionType: PT_APPROVAL,
+    holder: { kind: 'individual', userId: person.user.id, roleAssignmentId: person.assignmentId },
+    limit: { kind: 'amount', amount: 100_000_000 },
+    coversUnknown: false,
+    origin: 'synthetic',
+    validFrom: setup.today(),
+  });
+  expect(prepared.status, JSON.stringify(prepared.body)).toBe(200);
+  const { requestId, limitId } = prepared.body as { requestId: string; limitId: string };
+  const done = await decide(settingsApprover, requestId, limitId);
   expect(done.status, JSON.stringify(done.body)).toBe(200);
 }
 
@@ -456,6 +481,7 @@ beforeAll(async () => {
   // Policy 17 Signed and validated on the test-only check's SYNTHETIC value, so held lines are decided (goods-in 10.5).
   await damageGateOpen(setup, database);
   approveReason = await writeSyntheticReason(database, 'approve');
+  rejectReason = await writeSyntheticReason(database, 'reject');
   const numbering = api.app.get<NumberingInterface>(NUMBERING);
   await asUserIn(api.app, organisation, setup.preparer.id, async (context) => {
     await defineSyntheticGrnSeries(context, numbering);
@@ -546,8 +572,10 @@ beforeAll(async () => {
     ),
   );
 
+  // Warehouse (P-WHS), who counts, reports damage found at the count, issues the GRN and proposes a recount (goods-in 4.7,
+  // 4.9, 8.5).
   receiver = await enrolled('PTU-RECEIVER', [
-    ...RECEIVER_AUTHORITY,
+    ...RECEIVER_REPORTER_AUTHORITY,
     { recordType: 'receiving.recount', action: 'create' },
   ]);
   recountApprover = await enrolled('PTU-RECOUNT-APPROVER', [
@@ -564,6 +592,12 @@ beforeAll(async () => {
     { recordType: 'files_imports.import_batch', action: 'view' },
     { recordType: 'merchandise.pt', action: 'view' },
   ]);
+  ptApprover = await enrolled('PTU-APPROVER', [
+    { recordType: 'merchandise.pt', action: 'view' },
+    { recordType: 'merchandise.pt', action: 'approve' },
+    { recordType: 'access.approval_request', action: 'view' },
+    { recordType: 'access.approval_reason', action: 'view' },
+  ]);
   notAPtMaker = await enrolled(
     'PTU-NOT-MAKER',
     PT_MAKER_AUTHORITY.filter((each) => each.recordType !== 'merchandise.pt'),
@@ -571,6 +605,7 @@ beforeAll(async () => {
   settingsAdmin = await enrolled('PTU-SETTINGS', [
     { recordType: 'access.approval_limit', action: 'view' },
     { recordType: 'access.approval_limit', action: 'create' },
+    { recordType: 'access.approval_request', action: 'view' },
     { recordType: 'exceptions.exception_routing', action: 'view' },
     { recordType: 'exceptions.exception_routing', action: 'edit' },
   ]);
@@ -582,12 +617,17 @@ beforeAll(async () => {
     { recordType: 'access.approval_reason', action: 'view' },
   ]);
   await unknownOnlyLimit(bookingApprover);
+  await ptApprovalLimit(ptApprover);
   await unknownOnlyLimit(recountApprover, RECOUNT_APPROVAL);
+  // A GRN received without a booking goes to Booking for review (goods-in 4.10; RR-580); damage found at the count goes
+  // to Operations, here the Booking approver (goods-in 8.5): every follow-up routed by a SYNTHETIC rule (V-03).
   for (const type of [
     'receiving.shortage',
     'receiving.excess',
     'receiving.wrong-goods',
     'receiving.unidentified-goods',
+    'receiving.booking-review',
+    'stock.damage',
   ]) {
     await route(type, bookingApprover);
   }
@@ -661,7 +701,7 @@ describe('submitting a PT file for a GRN (goods-in 5.6, 5.7, 5.8)', () => {
     );
   });
 
-  it('goods-in 5.7 a wrong draft is withdrawn, never edited: its request and the GRN mark end, and a corrected file is uploaded', async () => {
+  it('PRD-REC-019 a wrong draft is withdrawn, never edited: its request and the GRN mark end, and a corrected file is uploaded (goods-in 5.7)', async () => {
     const style = syntheticCode('PTU-W');
     const { grnId } = await issuedGrn([{ style, sizeAt: 0, counted: 1 }]);
     const { batchId } = await uploaded(grnId, [ptRow(style, 0)]);
@@ -710,7 +750,7 @@ describe('submitting a PT file for a GRN (goods-in 5.6, 5.7, 5.8)', () => {
     expect(shown.draft?.totals.mrpPaise).toBe(199_900);
   });
 
-  it('goods-in 5.1 the uploader holds the permission to prepare PTs for the GRN place; another is refused', async () => {
+  it('PRD-REC-014 the uploader holds the permission to prepare PTs for the GRN place; another is refused (goods-in 5.1)', async () => {
     const style = syntheticCode('PTU-P');
     const { grnId } = await issuedGrn([{ style, sizeAt: 0, counted: 1 }]);
     const bytes = await syntheticPtWorkbook({ rows: [ptRow(style, 0)], marker: 'PTU-NOT-MAKER' });
@@ -723,7 +763,7 @@ describe('submitting a PT file for a GRN (goods-in 5.6, 5.7, 5.8)', () => {
     expect(errorOf(hidden)?.code).toBe('files-imports.subject-not-found');
   });
 
-  it('goods-in 5.2 PRD-IMP-004 finds the header on row 2 below a subtotal row, as on a preparer work tab', async () => {
+  it('PRD-IMP-004 finds the header on row 2 below a subtotal row, as on a preparer work tab (goods-in 5.2)', async () => {
     const style = syntheticCode('PTU-H');
     const { grnId } = await issuedGrn([{ style, sizeAt: 0, counted: 2 }]);
     const { validated } = await uploaded(grnId, [ptRow(style, 0), ptRow(style, 0)], { headerRow: 2 });
@@ -757,6 +797,81 @@ describe('the PT upload waits for every held line (goods-in 12 test 2; 5.1, 4.6;
     expect(taken.status, JSON.stringify(taken.body)).toBe(200);
     const { validated } = await uploaded(grnId, [ptRow(style, 0, { QTY: 3, NAG: 3 })]);
     expect(validated).toBe('Validated');
+  });
+
+  it('DEC-137 refuses the upload while damage found at the count waits for its decision, naming the report (goods-in 12 test 2)', async () => {
+    // Design test 2's PT half for damage: the report on the GRN line waits for a different person's decision (8.5).
+    const style = syntheticCode('PTU-T2-DAMAGE');
+    const { arrivalId, grnId } = await issuedGrn([{ style, sizeAt: 0, counted: 3, damaged: 1 }]);
+    const read = await get(receiver, `/api/receiving/arrivals/${arrivalId}`);
+    const report = arrivalReadSchema.parse(read.body).arrival.grn?.lines[0]?.damage?.damageReportId;
+    expect(report).toEqual(expect.any(String));
+    expect((await grnPt(grnId)).upload).toMatchObject({
+      kind: 'blocked',
+      code: 'merchandise.pt-held-lines-open',
+      missing: [{ kind: 'record', recordType: 'stock.damage_report', recordId: report }],
+    });
+    const bytes = await syntheticPtWorkbook({ rows: [ptRow(style, 0, { QTY: 3, NAG: 3 })], marker: 'PTU-T2-DMG' });
+    const refused = await start(ptMaker, grnId, await handIn(ptMaker, bytes, 't2-damage'));
+    expect(refused.status).toBe(422);
+    expect(errorOf(refused)).toMatchObject({
+      code: 'files-imports.subject-refused',
+      missing: [
+        { kind: 'import-subject', reason: 'merchandise.pt-held-lines-open' },
+        { kind: 'record', recordType: 'stock.damage_report', recordId: report },
+      ],
+    });
+    // Nothing is created for the GRN (goods-in 5.6).
+    expect((await grnPt(grnId)).pt).toBeNull();
+  });
+});
+
+describe('the PT decision waits for the PT approval (goods-in 5.8, 6; S2-F06-T01)', () => {
+  it('PRD-REC-017 refuses approving or rejecting a PT revision, naming it, so no PT is called official without its coverage and value', async () => {
+    const style = syntheticCode('PTU-DECIDE');
+    const { grnId } = await issuedGrn([{ style, sizeAt: 0, counted: 1 }]);
+    const { batchId } = await uploaded(grnId, [ptRow(style, 0)]);
+    expect((await submitted(batchId)).status).toBe(200);
+    const revision = (await grnPt(grnId)).pt?.revisions[0];
+    const requestId = revision?.request?.id ?? '';
+    for (const outcome of ['approve', 'reject'] as const) {
+      const decided = await decide(ptApprover, requestId, revision?.revisionId ?? '', outcome);
+      expect(decided.status, JSON.stringify(decided.body)).toBe(422);
+      expect(errorOf(decided)).toMatchObject({
+        code: 'merchandise.pt-decision-not-available',
+        missing: [{ kind: 'record', recordType: 'merchandise.pt_revision', recordId: revision?.revisionId }],
+      });
+    }
+    // The draft keeps waiting, its request open, and the GRN keeps its mark (goods-in 5.8).
+    const after = await grnPt(grnId);
+    expect(after.pt?.revisions[0]).toMatchObject({
+      state: 'Awaiting approval',
+      request: { state: 'Awaiting approval' },
+    });
+    expect(after.mark).toMatchObject({ kind: 'set', ptRevisionId: revision?.revisionId });
+  });
+});
+
+describe('the Receive Goods inbox once a PT file is submitted (goods-in 4.1, 4.8; RR-584)', () => {
+  it('PRD-UXP-003 keeps the GRN as "PT waiting for approval" while its PT file waits, and as waiting for its PT once withdrawn', async () => {
+    const style = syntheticCode('PTU-INBOX');
+    const { arrivalId, grnId } = await issuedGrn([{ style, sizeAt: 0, counted: 1 }]);
+    const waitingFor = async () =>
+      inboxSchema
+        .parse((await get(receiver, `/api/receiving/sites/${fixture.siteId}/inbox?view=pending`)).body)
+        .entries.find((entry) => entry.arrivalId === arrivalId)?.waitingFor;
+    expect(await waitingFor()).toBe('pt');
+    const { batchId } = await uploaded(grnId, [ptRow(style, 0)]);
+    expect((await submitted(batchId)).status).toBe(200);
+    expect(await waitingFor()).toBe('pt-approval');
+    const read = await grnPt(grnId);
+    const withdrawn = await post(
+      ptMaker,
+      `/api/merchandise/pt/revisions/${read.pt?.revisions[0]?.revisionId ?? ''}/withdraw`,
+      { versionToken: read.pt?.versionToken },
+    );
+    expect(withdrawn.status, JSON.stringify(withdrawn.body)).toBe(200);
+    expect(await waitingFor()).toBe('pt');
   });
 });
 
@@ -884,7 +999,7 @@ describe('a PT file refused whole, every problem listed by row and column (goods
     expect(submit.status).toBe(422);
   });
 
-  it('GC6-3 A-9 a PT file that links to another workbook is refused at intake, asking for a self-contained copy', async () => {
+  it('DEC-134 a PT file that links to another workbook is refused at intake, asking for a self-contained copy (GC6-3, A-9)', async () => {
     const bytes = withParts(await syntheticPtWorkbook({ rows: [], marker: 'PTU-LINKED' }), {
       'xl/externalLinks/externalLink1.xml': SYNTHETIC_EXTERNAL_LINK_PART,
       'xl/_rels/workbook.xml.rels': (old) =>
@@ -896,6 +1011,93 @@ describe('a PT file refused whole, every problem listed by row and column (goods
       code: 'files-imports.workbook-depends-on-another',
       missing: [{ kind: 'self-contained-copy' }],
     });
+  });
+});
+
+describe('the checks found exactly, and again at submit (goods-in 5.3, 5.6; code review 6 of stage 2)', () => {
+  it('PRD-PTW-011 compares NAG with QTY exactly: a NAG of 1.004 is not one piece, whatever it rounds to', async () => {
+    const style = syntheticCode('PTU-NAG');
+    const { grnId } = await issuedGrn([{ style, sizeAt: 0, counted: 1 }]);
+    const { batchId, validated } = await uploaded(grnId, [ptRow(style, 0, { NAG: 1.004 })]);
+    expect(validated).toBe('Staged');
+    const shown = await preview(batchId);
+    expect(
+      shown.issues
+        .filter((issue) => issue.severity === 'Blocking')
+        .map((issue) => [issue.rowNumber ?? 0, issue.column ?? '', issue.code]),
+    ).toEqual([[2, 'S', 'merchandise.pt-nag-not-qty']]);
+  });
+
+  it('DEC-134 PRD-IMP-007 refuses the whole file for an ITEM the item map does not give its SUB CATEGORY and TYPE (goods-in 5.3; RR-583)', async () => {
+    const style = syntheticCode('PTU-ITEM');
+    const { grnId } = await issuedGrn([{ style, sizeAt: 0, counted: 3 }]);
+    const { batchId, validated } = await uploaded(grnId, [
+      // Row 2: TSHIRT is a CASUAL TOP by the map; the file says FORMAL.
+      ptRow(style, 0, { 'SUB CATEGORY': code.category('FORMAL') }),
+      // Row 3: and BOTTOM.
+      ptRow(style, 0, { TYPE: lists.type.values.BOTTOM?.code }),
+      // Row 4: SHORTS is on the item list, but the map gives it nothing: never a default.
+      ptRow(style, 0, { ITEM: lists.item.values.SHORTS?.code }),
+    ]);
+    expect(validated).toBe('Staged');
+    const shown = await preview(batchId);
+    expect(shown.draft).toBeNull();
+    expect(
+      shown.issues
+        .filter((issue) => issue.severity === 'Blocking')
+        .map((issue) => [issue.rowNumber ?? 0, issue.column ?? '', issue.code])
+        .sort((a, b) => Number(a[0]) - Number(b[0])),
+    ).toEqual([
+      [2, 'E', 'merchandise.pt-item-map-disagrees'],
+      [3, 'F', 'merchandise.pt-item-map-disagrees'],
+      [4, 'G', 'merchandise.pt-item-not-mapped'],
+    ]);
+  });
+
+  it('DEC-134 PRD-IMP-007 refuses a file at submit with every problem the GRN or the lists now give it, by row and field (goods-in 5.6)', async () => {
+    const style = syntheticCode('PTU-RECHECK');
+    const { grnId } = await issuedGrn([{ style, sizeAt: 0, counted: 2 }]);
+    const { batchId, validated } = await uploaded(grnId, [ptRow(style, 0), ptRow(style, 0)]);
+    expect(validated).toBe('Validated');
+    // After the check, the item map changes: TSHIRT is now a FORMAL BOTTOM (a SYNTHETIC change of the item marking).
+    const itemMap = (category: 'CASUAL' | 'FORMAL', type: 'TOP' | 'BOTTOM') => [
+      {
+        itemValueId: lists.item.values.TSHIRT?.id ?? '',
+        categoryId: lists.categories[category]?.id ?? '',
+        typeValueId: lists.type.values[type]?.id ?? '',
+      },
+    ];
+    const remark = async (category: 'CASUAL' | 'FORMAL', type: 'TOP' | 'BOTTOM') => {
+      clock.advance(1);
+      const version = await writeSyntheticMarkingFrom(
+        database,
+        'item',
+        lists.item.attributeId,
+        setup.preparer.id,
+        clock.now(),
+      );
+      await writeSyntheticItemMap(database, version, itemMap(category, type));
+    };
+    await remark('FORMAL', 'BOTTOM');
+    try {
+      const published = await submitted(batchId);
+      // The publish fails, the batch kept to be corrected; its document's refusal names every problem, each by its
+      // code, row and field, never the first alone (PRD-IMP-007; imports-and-opening-data 7.4).
+      expect(published.status, JSON.stringify(published.body)).toBe(200);
+      expect(published.body).toMatchObject({ result: 'failed', state: 'Validated' });
+      const [document] = (published.body as { documents: { refusalCode?: string; missing?: unknown[] }[] }).documents;
+      expect(document?.refusalCode).toBe('merchandise.pt-file-refused');
+      expect(document?.missing).toEqual([
+        { kind: 'pt-issue', code: 'merchandise.pt-item-map-disagrees', row: '2', field: 'subCategory' },
+        { kind: 'pt-issue', code: 'merchandise.pt-item-map-disagrees', row: '2', field: 'type' },
+        { kind: 'pt-issue', code: 'merchandise.pt-item-map-disagrees', row: '3', field: 'subCategory' },
+        { kind: 'pt-issue', code: 'merchandise.pt-item-map-disagrees', row: '3', field: 'type' },
+      ]);
+      // Nothing is created (goods-in 5.6; PRD-IMP-012).
+      expect((await grnPt(grnId)).pt).toBeNull();
+    } finally {
+      await remark('CASUAL', 'TOP');
+    }
   });
 });
 
@@ -967,8 +1169,26 @@ describe('products and barcodes (goods-in 12 test 10, the proposal part; 5.5; PR
   });
 });
 
+describe('a row’s product found by its barcode first (goods-in 5.5; code review 6 of stage 2)', () => {
+  it('PRD-MER-007 takes the product the barcode maps to before the row identity, even of another style, showing the difference', async () => {
+    // Goods-in 5.5: "found by its barcode's external code mapping, or by brand, style, colour and size".
+    const fresh = syntheticCode('PTU-BARCODE-FIRST');
+    const { grnId } = await issuedGrn([{ style: fresh, sizeAt: 0, counted: 1 }]);
+    const { batchId, validated } = await uploaded(grnId, [ptRow(fresh, 0, { BARCODE: existing.barcode })]);
+    expect(validated).toBe('Validated');
+    const shown = await preview(batchId);
+    expect(shown.draft?.rows.map((row) => [row.rowNumber, row.product, row.repeated])).toEqual([
+      [2, 'existing', false],
+    ]);
+    expect(shown.draft?.newProducts).toEqual([]);
+    expect(shown.draft?.differences).toEqual([
+      { rowNumber: 2, field: 'design', file: fresh, product: existing.styleCode },
+    ]);
+  });
+});
+
 describe('the blank template (goods-in section 11)', () => {
-  it('goods-in 5.2 downloads the Confirmed layout with the lists its values must be on', async () => {
+  it('PRD-PTW-003 downloads the Confirmed layout with the lists its values must be on (goods-in 5.2)', async () => {
     const style = syntheticCode('PTU-TPL');
     const { grnId } = await issuedGrn([{ style, sizeAt: 0, counted: 1 }]);
     const read = await get(
@@ -992,7 +1212,7 @@ describe('the blank template (goods-in section 11)', () => {
 });
 
 describe('the template set up once (goods-in 5.2; PRD-IMP-004, PRD-IMP-008; DEC-134, DEC-140)', () => {
-  it('goods-in 5.2 an Admin proposes the template layout and its mapping, a second person confirms them, and a filled file is detected by them', async () => {
+  it('PRD-IMP-008 an Admin proposes the template layout and its mapping, a second person confirms them, and a filled file is detected by them (goods-in 5.2)', async () => {
     const admin = await enrolled('PTU-ADMIN', [
       { recordType: 'files_imports.layout', action: 'view' },
       { recordType: 'files_imports.layout', action: 'create' },
@@ -1024,6 +1244,55 @@ describe('the template set up once (goods-in 5.2; PRD-IMP-004, PRD-IMP-008; DEC-
     };
     // The proposer never confirms their own (PRD-IMP-008; POL-02.07).
     expect((await decide(admin, layoutRequest, layoutVersionId)).status).toBe(403);
+    // A layout of the PT template finds its header on row 1 or row 2 only (goods-in 5.2): one that looks lower is
+    // proposed and confirmed like any layout, but never stages a PT file.
+    const lowCode = syntheticCode('PTU-LOW-HEADER');
+    const low = await post(admin, '/api/files-imports/layout-versions', {
+      layout: { code: lowCode, source: syntheticName('PT template'), documentType: 'pt', kinds: ['transaction'] },
+      structure: { ...SYNTHETIC_PT_LAYOUT, headerRows: [1, 2, 3] },
+    });
+    expect(low.status, JSON.stringify(low.body)).toBe(200);
+    const lowVersion = low.body as { layoutVersionId: string; requestId: string };
+    const lowMapping = await post(admin, '/api/files-imports/mapping-versions', {
+      mapping: {
+        code: syntheticCode('PTU-LOW-HEADER-MAPPING'),
+        layoutVersionId: lowVersion.layoutVersionId,
+        target: 'merchandise.pt',
+      },
+      fields: SYNTHETIC_PT_MAPPING,
+    });
+    expect(lowMapping.status, JSON.stringify(lowMapping.body)).toBe(200);
+    const lowMappingVersion = lowMapping.body as { mappingVersionId: string; requestId: string };
+    expect((await decide(confirmer, lowVersion.requestId, lowVersion.layoutVersionId)).status).toBe(200);
+    expect((await decide(confirmer, lowMappingVersion.requestId, lowMappingVersion.mappingVersionId)).status).toBe(200);
+    const lowStyle = syntheticCode('PTU-LOW');
+    const { grnId: lowGrn } = await issuedGrn([{ style: lowStyle, sizeAt: 0, counted: 1 }]);
+    const lowFile = await handIn(
+      ptMaker,
+      await syntheticPtWorkbook({ rows: [ptRow(lowStyle, 0)], marker: 'PTU-LOW' }),
+      'low-header',
+    );
+    const { storedFileId: lowFileId, receiptId: lowReceipt } = lowFile.body as {
+      storedFileId: string;
+      receiptId: string;
+    };
+    const refusedLow = await post(ptMaker, '/api/files-imports/batches', {
+      storedFileId: lowFileId,
+      fileReceiptId: lowReceipt,
+      kind: 'transaction',
+      target: 'merchandise.pt',
+      layoutVersionId: lowVersion.layoutVersionId,
+      mappingVersionId: lowMappingVersion.mappingVersionId,
+      subject: { recordId: lowGrn },
+    });
+    expect(refusedLow.status).toBe(422);
+    expect(errorOf(refusedLow)).toMatchObject({
+      code: 'files-imports.header-rows-not-allowed',
+      missing: [
+        { kind: 'header-row', row: '1' },
+        { kind: 'header-row', row: '2' },
+      ],
+    });
     expect((await decide(confirmer, layoutRequest, layoutVersionId)).status).toBe(200);
     expect((await decide(confirmer, mappingRequest, mappingVersionId)).status).toBe(200);
     const style = syntheticCode('PTU-DETECTED');

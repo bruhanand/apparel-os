@@ -26,6 +26,7 @@ import {
 } from '../db/schema.js';
 import { currentLines, grnBlockers } from '../domain/lines.js';
 import { grnLineViews, linesOfGrn, type Requests } from './held-lines.js';
+import { grnsMarked } from './pt-mark.js';
 import { recountViewsOf } from './recounts.js';
 import { arrivalRow, entriesByArrival, entriesOf, factsOf, newestChange, type ArrivalRow } from '../commands/common.js';
 import { receivingMissing, type AvailabilityDependencies } from './availability.js';
@@ -227,8 +228,9 @@ export function peopleOf(arrival: Arrival): string[] {
 /**
  * The Receive Goods inbox of a Site (goods-in 4.1), newest recorded first, a page at a time (code-house-rules 12.1);
  * undefined when no Site has the identifier. Pending holds Arrivals not yet issued as a GRN, GRNs with held lines or
- * damage reported at the count not yet decided, and GRNs waiting for their PT, which every GRN does until the PT upload
- * is built (S2-F04-T02); History holds the rest, none yet. Each unit of the Site in force today comes with whether
+ * damage reported at the count not yet decided, GRNs waiting for their PT file, and GRNs whose PT file is submitted and
+ * waits for approval, marked "PT attached" (goods-in 4.8; the product owner, 22 Oct 2026, RR-584), which every one does
+ * until the PT approval is built (S2-F06-T01); History holds the rest, none yet. Each unit of the Site in force today comes with whether
  * receiving is available there, naming what is missing, and its locations in force; `covered` answers, for the facts
  * of each Arrival, whether the reader may view it; `damage` where the damage reports on GRN lines stand.
  */
@@ -293,6 +295,10 @@ export async function inboxOf(
     grns.map((each) => each.id),
     damage,
   );
+  const marked = await grnsMarked(
+    context,
+    grns.map((each) => each.id),
+  );
   const listed: InboxEntry[] = shown.map((row) => {
     const numbers = invoices.filter((each) => each.arrivalId === row.id).map((each) => each.number);
     const lines = currentLines(entries.get(row.id) ?? []);
@@ -301,7 +307,9 @@ export async function inboxOf(
       issued !== undefined
         ? waiting.has(issued.id)
           ? 'held-lines'
-          : 'pt'
+          : marked.has(issued.id)
+            ? 'pt-approval'
+            : 'pt'
         : numbers.length === 0
           ? 'invoice'
           : lines.length === 0

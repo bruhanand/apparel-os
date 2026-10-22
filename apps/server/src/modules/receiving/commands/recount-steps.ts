@@ -18,9 +18,9 @@ import { piecesToReverse, recountOfLine } from '../domain/recounts.js';
 import { linesOfGrn } from '../queries/held-lines.js';
 import { currentPtMark } from '../queries/pt-mark.js';
 import { countsNowOf, heldLinesOfLines, originsOfLine, type RecountRecord } from '../queries/recounts.js';
+import { grnRow } from '../queries/grns.js';
 import {
   arrivalRow,
-  grnRow,
   recordItem,
   recordNotFound,
   refusalOf,

@@ -102,7 +102,7 @@ export type IssuePlan =
  * written (goods-in 3.7, 4.10; PRD-BKG-007; POL-05.08; DEC-130): each links to the one line of the version in force it
  * matches, or goes to Booking for review with why (domain/receipts.ts). Read under the caller's lock on the booking at
  * step 1, which is a defect to lack (code-house-rules 8.2), so the links written once every lock is held are these; on
- * the business date given. A GRN line linked already is refused (`booking.receipt-already-linked`).
+ * the business date given.
  */
 export async function planAtIssue(
   context: TransactionContext,
@@ -119,16 +119,13 @@ export async function planAtIssue(
       refusal: { kind: 'not-found', code: 'booking.record-not-found', missing: [bookingItem(issue.bookingId)] },
     };
   }
+  // A GRN's lines are written in the issue's own transaction, so none can be linked before it: one that is, is a defect
+  // (code review 6 of stage 2; code-house-rules 12.2: the issue's route answers no such refusal).
   const already = await linkedOf(
     context,
     issue.receipts.map((receipt) => receipt.grnLineId),
   );
-  if (already.size > 0) {
-    return {
-      kind: 'refusal',
-      refusal: { kind: 'refused', code: 'booking.receipt-already-linked', missing: [bookingItem(row.id)] },
-    };
-  }
+  if (already.size > 0) throw new CommandDefect('A GRN line was linked to a booking before its GRN was issued');
   const inForce = await inForceOf(context, row, date);
   const found = outcomesAtIssue(inForce, issue.delivery, issue.receipts);
   const outcomes = issue.receipts.map((receipt, index): PlannedAtIssue => {

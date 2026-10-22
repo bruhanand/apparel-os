@@ -1,4 +1,5 @@
 import type { MissingItem } from '@apparel-os/schemas';
+import { fieldName } from '../files/import-text';
 import { isMessageId, t } from '../messages/catalogue';
 import { formatQuantity } from '../setup/format';
 import { Banner } from './Banner';
@@ -147,22 +148,43 @@ function ptText(item: MissingItem): string | undefined {
   if (item.kind === 'import-subject' && item.reason !== undefined) {
     return t('missing.import-subject.reason', { reason: codeText(item.reason) });
   }
+  // A problem of the file, by its row and column where it has them (goods-in 5.6; PRD-IMP-007).
   const issue = `issue.${item.code ?? ''}`;
   if (item.kind === 'pt-issue' && item.code !== undefined) {
-    return t('missing.pt-issue.named', { problem: isMessageId(issue) ? t(issue) : codeText(item.code) });
+    const problem = isMessageId(issue) ? t(issue) : codeText(item.code);
+    const row = Number(item.row);
+    if (item.row === undefined || !Number.isInteger(row)) return t('missing.pt-issue.named', { problem });
+    if (item.field === undefined) return t('missing.pt-issue.row', { row: formatQuantity(row), problem });
+    return t('missing.pt-issue.cell', { row: formatQuantity(row), column: fieldName(item.field), problem });
   }
   if (item.kind === 'layout-sheet-matched' && item.sheet !== undefined) {
     return t('missing.layout-sheet-matched.named', { sheet: item.sheet });
   }
-  if (item.kind === 'pt-style-size' && item.styleCode !== undefined) {
-    const named = { style: item.styleCode, size: item.size ?? '' };
-    const file = item.fileQuantity === undefined ? undefined : formatQuantity(Number(item.fileQuantity));
-    const grn = item.grnQuantity === undefined ? undefined : formatQuantity(Number(item.grnQuantity));
-    if (file !== undefined && grn !== undefined) return t('missing.pt-style-size.both', { ...named, file, grn });
-    if (file !== undefined) return t('missing.pt-style-size.file', { ...named, file });
-    if (grn !== undefined) return t('missing.pt-style-size.grn', { ...named, grn });
+  if (item.kind === 'header-row' && item.row !== undefined) {
+    return t('missing.header-row.named', { row: item.row });
   }
+  if (item.kind === 'pt-style-size' && item.styleCode !== undefined) return styleSizeText(item, item.styleCode);
   return undefined;
+}
+
+/**
+ * A style and size of a PT file or its GRN, with the quantities where the item gives them (goods-in 5.4). A GRN line
+ * counted with no size names none: its text says so, never an empty size (PRD-MOD-015).
+ */
+function styleSizeText(item: MissingItem, style: string): string {
+  const file = item.fileQuantity === undefined ? undefined : formatQuantity(Number(item.fileQuantity));
+  const grn = item.grnQuantity === undefined ? undefined : formatQuantity(Number(item.grnQuantity));
+  if (item.size === undefined) {
+    if (grn === undefined) return t('missing.pt-style-size.unsized.named', { style });
+    return file === undefined
+      ? t('missing.pt-style-size.unsized.grn', { style, grn })
+      : t('missing.pt-style-size.unsized.both', { style, file, grn });
+  }
+  const named = { style, size: item.size };
+  if (file !== undefined && grn !== undefined) return t('missing.pt-style-size.both', { ...named, file, grn });
+  if (file !== undefined) return t('missing.pt-style-size.file', { ...named, file });
+  if (grn !== undefined) return t('missing.pt-style-size.grn', { ...named, grn });
+  return t('missing.pt-style-size.named', named);
 }
 
 /** What an intake refusal names (imports-and-opening-data 9.3, 11; PRD-UXP-003; S1-F06-T02). */

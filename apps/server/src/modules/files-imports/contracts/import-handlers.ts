@@ -17,6 +17,9 @@ import type { EffectiveValue } from '../domain/report.js';
 // its publish needs for each kind it accepts, the measures an outcome sums (7.4), and the rows its publish locks with
 // the batch at step 1 (code-house-rules 8.2).
 
+/** One issue a handler finds in a document, by row and field (3.1 step 7; PRD-IMP-007). */
+export type ImportIssue = Extract<DocumentPreview, { kind: 'issues' }>['issues'][number];
+
 /** One field of the handler's staged row: its name and whether a document needs it known (PRD-MOD-015). */
 export interface ImportField {
   readonly name: string;
@@ -218,10 +221,18 @@ export interface ImportHandler {
   /** The record its batches are about, for a handler that imports a file for one record (S2-F04-T02). */
   readonly subject?: ImportSubject;
   /**
-   * Whether its preview runs where a required field is Unknown, checking everything else, so every problem of a file
-   * is listed at once (PRD-IMP-007; goods-in 5.6; S2-F04-T02). Otherwise the preview waits for every required field.
+   * The only rows a layout of its target may find the header on, where its files fix them, such as a PT file's row 1
+   * or row 2 (goods-in 5.2); Start an import refuses a layout looking elsewhere (`files-imports.header-rows-not-allowed`).
+   * Any row a layout states otherwise (6.5).
    */
-  readonly checksUnknown?: boolean;
+  readonly headerRows?: readonly number[];
+  /**
+   * Its own issues of a document a required field of which is Unknown, checking everything else, so every problem of a
+   * file is listed at once beside the pipeline's (PRD-IMP-007; goods-in 5.6; S2-F04-T02); none when it finds none, since
+   * what such a document would create is not worked out (PRD-MOD-015). Without it, the handler's checks wait for every
+   * required field.
+   */
+  checksUnknown?(context: TransactionContext, document: HandlerDocument): Promise<readonly ImportIssue[]>;
   /**
    * The opening kind an opening-balance handler fills (10.1, 10.2, 10.4): opening stock, whose approved, unpublished
    * batch is the unit's opening plan for the stock-plan readiness check (module-map 4.16; DEC-117); or, each its own
@@ -255,9 +266,11 @@ export interface ImportHandler {
    * changes, as a person's change of the same record would be authorised: held at step 0 with the batch's, so
    * publishing goes through the same checks as a person's change (structure-and-masters 6.1, 7; module-map section 3,
    * rule 8). Each document is authorised against its own place, so a Store-scoped preparer publishes only within
-   * their scope (product owner, 10 Oct 2026). A record type no place scopes names no facts.
+   * their scope (product owner, 10 Oct 2026). A record type no place scopes names no facts. Undefined, for a handler
+   * that imports a file for one record, when the person may no longer see that record: Publish answers
+   * `files-imports.subject-not-found`, as Start an import does (code-house-rules 12.3; S2-F04-T02).
    */
-  publishNeeds(context: TransactionContext, document: HandlerDocument): Promise<ImportNeed>;
+  publishNeeds(context: TransactionContext, document: HandlerDocument): Promise<ImportNeed | undefined>;
   /**
    * The rows of its own that publishing the document locks, which Publish locks with the batch at step 1 in one call
    * (code-house-rules 8.2 "Rows of other modules"); its Maintain operation then finds them held.

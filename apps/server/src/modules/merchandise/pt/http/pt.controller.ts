@@ -1,4 +1,4 @@
-import { GRN_TYPE, IMPORT_BATCH_TYPE, PT_TYPE, routes, type FieldClass } from '@apparel-os/schemas';
+import { IMPORT_BATCH_TYPE, PT_PREVIEW_PAGE_CAP, PT_TYPE, routes, type FieldClass } from '@apparel-os/schemas';
 import { Controller, Inject } from '@nestjs/common';
 import {
   ApiRefusal,
@@ -18,21 +18,15 @@ import {
   type TransactionContext,
 } from '../../../../kernel/index.js';
 import { ACCESS, replayRefusal, SignedIn, type AccessInterface, type SignedInUser } from '../../../access/index.js';
-import { revisionNotFound } from '../commands/withdraw-pt.js';
+import { BUSINESS_DATE_NOT_SET, grnNotFound, recordItem, revisionNotFound } from '../domain/refusals.js';
 import type { PtInterface } from '../pt.js';
 import { PT } from '../tokens.js';
 
-/** The refusal while the Organisation has no timezone, so no business date (code-house-rules 9; PRD-SEC-017). */
-const BUSINESS_DATE_NOT_SET: CommandRefusal = {
-  kind: 'unavailable',
-  code: 'access.business-date-not-set',
-  missing: [{ kind: 'setting', setting: 'configuration.timezone' }],
-};
-
-const notFound = (recordType: string, recordId: string): CommandRefusal => ({
+/** No import batch of a PT file, or none the reader may see, has the identifier (code-house-rules 12.3). */
+const batchNotFound = (batchId: string): CommandRefusal => ({
   kind: 'not-found',
   code: 'merchandise.record-not-found',
-  missing: [{ kind: 'record', recordType, recordId }],
+  missing: [recordItem(IMPORT_BATCH_TYPE, batchId)],
 });
 
 /** The classes of a PT's cost and margin, masked for a reader not granted them (access-and-approvals 6). */
@@ -64,7 +58,7 @@ export class PtController {
     const { grnId } = input.params;
     return this.read(user, 'merchandise.read-grn-pt', async (context) => {
       const facts = await this.pt.grnFacts(context, grnId);
-      if (facts === undefined) refuse(notFound(GRN_TYPE, grnId));
+      if (facts === undefined) refuse(grnNotFound(grnId));
       const authorised = await this.access.authorise(context, {
         actorId: user.userId,
         action: 'view',
@@ -79,7 +73,7 @@ export class PtController {
         (versionIds) => this.access.approvalRequestsOf(context, versionIds),
         masked,
       );
-      if (read === undefined) refuse(notFound(GRN_TYPE, grnId));
+      if (read === undefined) refuse(grnNotFound(grnId));
       const names = (await this.access.partyNames(context, read.people, [])).users;
       return {
         asOf: context.startedAt.toISOString(),
@@ -98,7 +92,7 @@ export class PtController {
     return this.read(user, 'merchandise.preview-pt-upload', async (context) => {
       const batch = await this.pt.handlerBatch(context, batchId);
       const grnId = batch?.subject?.recordId;
-      if (batch === undefined || grnId === undefined) refuse(notFound(IMPORT_BATCH_TYPE, batchId));
+      if (batch === undefined || grnId === undefined) refuse(batchNotFound(batchId));
       const viewsBatch = await this.access.authorise(context, {
         actorId: user.userId,
         action: 'view',
@@ -107,7 +101,7 @@ export class PtController {
       });
       if (viewsBatch.kind === 'refused') refuse(viewsBatch.refusal);
       const facts = await this.pt.grnFacts(context, grnId);
-      if (facts === undefined) refuse(notFound(IMPORT_BATCH_TYPE, batchId));
+      if (facts === undefined) refuse(batchNotFound(batchId));
       const authorised = await this.access.authorise(context, {
         actorId: user.userId,
         action: 'view',
@@ -116,17 +110,18 @@ export class PtController {
       });
       if (authorised.kind === 'refused') refuse(authorised.refusal);
       const masked = await this.maskedFor(context, user, authorised.roleAssignmentId);
+      // A page of at most the documented cap, the cap itself when none is asked (code-house-rules 12.1 "Reads").
       const { after, limit } = input.query;
       const preview = await this.pt.preview(
         context,
         batch,
         {
           ...(after === undefined ? {} : { after: Number(after) }),
-          limit: limit === undefined ? Number.MAX_SAFE_INTEGER : Number(limit),
+          limit: limit === undefined ? PT_PREVIEW_PAGE_CAP : Number(limit),
         },
         masked,
       );
-      if (preview === undefined) refuse(notFound(IMPORT_BATCH_TYPE, batchId));
+      if (preview === undefined) refuse(batchNotFound(batchId));
       return { asOf: context.startedAt.toISOString(), ...preview };
     });
   }
@@ -139,7 +134,7 @@ export class PtController {
     const { grnId } = input.params;
     return this.read(user, 'merchandise.download-pt-template', async (context, today) => {
       const facts = await this.pt.grnFacts(context, grnId);
-      if (facts === undefined) refuse(notFound(GRN_TYPE, grnId));
+      if (facts === undefined) refuse(grnNotFound(grnId));
       const authorised = await this.access.authorise(context, {
         actorId: user.userId,
         action: 'create',

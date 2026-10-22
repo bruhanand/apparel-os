@@ -5,6 +5,7 @@ import {
   type GrnPtRead,
   type ImportLayoutList,
   type MaskablePaise,
+  type MissingItem,
   type PtPreview,
 } from '@apparel-os/schemas';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -20,7 +21,7 @@ import { base64Of } from '../files/Evidence';
 import { fieldName, issueText } from '../files/import-text';
 import { formatDateTime } from '../history/format';
 import { t } from '../messages/catalogue';
-import { formatPaise, formatQuantity } from '../setup/format';
+import { formatDecimal, formatList, formatPaise, formatQuantity } from '../setup/format';
 import { Card, GrantedButton, inputClass, ListRead, SubmissionBanner, Th, useGranted } from '../setup/parts';
 import { stateIdOf } from '../setup/states';
 import { useTimeZone } from '../shell/session';
@@ -234,6 +235,8 @@ function Upload({
 /** The batch's problems by row and column, or the preview of what submitting it makes (goods-in 5.6). */
 function Checked({ batchId, onDone }: { batchId: string; onDone: () => void }) {
   const [after, setAfter] = useState<number | undefined>(undefined);
+  // A submit the re-check refused: the reason and every problem it names (goods-in 5.6, 5.8).
+  const [refused, setRefused] = useState<{ readonly code: string; readonly missing: readonly MissingItem[] }>();
   const read = readQuery(api, 'previewPtUpload', {
     params: { batchId },
     query: { limit: String(PT_PREVIEW_PAGE_CAP), ...(after === undefined ? {} : { after: String(after) }) },
@@ -266,7 +269,20 @@ function Checked({ batchId, onDone }: { batchId: string; onDone: () => void }) {
             )}
             <SubmissionBanner state={seen.state} done="pt.submit.seen" />
             <SubmissionBanner state={submit.state} done="pt.submit.done" />
-            <SubmissionBanner state={publish.state} done="pt.submit.done" />
+            {refused === undefined ? (
+              <SubmissionBanner state={publish.state} done="pt.submit.done" />
+            ) : (
+              <Banner tone="danger" role="alert" message="pt.submit.refused">
+                <span>{codeText(refused.code)}</span>
+                {refused.missing.length > 0 && (
+                  <ul aria-label={t('pt.report.title')} className="m-0 list-disc pl-5 text-caption">
+                    {refused.missing.map((item, index) => (
+                      <li key={index}>{missingText(item)}</li>
+                    ))}
+                  </ul>
+                )}
+              </Banner>
+            )}
             {preview.draft !== null && preview.batchState === 'Validated' && (
               <div>
                 <GrantedButton
@@ -293,6 +309,13 @@ function Checked({ batchId, onDone }: { batchId: string; onDone: () => void }) {
                       const published = await publish.submit({ params: { batchId }, body: { versionId } });
                       if (published === undefined) return;
                       await queryClient.invalidateQueries({ queryKey: [read.queryKey[0]] });
+                      // The GRN as it stands may refuse the file at its submit: nothing is created, and every problem
+                      // is shown, to correct in the file and upload again (5.6).
+                      const [document] = published.documents;
+                      if (published.result === 'failed' && document?.refusalCode !== undefined) {
+                        setRefused({ code: document.refusalCode, missing: document.missing ?? [] });
+                        return;
+                      }
                       onDone();
                     })();
                   }}
@@ -322,16 +345,18 @@ function Issues({ preview }: { preview: PtPreview }) {
           <tr key={issue.issueId} className="border-t border-border align-top">
             <td className="px-3 py-1">{issue.rowNumber === undefined ? '' : formatQuantity(issue.rowNumber)}</td>
             <td className="px-3 py-1">
-              {[issue.sheet, issue.column, issue.field === undefined ? undefined : fieldName(issue.field)]
-                .filter((each) => each !== undefined)
-                .join(' · ')}
+              {formatList(
+                [issue.sheet, issue.column, issue.field === undefined ? undefined : fieldName(issue.field)].filter(
+                  (each) => each !== undefined,
+                ),
+              )}
             </td>
             <td className="px-3 py-1">{t(`intake.severity.${issue.severity}`)}</td>
             <td className="px-3 py-1">
               <span>{issueText(issue.code)}</span>
               {issue.missing.length > 0 && (
                 <span className="block text-caption text-text-2">
-                  {issue.missing.map((item) => missingText(item)).join(' · ')}
+                  {formatList(issue.missing.map((item) => missingText(item)))}
                 </span>
               )}
             </td>
@@ -367,7 +392,7 @@ function Draft({ preview, onPage }: { preview: PtPreview; onPage: (after: number
                   style: product.styleCode,
                   colour: product.colour,
                   size: product.size,
-                  rows: product.rowNumbers.map((row) => formatQuantity(row)).join(', '),
+                  rows: formatList(product.rowNumbers.map((row) => formatQuantity(row))),
                 })}
               </li>
             ))}
@@ -384,7 +409,7 @@ function Draft({ preview, onPage }: { preview: PtPreview; onPage: (after: number
               <li key={each.barcode}>
                 {t('pt.preview.repeated-barcode', {
                   barcode: each.barcode,
-                  rows: each.rowNumbers.map((row) => formatQuantity(row)).join(', '),
+                  rows: formatList(each.rowNumbers.map((row) => formatQuantity(row))),
                 })}
               </li>
             ))}
@@ -440,7 +465,7 @@ function Draft({ preview, onPage }: { preview: PtPreview; onPage: (after: number
               <td className="px-3 py-1 text-right">{formatPaise(row.mrpPaise)}</td>
               <td className="px-3 py-1 text-right">{amountText(row.pRatePaise)}</td>
               <td className="px-3 py-1 text-right">
-                {row.margin.kind === 'margin' ? row.margin.value : t('pt.masked')}
+                {row.margin.kind === 'margin' ? formatDecimal(row.margin.value) : t('pt.masked')}
               </td>
               <td className="px-3 py-1">{t(`pt.row.product.${row.product}`)}</td>
             </tr>
@@ -554,7 +579,7 @@ export function PtFile({ grnId }: { grnId: string }) {
                   <span>{codeText(read.upload.code)}</span>
                   {read.upload.missing.length > 0 && (
                     <span className="text-caption">
-                      {read.upload.missing.map((item) => missingText(item)).join(' · ')}
+                      {formatList(read.upload.missing.map((item) => missingText(item)))}
                     </span>
                   )}
                 </Banner>

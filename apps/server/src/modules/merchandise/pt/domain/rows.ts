@@ -1,15 +1,16 @@
-import { fraction, isDecimal, parseDecimal, roundToInteger } from '@apparel-os/calculations';
+import { fraction, isDecimal, parseDecimal, roundToInteger, type Fraction } from '@apparel-os/calculations';
 import { ticketMargin } from '@apparel-os/calculations/costing';
 import { known } from '@apparel-os/domain';
 
 // The checks of goods-in 5.3 on one row of a PT file (S2-F04-T02; PRD-PTW-011, PRD-MER-007, PRD-IMP-006, PRD-IMP-007,
 // DEC-134, DEC-135, DEC-140). Each value of a list is on its list, compared as the code of an approved value, exactly as
-// the file gives it once its mapping trimmed it (structure-and-masters 2.1); the brand is the GRN's; the barcode digits,
-// its leading zeros kept; HSN six or eight digits; QTY whole pieces above zero; MRP, BASIC and P RATE above zero in
-// whole paise, P RATE not above MRP; NAG equal to QTY; MARGIN, rounded half up to two decimals, equal to the shared
-// ticket-margin calculation's. Every problem of the row is found at once (PRD-IMP-007). A value Unknown is reported by
-// the required check of files-imports, so its own checks are skipped and the rest still run (PRD-MOD-015). Pure: no
-// database, no clock.
+// the file gives it once its mapping trimmed it (structure-and-masters 2.1); the brand is the GRN's; the ITEM's sub
+// category and type are the row's by the master sheet's item map (the product owner, 22 Oct 2026, RR-583); the barcode
+// digits, its leading zeros kept; HSN six or eight digits; QTY whole pieces above zero; MRP, BASIC and P RATE above zero
+// in whole paise, P RATE not above MRP; NAG equal to QTY, compared exactly; MARGIN, rounded half up to two decimals,
+// equal to the shared ticket-margin calculation's. Every problem of the row is found at once (PRD-IMP-007). A value
+// Unknown is reported by the required check of files-imports, so its own checks are skipped and the rest still run
+// (PRD-MOD-015). Pure: no database, no clock.
 
 /** The fields of the PT handler's staged row: the template's 20 columns and its two `SUGGESTED` hints (5.2, 5.3). */
 export const PT_FIELDS = [
@@ -60,13 +61,19 @@ const LIST_OF: Readonly<Partial<Record<PtField, PtList>>> = {
   outputTax: 'gstRate',
 };
 
+/** An item's sub category, a category, and its type, a value of the type list, by the master sheet's item map (5.2). */
+export interface ItemMapEntry {
+  readonly categoryId: string;
+  readonly typeValueId: string;
+}
+
 export interface PtLists {
-  /** The GRN's brand (5.3: on the brand list, and the GRN's brand). */
-  readonly grnBrandId: string;
   /** Codes to identifiers. */
   readonly brands: ReadonlyMap<string, string>;
   readonly categories: ReadonlyMap<string, string>;
   readonly attributes: Readonly<Record<PtList, ReadonlyMap<string, string>>>;
+  /** The item map, by the item's value: never a default, so an item it does not hold has no sub category or type. */
+  readonly itemMap: ReadonlyMap<string, ItemMapEntry>;
 }
 
 /** One row as the handler is given it: each field's known text, or undefined while Unknown (PRD-MOD-015). */
@@ -119,13 +126,30 @@ function pieces(text: string): number | undefined {
   return Number.isSafeInteger(value) && value > 0 ? value : undefined;
 }
 
-/** A decimal text in hundredths, rounded half up (PRD-PTW-011), or undefined when it is no decimal. */
-export function hundredthsOf(text: string): bigint | undefined {
+/** A decimal text read exactly, its sign kept, or undefined when it is no decimal (shared-calculations 3.1). */
+function exactOf(text: string): Fraction | undefined {
   const negative = text.startsWith('-');
   const body = negative ? text.slice(1) : text;
   if (!isDecimal(body)) return undefined;
   const value = parseDecimal(body);
-  const rounded = roundToInteger(fraction(value.n * 100n, value.d), 'half-up');
+  return negative ? fraction(-value.n, value.d) : value;
+}
+
+/** Whether two decimal texts are the same number exactly, as NAG and QTY must be (PRD-PTW-011). */
+function sameNumber(left: string, right: string): boolean {
+  const a = exactOf(left);
+  const b = exactOf(right);
+  if (a === undefined || b === undefined) return false;
+  // Fractions are kept in lowest terms with a positive denominator, so equal numbers have equal parts.
+  return a.n === b.n && a.d === b.d;
+}
+
+/** A decimal text in hundredths, rounded half up (PRD-PTW-011), or undefined when it is no decimal. */
+export function hundredthsOf(text: string): bigint | undefined {
+  const value = exactOf(text);
+  if (value === undefined) return undefined;
+  const negative = value.n < 0n;
+  const rounded = roundToInteger(fraction((negative ? -value.n : value.n) * 100n, value.d), 'half-up');
   return negative ? -rounded : rounded;
 }
 
@@ -138,8 +162,15 @@ export function marginOf(mrpPaise: number, pRatePaise: number): string | undefin
   return result.ok && result.value.kind === 'known' ? result.value.value : undefined;
 }
 
-/** Runs every check of 5.3 on one row: its issues, and the row as kept when it has none. */
-export function checkRow(input: PtRowInput, lists: PtLists): { issues: PtIssue[]; row?: CheckedRow } {
+/**
+ * Runs every check of 5.3 on one row against the lists and the GRN's brand (5.3: on the brand list, and the GRN's
+ * brand): its issues, and the row as kept when it has none.
+ */
+export function checkRow(
+  input: PtRowInput,
+  lists: PtLists,
+  grnBrandId: string,
+): { issues: PtIssue[]; row?: CheckedRow } {
   const issues: PtIssue[] = [];
   const issue = (field: PtField, code: string) => issues.push({ code, field, rowNumber: input.rowNumber });
   const value = (field: PtField) => input.values[field];
@@ -157,7 +188,7 @@ export function checkRow(input: PtRowInput, lists: PtLists): { issues: PtIssue[]
   if (brand !== undefined) {
     brandId = lists.brands.get(brand);
     if (brandId === undefined) issue('brand', 'merchandise.pt-value-not-on-list');
-    else if (brandId !== lists.grnBrandId) issue('brand', 'merchandise.pt-brand-not-the-grn');
+    else if (brandId !== grnBrandId) issue('brand', 'merchandise.pt-brand-not-the-grn');
   }
   const colour = onList('colour', lists.attributes.colour);
   const gender = onList('gender', lists.attributes.gender);
@@ -166,6 +197,18 @@ export function checkRow(input: PtRowInput, lists: PtLists): { issues: PtIssue[]
   const item = onList('item', lists.attributes.item);
   const fit = onList('fit', lists.attributes.fit);
   const size = onList('size', lists.attributes.size);
+  // The ITEM agrees with its SUB CATEGORY and TYPE by the master sheet's item map (5.2, 5.3; RR-583): an item the map
+  // does not hold is a problem, never given a sub category or type by default.
+  if (item !== undefined) {
+    const mapped = lists.itemMap.get(item.valueId);
+    if (mapped === undefined) issue('item', 'merchandise.pt-item-not-mapped');
+    else {
+      if (subCategory !== undefined && mapped.categoryId !== subCategory.valueId) {
+        issue('subCategory', 'merchandise.pt-item-map-disagrees');
+      }
+      if (type !== undefined && mapped.typeValueId !== type.valueId) issue('type', 'merchandise.pt-item-map-disagrees');
+    }
+  }
 
   const barcode = value('barcode');
   if (barcode !== undefined && !DIGITS.test(barcode)) issue('barcode', 'merchandise.pt-barcode-not-digits');
@@ -195,8 +238,9 @@ export function checkRow(input: PtRowInput, lists: PtLists): { issues: PtIssue[]
   const inputTax = onList('inputTax', lists.attributes.gstRate);
   const outputTax = onList('outputTax', lists.attributes.gstRate);
 
+  // NAG equals QTY exactly (PRD-PTW-011): a NAG of 2.004 is not 2 pieces, whatever it rounds to.
   const nagText = value('nag');
-  if (nagText !== undefined && qtyText !== undefined && hundredthsOf(nagText) !== hundredthsOf(qtyText)) {
+  if (nagText !== undefined && qtyText !== undefined && !sameNumber(nagText, qtyText)) {
     issue('nag', 'merchandise.pt-nag-not-qty');
   }
   const marginText = value('margin');

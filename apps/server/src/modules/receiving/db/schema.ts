@@ -1,3 +1,4 @@
+import type { ReviewReason } from '@apparel-os/schemas';
 import { boolean, date, integer, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 // Drizzle definitions of `receiving`'s tables (code-house-rules 3.4). They mirror the reviewed migration
@@ -230,10 +231,6 @@ export const heldLineDecision = receiving.table('held_line_decision', {
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 
-/** Why a GRN line went to Booking for review at its GRN's issue (goods-in 3.7, 4.10). */
-export type ReviewReasonColumn =
-  'no-match' | 'ambiguous' | 'other-site' | 'other-supplier' | 'not-approved' | 'late' | 'excess';
-
 /**
  * The outcome at its GRN's issue of a GRN line of an Arrival against a booking that delivers pieces: linked to the
  * booking line it matches, or sent to Booking for review with why (goods-in 3.7, 4.10).
@@ -245,7 +242,8 @@ export const grnLineBooking = receiving.table('grn_line_booking', {
   ...facts(),
   bookingId: uuid('booking_id').notNull(),
   outcome: text('outcome').$type<'linked' | 'review'>().notNull(),
-  reason: text('reason').$type<ReviewReasonColumn>(),
+  // Why it went to review, one of `reviewReasonSchema`'s, which the migration's check lists too (goods-in 3.7, 4.10).
+  reason: text('reason').$type<ReviewReason>(),
   bookingLineKey: uuid('booking_line_key'),
   receiptLinkId: uuid('receipt_link_id'),
   recordedAt: at('recorded_at').notNull().defaultNow(),

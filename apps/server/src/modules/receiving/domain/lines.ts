@@ -182,7 +182,10 @@ export const lineItem = (lineId: string): MissingItem => ({ kind: 'count-line', 
  * What stops a GRN being issued from the count as it stands, before anything is read under the ledger's locks
  * (goods-in 4.5; DEC-133): no invoice; no line; a line with extra pieces the count does not record as received or not
  * received, which only a line saved before the findings were built can be, since saving a line now asks for it
- * (goods-in 4.4, 4.9). Each names the lines concerned.
+ * (goods-in 4.4, 4.9); a line of goods on the invoice, or of wrong goods named by their product, with no size recorded,
+ * since the PT file is matched on its size (goods-in 4.3, 5.4; the product owner, 22 Oct 2026, RR-586): unidentified
+ * goods are described, not sized. A line is saved without its size as the count goes, and sized before the GRN. Each
+ * names the lines concerned.
  */
 export function grnBlockers(
   invoices: number,
@@ -193,6 +196,10 @@ export function grnBlockers(
   const unrecorded = lines.filter((line) => extraPiecesOf(line.entry) > 0 && line.entry.extra === null);
   if (unrecorded.length > 0) {
     return { code: 'receiving.extra-not-recorded', missing: unrecorded.map((line) => lineItem(line.lineId)) };
+  }
+  const unsized = lines.filter((line) => line.entry.goods !== 'unidentified' && line.entry.size === null);
+  if (unsized.length > 0) {
+    return { code: 'receiving.size-required', missing: unsized.map((line) => lineItem(line.lineId)) };
   }
   return undefined;
 }

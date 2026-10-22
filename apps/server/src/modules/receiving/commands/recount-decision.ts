@@ -8,10 +8,10 @@ import { recountDecision, recountMovement } from '../db/schema.js';
 import { RECEIVING_MODULE, SHORTAGE_EXCEPTION_TYPE } from '../domain/kinds.js';
 import { receivingMissing, receivingUnavailable, type AvailabilityDependencies } from '../queries/availability.js';
 import { recountRow, recountsOfGrn, type RecountRecord } from '../queries/recounts.js';
+import { grnRow } from '../queries/grns.js';
 import {
   audited,
   exceptionFactsOf,
-  grnRow,
   recordItem,
   recordNotFound,
   refusalOf,

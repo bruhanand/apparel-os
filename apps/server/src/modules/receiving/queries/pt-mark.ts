@@ -1,9 +1,10 @@
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, inArray } from 'drizzle-orm';
 import type { TransactionContext } from '../../../kernel/index.js';
 import type { RecordFacts } from '../../access/index.js';
 import type { AuditScope } from '../../audit/index.js';
-import { grn, grnPtMark, type PtMarkReason } from '../db/schema.js';
-import { factsOf } from '../commands/common.js';
+import { grnPtMark, type PtMarkReason } from '../db/schema.js';
+import { factsOf } from '../domain/facts.js';
+import { grnRow } from './grns.js';
 
 // What other modules read of a GRN around its PT (goods-in 5.1, 5.8; S2-F04-T02): the GRN itself, its number and
 // scope facts, which the PT carries; and its "PT attached" mark now, with when, why and by whom it was last changed.
@@ -20,6 +21,24 @@ export async function currentPtMark(context: TransactionContext, grnId: string):
     .orderBy(desc(grnPtMark.changeNumber))
     .limit(1);
   return row;
+}
+
+/**
+ * The GRNs of those given whose "PT attached" mark is set now (goods-in 4.1, 4.8, 5.8): a PT file is submitted for each
+ * and waits for its approval (RR-584).
+ */
+export async function grnsMarked(context: TransactionContext, grnIds: readonly string[]): Promise<ReadonlySet<string>> {
+  if (grnIds.length === 0) return new Set();
+  const rows = await context.tx
+    .select({ grnId: grnPtMark.grnId, change: grnPtMark.change, changeNumber: grnPtMark.changeNumber })
+    .from(grnPtMark)
+    .where(inArray(grnPtMark.grnId, [...grnIds]));
+  const newest = new Map<string, (typeof rows)[number]>();
+  for (const row of rows) {
+    const known = newest.get(row.grnId);
+    if (known === undefined || row.changeNumber > known.changeNumber) newest.set(row.grnId, row);
+  }
+  return new Set([...newest.values()].filter((row) => row.change === 'set').map((row) => row.grnId));
 }
 
 /** A GRN's "PT attached" mark now (goods-in 5.8): set by a PT revision, or not set; with its latest change. */
@@ -50,12 +69,11 @@ export async function ptMarkOf(context: TransactionContext, grnId: string): Prom
     : { kind: 'not-set', lastChange };
 }
 
-/** A GRN as `merchandise` · PT names it: its number, Arrival and scope facts (goods-in 5.7). */
+/** A GRN as `merchandise` · PT names it: its number, Arrival and scope facts, its brand among them (goods-in 5.7). */
 export interface GrnForPt {
   readonly grnId: string;
   readonly number: string;
   readonly arrivalId: string;
-  readonly brandId: string;
   readonly facts: RecordFacts &
     AuditScope & {
       readonly siteId: string;
@@ -67,13 +85,12 @@ export interface GrnForPt {
 
 /** The GRN, as the reader may see it, or undefined. */
 export async function grnForPt(context: TransactionContext, grnId: string): Promise<GrnForPt | undefined> {
-  const [row] = await context.tx.select().from(grn).where(eq(grn.id, grnId));
+  const row = await grnRow(context, grnId);
   if (row === undefined) return undefined;
   return {
     grnId: row.id,
     number: row.number,
     arrivalId: row.arrivalId,
-    brandId: row.brandId,
     facts: {
       ...factsOf(row),
       siteId: row.siteId,

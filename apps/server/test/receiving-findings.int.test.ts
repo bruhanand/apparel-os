@@ -424,6 +424,8 @@ beforeAll(async () => {
     'receiving.excess',
     'receiving.wrong-goods',
     'receiving.unidentified-goods',
+    // Every GRN here is received without a booking, so it goes to Booking for review (goods-in 4.10; RR-580).
+    'receiving.booking-review',
   ]) {
     await route(type, bookingApprover);
   }
@@ -462,7 +464,9 @@ describe('a shortage at the count (goods-in 12 test 1; PRD-ACP-001, PRD-REC-008)
     expect(await holdsOfLine(line?.id ?? '')).toEqual([]);
     // The shortage reaches Booking in My work, with its exposure Unknown (PRD-EXC-001; POL-02.16).
     const grnId = (issued.body as { grnId: string }).grnId;
+    // So does the GRN itself, received without a booking, for its lines to be linked later (goods-in 4.10; RR-580).
     expect(await exceptionsOn([grnId])).toEqual([
+      expect.objectContaining({ type: 'receiving.booking-review', owner_user_id: bookingApprover.user.id }),
       expect.objectContaining({ type: 'receiving.shortage', owner_user_id: bookingApprover.user.id }),
     ]);
     const work = myWorkSchema.parse((await get(bookingApprover, '/api/inbox/my-work')).body).items;
@@ -479,6 +483,10 @@ describe('a shortage at the count (goods-in 12 test 1; PRD-ACP-001, PRD-REC-008)
     const line = (await grnLines(arrivalId)).get('SYN-T1-NONE');
     expect(line?.findings).toEqual({ shortage: 3, extra: 0, received: 0, damaged: 0 });
     expect(await custodyOfLine(line?.id ?? '')).toEqual({});
+    // Nothing received delivers nothing to review against a booking: only the shortage reaches Booking (RR-580).
+    expect((await exceptionsOn([(issued.body as { grnId: string }).grnId])).map((each) => each.type)).toEqual([
+      'receiving.shortage',
+    ]);
   });
 });
 
@@ -532,7 +540,8 @@ describe('a GRN with clean, short, excess, wrong, unidentified and damaged lines
         goods: 'wrong',
         styleCode: fixture.batchSku.styleCode,
         colour: null,
-        sizeValueId: null,
+        // Wrong goods are sized, as goods on the invoice are (goods-in 4.3; RR-586).
+        sizeValueId: fixture.sizes.values[0]?.id ?? null,
         skuId: fixture.batchSku.id,
         description: null,
         invoiceQuantity: 0,
@@ -621,6 +630,7 @@ describe('a GRN with clean, short, excess, wrong, unidentified and damaged lines
       raised.map((each) => [each.type, each.record_id === grnId ? 'grn' : 'held-line', each.owner_user_id]).sort(),
     ).toEqual(
       [
+        ['receiving.booking-review', 'grn', bookingApprover.user.id],
         ['receiving.excess', 'grn', bookingApprover.user.id],
         ['receiving.excess', 'held-line', bookingApprover.user.id],
         ['receiving.shortage', 'grn', bookingApprover.user.id],
@@ -649,7 +659,8 @@ describe('a GRN with clean, short, excess, wrong, unidentified and damaged lines
         goods: 'wrong',
         styleCode: fixture.batchSku.styleCode,
         colour: null,
-        sizeValueId: null,
+        // Wrong goods are sized, as goods on the invoice are (goods-in 4.3; RR-586).
+        sizeValueId: fixture.sizes.values[0]?.id ?? null,
         skuId: fixture.batchSku.id,
         description: null,
         invoiceQuantity: 0,
@@ -675,6 +686,7 @@ describe('a GRN with clean, short, excess, wrong, unidentified and damaged lines
     }
     const raised = await exceptionsOn([grnId]);
     expect(raised.map((each) => [each.type, each.owner_user_id])).toEqual([
+      ['receiving.booking-review', bookingApprover.user.id],
       ['receiving.excess', bookingApprover.user.id],
       ['receiving.wrong-goods', bookingApprover.user.id],
     ]);
@@ -977,7 +989,8 @@ describe('damage at the count on any piece received (goods-in 4.4, 4.9; stock-le
         goods: 'wrong',
         styleCode: fixture.batchSku.styleCode,
         colour: null,
-        sizeValueId: null,
+        // Wrong goods are sized, as goods on the invoice are (goods-in 4.3; RR-586).
+        sizeValueId: fixture.sizes.values[0]?.id ?? null,
         skuId: fixture.batchSku.id,
         description: null,
         invoiceQuantity: 0,

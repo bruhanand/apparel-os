@@ -396,9 +396,8 @@ export async function previewOf(
   );
   if (issues.length === 0) return handler.preview(context, document);
   // A handler that checks what it can of a row with an Unknown field lists every problem at once (PRD-IMP-007).
-  if (handler.checksUnknown !== true) return { kind: 'issues', issues };
-  const own = await handler.preview(context, document);
-  return { kind: 'issues', issues: [...issues, ...(own.kind === 'issues' ? own.issues : [])] };
+  if (handler.checksUnknown === undefined) return { kind: 'issues', issues };
+  return { kind: 'issues', issues: [...issues, ...(await handler.checksUnknown(context, document))] };
 }
 
 /** The handler of a batch's target and kind; a batch is started only with one, so none here is a defect. */

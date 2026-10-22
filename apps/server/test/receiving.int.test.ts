@@ -30,6 +30,7 @@ import {
   type AccessTestApp,
   type SyntheticUser,
 } from './support/access.js';
+import { defineSyntheticCodeSeries } from './support/exceptions.js';
 import { grantSynthetic, type SyntheticAuthority } from './support/grants.js';
 import { capturingLogger } from './support/jobs.js';
 import { startTestFileStore, type TestFileStore } from './support/minio.js';
@@ -47,6 +48,7 @@ import {
   receivingGateOpen,
   receivingGranted,
   receivingPolicyValidated,
+  routeSyntheticFollowUp,
   type ReceivingFixture,
 } from './support/receiving.js';
 
@@ -181,6 +183,13 @@ async function readArrival(user: SyntheticUser, arrivalId: string): Promise<Arri
   return arrivalReadSchema.parse(read.body).arrival;
 }
 
+/** The identifier of the fixture's size value at a place on the list, which every line of goods on the invoice names. */
+function sizeAt(at: number): string {
+  const value = fixture.sizes.values[at];
+  if (value === undefined) throw new Error(`No SYNTHETIC size at ${String(at)}`);
+  return value.id;
+}
+
 /** A line of goods of a product not yet set up, by style code, colour and size (goods-in 4.3; DEC-138). */
 function describedLine(styleCode: string, invoice: number, counted: number, size = 0) {
   const value = fixture.sizes.values[size];
@@ -253,6 +262,16 @@ beforeAll(async () => {
   );
   outsider = await enrolled('RCV-OUTSIDER', [{ recordType: 'merchandise.brand', action: 'view' }]);
   policyReader = await enrolled('RCV-POLICIES', [{ recordType: 'configuration.policy_status', action: 'view' }]);
+  // A GRN received without a booking goes to Booking for review (goods-in 4.10; RR-580): the exception-code series and
+  // the review routed at the fixture's Site by a SYNTHETIC rule (V-03), so the clean GRNs here are issued.
+  await setup.run(setup.preparer.id, (context) =>
+    defineSyntheticCodeSeries(context, api.app.get<NumberingInterface>(NUMBERING)),
+  );
+  await routeSyntheticFollowUp(setup, database, {
+    typeCode: 'receiving.booking-review',
+    siteId: fixture.siteId,
+    ownerId: setup.preparer.id,
+  });
 }, 240_000);
 
 afterAll(async () => {
@@ -628,7 +647,7 @@ describe('issuing the GRN (goods-in 4.5, 10.3; PRD-REC-008, PRD-ACP-001, PRD-INT
     const batchLine = await saveLine(storeReceiver, arrivalId, {
       styleCode: fixture.batchSku.styleCode,
       colour: null,
-      sizeValueId: null,
+      sizeValueId: sizeAt(0),
       goods: 'on-invoice',
       skuId: fixture.batchSku.id,
       description: null,
@@ -649,7 +668,7 @@ describe('issuing the GRN (goods-in 4.5, 10.3; PRD-REC-008, PRD-ACP-001, PRD-INT
     const withBatch = await saveLine(storeReceiver, arrivalId, {
       styleCode: fixture.batchSku.styleCode,
       colour: null,
-      sizeValueId: null,
+      sizeValueId: sizeAt(0),
       goods: 'on-invoice',
       skuId: fixture.batchSku.id,
       description: null,
@@ -794,6 +813,43 @@ describe('issuing the GRN (goods-in 4.5, 10.3; PRD-REC-008, PRD-ACP-001, PRD-INT
     } finally {
       await verify.end();
     }
+  });
+
+  it('PRD-REC-016 refuses the GRN while a line of goods on the invoice has no size, naming the line, until it is sized (goods-in 4.3; RR-586)', async () => {
+    // A size is what the PT file is matched on (goods-in 5.4): the product owner, 22 Oct 2026, RR-586.
+    const arrivalId = await recordArrival(storeReceiver, fixture.wholeStore, fixture.storeLocation);
+    expect((await recordInvoice(storeReceiver, arrivalId)).status).toBe(200);
+    expect((await saveLine(storeReceiver, arrivalId, describedLine('SYN-STYLE-SIZED', 1, 1))).status).toBe(200);
+    // The count is saved as it goes, a line without its size too.
+    const unsized = await saveLine(storeReceiver, arrivalId, {
+      ...describedLine('SYN-STYLE-UNSIZED', 2, 2),
+      sizeValueId: null,
+    });
+    expect(unsized.status, JSON.stringify(unsized.body)).toBe(200);
+    const { lineId, lineVersionToken } = unsized.body as { lineId: string; lineVersionToken: string };
+    const before = await readArrival(storeReceiver, arrivalId);
+    expect(before.blocking).toEqual([{ kind: 'count-line', lineId }]);
+    const refused = await post(storeReceiver, `/api/receiving/arrivals/${arrivalId}/grn`, {
+      versionToken: before.versionToken,
+    });
+    expect(refused.status).toBe(422);
+    expect(errorOf(refused)).toMatchObject({
+      code: 'receiving.size-required',
+      missing: [{ kind: 'count-line', lineId }],
+    });
+    expect((await readArrival(storeReceiver, arrivalId)).grn).toBeNull();
+    // Sized, the line no longer stops the GRN.
+    const sized = await saveLine(storeReceiver, arrivalId, {
+      ...describedLine('SYN-STYLE-UNSIZED', 2, 2, 1),
+      line: { lineId, versionToken: lineVersionToken },
+    });
+    expect(sized.status, JSON.stringify(sized.body)).toBe(200);
+    const after = await readArrival(storeReceiver, arrivalId);
+    expect(after.blocking).toEqual([]);
+    const issued = await post(storeReceiver, `/api/receiving/arrivals/${arrivalId}/grn`, {
+      versionToken: after.versionToken,
+    });
+    expect(issued.status, JSON.stringify(issued.body)).toBe(200);
   });
 
   it('PRD-INT-002 goods-in 12 test 19 every write of an Arrival replays its first answer under its key, and writes once', async () => {
