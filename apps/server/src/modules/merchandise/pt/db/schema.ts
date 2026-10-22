@@ -2,7 +2,7 @@ import { bigint, boolean, date, integer, jsonb, numeric, pgSchema, text, timesta
 import type { PtRowDetail } from '../domain/detail.js';
 
 // Drizzle definitions of `merchandise` · PT's tables (code-house-rules 3.4). They mirror the reviewed migration
-// (migrations/organisation/0104) and never create or change a table; an integration test compares each with the
+// (migrations/organisation/0106) and never create or change a table; an integration test compares each with the
 // migrated database. Never exported from the unit's index.ts, so no other unit can name these tables
 // (code-house-rules 2). The part shares the schema `merchandise` with the catalogue; each table belongs to one part.
 

@@ -195,7 +195,7 @@ export const heldLineVersion = receiving.table('held_line_version', {
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 
-/** Why the GRN's "PT attached" mark was set or cleared (goods-in 5.8; migration 0103). */
+/** Why the GRN's "PT attached" mark was set or cleared (goods-in 5.8; migration 0105). */
 export type PtMarkReason = 'pt-submitted' | 'pt-withdrawn' | 'pt-rejected' | 'pt-reversed';
 
 /** Each set and clear of a GRN's "PT attached" mark, numbered per GRN; the newest is the mark now (goods-in 5.8). */
