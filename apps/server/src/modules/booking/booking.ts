@@ -29,14 +29,13 @@ import { recordBooking } from './commands/record-booking.js';
 import { saveDraft } from './commands/save-draft.js';
 import { submitBooking } from './commands/submit-booking.js';
 import { prepareBudget, prepareBudgetVersion } from './commands/budgets.js';
-import { proposeCancellation, proposeExtension, recordConfirmation, recordIssue } from './commands/lifecycle.js';
-import {
-  linkReceiptAtIssue,
-  linkReceiptLater,
-  type GrnLineRef,
-  type Linker,
-  type ReceiptAtIssue,
-} from './commands/receipts.js';
+import { linkReceiptAtIssue } from './commands/link-receipt-at-issue.js';
+import { linkReceiptLater } from './commands/link-receipt-later.js';
+import { proposeCancellation } from './commands/propose-cancellation.js';
+import { proposeExtension } from './commands/propose-extension.js';
+import type { Linker, ReceiptAtIssue, ReceiptLater } from './commands/receipt-link.js';
+import { recordConfirmation } from './commands/record-confirmation.js';
+import { recordIssue } from './commands/record-issue.js';
 import { bookingLock, bookingPage, bookingRow, bookingView } from './queries/bookings.js';
 import { statusOfBooking } from './queries/lifecycle.js';
 import { budgetOf, budgetPage, budgetRow, budgetRows, budgetViews, remainingOf } from './queries/budgets.js';
@@ -214,18 +213,10 @@ export class Booking {
 
   /**
    * A later link by Booking of a GRN line received without a booking, or sent for review, to the booking line named
-   * (goods-in 3.7; PRD-BKG-008), dated and signed. The caller holds the booking's lock at step 1.
+   * (goods-in 3.7, 3.10; PRD-BKG-008), dated and signed, refused when the GRN line's goods are not that line's. The
+   * caller holds the booking's lock at step 1.
    */
-  linkReceiptLater(
-    context: TransactionContext,
-    linker: Linker,
-    link: {
-      readonly bookingId: string;
-      readonly lineKey: string;
-      readonly grnLine: GrnLineRef;
-      readonly quantity: number;
-    },
-  ) {
+  linkReceiptLater(context: TransactionContext, linker: Linker, link: ReceiptLater) {
     return linkReceiptLater(context, this.dependencies.audit, linker, link);
   }
 }

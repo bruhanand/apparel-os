@@ -19,6 +19,7 @@ import {
 } from '../../../kernel/index.js';
 import {
   ACCESS,
+  replayRefusal,
   SignedIn,
   type AccessInterface,
   type Preparer,
@@ -112,8 +113,9 @@ export class BookingController {
     const { budgetId } = input.params;
     const answer = await this.read(user, 'booking.read-open-to-buy-budget', async (context, today) => {
       // A budget is authorised with its brand first, so a reader outside its scope learns nothing more of it; one that
-      // does not exist carries no fact, which only all-members scope covers (5.3; PRD-MOD-015).
-      const facts = (await this.booking.budgetFacts(context, budgetId)) ?? {};
+      // does not exist is not found, never refused as not authorised (code-house-rules 12.3).
+      const facts = await this.booking.budgetFacts(context, budgetId);
+      if (facts === undefined) return { refused: budgetNotFound(budgetId) };
       const authorised = await this.access.authorise(context, {
         actorId: user.userId,
         action: 'view',
@@ -191,9 +193,10 @@ export class BookingController {
   async readBooking(@RouteInput() input: RouteInputOf<typeof routes.readBooking>, @SignedIn() user: SignedInUser) {
     const { bookingId } = input.params;
     const answer = await this.read(user, 'booking.read-booking', async (context, today) => {
-      // Authorised with its facts first; one the reader cannot see carries none, which only all-members scope covers
-      // (5.3; PRD-MOD-015).
-      const facts = (await this.booking.bookingFacts(context, bookingId)) ?? {};
+      // Authorised with its facts first; one the reader cannot see is hidden by row-level security, so it is not found,
+      // never refused as not authorised, which would say it exists (code-house-rules 12.3; PRD-SEC-005).
+      const facts = await this.booking.bookingFacts(context, bookingId);
+      if (facts === undefined) return { refused: bookingNotFound(bookingId) };
       const authorised = await this.access.authorise(context, {
         actorId: user.userId,
         action: 'view',
@@ -389,13 +392,11 @@ export class BookingController {
     factsOf: FactsOf,
     work: (context: TransactionContext, preparer: Preparer) => Promise<Outcome<object>>,
   ) {
+    // A replay answers as any request failing the same checks would: a booking not found stays not found (12.3, 12.4).
     const authoriseReplay: ReplayAuthorisation = async (context) => {
       const authorised = await this.authoriseIn(context, user, route, factsOf);
       if (authorised.kind === 'allowed') return { kind: 'allowed' };
-      return {
-        kind: 'refused',
-        refusal: { kind: 'not-authorised', code: authorised.refusal.code, missing: authorised.refusal.missing },
-      };
+      return { kind: 'refused', refusal: replayRefusal(authorised.refusal) };
     };
     const answer = await this.helper.run(
       {

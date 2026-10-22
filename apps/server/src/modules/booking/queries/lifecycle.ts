@@ -1,6 +1,6 @@
 import { paise, type Paise } from '@apparel-os/domain';
 import type { BookingAmendment, BookingStatus } from '@apparel-os/schemas';
-import { and, asc, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
 import type { LatestRequest } from '../../access/index.js';
 import {
@@ -244,6 +244,32 @@ export async function communicationOfVersion(context: TransactionContext, versio
     .where(and(eq(bookingSupplierFile.bookingVersionId, versionId), isNotNull(bookingSupplierFile.bookingVersionId)))
     .orderBy(asc(bookingSupplierFile.recordedAt), asc(bookingSupplierFile.id));
   return rows.map((row) => row.attachmentId);
+}
+
+/**
+ * The oldest cancellation, or extension, of the booking still waiting for its decision, or undefined (goods-in 3.10). An
+ * amendment and its decision are written under the booking's lock, so read under it this is stable (code-house-rules
+ * 8.1).
+ */
+export async function pendingAmendmentOf(
+  context: TransactionContext,
+  bookingId: string,
+  kind: AmendmentRow['kind'],
+): Promise<AmendmentRow | undefined> {
+  const [row] = await context.tx
+    .select({ amendment: bookingAmendment })
+    .from(bookingAmendment)
+    .leftJoin(bookingAmendmentDecision, eq(bookingAmendmentDecision.bookingAmendmentId, bookingAmendment.id))
+    .where(
+      and(
+        eq(bookingAmendment.bookingId, bookingId),
+        eq(bookingAmendment.kind, kind),
+        isNull(bookingAmendmentDecision.id),
+      ),
+    )
+    .orderBy(asc(bookingAmendment.recordedAt), asc(bookingAmendment.id))
+    .limit(1);
+  return row?.amendment;
 }
 
 /** An amendment with its lines and its decision, or undefined (goods-in 3.5). */

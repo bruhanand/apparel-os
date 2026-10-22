@@ -1080,17 +1080,22 @@ const BOOKING_DECISION_CODES = [
 ] as const satisfies readonly ErrorCode[];
 
 /**
- * The codes every change to a booking's Draft can answer (goods-in 3.1, 3.4; S2-F01-T03): the booking not found or no
- * longer a Draft, and the version token's, which holding the actor's authority answers too when their role changed
- * under the lock (code-house-rules 8.2, 12.7). Saving a Draft is not policy-gated (DEC-116; goods-in 10.5).
+ * The codes every command on an existing booking can answer (goods-in 3.1, 3.4, 3.10; S2-F01-T03, S2-F01-T04): the
+ * booking not found, and the version token's, which holding the actor's authority answers too when their role changed
+ * under the lock (code-house-rules 8.2, 12.7).
  */
-const BOOKING_CHANGE_CODES = [
+const BOOKING_COMMAND_CODES = [
   ...HISTORY_CODES,
   'kernel.cross-site-request',
   'kernel.stale-version',
   'booking.record-not-found',
-  'booking.not-draft',
 ] as const satisfies readonly ErrorCode[];
+
+/**
+ * The codes every change to a booking's Draft can answer (goods-in 3.1, 3.4; S2-F01-T03): those of a command on a
+ * booking, and the booking no longer a Draft. Saving a Draft is not policy-gated (DEC-116; goods-in 10.5).
+ */
+const BOOKING_CHANGE_CODES = [...BOOKING_COMMAND_CODES, 'booking.not-draft'] as const satisfies readonly ErrorCode[];
 
 /** What a Draft's content can answer: the brand, the destination, the supplier's link and the season (3.1). */
 const BOOKING_CONTENT_CODES = [
@@ -1113,23 +1118,24 @@ const BOOKING_NEXT_DRAFT_CODES = [
 ] as const satisfies readonly ErrorCode[];
 
 /**
- * What every change of an approved booking's lifecycle can answer (goods-in 3.4, 3.5, 3.10; S2-F01-T04): the booking
- * not found or not approved, and the version token's. Recording Issued or Confirmed, and proposing a cancellation or an
+ * What every change of an approved booking's lifecycle can answer (goods-in 3.4, 3.5, 3.10; S2-F01-T04): those of a
+ * command on a booking, and the booking not approved. Recording Issued or Confirmed, and proposing a cancellation or an
  * extension, record no business effect, so they are not policy-gated; the decisions are (DEC-116; goods-in 10.5).
  */
 const BOOKING_LIFECYCLE_CODES = [
-  ...HISTORY_CODES,
-  'kernel.cross-site-request',
-  'kernel.stale-version',
-  'booking.record-not-found',
+  ...BOOKING_COMMAND_CODES,
   'booking.not-approved',
 ] as const satisfies readonly ErrorCode[];
 
-/** What proposing a cancellation or an extension can answer besides (3.5): its lines and the communication. */
+/**
+ * What proposing a cancellation or an extension can answer besides (3.5, 3.10): its lines, the communication, and one
+ * of its kind waiting for its decision already.
+ */
 const BOOKING_AMENDMENT_CODES = [
   ...BOOKING_LIFECYCLE_CODES,
   'booking.line-not-found',
   'booking.communication-required',
+  'booking.amendment-pending',
 ] as const satisfies readonly ErrorCode[];
 
 /**

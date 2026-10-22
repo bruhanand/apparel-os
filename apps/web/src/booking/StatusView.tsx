@@ -4,9 +4,10 @@ import { t } from '../messages/catalogue';
 import { formatDate, formatQuantity } from '../setup/format';
 import { Th } from '../setup/parts';
 
-// The booking status of the version in force, as the booking screen and the approval panel show it (goods-in 3.6, 3.8;
-// PRD-BKG-005, PRD-BKG-006; S2-F01-T04): each line's ordered, delivered, cancelled, outstanding and over-delivered
-// pieces, its due date, and whether it is overdue.
+// The booking status of the version in force, as the booking screen and the approval panel show it (goods-in 3.6, 3.8,
+// 3.10; PRD-BKG-005, PRD-BKG-006; S2-F01-T04): each line's ordered, delivered, cancelled, outstanding and
+// over-delivered pieces, its own delivery date as extended, shown only, its due date, the window's end as extended, and
+// whether it is overdue, which the window decides (POL-05.06).
 
 /** Text as the booking writes it, or Not given where it gives none (PRD-MER-005). */
 export const given = (text: string | null) => text ?? t('booking.line.not-given');
@@ -28,6 +29,7 @@ export function StatusView({ status }: { status: BookingStatus }) {
               <Th label="booking.status.cancelled" />
               <Th label="booking.status.outstanding" />
               <Th label="booking.status.over-delivered" />
+              <Th label="booking.line.delivery-date" />
               <Th label="booking.status.due" />
             </tr>
           </thead>
@@ -43,6 +45,9 @@ export function StatusView({ status }: { status: BookingStatus }) {
                 <td className="px-3 tabular-nums">{formatQuantity(line.cancelled)}</td>
                 <td className="px-3 tabular-nums">{formatQuantity(line.outstanding)}</td>
                 <td className="px-3 tabular-nums">{formatQuantity(line.overDelivered)}</td>
+                <td className="px-3">
+                  {line.deliveryDate === null ? t('booking.line.not-given') : formatDate(line.deliveryDate)}
+                </td>
                 <td className="px-3">
                   <span className="inline-flex flex-wrap items-center gap-2">
                     {formatDate(line.dueDate)}
@@ -60,6 +65,7 @@ export function StatusView({ status }: { status: BookingStatus }) {
               <td className="px-3 tabular-nums">{formatQuantity(status.totals.cancelled)}</td>
               <td className="px-3 tabular-nums">{formatQuantity(status.totals.outstanding)}</td>
               <td className="px-3 tabular-nums">{formatQuantity(status.totals.overDelivered)}</td>
+              <td className="px-3" />
               <td className="px-3" />
             </tr>
           </tbody>

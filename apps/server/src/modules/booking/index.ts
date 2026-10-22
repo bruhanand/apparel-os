@@ -10,15 +10,9 @@ export { bookingRestoreParticipant } from './restore-participant.js';
 export { BOOKING_KIND, BOOKING_SCOPE_KEY } from './domain/kinds.js';
 export { APPROVE_BOOKING, APPROVE_BOOKING_TERMS, BOOKING_CAPABILITY, BOOKING_OPERATIONS } from './domain/gate.js';
 export { bookingApproved } from './events.js';
-// The lifecycle (goods-in 3.4 to 3.8; S2-F01-T04): the receipt link's types for `receiving`, the overdue job kind and
-// its exception type for the composition root.
-export type { GrnLineRef, Linker, ReceiptAtIssue, ReceiptLinked } from './commands/receipts.js';
-export {
-  BOOKING_JOBS_IDENTITY,
-  bookingJobKinds,
-  markOverdue,
-  OVERDUE_EXCEPTION_TYPE,
-  overdueExceptionType,
-} from './jobs/overdue.js';
+// The lifecycle (goods-in 3.4 to 3.8; S2-F01-T04): the receipt link's types for `receiving`, the overdue job kind,
+// its service identity and its exception type for the composition root.
+export type { GrnLineRef, Linker, ReceiptAtIssue, ReceiptLater, ReceiptLinked } from './commands/receipt-link.js';
+export { BOOKING_JOBS_IDENTITY, bookingJobKinds, overdueExceptionType } from './jobs/overdue.js';
 export type { OverdueJobDependencies } from './jobs/overdue.js';
 export { bookingAmended } from './events.js';

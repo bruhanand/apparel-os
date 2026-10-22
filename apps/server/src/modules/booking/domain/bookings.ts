@@ -6,6 +6,7 @@ import {
   type MissingItem,
 } from '@apparel-os/schemas';
 import type { ApprovalRule } from '../../access/index.js';
+import type { ExceptionFacts } from '../../exceptions/index.js';
 import type { BookingChangeKind } from '../db/schema.js';
 
 // The rules of a booking (goods-in 3.1 to 3.4; PRD-BKG-001 to PRD-BKG-004; POL-05.01, POL-02.07, POL-02.09;
@@ -74,6 +75,17 @@ export const bookingDocument = (bookingId: string, versionId: string) =>
 /** The record a booking's audit record names (numbering-and-audit 4.1). */
 export const bookingAuditRecord = (bookingId: string, versionId?: string) =>
   ({ module: 'booking', type: 'booking', id: bookingId, ...(versionId === undefined ? {} : { versionId }) }) as const;
+
+/**
+ * The facts of an exception about a booking (access-and-approvals 12.1; goods-in 3.10): its destination Site and its
+ * brand. A booking names no Store or business unit (3.9), so neither is a fact of it.
+ */
+export const exceptionFactsOf = (row: { readonly siteId: string; readonly brandId: string }): ExceptionFacts => ({
+  siteId: row.siteId,
+  storeId: null,
+  businessUnitId: null,
+  brandId: row.brandId,
+});
 
 /** A booking named in a refusal (PRD-UXP-003). */
 export const bookingItem = (bookingId: string): MissingItem => ({

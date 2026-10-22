@@ -17,6 +17,7 @@ import { t, type MessageId } from '../messages/catalogue';
 import { formatDate, formatQuantity } from '../setup/format';
 import { Card, GrantedButton, inputClass, SubmissionBanner } from '../setup/parts';
 import { stateIdOf } from '../setup/states';
+import { AmendmentLines, extensionEnd } from './AmendmentLines';
 import { BOOKING_READS } from './BookingForm';
 import { given } from './StatusView';
 
@@ -333,7 +334,6 @@ export function ExtendCard({
 export function AmendmentsCard({ booking, timeZone }: { booking: Booking; timeZone: string }) {
   const [panel, setPanel] = useState<string | null>(null);
   if (booking.amendments.length === 0) return null;
-  const numberOf = (lineKey: string) => booking.status?.lines.find((line) => line.lineKey === lineKey)?.lineNumber;
   return (
     <Card title="booking.amendments">
       <ul aria-label={t('booking.amendments')} className="m-0 flex list-none flex-col gap-3 p-0">
@@ -343,9 +343,9 @@ export function AmendmentsCard({ booking, timeZone }: { booking: Booking; timeZo
             <li key={amendment.id} className="flex flex-col gap-1 text-body-sm">
               <span className="flex flex-wrap items-center gap-2">
                 <span>
-                  {amendment.windowTo === undefined
-                    ? t('booking.amendment.cancellation', { at })
-                    : t('booking.amendment.extension', { to: formatDate(amendment.windowTo), at })}
+                  {amendment.kind === 'extension'
+                    ? t('booking.amendment.extension', { to: formatDate(extensionEnd(amendment)), at })
+                    : t('booking.amendment.cancellation', { at })}
                 </span>
                 <StatusBadge state={stateIdOf(amendment.state)} />
                 {amendment.state === 'Awaiting approval' && amendment.request !== undefined && (
@@ -358,20 +358,7 @@ export function AmendmentsCard({ booking, timeZone }: { booking: Booking; timeZo
                   />
                 )}
               </span>
-              <ul className="m-0 list-disc pl-5">
-                {amendment.lines.map((line) => {
-                  const number = numberOf(line.lineKey);
-                  if (number === undefined) return <li key={line.lineKey}>{t('booking.amendment.line-unknown')}</li>;
-                  return (
-                    <li key={line.lineKey}>
-                      {line.quantity !== undefined &&
-                        t('booking.amendment.line-quantity', { number, quantity: formatQuantity(line.quantity) })}
-                      {line.deliveryDate !== undefined &&
-                        t('booking.amendment.line-date', { number, date: formatDate(line.deliveryDate) })}
-                    </li>
-                  );
-                })}
-              </ul>
+              <AmendmentLines amendment={amendment} status={booking.status} />
               {amendment.communicationAttachmentIds.length > 0 && (
                 <EvidenceList attachmentIds={amendment.communicationAttachmentIds} />
               )}
