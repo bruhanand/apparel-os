@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { BOOKING_CAPS, type Booking, type BookingLineDraft } from '@apparel-os/schemas';
+import { BOOKING_CAPS, type Booking, type BookingLineDraft, type BookingStatus } from '@apparel-os/schemas';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -233,14 +233,18 @@ function LinesTable({
 
 /**
  * A new booking, or the next Draft of one (goods-in 3.1). `booking` given: its brand and destination stay, and the
- * form starts from its newest version. `onSaved` receives the booking saved.
+ * form starts from its newest version, each line keeping its key so the next version continues it (3.10). `effective`
+ * given, for a change of an approved booking, the window's end and the lines' dates start as extensions left them
+ * (3.5). `onSaved` receives the booking saved.
  */
 export function BookingForm({
   booking,
+  effective,
   waiting,
   onSaved,
 }: {
   booking?: Booking;
+  effective?: BookingStatus | undefined;
   /** While set, saving waits, its reason the message given: the booking is being read again. */
   waiting?: MessageId | undefined;
   onSaved: (bookingId: string) => void;
@@ -257,10 +261,14 @@ export function BookingForm({
       supplierPartyId: version?.supplierPartyId ?? '',
       seasonValueId: version?.season.valueId ?? '',
       windowFrom: version?.deliveryWindow.from ?? '',
-      windowTo: version?.deliveryWindow.to ?? '',
+      windowTo: effective?.deliveryWindow.to ?? version?.deliveryWindow.to ?? '',
     },
   });
-  const [lines, setLines] = useState<LineInput[]>(version?.lines.map(inputOf) ?? []);
+  const [lines, setLines] = useState<LineInput[]>(
+    version?.lines.map((line) =>
+      inputOf(line, effective?.lines.find((each) => each.lineKey === line.lineKey)?.deliveryDate ?? line.deliveryDate),
+    ) ?? [],
+  );
   const [problems, setProblems] = useState<LineProblems[] | undefined>(undefined);
   const record = useSubmission('recordBooking', BOOKING_READS);
   const save = useSubmission('saveBookingDraft', BOOKING_READS);

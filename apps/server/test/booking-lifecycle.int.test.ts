@@ -1,0 +1,1033 @@
+import { randomInt } from 'node:crypto';
+import { uuidv7 } from '@apparel-os/domain';
+import {
+  BOOKING_APPROVAL,
+  bookingReadSchema,
+  exceptionViewSchema,
+  myWorkSchema,
+  openToBuyBudgetReadSchema,
+  type AgreementTerms,
+  type Booking,
+} from '@apparel-os/schemas';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import {
+  COMMAND_RUNNER,
+  CommandRunner,
+  IdempotencyHelper,
+  OrganisationRouter,
+  OUTBOX_AUTHORITY,
+  OUTBOX_PROCESSOR_IDENTITY,
+  restrictedValueCipherNotConfigured,
+  secretCheckNotImplemented,
+  Worker,
+  type JobRegistry,
+  type RoutedOrganisation,
+} from '../src/kernel/index.js';
+// The access module's JobIdentities, as AccessJobIdentitiesModule provides it to the worker (RR-273).
+import { jobIdentities } from '../src/modules/access/commands/job-identities.js';
+import { Audit } from '../src/modules/audit/index.js';
+import {
+  BOOKING,
+  BOOKING_JOBS_IDENTITY,
+  bookingJobKinds,
+  overdueExceptionType,
+  type BookingInterface,
+  type ReceiptLinked,
+} from '../src/modules/booking/index.js';
+import { Exceptions } from '../src/modules/exceptions/index.js';
+import { Inbox } from '../src/modules/inbox/index.js';
+import { NUMBERING, type NumberingInterface } from '../src/modules/numbering/index.js';
+import { composedNumbering } from '../src/numbered-kinds.js';
+import { defineSyntheticBookingSeries } from './fixtures/booking-series.js';
+import { syntheticCode, syntheticName } from './fixtures/synthetic.js';
+import { syntheticWorkerSettings } from './fixtures/worker-settings.js';
+import {
+  codeFor,
+  startAccessApp,
+  syntheticKeysEnvironment,
+  SyntheticClock,
+  syntheticTimezone,
+  SYNTHETIC_ORIGIN,
+  writeSyntheticReason,
+  writeSyntheticSetting,
+  writeSyntheticUser,
+  type AccessTestApp,
+  type SyntheticUser,
+} from './support/access.js';
+import { BOOKING_POLICY_CHECKS, bookingGateOpen } from './support/booking.js';
+import { defineSyntheticCodeSeries } from './support/exceptions.js';
+import { grantSynthetic, type SyntheticAuthority } from './support/grants.js';
+import { capturingLogger, eventually, writeSyntheticServiceIdentity } from './support/jobs.js';
+import { writeSyntheticMarking } from './support/marked-attributes.js';
+import { startTestFileStore, type TestFileStore } from './support/minio.js';
+import { STORE_FILE_PATH, syntheticPdfUpload } from './support/opening-app.js';
+import { decided, structureSetup, type StructureSetup } from './support/organisation.js';
+import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
+import { databaseUrl } from './support/postgres.js';
+import { receivingFixture, type ReceivingFixture } from './support/receiving.js';
+
+// S2-F01-T04: an approved booking's lifecycle through the whole application, on real PostgreSQL (goods-in 3.4 to 3.8,
+// 3.10, 10.3, 12 tests 4, 5 and 7; PRD-BKG-005, PRD-BKG-006, PRD-BKG-008, PRD-BKG-009, PRD-BKG-013; POL-05.01,
+// POL-05.03 to POL-05.07, POL-05.10; DEC-099, DEC-132). Booking records Issued and Confirmed; a change after approval is
+// a new version approved again, reserving or releasing the difference and taking the Agreement version then in force;
+// a cancellation of an undelivered balance and an extension of the window are each approved by a different person;
+// delivered quantities come from receipt links, made here through `booking`'s receipt link operation by a test caller
+// standing for `receiving` (S2-F02-T04 makes the real one); and an overdue balance reaches Booking in My work, raised by
+// the overdue job, with nothing cancelled. Policies 5 and 1 are opened through TEST-ONLY checks reporting labelled
+// synthetic values (RR-561, RR-565; support/booking.ts). Every person, place, brand, price, budget, limit, date and
+// number here is SYNTHETIC.
+
+const BOOKING_TYPE = 'booking.booking';
+const BUDGET = 'booking.open_to_buy_budget';
+const CHECK = 'booking.open_to_buy_check';
+const PANEL: SyntheticAuthority = { recordType: 'access.approval_request', action: 'view' };
+/** SYNTHETIC amounts in paise. */
+const SYNTHETIC_BUDGET = 100_000_000;
+const SYNTHETIC_LIMIT = 500_000_000;
+const COST = 50_000;
+
+const log = capturingLogger();
+let world: SyntheticWorld;
+let database: string;
+let organisationCode: string;
+let organisation: RoutedOrganisation;
+let router: OrganisationRouter;
+let api: AccessTestApp;
+let minio: TestFileStore;
+let keys: Record<string, string>;
+let clock: SyntheticClock;
+let setup: StructureSetup;
+let fixture: ReceivingFixture;
+let approveReason: string;
+let rejectReason: string;
+const cookies = new Map<string, string>();
+const assignments = new Map<string, string>();
+/** Booking (P-BKG): records, changes and proposes; prepares budgets; owns the overdue exceptions. */
+let booker: SyntheticUser;
+let accounts: SyntheticUser;
+/** The Owner (P-OWN): approves budgets, bookings, cancellations and extensions within a SYNTHETIC limit. */
+let owner: SyntheticUser;
+/** A receiver standing for `receiving`'s caller of the receipt link, who sees the bookings it links to. */
+let receiver: SyntheticUser;
+let settingsAdmin: SyntheticUser;
+let settingsApprover: SyntheticUser;
+let seasons: string[];
+let budgetId: string;
+
+interface Call {
+  readonly status: number;
+  readonly body: Record<string, unknown>;
+}
+
+const errorOf = (call: Call) => (call.body as { error?: { code: string; missing?: Record<string, string>[] } }).error;
+
+function freshCode(user: SyntheticUser): string {
+  clock.advance(30);
+  return codeFor(user.factorSecret ?? Buffer.alloc(0), 0, clock.now());
+}
+
+async function signIn(user: SyntheticUser): Promise<void> {
+  const response = await fetch(`${api.baseUrl}/api/access/sign-in`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: SYNTHETIC_ORIGIN, 'x-forwarded-for': '10.9.9.74' },
+    body: JSON.stringify({ organisationCode, login: user.login, password: user.password, totpCode: freshCode(user) }),
+  });
+  expect(response.status).toBe(200);
+  cookies.set(user.id, (response.headers.get('set-cookie') ?? '').split(';')[0] ?? '');
+}
+
+async function enrolled(label: string, authorities: readonly SyntheticAuthority[]): Promise<SyntheticUser> {
+  const user = await writeSyntheticUser(database, organisationCode, keys, {
+    label: `${label}${String(randomInt(1_000_000))}`,
+    enrolled: true,
+  });
+  const granted = await grantSynthetic(database, { kind: 'user', id: user.id }, authorities);
+  assignments.set(user.id, granted.assignmentId);
+  await signIn(user);
+  return user;
+}
+
+async function post(user: SyntheticUser, path: string, body: unknown, key: string = uuidv7()): Promise<Call> {
+  const response = await fetch(`${api.baseUrl}${path}`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      origin: SYNTHETIC_ORIGIN,
+      cookie: cookies.get(user.id) ?? '',
+      'idempotency-key': key,
+    },
+    body: JSON.stringify(body),
+  });
+  return { status: response.status, body: (await response.json()) as Record<string, unknown> };
+}
+
+async function get(user: SyntheticUser, path: string): Promise<Call> {
+  const response = await fetch(`${api.baseUrl}${path}`, { headers: { cookie: cookies.get(user.id) ?? '' } });
+  return { status: response.status, body: (await response.json()) as Record<string, unknown> };
+}
+
+function decide(
+  by: SyntheticUser,
+  requestId: string,
+  versionId: string,
+  outcome: 'approve' | 'reject' = 'approve',
+): Promise<Call> {
+  return post(by, `/api/access/approval-requests/${requestId}/decision`, {
+    versionId,
+    outcome,
+    reason: { kind: 'listed', reasonId: outcome === 'approve' ? approveReason : rejectReason },
+    totpCode: freshCode(by),
+  });
+}
+
+function ok(call: Call): Record<string, unknown> {
+  expect(call.status, JSON.stringify(call.body)).toBe(200);
+  return call.body;
+}
+
+let fileCount = 0;
+async function storedFile(user: SyntheticUser): Promise<{ storedFileId: string; fileReceiptId: string }> {
+  fileCount += 1;
+  const stored = ok(await post(user, STORE_FILE_PATH, syntheticPdfUpload('BOOKING', `LIFE-${String(fileCount)}`)));
+  return { storedFileId: stored.storedFileId as string, fileReceiptId: stored.receiptId as string };
+}
+
+/** One line at the SYNTHETIC cost, with colour and size where given. */
+function line(
+  styleCode: string,
+  quantity: number,
+  options: { colour?: string; size?: string; deliveryDate?: string; lineKey?: string } = {},
+) {
+  return {
+    ...(options.lineKey === undefined ? {} : { lineKey: options.lineKey }),
+    styleCode,
+    colour: options.colour ?? null,
+    size: options.size ?? null,
+    quantity,
+    indicativeCost: COST,
+    mrp: 99_900,
+    deliveryDate: options.deliveryDate ?? null,
+  };
+}
+
+async function readBooking(user: SyntheticUser, bookingId: string): Promise<Booking> {
+  return bookingReadSchema.parse(ok(await get(user, `/api/booking/bookings/${bookingId}`))).booking;
+}
+
+/** Records, documents and submits a booking as Booking, and has the Owner approve it; answers the booking. */
+async function approvedBooking(
+  lines: readonly ReturnType<typeof line>[],
+  window: { from: string; to: string } = { from: setup.day(0), to: setup.day(30) },
+): Promise<Booking> {
+  const made = ok(
+    await post(booker, '/api/booking/bookings', {
+      brandId: fixture.brand.id,
+      destinationSiteId: fixture.siteId,
+      supplierPartyId: fixture.supplier.id,
+      seasonValueId: seasons[0],
+      deliveryWindow: window,
+      lines,
+    }),
+  );
+  const bookingId = made.bookingId as string;
+  const attached = ok(
+    await post(booker, `/api/booking/bookings/${bookingId}/documents`, {
+      files: [await storedFile(booker)],
+      versionToken: made.versionToken,
+    }),
+  );
+  const sent = ok(
+    await post(booker, `/api/booking/bookings/${bookingId}/submission`, { versionToken: attached.versionToken }),
+  );
+  ok(await decide(owner, sent.requestId as string, sent.versionId as string));
+  return readBooking(booker, bookingId);
+}
+
+function keyOf(booking: Booking, size: string): string {
+  const found = booking.status?.lines.find((each) => each.size === size);
+  if (found === undefined) throw new Error(`no line of size ${size}`);
+  return found.lineKey;
+}
+
+/** The remaining open-to-buy of the budget, read as the Owner. */
+async function remaining(): Promise<number> {
+  const budget = openToBuyBudgetReadSchema.parse(ok(await get(owner, `/api/booking/open-to-buy-budgets/${budgetId}`)))
+    .budget.remaining;
+  if (budget.kind !== 'approved') throw new Error('The budget is not approved');
+  return budget.remaining;
+}
+
+/**
+ * A test caller standing for `receiving` at a GRN's issue (goods-in 3.7, 10.2): a command of the application as the
+ * receiver, holding the booking's lock at step 1 as `receiving` will with its Arrival, linking each GRN line through
+ * `booking`'s receipt link operation. The GRN and its lines are SYNTHETIC identifiers: `booking` keeps them with no
+ * foreign key, and S2-F02-T04 makes the real caller.
+ */
+async function receive(
+  bookingId: string,
+  lines: readonly { size: string | null; colour?: string | null; quantity: number; styleCode?: string }[],
+  siteId: string = fixture.siteId,
+): Promise<ReceiptLinked[]> {
+  const booking = api.app.get<BookingInterface>(BOOKING);
+  const grnId = uuidv7();
+  return api.app.get<CommandRunner>(COMMAND_RUNNER).run(
+    {
+      commandName: 'test.receive-against-booking',
+      organisation,
+      correlationId: uuidv7(),
+      actor: { kind: 'actor', actorId: receiver.id },
+    },
+    async (context) => {
+      await context.lock(1, [booking.bookingLockTarget(bookingId)]);
+      const answers: ReceiptLinked[] = [];
+      for (const each of lines) {
+        const outcome = await booking.linkReceiptAtIssue(
+          context,
+          { userId: receiver.id, roleAssignmentId: assignments.get(receiver.id) ?? '' },
+          {
+            bookingId,
+            grnLine: { grnId, grnLineId: uuidv7(), siteId },
+            goods: { styleCode: each.styleCode ?? 'SYN-LIFE', colour: each.colour ?? 'SYN NAVY', size: each.size },
+            quantity: each.quantity,
+          },
+        );
+        if (outcome.kind !== 'success') throw new Error(`Refused: ${outcome.refusal.code}`);
+        answers.push(outcome.answer);
+      }
+      return answers;
+    },
+  );
+}
+
+/** Terms with every value Unknown but the ownership-transfer event (POL-01.05), for a SYNTHETIC Agreement version. */
+function terms(): AgreementTerms {
+  return {
+    commercialModel: null,
+    ownershipEvent: { kind: 'sale-to-customer' },
+    returnRights: { allowed: null, window: null, startsAt: null },
+    returnConditions: {
+      conditionTags: null,
+      packagingLimits: null,
+      quantityLimits: null,
+      supplierApproval: null,
+      freightAndDeductions: null,
+      settlement: null,
+    },
+    commissions: null,
+    paymentTerms: null,
+    creditNoteTerms: null,
+    promotionTerms: null,
+    cashDiscount: { rate: null, days: null, from: null },
+    interest: { rate: null, days: null, from: null },
+  };
+}
+
+beforeAll(async () => {
+  world = await createSyntheticOrganisations('lifecycle');
+  database = world.organisations[0].database;
+  organisationCode = world.organisations[0].code;
+  keys = syntheticKeysEnvironment(world);
+  await writeSyntheticSetting(database, 'access.sign-in-throttling', { failureLimit: 50, windowSeconds: 600 });
+  await writeSyntheticSetting(database, 'access.password-rules', { minimumLength: 12 });
+  await writeSyntheticSetting(database, 'access.office-session-limits', {
+    idleLockSeconds: 1800,
+    absoluteSeconds: 28800,
+  });
+  approveReason = await writeSyntheticReason(database, 'approve');
+  rejectReason = await writeSyntheticReason(database, 'reject');
+  minio = await startTestFileStore();
+  clock = new SyntheticClock();
+  api = await startAccessApp(world, keys, {
+    clock,
+    fileStoreEnvironment: minio.environment,
+    validityChecks: BOOKING_POLICY_CHECKS,
+  });
+  router = new OrganisationRouter(
+    { directoryConnectionString: databaseUrl(world.directory, 'runtime'), poolMax: 4 },
+    log.logger,
+  );
+  const routed = await router.resolveForSignIn(organisationCode);
+  if (!routed.routed) throw new Error('not routed');
+  organisation = routed.organisation;
+  setup = await structureSetup({
+    directory: world.directory,
+    database,
+    organisationCode,
+    keysEnvironment: keys,
+    label: 'LIFECYCLE',
+  });
+  fixture = await receivingFixture(setup, database, 'LIF');
+  const today = setup.today();
+  const okOf = <A>(outcome: { kind: 'success'; answer: A } | { kind: 'refusal'; refusal: { code: string } }): A => {
+    if (outcome.kind !== 'success') throw new Error(`Refused: ${outcome.refusal.code}`);
+    return outcome.answer;
+  };
+  const seasonAttribute = okOf(
+    await setup.asPreparerDo((c, p) =>
+      setup.catalogue.prepareAttribute(c, p, {
+        code: syntheticCode(`LIF-SEASON-${String(randomInt(1_000_000))}`),
+        valueKind: 'list',
+        name: syntheticName('SEASON'),
+        validFrom: today,
+      }),
+    ),
+  ).recordId;
+  seasons = [];
+  for (const label of ['SS1', 'AW1']) {
+    const proposed = okOf(
+      await setup.asPreparerDo((c, p) =>
+        setup.catalogue.proposeVocabularyValue(c, p, {
+          attributeId: seasonAttribute,
+          code: syntheticCode(`${label}-${String(randomInt(1_000_000))}`),
+          name: syntheticName(label),
+        }),
+      ),
+    );
+    decided(await setup.decide(proposed.requestId, proposed.proposalId));
+    const confirmed = await setup.run(setup.preparer.id, (c) => setup.catalogue.proposal(c, proposed.proposalId));
+    if (confirmed?.valueId === undefined) throw new Error(`${label} was not confirmed`);
+    seasons.push(confirmed.valueId);
+  }
+  await writeSyntheticMarking(database, 'season', seasonAttribute, setup.preparer.id);
+
+  booker = await enrolled('LIF-BOOKER', [
+    { recordType: BOOKING_TYPE, action: 'view' },
+    { recordType: BOOKING_TYPE, action: 'create' },
+    { recordType: BOOKING_TYPE, action: 'edit' },
+    { recordType: BUDGET, action: 'view' },
+    { recordType: BUDGET, action: 'create' },
+    { recordType: 'files_imports.stored_file', action: 'create' },
+    { recordType: 'exceptions.exception', action: 'view' },
+    { recordType: 'exceptions.exception', action: 'edit' },
+    PANEL,
+  ]);
+  accounts = await enrolled('LIF-ACCOUNTS', [
+    { recordType: BUDGET, action: 'view' },
+    { recordType: CHECK, action: 'view' },
+    { recordType: CHECK, action: 'approve' },
+    PANEL,
+  ]);
+  owner = await enrolled('LIF-OWNER', [
+    { recordType: BOOKING_TYPE, action: 'view' },
+    { recordType: BOOKING_TYPE, action: 'approve' },
+    { recordType: BUDGET, action: 'view' },
+    { recordType: BUDGET, action: 'approve' },
+    PANEL,
+  ]);
+  receiver = await enrolled('LIF-RECEIVER', [{ recordType: BOOKING_TYPE, action: 'view' }]);
+  settingsAdmin = await enrolled('LIF-SETTINGS', [
+    { recordType: 'access.approval_limit', action: 'view' },
+    { recordType: 'access.approval_limit', action: 'create' },
+    { recordType: 'exceptions.exception_routing', action: 'view' },
+    { recordType: 'exceptions.exception_routing', action: 'edit' },
+  ]);
+  settingsApprover = await enrolled('LIF-SETTINGS-APPROVER', [
+    { recordType: 'access.approval_limit', action: 'view' },
+    { recordType: 'access.approval_limit', action: 'approve' },
+    { recordType: 'exceptions.exception_routing', action: 'approve' },
+    PANEL,
+  ]);
+  // The Owner's SYNTHETIC booking limit (V-02), prepared and approved by two other people (9.2).
+  const limit = ok(
+    await post(settingsAdmin, '/api/access/approval-limits', {
+      actionType: BOOKING_APPROVAL,
+      holder: { kind: 'individual', userId: owner.id, roleAssignmentId: assignments.get(owner.id) },
+      limit: { kind: 'amount', amount: SYNTHETIC_LIMIT },
+      coversUnknown: false,
+      origin: 'synthetic',
+      validFrom: today,
+    }),
+  );
+  ok(await decide(settingsApprover, limit.requestId as string, limit.limitId as string));
+  // A SYNTHETIC budget for the brand and the first season: prepared, checked and approved by three people (3.3).
+  const prepared = ok(
+    await post(booker, '/api/booking/open-to-buy-budgets', {
+      brandId: fixture.brand.id,
+      seasonValueId: seasons[0],
+      amount: SYNTHETIC_BUDGET,
+      origin: 'synthetic',
+    }),
+  );
+  budgetId = prepared.budgetId as string;
+  ok(await decide(accounts, prepared.requestId as string, prepared.versionId as string));
+  const budget = openToBuyBudgetReadSchema.parse(
+    ok(await get(owner, `/api/booking/open-to-buy-budgets/${budgetId}`)),
+  ).budget;
+  const approvalId = budget.versions[0]?.request?.id;
+  if (approvalId === undefined) throw new Error('The budget approval was not requested');
+  ok(await decide(owner, approvalId, prepared.versionId as string));
+  // The overdue balance routed to Booking at the Site, by a SYNTHETIC owner and due time (12.2; POL-02.16; V-03).
+  const routing = ok(
+    await post(settingsAdmin, '/api/exceptions/routing', {
+      typeCode: 'booking.overdue-balance',
+      siteId: fixture.siteId,
+      owner: { kind: 'user', userId: booker.id },
+      dueRule: { format: 'elapsed-minutes-v1', minutes: 60 },
+      escalation: { kind: 'user', userId: booker.id },
+      validFrom: today,
+      origin: 'synthetic',
+    }),
+  );
+  ok(await decide(settingsApprover, routing.requestId as string, routing.versionId as string));
+  await bookingGateOpen(setup, database);
+  const numbering = api.app.get<NumberingInterface>(NUMBERING);
+  await api.app.get<CommandRunner>(COMMAND_RUNNER).run(
+    {
+      commandName: 'test.define-series',
+      organisation,
+      correlationId: uuidv7(),
+      actor: { kind: 'actor', actorId: owner.id },
+    },
+    async (context) => {
+      await defineSyntheticBookingSeries(context, numbering);
+      await defineSyntheticCodeSeries(context, numbering);
+    },
+  );
+}, 300_000);
+
+afterAll(async () => {
+  await (setup as StructureSetup | undefined)?.close();
+  await (router as OrganisationRouter | undefined)?.close();
+  await (api as AccessTestApp | undefined)?.close();
+  await (minio as TestFileStore | undefined)?.stop();
+  await (world as SyntheticWorld | undefined)?.reset();
+});
+
+describe('Issued and Confirmed (goods-in 3.4; POL-05.01, DEC-099)', () => {
+  let booking: Booking;
+
+  it('POL-05.01 a Draft is neither issued nor confirmed; Confirmed waits for Issued; a date is never in the future', async () => {
+    const draft = ok(
+      await post(booker, '/api/booking/bookings', {
+        brandId: fixture.brand.id,
+        destinationSiteId: fixture.siteId,
+        supplierPartyId: fixture.supplier.id,
+        seasonValueId: seasons[0],
+        deliveryWindow: { from: setup.day(0), to: setup.day(30) },
+        lines: [line('SYN-LIFE', 1)],
+      }),
+    );
+    expect(
+      errorOf(
+        await post(booker, `/api/booking/bookings/${draft.bookingId as string}/issue`, {
+          versionToken: draft.versionToken,
+          issuedOn: setup.today(),
+        }),
+      )?.code,
+    ).toBe('booking.not-approved');
+    booking = await approvedBooking([line('SYN-LIFE', 4, { size: 'S' })]);
+    expect(booking.state).toBe('Approved');
+    const path = `/api/booking/bookings/${booking.id}`;
+    expect(
+      errorOf(
+        await post(booker, `${path}/confirmation`, {
+          versionToken: booking.versionToken,
+          confirmedOn: setup.today(),
+          files: [await storedFile(booker)],
+        }),
+      )?.code,
+    ).toBe('booking.not-issued');
+    expect(
+      errorOf(await post(booker, `${path}/issue`, { versionToken: booking.versionToken, issuedOn: setup.day(1) }))
+        ?.code,
+    ).toBe('booking.date-in-future');
+    expect(
+      errorOf(await post(booker, `${path}/issue`, { versionToken: booking.versionToken, issuedOn: setup.day(-1) }))
+        ?.code,
+    ).toBe('booking.date-too-early');
+  });
+
+  it('DEC-099 POL-05.01 Booking records Issued with its date, then Confirmed with the supplier’s confirmation', async () => {
+    const path = `/api/booking/bookings/${booking.id}`;
+    const issued = ok(
+      await post(booker, `${path}/issue`, { versionToken: booking.versionToken, issuedOn: setup.today() }),
+    );
+    const afterIssue = await readBooking(booker, booking.id);
+    expect(afterIssue).toMatchObject({
+      state: 'Issued',
+      versionToken: issued.versionToken,
+      issue: { issuedOn: setup.today(), recordedBy: booker.id },
+    });
+    expect(
+      errorOf(await post(booker, `${path}/issue`, { versionToken: afterIssue.versionToken, issuedOn: setup.today() }))
+        ?.code,
+    ).toBe('booking.already-issued');
+    ok(
+      await post(booker, `${path}/confirmation`, {
+        versionToken: afterIssue.versionToken,
+        confirmedOn: setup.today(),
+        files: [await storedFile(booker)],
+      }),
+    );
+    const confirmed = await readBooking(owner, booking.id);
+    expect(confirmed).toMatchObject({ state: 'Confirmed', confirmation: { confirmedOn: setup.today() } });
+    expect(confirmed.confirmation?.attachmentIds).toHaveLength(1);
+    // The list filters by the lifecycle's states too (goods-in section 11).
+    const list = ok(await get(booker, `/api/booking/bookings?state=Confirmed`));
+    expect((list.bookings as { id: string }[]).map((each) => each.id)).toContain(booking.id);
+  });
+});
+
+describe('quantities from receipt links (goods-in 3.6, 3.7; 12 test 5)', () => {
+  let booking: Booking;
+
+  it('PRD-BKG-005 PRD-BKG-006 booked 10 each of S, M and L; deliveries of 5, 3 and 2 a size leave 15, 6 and 0', async () => {
+    booking = await approvedBooking(['S', 'M', 'L'].map((size) => line('SYN-LIFE', 10, { colour: 'SYN NAVY', size })));
+    expect(booking.status?.totals).toEqual({
+      ordered: 30,
+      delivered: 0,
+      cancelled: 0,
+      outstanding: 30,
+      overDelivered: 0,
+    });
+    const outstanding: number[] = [];
+    for (const each of [5, 3, 2]) {
+      const answers = await receive(
+        booking.id,
+        // Matched ignoring case and spaces at the ends (goods-in 3.7; DEC-130).
+        ['s', ' M', 'l '].map((size) => ({ size, colour: 'syn navy', quantity: each, styleCode: ' syn-life' })),
+      );
+      expect(answers.map((answer) => answer.kind)).toEqual(['linked', 'linked', 'linked']);
+      outstanding.push((await readBooking(booker, booking.id)).status?.totals.outstanding ?? -1);
+    }
+    expect(outstanding).toEqual([15, 6, 0]);
+    const read = await readBooking(booker, booking.id);
+    expect(read.status?.lines.map((each) => [each.size, each.delivered, each.outstanding])).toEqual([
+      ['S', 10, 0],
+      ['M', 10, 0],
+      ['L', 10, 0],
+    ]);
+  });
+
+  it('PRD-BKG-007 a line matching no booking line, or counted at another Site, goes to review and links nothing', async () => {
+    const answers = await receive(booking.id, [{ size: 'XL', quantity: 1 }]);
+    expect(answers).toEqual([{ kind: 'review', reason: 'no-match' }]);
+    expect(await receive(booking.id, [{ size: 'S', quantity: 1 }], uuidv7())).toEqual([
+      { kind: 'review', reason: 'other-site' },
+    ]);
+    expect((await readBooking(booker, booking.id)).status?.totals.delivered).toBe(30);
+  });
+
+  it('PRD-BKG-008 a later link by Booking names the line, is dated and signed, and shows beyond ordered as over-delivered', async () => {
+    const service = api.app.get<BookingInterface>(BOOKING);
+    const grnLineId = uuidv7();
+    const link = () =>
+      api.app.get<CommandRunner>(COMMAND_RUNNER).run(
+        {
+          commandName: 'test.link-later',
+          organisation,
+          correlationId: uuidv7(),
+          actor: { kind: 'actor', actorId: receiver.id },
+        },
+        async (context) => {
+          await context.lock(1, [service.bookingLockTarget(booking.id)]);
+          return service.linkReceiptLater(
+            context,
+            { userId: receiver.id, roleAssignmentId: assignments.get(receiver.id) ?? '' },
+            {
+              bookingId: booking.id,
+              lineKey: keyOf(booking, 'M'),
+              grnLine: { grnId: uuidv7(), grnLineId, siteId: fixture.siteId },
+              quantity: 2,
+            },
+          );
+        },
+      );
+    expect((await link()).kind).toBe('success');
+    const again = await link();
+    expect(again.kind === 'refusal' ? again.refusal.code : again.kind).toBe('booking.receipt-already-linked');
+    const read = await readBooking(booker, booking.id);
+    expect(read.status?.lines.find((each) => each.size === 'M')).toMatchObject({
+      delivered: 12,
+      outstanding: 0,
+      overDelivered: 2,
+    });
+  });
+});
+
+describe('cancelling an undelivered balance (goods-in 3.5, 3.6; 12 test 4)', () => {
+  let booking: Booking;
+
+  it('POL-05.07 POL-02.07 PRD-BKG-013 a cancellation, approved by another person, releases its value and keeps what was received', async () => {
+    booking = await approvedBooking([
+      line('SYN-LIFE', 10, { colour: 'SYN NAVY', size: 'S' }),
+      line('SYN-LIFE', 10, { colour: 'SYN NAVY', size: 'M' }),
+    ]);
+    expect(booking.approval?.reserved).toBe(20 * COST);
+    await receive(booking.id, [{ size: 'S', quantity: 4 }]);
+    const before = await remaining();
+    const current = await readBooking(booker, booking.id);
+    const proposed = ok(
+      await post(booker, `/api/booking/bookings/${booking.id}/cancellations`, {
+        versionToken: current.versionToken,
+        scope: { kind: 'lines', lineKeys: [keyOf(booking, 'S')] },
+      }),
+    );
+    const amendmentId = proposed.amendmentId as string;
+    const waiting = await readBooking(booker, booking.id);
+    expect(waiting.amendments).toEqual([
+      expect.objectContaining({
+        id: amendmentId,
+        kind: 'cancellation',
+        state: 'Awaiting approval',
+        lines: [{ lineKey: keyOf(booking, 'S'), quantity: 6 }],
+      }),
+    ]);
+    // Nothing is cancelled before the approval; the proposer may not approve it (POL-02.07).
+    expect(waiting.status?.totals.cancelled).toBe(0);
+    expect(errorOf(await decide(booker, proposed.requestId as string, amendmentId))?.code).toMatch(/^access\./);
+    ok(await decide(owner, proposed.requestId as string, amendmentId));
+    const after = await readBooking(booker, booking.id);
+    expect(after.status?.lines.find((each) => each.size === 'S')).toMatchObject({
+      ordered: 10,
+      delivered: 4,
+      cancelled: 6,
+      outstanding: 0,
+    });
+    expect(after.amendments[0]?.state).toBe('Approved');
+    // 6 pieces at 500.00 released: 3,000.00 (worked by hand).
+    expect(after.approval?.reserved).toBe(14 * COST);
+    expect(await remaining()).toBe(before + 6 * COST);
+  });
+
+  it('POL-05.07 a cancellation is refused when the balance changed since it was proposed, and when nothing is outstanding', async () => {
+    const current = await readBooking(booker, booking.id);
+    const proposed = ok(
+      await post(booker, `/api/booking/bookings/${booking.id}/cancellations`, {
+        versionToken: current.versionToken,
+        scope: { kind: 'whole' },
+      }),
+    );
+    expect((await readBooking(booker, booking.id)).amendments.at(-1)?.lines).toEqual([
+      { lineKey: keyOf(booking, 'M'), quantity: 10 },
+    ]);
+    await receive(booking.id, [{ size: 'M', quantity: 2 }]);
+    expect(errorOf(await decide(owner, proposed.requestId as string, proposed.amendmentId as string))?.code).toBe(
+      'booking.balance-changed',
+    );
+    const unchanged = await readBooking(booker, booking.id);
+    expect(unchanged.status?.totals).toMatchObject({ cancelled: 6, outstanding: 8 });
+    expect(
+      errorOf(
+        await post(booker, `/api/booking/bookings/${booking.id}/cancellations`, {
+          versionToken: unchanged.versionToken,
+          scope: { kind: 'lines', lineKeys: [keyOf(booking, 'S')] },
+        }),
+      )?.code,
+    ).toBe('booking.nothing-outstanding');
+  });
+});
+
+describe('a change after approval (goods-in 3.5, 3.10; 12 test 4)', () => {
+  let booking: Booking;
+
+  it('POL-05.03 POL-05.04 a change is a new version; after issue it carries the supplier’s communication; the version in force stays', async () => {
+    booking = await approvedBooking([line('SYN-LIFE', 10, { colour: 'SYN NAVY', size: 'S' })]);
+    const issued = ok(
+      await post(booker, `/api/booking/bookings/${booking.id}/issue`, {
+        versionToken: booking.versionToken,
+        issuedOn: setup.today(),
+      }),
+    );
+    const key = keyOf(booking, 'S');
+    const saved = ok(
+      await post(booker, `/api/booking/bookings/${booking.id}/drafts`, {
+        versionToken: issued.versionToken,
+        supplierPartyId: fixture.supplier.id,
+        seasonValueId: seasons[0],
+        deliveryWindow: { from: setup.day(0), to: setup.day(30) },
+        lines: [
+          line('SYN-LIFE', 12, { colour: 'SYN NAVY', size: 'S', lineKey: key }),
+          line('SYN-LIFE', 3, { colour: 'SYN NAVY', size: 'M' }),
+        ],
+      }),
+    );
+    const changing = await readBooking(booker, booking.id);
+    expect(changing).toMatchObject({
+      state: 'Issued',
+      change: { state: 'Draft', versionId: saved.versionId },
+      status: { versionId: booking.status?.versionId, totals: { ordered: 10 } },
+    });
+    expect(changing.version.lines[0]?.lineKey).toBe(key);
+    expect(
+      errorOf(
+        await post(booker, `/api/booking/bookings/${booking.id}/submission`, { versionToken: saved.versionToken }),
+      )?.code,
+    ).toBe('booking.communication-required');
+    ok(
+      await post(booker, `/api/booking/bookings/${booking.id}/submission`, {
+        versionToken: saved.versionToken,
+        communication: [await storedFile(booker)],
+      }),
+    );
+    const awaiting = await readBooking(booker, booking.id);
+    expect(awaiting).toMatchObject({ state: 'Issued', change: { state: 'Awaiting approval' } });
+    expect(awaiting.version.communicationAttachmentIds).toHaveLength(1);
+  });
+
+  it('PRD-BKG-013 PRD-BKG-006 a change keeps what is delivered of a line, and its style, colour and size', async () => {
+    await receive(booking.id, [{ size: 'S', quantity: 5 }]);
+    // The change awaiting approval is rejected, so the booking takes a Draft again; one that lowers S below the 5
+    // delivered, leaves it out, or makes it another size, is refused.
+    const rejectedChange = await readBooking(booker, booking.id);
+    const requestId = rejectedChange.version.request?.id;
+    if (requestId === undefined) throw new Error('The change was not requested');
+    ok(await decide(owner, requestId, rejectedChange.version.id, 'reject'));
+    const back = await readBooking(booker, booking.id);
+    expect(back).toMatchObject({ state: 'Issued', change: { state: 'Draft' } });
+    const body = (lines: unknown[]) => ({
+      versionToken: back.versionToken,
+      supplierPartyId: fixture.supplier.id,
+      seasonValueId: seasons[0],
+      deliveryWindow: { from: setup.day(0), to: setup.day(30) },
+      lines,
+    });
+    const key = keyOf(booking, 'S');
+    expect(
+      errorOf(
+        await post(
+          booker,
+          `/api/booking/bookings/${booking.id}/drafts`,
+          body([line('SYN-LIFE', 4, { colour: 'SYN NAVY', size: 'S', lineKey: key })]),
+        ),
+      ),
+    ).toMatchObject({ code: 'booking.line-below-received', missing: [{ kind: 'booking-line', lineKey: key }] });
+    expect(
+      errorOf(
+        await post(
+          booker,
+          `/api/booking/bookings/${booking.id}/drafts`,
+          body([line('SYN-LIFE', 10, { colour: 'SYN NAVY', size: 'XL', lineKey: key })]),
+        ),
+      )?.code,
+    ).toBe('booking.line-received');
+    expect(
+      errorOf(await post(booker, `/api/booking/bookings/${booking.id}/drafts`, body([line('SYN-LIFE', 10)]))),
+    ).toMatchObject({ code: 'booking.line-below-received' });
+  });
+
+  it('POL-05.02 DEC-132 the change approved again reserves the difference; one that lowers the value releases it', async () => {
+    const current = await readBooking(booker, booking.id);
+    const key = keyOf(booking, 'S');
+    const change = (lines: unknown[], versionToken: string) =>
+      post(booker, `/api/booking/bookings/${booking.id}/drafts`, {
+        versionToken,
+        supplierPartyId: fixture.supplier.id,
+        seasonValueId: seasons[0],
+        deliveryWindow: { from: setup.day(0), to: setup.day(30) },
+        lines,
+      });
+    const raise = ok(
+      await change(
+        [line('SYN-LIFE', 12, { colour: 'SYN NAVY', size: 'S', lineKey: key }), line('SYN-LIFE', 3, { size: 'M' })],
+        current.versionToken,
+      ),
+    );
+    const before = await remaining();
+    // The version in force is Issued, so the change carries the supplier's communication (POL-05.04).
+    const sent = ok(
+      await post(booker, `/api/booking/bookings/${booking.id}/submission`, {
+        versionToken: raise.versionToken,
+        communication: [await storedFile(booker)],
+      }),
+    );
+    ok(await decide(owner, sent.requestId as string, sent.versionId as string));
+    const raised = await readBooking(booker, booking.id);
+    // 10 at 500.00 became 15: 2,500.00 more reserved (worked by hand). The new version is Approved, not yet issued, and
+    // keeps the Agreement version in force at its approval (DEC-132).
+    expect(raised).toMatchObject({
+      state: 'Approved',
+      status: { versionId: sent.versionId, totals: { ordered: 15, delivered: 5, outstanding: 10 } },
+      approval: { versionId: sent.versionId, reserved: 15 * COST, agreementVersionId: fixture.agreementVersionId },
+      terms: { kind: 'fixed', versionId: fixture.agreementVersionId },
+    });
+    expect(raised).not.toHaveProperty('change');
+    expect(await remaining()).toBe(before - 5 * COST);
+    // The receipt links follow the line's key into the new version (goods-in 3.10).
+    expect(raised.status?.lines.find((each) => each.lineKey === key)?.delivered).toBe(5);
+    // The new version in force is not issued yet, so a change of it carries no communication.
+    const lower = ok(
+      await change([line('SYN-LIFE', 6, { colour: 'SYN NAVY', size: 'S', lineKey: key })], raised.versionToken),
+    );
+    const lowered = ok(
+      await post(booker, `/api/booking/bookings/${booking.id}/submission`, { versionToken: lower.versionToken }),
+    );
+    ok(await decide(owner, lowered.requestId as string, lowered.versionId as string));
+    expect((await readBooking(booker, booking.id)).approval?.reserved).toBe(6 * COST);
+    expect(await remaining()).toBe(before + 4 * COST);
+    // An approved booking with no newer version has nothing to submit.
+    const settled = await readBooking(booker, booking.id);
+    expect(
+      errorOf(
+        await post(booker, `/api/booking/bookings/${booking.id}/submission`, { versionToken: settled.versionToken }),
+      )?.code,
+    ).toBe('booking.no-change');
+  });
+});
+
+describe('extending the window (goods-in 3.5, 3.8)', () => {
+  it('POL-05.07 an extension, approved by another person, moves the window’s end and a line’s date; an earlier date is refused', async () => {
+    const booking = await approvedBooking(
+      [line('SYN-LIFE', 5, { size: 'S', deliveryDate: setup.day(-2) }), line('SYN-LIFE', 5, { size: 'M' })],
+      { from: setup.day(-10), to: setup.day(-1) },
+    );
+    expect(booking.status?.lines.map((each) => each.overdue)).toEqual([true, true]);
+    const path = `/api/booking/bookings/${booking.id}/extensions`;
+    expect(
+      errorOf(await post(booker, path, { versionToken: booking.versionToken, windowTo: setup.day(-3), lines: [] }))
+        ?.code,
+    ).toBe('booking.not-an-extension');
+    const proposed = ok(
+      await post(booker, path, {
+        versionToken: booking.versionToken,
+        windowTo: setup.day(20),
+        lines: [{ lineKey: keyOf(booking, 'S'), deliveryDate: setup.day(10) }],
+      }),
+    );
+    expect(errorOf(await decide(booker, proposed.requestId as string, proposed.amendmentId as string))?.code).toMatch(
+      /^access\./,
+    );
+    ok(await decide(owner, proposed.requestId as string, proposed.amendmentId as string));
+    const extended = await readBooking(booker, booking.id);
+    expect(extended.status?.deliveryWindow).toEqual({ from: setup.day(-10), to: setup.day(20) });
+    expect(extended.status?.lines.map((each) => [each.dueDate, each.overdue])).toEqual([
+      [setup.day(10), false],
+      [setup.day(20), false],
+    ]);
+  });
+});
+
+describe('the overdue balance (goods-in 3.8; 12 test 7)', () => {
+  it('POL-05.06 PRD-BKG-009 the window passes with pieces outstanding: the balance is marked overdue and reaches Booking; nothing is cancelled', async () => {
+    const booking = await approvedBooking([line('SYN-LATE', 8, { size: 'S' }), line('SYN-LATE', 2, { size: 'M' })], {
+      from: setup.day(-20),
+      to: setup.day(-1),
+    });
+    await receive(booking.id, [{ size: 'M', quantity: 2, styleCode: 'SYN-LATE', colour: null }]);
+    // The overdue job, run by a worker with SYNTHETIC settings (DEC-118, DEC-119; CH-10) under its own service identity.
+    await writeSyntheticServiceIdentity(database, OUTBOX_PROCESSOR_IDENTITY, [OUTBOX_AUTHORITY]);
+    await writeSyntheticServiceIdentity(database, BOOKING_JOBS_IDENTITY, [
+      { action: 'edit', recordType: BOOKING_TYPE },
+    ]);
+    const numbering = composedNumbering();
+    const registry: JobRegistry = {
+      events: [],
+      consumers: [],
+      jobKinds: bookingJobKinds({
+        audit: (logger) => new Audit(logger),
+        exceptions: (logger) =>
+          new Exceptions({ numbering, inbox: new Inbox(), audit: new Audit(logger), types: [overdueExceptionType] }),
+      }),
+    };
+    const runner = new CommandRunner({
+      clock: { now: () => new Date() },
+      timezones: syntheticTimezone,
+      logger: log.logger,
+    });
+    const worker = new Worker({
+      router,
+      runner,
+      helper: new IdempotencyHelper({
+        runner,
+        logger: log.logger,
+        secretCheck: secretCheckNotImplemented,
+        cipher: restrictedValueCipherNotConfigured,
+      }),
+      identities: jobIdentities(),
+      logger: log.logger,
+      registry,
+      settings: syntheticWorkerSettings(registry, { fast: true }),
+    });
+    await worker.start();
+    try {
+      let exceptionId: string | undefined;
+      await eventually(async () => {
+        const items = myWorkSchema.parse(ok(await get(booker, '/api/inbox/my-work'))).items;
+        for (const item of items.filter((each) => each.kind === 'exception')) {
+          const read = exceptionViewSchema.parse(
+            ok(await get(booker, `/api/exceptions/exceptions/${item.owner.recordId}`)),
+          );
+          if (read.links.some((link) => link.recordId === booking.id)) exceptionId = read.id;
+        }
+        return exceptionId !== undefined;
+      }, 30_000);
+      const raised = exceptionViewSchema.parse(
+        ok(await get(booker, `/api/exceptions/exceptions/${exceptionId ?? ''}`)),
+      );
+      // One exception for the booking's balance due at the window's end: 8 pieces at 500.00 outstanding (by hand).
+      expect(raised).toMatchObject({
+        type: { code: 'booking.overdue-balance' },
+        state: 'Unresolved',
+        exposure: { kind: 'known', amount: 8 * COST },
+        siteId: fixture.siteId,
+        brandId: fixture.brand.id,
+      });
+      // Expiry cancels nothing (POL-05.06).
+      const read = await readBooking(booker, booking.id);
+      expect(read.state).toBe('Approved');
+      expect(read.status?.lines.map((each) => [each.size, each.outstanding, each.cancelled, each.overdue])).toEqual([
+        ['S', 8, 0, true],
+        ['M', 0, 0, false],
+      ]);
+      // It cannot close while the balance is still overdue (PRD-EXC-002); extended, it can.
+      expect(errorOf(await post(booker, `/api/exceptions/exceptions/${raised.id}/close`, {}))?.code).toMatch(
+        /^exceptions\./,
+      );
+      const proposed = ok(
+        await post(booker, `/api/booking/bookings/${booking.id}/extensions`, {
+          versionToken: read.versionToken,
+          windowTo: setup.day(5),
+          lines: [],
+        }),
+      );
+      ok(await decide(owner, proposed.requestId as string, proposed.amendmentId as string));
+      ok(await post(booker, `/api/exceptions/exceptions/${raised.id}/close`, {}));
+    } finally {
+      await worker.stop();
+    }
+  });
+});
+
+describe('a re-approval on a later day takes the Agreement version then in force (goods-in 3.2, 3.5; DEC-132)', () => {
+  it('DEC-132 POL-01.04 a change approved again fixes the Agreement version in force at its approval', async () => {
+    const booking = await approvedBooking([line('SYN-AGR', 2, { size: 'S' })]);
+    if (booking.terms.kind !== 'fixed') throw new Error('The Agreement version is not fixed');
+    // A later Agreement version of the brand, from tomorrow, prepared and approved by two people (structure-and-masters
+    // 5.2), then the application's clock moved to tomorrow, where it is in force.
+    const agreementId = booking.terms.agreementId;
+    const next = await setup.asPreparerDo((c, p) =>
+      setup.parties.prepareAgreementVersion(c, p, agreementId, {
+        terms: terms(),
+        margins: null,
+        signedAgreement: [],
+        validFrom: setup.day(1),
+        versionToken: fixture.agreementVersionId,
+      }),
+    );
+    if (next.kind !== 'success' || next.answer.requestId === undefined) {
+      throw new Error(`No Agreement version: ${next.kind === 'refusal' ? next.refusal.code : 'not requested'}`);
+    }
+    decided(await setup.decide(next.answer.requestId, next.answer.versionId));
+    clock.advance(86_400);
+    for (const user of [booker, owner]) await signIn(user);
+    const today = await readBooking(booker, booking.id);
+    expect(today.terms).toMatchObject({ kind: 'fixed', versionId: fixture.agreementVersionId });
+    const saved = ok(
+      await post(booker, `/api/booking/bookings/${booking.id}/drafts`, {
+        versionToken: today.versionToken,
+        supplierPartyId: fixture.supplier.id,
+        seasonValueId: seasons[0],
+        deliveryWindow: { from: setup.day(0), to: setup.day(30) },
+        lines: [line('SYN-AGR', 3, { size: 'S', lineKey: keyOf(booking, 'S') })],
+      }),
+    );
+    const sent = ok(
+      await post(booker, `/api/booking/bookings/${booking.id}/submission`, { versionToken: saved.versionToken }),
+    );
+    ok(await decide(owner, sent.requestId as string, sent.versionId as string));
+    expect((await readBooking(booker, booking.id)).terms).toMatchObject({
+      kind: 'fixed',
+      versionId: next.answer.versionId,
+    });
+  });
+});

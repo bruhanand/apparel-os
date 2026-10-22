@@ -10,3 +10,10 @@ export const bookingApproved = defineEvent({
   version: 1,
   payload: z.strictObject({ bookingId: z.uuid(), versionId: z.uuid() }),
 });
+
+/** A cancellation of a booking's undelivered balance, or an extension of its window, was approved (goods-in 3.5). */
+export const bookingAmended = defineEvent({
+  type: 'booking.booking-amended',
+  version: 1,
+  payload: z.strictObject({ bookingId: z.uuid(), amendmentId: z.uuid() }),
+});

@@ -1059,7 +1059,8 @@ export const deviceCodes = declareCodes({
  * - `booking.site-not-in-force`: the destination is not a Site in force today (goods-in 3.1).
  * - `booking.supplier-not-linked`: the supplier is not linked to the brand, or holds no supplier role, on the booking's
  *   date (PRD-MER-021).
- * - `booking.not-draft`: the booking is not a Draft: it awaits approval or is approved (goods-in 3.4, 3.5).
+ * - `booking.not-draft`: the booking takes no such change now: its version waits for a decision, or, for booking
+ *   documents, it has been approved (goods-in 3.4, 3.5).
  * - `booking.no-document`: a booking is submitted only with at least one booking document attached (goods-in 3.1).
  * - `booking.no-lines`: a booking is submitted only with at least one line (goods-in 3.1).
  * - `booking.no-agreement-in-force`: the brand has no Agreement version in force on the approval's date; `missing`
@@ -1071,6 +1072,29 @@ export const deviceCodes = declareCodes({
  *   3.9).
  * - `booking.no-booking-series`, `booking.booking-series-paused`: no Open booking number series
  *   (numbering-and-audit 3.2; goods-in 3.1).
+ *
+ * An approved booking's lifecycle (goods-in 3.4 to 3.8, 3.10; S2-F01-T04):
+ *
+ * - `booking.not-approved`: the booking has no approved version yet, so it is not issued, confirmed, cancelled,
+ *   extended or received against (goods-in 3.4).
+ * - `booking.already-issued`, `booking.already-confirmed`: the version in force is recorded as Issued, or Confirmed,
+ *   already (POL-05.01).
+ * - `booking.not-issued`: Confirmed is recorded only once the version in force is Issued (POL-05.01).
+ * - `booking.date-in-future`: the date given is later than today (code-house-rules 9).
+ * - `booking.date-too-early`: Issued is dated before the approval's date, or Confirmed before the issue's date.
+ * - `booking.no-change`: an approved booking is submitted again only with a newer version, a change (goods-in 3.5).
+ * - `booking.communication-required`: after issue, a change, a cancellation or an extension carries the supplier's
+ *   communication (POL-05.04).
+ * - `booking.line-not-found`: no line of the booking, or of its version in force, has that key.
+ * - `booking.line-repeated`: one version names a line's key twice.
+ * - `booking.line-below-received`: a change lowers a line, or leaves it out, below what is delivered and cancelled of
+ *   it (PRD-BKG-013, POL-05.04).
+ * - `booking.line-received`: a change alters the style code, colour or size of a line with goods linked to it.
+ * - `booking.nothing-outstanding`: a cancellation names a line, or a booking, with nothing outstanding (goods-in 3.6).
+ * - `booking.balance-changed`: the outstanding balance changed since the cancellation was proposed; propose it again.
+ * - `booking.version-not-in-force`: the cancellation or extension amends a version a change has since replaced.
+ * - `booking.not-an-extension`: a date given is not later than the one it replaces, or nothing is extended.
+ * - `booking.receipt-already-linked`: the GRN line is linked to a booking line already (goods-in 3.7; PRD-BKG-008).
  */
 export const bookingCodes = declareCodes({
   'booking.record-not-found': 'not-found',
@@ -1089,6 +1113,23 @@ export const bookingCodes = declareCodes({
   'booking.open-to-buy-short': 'refused',
   'booking.no-booking-series': 'unavailable',
   'booking.booking-series-paused': 'unavailable',
+  'booking.not-approved': 'refused',
+  'booking.already-issued': 'refused',
+  'booking.already-confirmed': 'refused',
+  'booking.not-issued': 'refused',
+  'booking.date-in-future': 'refused',
+  'booking.date-too-early': 'refused',
+  'booking.no-change': 'refused',
+  'booking.communication-required': 'refused',
+  'booking.line-not-found': 'refused',
+  'booking.line-repeated': 'refused',
+  'booking.line-below-received': 'refused',
+  'booking.line-received': 'refused',
+  'booking.nothing-outstanding': 'refused',
+  'booking.balance-changed': 'refused',
+  'booking.version-not-in-force': 'refused',
+  'booking.not-an-extension': 'refused',
+  'booking.receipt-already-linked': 'refused',
 });
 
 /**

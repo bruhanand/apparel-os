@@ -18,7 +18,7 @@ import {
   type ModuleApprovals,
   type ScopeMembers,
 } from './modules/access/index.js';
-import { BookingModule, bookingApprovals } from './modules/booking/index.js';
+import { BookingModule, bookingApprovals, overdueExceptionType } from './modules/booking/index.js';
 import {
   ReceivingModule,
   receivingApprovals,
@@ -184,7 +184,8 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
           // reaches `access` when it runs, never at start (access-and-approvals 9.8b "As built for a document decided
           // in two steps").
           // A booking version's approval asks the policy gate and draws its number from the booking series through
-          // `numbering` built with every declared kind (goods-in 3.4, 10.5; S2-F01-T03).
+          // `numbering` built with every declared kind (goods-in 3.4, 10.5; S2-F01-T03); a cancellation's and an
+          // extension's ask the gate too (goods-in 3.5; S2-F01-T04).
           bookingApprovals({
             audit,
             configuration,
@@ -236,11 +237,16 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
       useValue: [receivingStockCaller, stockDocumentsStockCaller] satisfies readonly CallerRegistration[],
     },
     // The exception types the raising modules register (access-and-approvals 12.1): the damage a report raises, to
-    // Operations as its routing says (goods-in 8.2; S2-F08-T01), and the shortage and held lines a GRN's count finds,
-    // to Booking (goods-in 4.5; S2-F02-T03).
+    // Operations as its routing says (goods-in 8.2; S2-F08-T01), the shortage and held lines a GRN's count finds, to
+    // Booking (goods-in 4.5; S2-F02-T03), and the overdue balance of a booking, also to Booking (goods-in 3.8;
+    // S2-F01-T04).
     {
       provide: EXCEPTION_TYPES,
-      useValue: [damageExceptionType, ...receivingExceptionTypes] satisfies readonly ExceptionTypeRegistration[],
+      useValue: [
+        damageExceptionType,
+        ...receivingExceptionTypes,
+        overdueExceptionType,
+      ] satisfies readonly ExceptionTypeRegistration[],
     },
     // The decision-evidence contract of `access`, which files-imports' Attach implements (9.5; S1-F08-T03).
     { provide: DECISION_EVIDENCE, useFactory: (audit: AuditInterface) => decisionEvidence(audit), inject: [AUDIT] },

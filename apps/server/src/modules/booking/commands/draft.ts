@@ -8,8 +8,10 @@ import type { FilesImportsInterface } from '../../files-imports/index.js';
 import { brandInForce, type CatalogueInterface } from '../../merchandise/catalogue/index.js';
 import { brandSupplierLinkedOn } from '../../merchandise/parties/index.js';
 import { bookingChange, bookingLine, bookingVersion, type BookingChangeKind } from '../db/schema.js';
-import { bookingAuditRecord, bookingItem, stateOf } from '../domain/bookings.js';
+import { bookingAuditRecord, bookingItem, lineItem } from '../domain/bookings.js';
+import { changeRefusal, CONTENT_CHANGES, lifecycleOf } from '../domain/lifecycle.js';
 import { changesOf, lockBooking, versionsOf, type BookingRow } from '../queries/bookings.js';
+import { approvalInForce, lineKeysOf, statusOfBooking } from '../queries/lifecycle.js';
 import { refused, valueChange, type Outcome, type ValueChange } from './common.js';
 
 // What the commands of a booking's Draft share (goods-in 3.1, 3.4, 3.9; PRD-BKG-001 to PRD-BKG-003, PRD-MER-021;
@@ -18,6 +20,11 @@ import { refused, valueChange, type Outcome, type ValueChange } from './common.j
 // is edited freely: each save writes its next version with its lines, frozen when written (7.2). None is
 // policy-gated: they record no business effect (DEC-116; goods-in 10.5). Each command is a file of its own: record,
 // save, attach documents and submit.
+//
+// Once approved, a booking takes a change as its next Draft, a new version approved again (goods-in 3.5, 3.10;
+// POL-05.03, POL-05.10; S2-F01-T04): a line names, by its key, the line it continues, so its receipt links and
+// cancellations follow it; a change keeps what is delivered and cancelled of each line; after issue it is submitted
+// with the supplier's communication (POL-05.04). The version in force stays in force until the change is approved.
 
 /** Who acts: the signed-in person and the assignment Authorise used (access-and-approvals 7.1). */
 export interface Actor {
@@ -167,6 +174,8 @@ export async function writeVersion(
     bookingVersionId: versionId,
     lineNumber: index + 1,
     ...factsOf(row),
+    // The line it continues, by its key, the identifier of that line as first written (goods-in 3.10).
+    firstLineId: line.lineKey ?? null,
     // Each as written: a GRN line is matched against them, ignoring case and spaces at the ends (goods-in 3.7).
     styleCode: line.styleCode,
     colour: line.colour,
@@ -197,19 +206,53 @@ export async function writeVersion(
 }
 
 /**
- * The booking under its lock for a change of its Draft, or the refusal: not found, a stale version token, or no
- * longer a Draft (goods-in 3.4, 3.5): a booking awaiting approval or approved takes no Draft change here.
+ * The booking under its lock for a change of its content, or the refusal: not found, a stale version token, or a
+ * version waiting for its decision (goods-in 3.4, 3.5). A Draft before approval takes any change; an approved booking
+ * takes a change as its next Draft (3.5, 3.10), but its booking documents are fixed with its first approval (3.1).
  */
 export async function draftForChange(
   context: TransactionContext,
   bookingId: string,
   versionToken: string,
+  purpose: 'content' | 'documents',
 ): Promise<{ readonly kind: 'draft'; readonly row: BookingRow } | Outcome<never>> {
   const row = await lockBooking(context, bookingId);
   if (row === undefined) return refused('not-found', 'booking.record-not-found', [bookingItem(bookingId)]);
-  const newest = (await changesOf(context, row.id)).at(-1);
-  if (newest === undefined) throw new Error(`A booking has no change: ${row.id}`);
+  const changes = await changesOf(context, row.id);
+  const newest = changes.at(-1);
+  const content = changes.filter((each) => CONTENT_CHANGES.includes(each.change)).at(-1);
+  if (newest === undefined || content === undefined) throw new Error(`A booking has no change: ${row.id}`);
   if (newest.id !== versionToken) return refused('conflict', 'kernel.stale-version', [bookingItem(row.id)]);
-  if (stateOf(newest.change) !== 'Draft') return refused('refused', 'booking.not-draft', [bookingItem(row.id)]);
+  const approved = (await approvalInForce(context, row.id)) !== undefined;
+  const state = lifecycleOf({ approved: false, issued: false, confirmed: false, newestContent: content.change });
+  if (state === 'Awaiting approval' || (purpose === 'documents' && approved)) {
+    return refused('refused', 'booking.not-draft', [bookingItem(row.id)]);
+  }
   return { kind: 'draft', row };
+}
+
+/**
+ * The lines of a next Draft checked (goods-in 3.5, 3.10): each line it continues is a line of the booking, named once
+ * (`booking.line-not-found`, `booking.line-repeated`); once approved, it keeps what is delivered and cancelled of each
+ * line of the version in force, as of the booking's date (PRD-BKG-013; changeRefusal). Undefined when they pass.
+ */
+export async function linesRefusal(
+  context: TransactionContext,
+  bookingId: string,
+  lines: readonly BookingLineDraft[],
+  date: string,
+): Promise<Outcome<never> | undefined> {
+  const known = await lineKeysOf(context, bookingId);
+  const seen = new Set<string>();
+  for (const line of lines) {
+    if (line.lineKey === undefined) continue;
+    if (!known.has(line.lineKey))
+      return refused('refused', 'booking.line-not-found', [lineItem(bookingId, line.lineKey)]);
+    if (seen.has(line.lineKey)) return refused('refused', 'booking.line-repeated', [lineItem(bookingId, line.lineKey)]);
+    seen.add(line.lineKey);
+  }
+  const inForce = await statusOfBooking(context, bookingId, date);
+  if (inForce === undefined) return undefined;
+  const refusal = changeRefusal(inForce, lines);
+  return refusal === undefined ? undefined : refused('refused', refusal.code, [lineItem(bookingId, refusal.lineKey)]);
 }

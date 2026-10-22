@@ -263,6 +263,74 @@ export class BookingController {
     );
   }
 
+  // An approved booking's lifecycle (goods-in 3.4, 3.5, 3.10; S2-F01-T04): Issued and Confirmed recorded by Booking,
+  // and a cancellation or an extension proposed for a different person's approval in My work. None is policy-gated:
+  // the decisions are (goods-in 10.5).
+
+  @ApiRoute(routes.recordBookingIssue)
+  recordBookingIssue(
+    @RouteInput() input: RouteInputOf<typeof routes.recordBookingIssue>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    const { bookingId } = input.params;
+    return this.command(
+      routes.recordBookingIssue,
+      'booking.record-booking-issue',
+      user,
+      input,
+      this.bookingFactsOf(bookingId),
+      (context, actor) => this.booking.recordIssue(context, actor, bookingId, input.body),
+    );
+  }
+
+  @ApiRoute(routes.recordBookingConfirmation)
+  recordBookingConfirmation(
+    @RouteInput() input: RouteInputOf<typeof routes.recordBookingConfirmation>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    const { bookingId } = input.params;
+    return this.command(
+      routes.recordBookingConfirmation,
+      'booking.record-booking-confirmation',
+      user,
+      input,
+      this.bookingFactsOf(bookingId),
+      (context, actor) => this.booking.recordConfirmation(context, actor, bookingId, input.body),
+    );
+  }
+
+  @ApiRoute(routes.proposeBookingCancellation)
+  proposeBookingCancellation(
+    @RouteInput() input: RouteInputOf<typeof routes.proposeBookingCancellation>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    const { bookingId } = input.params;
+    return this.command(
+      routes.proposeBookingCancellation,
+      'booking.propose-booking-cancellation',
+      user,
+      input,
+      this.bookingFactsOf(bookingId),
+      (context, actor) => this.booking.proposeCancellation(context, actor, bookingId, input.body),
+    );
+  }
+
+  @ApiRoute(routes.proposeBookingExtension)
+  proposeBookingExtension(
+    @RouteInput() input: RouteInputOf<typeof routes.proposeBookingExtension>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    const { bookingId } = input.params;
+    return this.command(
+      routes.proposeBookingExtension,
+      'booking.propose-booking-extension',
+      user,
+      input,
+      this.bookingFactsOf(bookingId),
+      (context, actor) => this.booking.proposeExtension(context, actor, bookingId, input.body),
+    );
+  }
+
   /** A booking's facts, or not found when the reader cannot see it (PRD-UXP-003). */
   private bookingFactsOf(bookingId: string): FactsOf {
     return async (context) => {

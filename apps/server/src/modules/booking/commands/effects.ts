@@ -1,5 +1,11 @@
 import { uuidv7 } from '@apparel-os/domain';
-import { BOOKING_APPROVAL, OPEN_TO_BUY_APPROVAL, OPEN_TO_BUY_CHECK } from '@apparel-os/schemas';
+import {
+  BOOKING_APPROVAL,
+  BOOKING_CANCELLATION,
+  BOOKING_EXTENSION,
+  OPEN_TO_BUY_APPROVAL,
+  OPEN_TO_BUY_CHECK,
+} from '@apparel-os/schemas';
 import { and, eq, sql } from 'drizzle-orm';
 import { CommandDefect, type LockTarget, type TransactionContext } from '../../../kernel/index.js';
 import type {
@@ -11,9 +17,10 @@ import type {
 } from '../../access/index.js';
 import type { AuditChange, AuditInterface } from '../../audit/index.js';
 import { openToBuyBudgetCheck, openToBuyBudgetVersion } from '../db/schema.js';
-import { bookingApprovalRule } from '../domain/bookings.js';
+import { amendmentApprovalRules, bookingApprovalRule } from '../domain/bookings.js';
 import { approvalDocument, bookingApprovalRules, budgetAuditRecord, versionItem } from '../domain/budgets.js';
 import { checkOf, versionRow } from '../queries/budgets.js';
+import { amendmentEffect } from './amendments.js';
 import { bookingApprovalEffect, type ApprovalDependencies } from './approval.js';
 import { budgetLock, refused } from './common.js';
 
@@ -227,12 +234,15 @@ function approvalEffect(dependencies: EffectDependencies): DocumentEffect {
  */
 export function bookingApprovals(dependencies: EffectDependencies): ModuleApprovals {
   return {
-    rules: [...bookingApprovalRules, bookingApprovalRule],
+    rules: [...bookingApprovalRules, bookingApprovalRule, ...amendmentApprovalRules],
     effects: new Map<string, DocumentEffect>([
       [OPEN_TO_BUY_CHECK, checkEffect(dependencies)],
       [OPEN_TO_BUY_APPROVAL, approvalEffect(dependencies)],
       // A booking version's approval (goods-in 3.4; S2-F01-T03).
       [BOOKING_APPROVAL, bookingApprovalEffect(dependencies)],
+      // A cancellation of an undelivered balance and an extension of the window (goods-in 3.5; S2-F01-T04).
+      [BOOKING_CANCELLATION, amendmentEffect(dependencies)],
+      [BOOKING_EXTENSION, amendmentEffect(dependencies)],
     ]),
   };
 }

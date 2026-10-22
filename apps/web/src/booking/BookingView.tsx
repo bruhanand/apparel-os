@@ -1,4 +1,4 @@
-import { BOOKING_TYPE, type Booking } from '@apparel-os/schemas';
+import { BOOKING_TYPE, type Booking, type BookingStatus } from '@apparel-os/schemas';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '../api';
@@ -17,12 +17,15 @@ import { stateIdOf } from '../setup/states';
 import { useTimeZone } from '../shell/session';
 import { BOOKING_READS, BookingForm } from './BookingForm';
 import { OpenToBuyFacts, referenceOf, TermsFacts, TotalsView, valueAtCostOf } from './facts';
+import { AmendmentsCard, CancelCard, ConfirmCard, ExtendCard, IssueCard, issued, useCommunication } from './Lifecycle';
+import { StatusView } from './StatusView';
 import { useBookingNames } from './names';
 
-// Booking › a booking (goods-in 3.1 to 3.4, section 11; PRD-BKG-001 to PRD-BKG-004, PRD-UXP-003; S2-F01-T03): its
-// state and what blocks it, its documents, the brand's Agreement terms read-only, the remaining open-to-buy of its brand
-// and season, its lines with their totals, the Draft's next version and its submission, and, once submitted, its
-// approval panel. A version-checked action waits while the booking is read again after a change (code-house-rules
+// Booking › a booking (goods-in 3.1 to 3.10, section 11; PRD-BKG-001 to PRD-BKG-006, PRD-UXP-003; S2-F01-T03,
+// S2-F01-T04): its state and what blocks it, its documents, the brand's Agreement terms read-only, the remaining
+// open-to-buy of its brand and season, its lines with their totals, the Draft's next version and its submission, and,
+// once submitted, its approval panel. Once approved: the version in force with each line's quantities, Issued and
+// Confirmed, a change as its next Draft, cancellations and extensions (Lifecycle.tsx). A version-checked action waits while the booking is read again after a change (code-house-rules
 // 12.7), as Receive Goods does.
 
 /** The reason a version-checked action waits while the booking is read again. */
@@ -120,9 +123,16 @@ function DocumentForm({ booking, waiting }: { booking: Booking; waiting: boolean
   );
 }
 
-/** Submits the Draft as it stands for approval by a different person (goods-in 3.4); what blocks it is named. */
+/**
+ * Submits the Draft as it stands for approval by a different person (goods-in 3.4); what blocks it is named. A change
+ * after issue carries the supplier's communication (3.5; POL-05.04).
+ */
 function SubmitCard({ booking, waiting }: { booking: Booking; waiting: boolean }) {
   const submission = useSubmission('submitBooking', BOOKING_READS);
+  const communication = useCommunication(
+    'booking-change-communication',
+    issued(booking) && booking.version.communicationAttachmentIds.length === 0,
+  );
   const blocking: MessageId[] = [
     ...(booking.documents.length === 0 ? (['error.booking.no-document'] as const) : []),
     ...(booking.version.lines.length === 0 ? (['error.booking.no-lines'] as const) : []),
@@ -138,6 +148,7 @@ function SubmitCard({ booking, waiting }: { booking: Booking; waiting: boolean }
         </ul>
       )}
       <p className="m-0 text-body-sm text-text-2">{t('booking.submit.intro')}</p>
+      {communication.element}
       <div>
         <GrantedButton
           label="booking.submit"
@@ -146,11 +157,71 @@ function SubmitCard({ booking, waiting }: { booking: Booking; waiting: boolean }
           variant="primary"
           waiting={waiting ? READING : undefined}
           onClick={() => {
-            void submission.submit({ params: { bookingId: booking.id }, body: { versionToken: booking.versionToken } });
+            void (async () => {
+              const files = await communication.files();
+              if (files === undefined) return;
+              const sent = await submission.submit({
+                params: { bookingId: booking.id },
+                body: { versionToken: booking.versionToken, ...files },
+              });
+              if (sent !== undefined) communication.clear();
+            })();
           }}
         />
       </div>
     </Card>
+  );
+}
+
+/**
+ * A change of an approved booking, its next Draft (goods-in 3.5, 3.10): started from the version in force with the
+ * dates extensions left it, saved and submitted for approval again by a different person; the version in force stays
+ * in force until then.
+ */
+function ChangeSection({ booking, status, reading }: { booking: Booking; status: BookingStatus; reading: boolean }) {
+  const [open, setOpen] = useState(false);
+  const drafting = booking.change?.state === 'Draft';
+  return (
+    <>
+      <Card title="booking.change.title">
+        <p className="m-0 text-body-sm text-text-2">{t('booking.change.intro')}</p>
+        {booking.change?.state === 'Awaiting approval' && (
+          <p role="status" className="m-0 text-body-sm">
+            {t('booking.change.awaiting')}
+          </p>
+        )}
+        {drafting && (
+          <p role="status" className="m-0 text-body-sm">
+            {t(booking.version.request?.state === 'Rejected' ? 'booking.change.rejected' : 'booking.change.draft')}
+          </p>
+        )}
+        {booking.change === undefined && !open && (
+          <div>
+            <GrantedButton
+              label="booking.change.start"
+              recordType={BOOKING_TYPE}
+              action="edit"
+              waiting={reading ? READING : undefined}
+              onClick={() => {
+                setOpen(true);
+              }}
+            />
+          </div>
+        )}
+      </Card>
+      {(drafting || (booking.change === undefined && open)) && (
+        <BookingForm
+          key={booking.version.id}
+          booking={booking}
+          effective={drafting ? undefined : status}
+          waiting={reading ? READING : undefined}
+          onSaved={() => {
+            setOpen(false);
+          }}
+        />
+      )}
+      {drafting && <SubmitCard booking={booking} waiting={reading} />}
+    </>
   );
 }
 
@@ -185,6 +256,11 @@ export function BookingView({ bookingId, onBack }: { bookingId: string; onBack: 
               <div className="flex flex-wrap items-center gap-3">
                 <h2 className="text-h2 font-semibold">{t('booking.title', { reference: referenceOf(booking) })}</h2>
                 <StatusBadge state={stateIdOf(booking.state)} />
+                {booking.change !== undefined && (
+                  <span className="text-body-sm text-text-2">
+                    {t(booking.change.state === 'Draft' ? 'booking.change.draft' : 'booking.change.awaiting')}
+                  </span>
+                )}
                 <span className="flex-1" />
                 <AsOf asOf={asOf} timeZone={timeZone} />
               </div>
@@ -239,7 +315,67 @@ export function BookingView({ bookingId, onBack }: { bookingId: string; onBack: 
                   />
                 </Card>
               )}
-              {draft && mayEdit ? (
+              {booking.status !== undefined && (
+                <Card title="booking.in-force">
+                  <Facts
+                    rows={[
+                      ['booking.version', t('booking.in-force.version', { number: booking.status.versionNumber })],
+                      [
+                        'booking.window',
+                        t('booking.window.range', {
+                          from: formatDate(booking.status.deliveryWindow.from),
+                          to: formatDate(booking.status.deliveryWindow.to),
+                        }),
+                      ],
+                      ...(booking.issue === undefined
+                        ? []
+                        : [
+                            [
+                              'booking.issue.title',
+                              t('booking.issue.at', { date: formatDate(booking.issue.issuedOn) }),
+                            ] as const,
+                          ]),
+                      ...(booking.confirmation === undefined
+                        ? []
+                        : [
+                            [
+                              'booking.confirm.title',
+                              t('booking.confirm.at', { date: formatDate(booking.confirmation.confirmedOn) }),
+                            ] as const,
+                          ]),
+                    ]}
+                  />
+                  {booking.confirmation !== undefined && (
+                    <EvidenceList attachmentIds={booking.confirmation.attachmentIds} />
+                  )}
+                  <StatusView status={booking.status} />
+                </Card>
+              )}
+              {booking.status !== undefined && mayEdit && booking.state === 'Approved' && (
+                <IssueCard booking={booking} waiting={reading} />
+              )}
+              {booking.status !== undefined && mayEdit && booking.state === 'Issued' && (
+                <ConfirmCard booking={booking} waiting={reading} />
+              )}
+              {booking.status !== undefined && mayEdit && (
+                <ChangeSection booking={booking} status={booking.status} reading={reading} />
+              )}
+              {booking.status !== undefined && mayEdit && (
+                <CancelCard booking={booking} status={booking.status} waiting={reading} />
+              )}
+              {booking.status !== undefined && mayEdit && (
+                <ExtendCard
+                  key={`${booking.status.versionId}-${booking.status.deliveryWindow.to}`}
+                  booking={booking}
+                  status={booking.status}
+                  waiting={reading}
+                />
+              )}
+              <AmendmentsCard booking={booking} timeZone={timeZone} />
+              {/* Once approved, the version in force shows above; a change shows here only where it is not edited. */}
+              {booking.status !== undefined &&
+              (booking.change === undefined || (booking.change.state === 'Draft' && mayEdit)) ? null : draft &&
+                mayEdit ? (
                 <BookingForm
                   // Kept while documents are attached, which change the token but not the version: the form sends the
                   // booking's newest token when it saves (code-house-rules 12.7).

@@ -78,6 +78,7 @@ describe('a line (goods-in 3.1; DEC-130)', () => {
   it('PRD-MOD-014 a saved line is typed back as the same paise', () => {
     const saved = {
       id: '01900000-0000-7000-8000-000000000001',
+      lineKey: '01900000-0000-7000-8000-000000000001',
       lineNumber: 1,
       styleCode: 'SYN-ST-3',
       colour: 'SYNTHETIC TEAL',
@@ -95,5 +96,29 @@ describe('a line (goods-in 3.1; DEC-130)', () => {
       size: null,
       colour: 'SYNTHETIC TEAL',
     });
+  });
+});
+
+describe('a line of a change (goods-in 3.5, 3.10; S2-F01-T04)', () => {
+  it('PRD-BKG-006 a saved line keeps its key into the next version, so its receipt links follow it', () => {
+    const saved = {
+      id: '01900000-0000-7000-8000-000000000002',
+      lineKey: '01900000-0000-7000-8000-000000000001',
+      lineNumber: 1,
+      styleCode: 'SYN-ST-4',
+      colour: null,
+      size: 'M',
+      quantity: 3,
+      indicativeCost: 50_000,
+      mrp: 99_900,
+      deliveryDate: '2026-11-01',
+    };
+    const input = inputOf(saved as Parameters<typeof inputOf>[0], '2026-11-20');
+    expect(draftLineOf(input)).toMatchObject({
+      lineKey: '01900000-0000-7000-8000-000000000001',
+      deliveryDate: '2026-11-20',
+    });
+    // A line added in the change is new: it names no key.
+    expect(draftLineOf({ ...input, lineKey: undefined })).not.toHaveProperty('lineKey');
   });
 });

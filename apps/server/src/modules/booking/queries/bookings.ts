@@ -20,8 +20,18 @@ import {
   bookingNumber,
   bookingVersion,
 } from '../db/schema.js';
-import { stateOf } from '../domain/bookings.js';
+import { CONTENT_CHANGES, lifecycleOf } from '../domain/lifecycle.js';
 import { budgetOf, remainingOf } from './budgets.js';
+import {
+  amendmentsOf,
+  approvalInForce,
+  confirmationOf,
+  issueOf,
+  lineKeyOf,
+  reservedByBudget,
+  statusOfVersion,
+  supplierFilesOf,
+} from './lifecycle.js';
 
 // The reads of bookings (goods-in 3.1 to 3.4, section 11; PRD-BKG-001 to PRD-BKG-003; S2-F01-T03): a booking with its
 // newest version, its lines and totals, its documents, the brand's Agreement terms read-only, the remaining open-to-buy
@@ -108,20 +118,6 @@ export async function numberOf(context: TransactionContext, bookingId: string): 
   return row?.number;
 }
 
-/** The newest approval of a booking, or undefined while none is approved. */
-export async function latestApprovalOf(
-  context: TransactionContext,
-  bookingId: string,
-): Promise<ApprovalRow | undefined> {
-  const [row] = await context.tx
-    .select()
-    .from(bookingApproval)
-    .where(eq(bookingApproval.bookingId, bookingId))
-    .orderBy(desc(bookingApproval.recordedAt), desc(bookingApproval.id))
-    .limit(1);
-  return row;
-}
-
 /** A version's lines as the totals read them, in paise (PRD-MOD-014). */
 export function pricedLines(lines: readonly LineRow[]) {
   return lines.map((line) => ({
@@ -136,6 +132,7 @@ function versionView(
   version: VersionRow,
   lines: readonly LineRow[],
   request: LatestRequest | undefined,
+  communicationAttachmentIds: readonly string[],
 ): BookingVersion {
   const totals = bookingTotals(pricedLines(lines));
   return {
@@ -150,6 +147,7 @@ function versionView(
     deliveryWindow: { from: version.windowFrom, to: version.windowTo },
     lines: lines.map((line) => ({
       id: line.id,
+      lineKey: lineKeyOf(line),
       lineNumber: line.lineNumber,
       styleCode: line.styleCode,
       colour: line.colour,
@@ -164,6 +162,7 @@ function versionView(
     savedBy: version.savedByUserId,
     savedAt: version.recordedAt.toISOString(),
     ...(request === undefined ? {} : { request: { id: request.id, state: request.state } }),
+    communicationAttachmentIds: [...communicationAttachmentIds],
   };
 }
 
@@ -174,7 +173,7 @@ function versionView(
 async function termsOf(
   context: TransactionContext,
   brandId: string,
-  approval: ApprovalRow | undefined,
+  approval: Pick<ApprovalRow, 'id' | 'agreementVersionId'> | undefined,
   today: string,
 ): Promise<BookingTerms> {
   const shown = (read: NonNullable<Awaited<ReturnType<typeof termsInForce>>>) => ({
@@ -197,8 +196,10 @@ async function termsOf(
 }
 
 /**
- * One booking as the reader sees it (goods-in 3.1 to 3.4, section 11): its newest version with lines and totals, every
- * version with its latest request, its documents, the terms, the remaining open-to-buy now and its approval.
+ * One booking as the reader sees it (goods-in 3.1 to 3.10, section 11): its state, its newest version with lines and
+ * totals, every version with its latest request, its documents, the terms, the remaining open-to-buy now, the approval
+ * in force with what the booking reserves, a change after approval, its issue and confirmation, the status of the
+ * version in force with each line's quantities, and its cancellations and extensions.
  */
 export async function bookingView(
   context: TransactionContext,
@@ -208,26 +209,46 @@ export async function bookingView(
 ): Promise<Booking | undefined> {
   const changes = await changesOf(context, row.id);
   const newestChange = changes.at(-1);
+  const newestContent = changes.filter((each) => CONTENT_CHANGES.includes(each.change)).at(-1);
   const versions = await versionsOf(context, row.id);
   const newest = versions.at(-1);
-  if (newestChange === undefined || newest === undefined) return undefined;
+  if (newestChange === undefined || newestContent === undefined || newest === undefined) return undefined;
   const { lines } = (await versionWithLines(context, newest.id)) ?? { lines: [] };
   const requests = await dependencies.access.approvalRequestsOf(
     context,
     versions.map((version) => version.id),
   );
-  const approval = await latestApprovalOf(context, row.id);
+  const approval = await approvalInForce(context, row.id);
+  const approved = versions.find((version) => version.id === approval?.bookingVersionId);
+  const issue = approval === undefined ? undefined : await issueOf(context, approval.bookingVersionId);
+  const confirmation = approval === undefined ? undefined : await confirmationOf(context, approval.bookingVersionId);
+  const files = await supplierFilesOf(context, row.id);
   const number = await numberOf(context, row.id);
   const budget = await budgetOf(context, row.brandId, newest.seasonValueId);
   const documents = await documentsOf(context, row.id);
+  const reserved = [...(await reservedByBudget(context, row.id)).values()].reduce(
+    (total, amount) => paise(total + amount),
+    paise(0),
+  );
+  const changing = approval !== undefined && newest.versionNumber > approval.versionNumber;
   return {
     id: row.id,
     ...(number === undefined ? {} : { number }),
-    state: stateOf(newestChange.change),
+    state: lifecycleOf({
+      approved: approval !== undefined,
+      issued: issue !== undefined,
+      confirmed: confirmation !== undefined,
+      newestContent: newestContent.change,
+    }),
     brandId: row.brandId,
     destinationSiteId: row.siteId,
     versionToken: newestChange.id,
-    version: versionView(newest, lines, requests.get(newest.id)),
+    version: versionView(
+      newest,
+      lines,
+      requests.get(newest.id),
+      files.filter((file) => file.bookingVersionId === newest.id).map((file) => file.attachmentId),
+    ),
     versions: versions.map((version) => {
       const request = requests.get(version.id);
       return {
@@ -252,24 +273,66 @@ export async function bookingView(
           approval: {
             versionId: approval.bookingVersionId,
             agreementVersionId: approval.agreementVersionId,
-            reserved: paise(approval.valuePaise),
+            reserved,
             approvedBy: approval.approvedByUserId,
             approvedAt: approval.approvedAt.toISOString(),
           },
         }),
+    ...(changing
+      ? {
+          change: {
+            state:
+              newestContent.change === 'submission' && newestContent.bookingVersionId === newest.id
+                ? ('Awaiting approval' as const)
+                : ('Draft' as const),
+            versionId: newest.id,
+          },
+        }
+      : {}),
+    ...(issue === undefined
+      ? {}
+      : {
+          issue: {
+            issuedOn: issue.issuedOn,
+            recordedBy: issue.recordedByUserId,
+            recordedAt: issue.recordedAt.toISOString(),
+          },
+        }),
+    ...(confirmation === undefined
+      ? {}
+      : {
+          confirmation: {
+            confirmedOn: confirmation.confirmedOn,
+            recordedBy: confirmation.recordedByUserId,
+            recordedAt: confirmation.recordedAt.toISOString(),
+            attachmentIds: files
+              .filter((file) => file.bookingConfirmationId === confirmation.id)
+              .map((file) => file.attachmentId),
+          },
+        }),
+    ...(approved === undefined ? {} : { status: await statusOfVersion(context, approved, today) }),
+    amendments: await amendmentsOf(context, row.id, (ids) => dependencies.access.approvalRequestsOf(context, ids)),
   };
 }
 
-/** The state of a booking's newest change, as SQL, for the list's filter (goods-in section 11). */
-const newestChangeKind = sql<string>`(select c.change from booking.booking_change c
-  where c.booking_id = ${booking.id} order by c.change_number desc limit 1)`;
-
-/** The change kinds of each state (stateOf). */
-const CHANGES_OF_STATE: Readonly<Record<BookingSummary['state'], readonly string[]>> = {
-  Draft: ['draft', 'documents', 'rejection'],
-  'Awaiting approval': ['submission'],
-  Approved: ['approval'],
-};
+/**
+ * A booking's state as SQL, for the list's filter and rows (goods-in 3.4, section 11), as lifecycleOf reads it: before
+ * its first approval, Awaiting approval after a submission and a Draft otherwise; once approved, the state of the
+ * approved version of the highest number, Confirmed, Issued or Approved.
+ */
+const approvedVersionId = sql`(select a.booking_version_id from booking.booking_approval a
+  join booking.booking_version av on av.id = a.booking_version_id
+  where a.booking_id = ${booking.id} order by av.version_number desc limit 1)`;
+const newestContentKind = sql`(select c.change from booking.booking_change c
+  where c.booking_id = ${booking.id} and c.change in ('draft', 'documents', 'submission', 'approval', 'rejection')
+  order by c.change_number desc limit 1)`;
+const stateOfRow = sql<BookingSummary['state']>`(case
+  when ${approvedVersionId} is null then
+    (case when ${newestContentKind} = 'submission' then 'Awaiting approval' else 'Draft' end)
+  when exists (select 1 from booking.booking_confirmation f where f.booking_version_id = ${approvedVersionId})
+    then 'Confirmed'
+  when exists (select 1 from booking.booking_issue i where i.booking_version_id = ${approvedVersionId}) then 'Issued'
+  else 'Approved' end)`;
 
 /**
  * A page of the bookings the reader may see, newest first by identifier (code-house-rules 12.1 "Reads"), filtered by
@@ -290,17 +353,12 @@ export async function bookingPage(
     query.after === undefined ? undefined : sql`${booking.id} < ${query.after}::uuid`,
     query.brandId === undefined ? undefined : eq(booking.brandId, query.brandId),
     query.siteId === undefined ? undefined : eq(booking.siteId, query.siteId),
-    query.state === undefined
-      ? undefined
-      : sql`${newestChangeKind} in (${sql.join(
-          CHANGES_OF_STATE[query.state].map((kind) => sql`${kind}`),
-          sql`, `,
-        )})`,
+    query.state === undefined ? undefined : sql`${stateOfRow} = ${query.state}`,
     query.supplierPartyId === undefined ? undefined : eq(bookingVersion.supplierPartyId, query.supplierPartyId),
     query.seasonValueId === undefined ? undefined : eq(bookingVersion.seasonValueId, query.seasonValueId),
   ];
   const rows = await context.tx
-    .select({ booking, version: bookingVersion, newestChange: newestChangeKind })
+    .select({ booking, version: bookingVersion, state: stateOfRow })
     .from(booking)
     .innerJoin(bookingVersion, sql`${bookingVersion.id} = ${newestVersion}`)
     .where(and(...conditions))
@@ -324,12 +382,12 @@ export async function bookingPage(
               read.map((row) => row.booking.id),
             ),
           );
-  const bookings = read.map(({ booking: row, version, newestChange }): BookingSummary => {
+  const bookings = read.map(({ booking: row, version, state }): BookingSummary => {
     const number = numbers.find((each) => each.bookingId === row.id)?.number;
     return {
       id: row.id,
       ...(number === undefined ? {} : { number }),
-      state: stateOf(newestChange as ChangeRow['change']),
+      state,
       brandId: row.brandId,
       destinationSiteId: row.siteId,
       supplierPartyId: version.supplierPartyId,

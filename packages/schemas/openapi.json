@@ -2068,12 +2068,17 @@
               "access.starts-in-past",
               "access.user-not-approved",
               "access.version-overlaps",
+              "booking.balance-changed",
               "booking.budget-not-checked",
+              "booking.line-below-received",
+              "booking.line-received",
               "booking.no-agreement-in-force",
+              "booking.not-an-extension",
               "booking.open-to-buy-missing",
               "booking.open-to-buy-short",
               "booking.supplier-not-linked",
               "booking.version-not-awaiting",
+              "booking.version-not-in-force",
               "configuration.origin-not-allowed",
               "files-imports.proposal-not-open",
               "files-imports.rule-conflict",
@@ -11533,7 +11538,9 @@
               "enum": [
                 "Draft",
                 "Awaiting approval",
-                "Approved"
+                "Approved",
+                "Issued",
+                "Confirmed"
               ]
             }
           },
@@ -11610,7 +11617,9 @@
                             "enum": [
                               "Draft",
                               "Awaiting approval",
-                              "Approved"
+                              "Approved",
+                              "Issued",
+                              "Confirmed"
                             ]
                           },
                           "brandId": {
@@ -11912,6 +11921,7 @@
             },
             "x-error-codes": [
               "booking.brand-not-in-force",
+              "booking.line-not-found",
               "booking.season-not-in-vocabulary",
               "booking.site-not-in-force",
               "booking.supplier-not-linked"
@@ -11998,6 +12008,11 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "lineKey": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                        },
                         "styleCode": {
                           "type": "string",
                           "maxLength": 60,
@@ -48816,6 +48831,547 @@
         }
       }
     },
+    "/api/booking/bookings/{bookingId}/cancellations": {
+      "post": {
+        "operationId": "proposeBookingCancellation",
+        "x-access": {
+          "kind": "action",
+          "action": "edit",
+          "recordType": "booking.booking",
+          "authorisedIn": "command"
+        },
+        "parameters": [
+          {
+            "name": "bookingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "bookingId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    },
+                    "amendmentId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    },
+                    "versionToken": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    }
+                  },
+                  "required": [
+                    "bookingId",
+                    "amendmentId",
+                    "requestId",
+                    "versionToken"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.cross-site-request",
+              "kernel.idempotency-key-required",
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.business-date-not-set",
+              "access.not-authorised",
+              "kernel.recovery-hold"
+            ]
+          },
+          "404": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "booking.record-not-found"
+            ]
+          },
+          "409": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.idempotency-key-reused",
+              "kernel.request-in-progress",
+              "kernel.stale-version"
+            ]
+          },
+          "422": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "booking.communication-required",
+              "booking.line-not-found",
+              "booking.not-approved",
+              "booking.nothing-outstanding"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed",
+              "kernel.outcome-unknown"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "versionToken": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                  },
+                  "scope": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "const": "whole"
+                          }
+                        },
+                        "required": [
+                          "kind"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "const": "lines"
+                          },
+                          "lineKeys": {
+                            "minItems": 1,
+                            "maxItems": 10000,
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                            }
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "lineKeys"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "communication": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "storedFileId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                        },
+                        "fileReceiptId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                        }
+                      },
+                      "required": [
+                        "storedFileId",
+                        "fileReceiptId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "versionToken",
+                  "scope"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/booking/bookings/{bookingId}/extensions": {
+      "post": {
+        "operationId": "proposeBookingExtension",
+        "x-access": {
+          "kind": "action",
+          "action": "edit",
+          "recordType": "booking.booking",
+          "authorisedIn": "command"
+        },
+        "parameters": [
+          {
+            "name": "bookingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "bookingId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    },
+                    "amendmentId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    },
+                    "versionToken": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    }
+                  },
+                  "required": [
+                    "bookingId",
+                    "amendmentId",
+                    "requestId",
+                    "versionToken"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.cross-site-request",
+              "kernel.idempotency-key-required",
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.business-date-not-set",
+              "access.not-authorised",
+              "kernel.recovery-hold"
+            ]
+          },
+          "404": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "booking.record-not-found"
+            ]
+          },
+          "409": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.idempotency-key-reused",
+              "kernel.request-in-progress",
+              "kernel.stale-version"
+            ]
+          },
+          "422": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "booking.communication-required",
+              "booking.line-not-found",
+              "booking.not-an-extension",
+              "booking.not-approved"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed",
+              "kernel.outcome-unknown"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "versionToken": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                  },
+                  "windowTo": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  "lines": {
+                    "maxItems": 10000,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "lineKey": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                        },
+                        "deliveryDate": {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                        }
+                      },
+                      "required": [
+                        "lineKey",
+                        "deliveryDate"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "communication": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "storedFileId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                        },
+                        "fileReceiptId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                        }
+                      },
+                      "required": [
+                        "storedFileId",
+                        "fileReceiptId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "versionToken",
+                  "windowTo",
+                  "lines"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/stock/damage-reports/{damageReportId}/reversals": {
       "post": {
         "operationId": "proposeDamageReversal",
@@ -55399,7 +55955,9 @@
                           "enum": [
                             "Draft",
                             "Awaiting approval",
-                            "Approved"
+                            "Approved",
+                            "Issued",
+                            "Confirmed"
                           ]
                         },
                         "brandId": {
@@ -55491,6 +56049,11 @@
                                     "format": "uuid",
                                     "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
                                   },
+                                  "lineKey": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                  },
                                   "lineNumber": {
                                     "type": "integer",
                                     "minimum": 1,
@@ -55548,6 +56111,7 @@
                                 },
                                 "required": [
                                   "id",
+                                  "lineKey",
                                   "lineNumber",
                                   "styleCode",
                                   "colour",
@@ -55646,6 +56210,14 @@
                                 "state"
                               ],
                               "additionalProperties": false
+                            },
+                            "communicationAttachmentIds": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              }
                             }
                           },
                           "required": [
@@ -55658,7 +56230,8 @@
                             "totals",
                             "styles",
                             "savedBy",
-                            "savedAt"
+                            "savedAt",
+                            "communicationAttachmentIds"
                           ],
                           "additionalProperties": false
                         },
@@ -56737,6 +57310,399 @@
                             "approvedAt"
                           ],
                           "additionalProperties": false
+                        },
+                        "change": {
+                          "type": "object",
+                          "properties": {
+                            "state": {
+                              "type": "string",
+                              "enum": [
+                                "Draft",
+                                "Awaiting approval"
+                              ]
+                            },
+                            "versionId": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                            }
+                          },
+                          "required": [
+                            "state",
+                            "versionId"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "issue": {
+                          "type": "object",
+                          "properties": {
+                            "issuedOn": {
+                              "type": "string",
+                              "format": "date",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                            },
+                            "recordedBy": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                            },
+                            "recordedAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            }
+                          },
+                          "required": [
+                            "issuedOn",
+                            "recordedBy",
+                            "recordedAt"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "confirmation": {
+                          "type": "object",
+                          "properties": {
+                            "confirmedOn": {
+                              "type": "string",
+                              "format": "date",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                            },
+                            "recordedBy": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                            },
+                            "recordedAt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            "attachmentIds": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              }
+                            }
+                          },
+                          "required": [
+                            "confirmedOn",
+                            "recordedBy",
+                            "recordedAt",
+                            "attachmentIds"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "status": {
+                          "type": "object",
+                          "properties": {
+                            "versionId": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                            },
+                            "versionNumber": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 9007199254740991
+                            },
+                            "deliveryWindow": {
+                              "type": "object",
+                              "properties": {
+                                "from": {
+                                  "type": "string",
+                                  "format": "date",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                },
+                                "to": {
+                                  "type": "string",
+                                  "format": "date",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                }
+                              },
+                              "required": [
+                                "from",
+                                "to"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "lines": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "lineKey": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                  },
+                                  "lineNumber": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "styleCode": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "colour": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "size": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "indicativeCost": {
+                                    "type": "number"
+                                  },
+                                  "deliveryDate": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "format": "date",
+                                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "dueDate": {
+                                    "type": "string",
+                                    "format": "date",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                  },
+                                  "ordered": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "delivered": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "cancelled": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "outstanding": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "overDelivered": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "overdue": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": [
+                                  "lineKey",
+                                  "lineNumber",
+                                  "styleCode",
+                                  "colour",
+                                  "size",
+                                  "indicativeCost",
+                                  "deliveryDate",
+                                  "dueDate",
+                                  "ordered",
+                                  "delivered",
+                                  "cancelled",
+                                  "outstanding",
+                                  "overDelivered",
+                                  "overdue"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "totals": {
+                              "type": "object",
+                              "properties": {
+                                "ordered": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "delivered": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "cancelled": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "outstanding": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "overDelivered": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                }
+                              },
+                              "required": [
+                                "ordered",
+                                "delivered",
+                                "cancelled",
+                                "outstanding",
+                                "overDelivered"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "versionId",
+                            "versionNumber",
+                            "deliveryWindow",
+                            "lines",
+                            "totals"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "amendments": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "cancellation",
+                                  "extension"
+                                ]
+                              },
+                              "state": {
+                                "type": "string",
+                                "enum": [
+                                  "Awaiting approval",
+                                  "Approved",
+                                  "Rejected",
+                                  "Superseded"
+                                ]
+                              },
+                              "versionId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "windowTo": {
+                                "type": "string",
+                                "format": "date",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                              },
+                              "lines": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "lineKey": {
+                                      "type": "string",
+                                      "format": "uuid",
+                                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                    },
+                                    "quantity": {
+                                      "type": "integer",
+                                      "minimum": 1,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "deliveryDate": {
+                                      "type": "string",
+                                      "format": "date",
+                                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                    }
+                                  },
+                                  "required": [
+                                    "lineKey"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "proposedBy": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "proposedAt": {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                              },
+                              "communicationAttachmentIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                }
+                              },
+                              "request": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                  },
+                                  "state": {
+                                    "type": "string",
+                                    "enum": [
+                                      "Awaiting approval",
+                                      "Approved",
+                                      "Rejected",
+                                      "Superseded",
+                                      "Withdrawn"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "state"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "kind",
+                              "state",
+                              "versionId",
+                              "lines",
+                              "proposedBy",
+                              "proposedAt",
+                              "communicationAttachmentIds"
+                            ],
+                            "additionalProperties": false
+                          }
                         }
                       },
                       "required": [
@@ -56749,7 +57715,8 @@
                         "versions",
                         "documents",
                         "terms",
-                        "openToBuy"
+                        "openToBuy",
+                        "amendments"
                       ],
                       "additionalProperties": false
                     }
@@ -79338,6 +80305,440 @@
         }
       }
     },
+    "/api/booking/bookings/{bookingId}/confirmation": {
+      "post": {
+        "operationId": "recordBookingConfirmation",
+        "x-access": {
+          "kind": "action",
+          "action": "edit",
+          "recordType": "booking.booking",
+          "authorisedIn": "command"
+        },
+        "parameters": [
+          {
+            "name": "bookingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "bookingId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    },
+                    "versionToken": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    }
+                  },
+                  "required": [
+                    "bookingId",
+                    "versionToken"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.cross-site-request",
+              "kernel.idempotency-key-required",
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.business-date-not-set",
+              "access.not-authorised",
+              "kernel.recovery-hold"
+            ]
+          },
+          "404": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "booking.record-not-found"
+            ]
+          },
+          "409": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.idempotency-key-reused",
+              "kernel.request-in-progress",
+              "kernel.stale-version"
+            ]
+          },
+          "422": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "booking.already-confirmed",
+              "booking.date-in-future",
+              "booking.date-too-early",
+              "booking.not-approved",
+              "booking.not-issued"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed",
+              "kernel.outcome-unknown"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "versionToken": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                  },
+                  "confirmedOn": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  "files": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "storedFileId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                        },
+                        "fileReceiptId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                        }
+                      },
+                      "required": [
+                        "storedFileId",
+                        "fileReceiptId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "versionToken",
+                  "confirmedOn",
+                  "files"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/booking/bookings/{bookingId}/issue": {
+      "post": {
+        "operationId": "recordBookingIssue",
+        "x-access": {
+          "kind": "action",
+          "action": "edit",
+          "recordType": "booking.booking",
+          "authorisedIn": "command"
+        },
+        "parameters": [
+          {
+            "name": "bookingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "bookingId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    },
+                    "versionToken": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    }
+                  },
+                  "required": [
+                    "bookingId",
+                    "versionToken"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.cross-site-request",
+              "kernel.idempotency-key-required",
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.business-date-not-set",
+              "access.not-authorised",
+              "kernel.recovery-hold"
+            ]
+          },
+          "404": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "booking.record-not-found"
+            ]
+          },
+          "409": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.idempotency-key-reused",
+              "kernel.request-in-progress",
+              "kernel.stale-version"
+            ]
+          },
+          "422": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "booking.already-issued",
+              "booking.date-in-future",
+              "booking.date-too-early",
+              "booking.not-approved"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed",
+              "kernel.outcome-unknown"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "versionToken": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                  },
+                  "issuedOn": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  }
+                },
+                "required": [
+                  "versionToken",
+                  "issuedOn"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/finance/ca-approval-evidence": {
       "post": {
         "operationId": "recordCaEvidence",
@@ -83933,6 +85334,10 @@
             },
             "x-error-codes": [
               "booking.brand-not-in-force",
+              "booking.line-below-received",
+              "booking.line-not-found",
+              "booking.line-received",
+              "booking.line-repeated",
               "booking.not-draft",
               "booking.season-not-in-vocabulary",
               "booking.site-not-in-force",
@@ -84015,6 +85420,11 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "lineKey": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                        },
                         "styleCode": {
                           "type": "string",
                           "maxLength": 60,
@@ -86728,6 +88138,8 @@
               }
             },
             "x-error-codes": [
+              "booking.communication-required",
+              "booking.no-change",
               "booking.no-document",
               "booking.no-lines",
               "booking.not-draft"
@@ -86772,6 +88184,30 @@
                     "type": "string",
                     "format": "uuid",
                     "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                  },
+                  "communication": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "storedFileId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                        },
+                        "fileReceiptId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                        }
+                      },
+                      "required": [
+                        "storedFileId",
+                        "fileReceiptId"
+                      ],
+                      "additionalProperties": false
+                    }
                   }
                 },
                 "required": [

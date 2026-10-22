@@ -27,6 +27,11 @@ export async function recordBooking(
       { kind: 'record', recordType: 'organisation.site', recordId: draft.destinationSiteId },
     ]);
   }
+  // A new booking has no line yet for a line of it to continue (goods-in 3.10).
+  const continuing = draft.lines.find((line) => line.lineKey !== undefined);
+  if (continuing?.lineKey !== undefined) {
+    return refused('refused', 'booking.line-not-found', [{ kind: 'booking-line', lineKey: continuing.lineKey }]);
+  }
   const season = await checkedSeason(context, dependencies, draft.brandId, draft, date);
   if ('kind' in season) return season;
   const values = {

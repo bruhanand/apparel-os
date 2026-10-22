@@ -27,7 +27,7 @@ export async function attachDocuments(
   bookingId: string,
   draft: BookingDocumentsDraft,
 ): Promise<Outcome<BookingDocumentsAttached>> {
-  const found = await draftForChange(context, bookingId, draft.versionToken);
+  const found = await draftForChange(context, bookingId, draft.versionToken, 'documents');
   if (found.kind !== 'draft') return found;
   const { row } = found;
   const kept = await documentsOf(context, row.id);

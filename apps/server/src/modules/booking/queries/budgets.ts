@@ -4,7 +4,7 @@ import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
 import type { AccessInterface, LatestRequest } from '../../access/index.js';
 import type { CatalogueInterface, CatalogueRecord } from '../../merchandise/catalogue/index.js';
-import { openToBuyBudget, openToBuyBudgetCheck, openToBuyBudgetVersion, openToBuyReservation } from '../db/schema.js';
+import { openToBuyBudget, openToBuyBudgetCheck, openToBuyBudgetVersion } from '../db/schema.js';
 import { versionState } from '../domain/budgets.js';
 
 // The reads of open-to-buy budgets (goods-in 3.3, section 11; PRD-BKG-004): each budget with its brand and season,
@@ -121,15 +121,23 @@ export async function inForceAt(
 
 /**
  * The value approved bookings of a budget's brand and season reserve (3.3; POL-05.02): the sum of the budget's
- * reservations, each written by a booking's approval (S2-F01-T03). With none, nothing is reserved, a known zero, not
- * Unknown. Summed by PostgreSQL as an exact numeric and read back as whole paise (PRD-MOD-014).
+ * reservations, each written by a booking's approval (S2-F01-T03), less its releases, each written by a cancellation
+ * or by an approved change that lowers a booking's value (3.5; S2-F01-T04). With none, nothing is reserved, a known
+ * zero, not Unknown. Summed by PostgreSQL as an exact numeric and read back as whole paise (PRD-MOD-014).
  */
 export async function reservedOf(context: TransactionContext, budgetId: string): Promise<Paise> {
   const [row] = await context.tx
-    .select({ reserved: sql<string>`coalesce(sum(${openToBuyReservation.amountPaise}), 0)::text` })
-    .from(openToBuyReservation)
-    .where(eq(openToBuyReservation.openToBuyBudgetId, budgetId));
-  return paise(Number(row?.reserved ?? '0'));
+    .select({
+      reserved: sql<string>`(coalesce((select sum(r.amount_paise) from booking.open_to_buy_reservation r
+          where r.open_to_buy_budget_id = ${budgetId}::uuid), 0)
+        - coalesce((select sum(x.amount_paise) from booking.open_to_buy_release x
+          where x.open_to_buy_budget_id = ${budgetId}::uuid), 0))::text`,
+    })
+    .from(openToBuyBudget)
+    .where(eq(openToBuyBudget.id, budgetId));
+  // Asked only of a budget read before (remainingOf): a budget not found is a defect, never nothing reserved.
+  if (row === undefined) throw new CommandDefect(`An open-to-buy budget is not found: ${budgetId}`);
+  return paise(Number(row.reserved));
 }
 
 /** The remaining open-to-buy of a budget at an instant: the approved amount less what is reserved (3.3). */
