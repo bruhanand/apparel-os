@@ -34,6 +34,7 @@ It fixes no tax rate, value slab, rounding rule, stacking order, offer, price, c
 - The `calculations` module (module-map 4.2, tier 0) is the workspace package `packages/calculations`, named `@apparel-os/calculations`. A package, not a server folder, because the counter runs the same code (`PRD-MOD-007`). **Design choice.**
 - It imports only `@apparel-os/domain` (paise, Unknown). No database, no network, no clock, no randomness, no environment: the date and every rule come in as inputs. The same input always gives the same output. **Design choice.**
 - It has two entry points. `@apparel-os/calculations` holds selling: price, offers, spread, tax, rounding, tenders and returns. `@apparel-os/calculations/costing` holds costing and ticket margin (section 8), which only the server imports. A build check fails if the counter bundle contains the costing entry point (`PRD-OFF-004`). **Design choice.**
+- **As built** (`S2-F01-T03` review, 22 Oct 2026): a third entry point, `@apparel-os/calculations/booking`, holds a booking's totals (goods-in 3.1, 3.9; `PRD-BKG-003`), which `booking` on the server and the web app's booking screens both compute, so the screen shows as typed what the server records. It imports neither of the other two, and neither imports it; the counter does not import it. **Design choice.**
 - The module check already says nothing under `packages/` imports from `apps/`. The code session adds a rule that `packages/calculations` imports only `@apparel-os/domain`. The `calculations` entry in its tier table names no server folder; that session removes it or keeps it as a guard against a server folder of that name (`PRD-MOD-002`). **Design choice.**
 - Its input and result shapes are TypeScript types in the package. Where a shape crosses the API (a priced bill, a working set), `packages/schemas` holds its Zod schema. **Design choice.**
 
@@ -46,6 +47,7 @@ It fixes no tax rate, value slab, rounding rule, stacking order, offer, price, c
 | `offers` | Offer eligibility and evaluation | Running Offers shows the same evaluation as checkout (`PRD-OFR-003`). Stage 4 |
 | `merchandise` · PT | Costing and ticket margin | PT workbench (`PRD-PTW-010`, `PRD-PTW-011`). Stage 2 |
 | `hr` | Incentives | Stage 6 (section 9) |
+| `booking` on the server, and the web app's booking screens | A booking's totals (booking entry point) | Every save and submission of a booking, its approval and its reads; the booking form as lines are typed (goods-in 3.9). Stage 2 |
 
 - The caller fetches the rule data through the owners' interfaces and passes it in: tax rules and rounding rules from `finance` · tax rules (section 10), offers, combination rules and price lists from `offers`, the costing profile from `merchandise` · PT, the return policy snapshot from the bill (module-map 4.2).
 - Authority is never checked here. A manual price change or discount needs the configured authority and reason (`PRD-POS-003`); `pos` checks that through `access`. The calculation only computes.
@@ -358,6 +360,7 @@ Operations in words; names, inputs and outputs become exact in code (module-map 
 | Ticket margin (costing entry) | MRP, P RATE | MARGIN, or Unknown | `PRD-PTW-011` |
 | Round by a rule | An exact value in paise as a decimal string; a rounding rule version | Whole paise. **Design choice**, for the mechanics cases (12.4 CG-20a) | `PRD-MOD-014` |
 | Incentives | Stage 6 | Stage 6 | `PRD-HRM-010` |
+| A booking's totals (booking entry) | Lines: style code, pieces, indicative cost and MRP a piece in whole paise | Pieces, cost and MRP of the booking and of each style, a style matched ignoring case and spaces at the ends; exact, never rounded (goods-in 3.1) | `PRD-BKG-003` |
 
 ## 12. Golden cases
 

@@ -1,4 +1,5 @@
-import { bookingTotals, type Booking, type BookingLineDraft, type OpenToBuyRemaining } from '@apparel-os/schemas';
+import { bookingTotals } from '@apparel-os/calculations/booking';
+import type { Booking, BookingLineDraft, OpenToBuyRemaining } from '@apparel-os/schemas';
 import { AgreementTermsList } from '../merchandise/AgreementScreen';
 import { t } from '../messages/catalogue';
 import { formatDate, formatPaise, formatQuantity } from '../setup/format';
@@ -12,8 +13,12 @@ export function referenceOf(booking: { readonly id: string; readonly number?: st
   return booking.number ?? t('booking.reference.draft', { id: booking.id.slice(-8).toUpperCase() });
 }
 
-/** Approved, reserved and remaining open-to-buy, or Not approved yet, never zero (PRD-MOD-015). */
-export function OpenToBuyFacts({ remaining }: { remaining: OpenToBuyRemaining }) {
+/**
+ * Approved, reserved and remaining open-to-buy, or Not approved yet, never zero (PRD-MOD-015). Given a booking not yet
+ * approved, its value at cost beside what is left and, when it is more, by how much it is short: an approval refused
+ * for open-to-buy names only the brand and season, and the amounts are these reads' (goods-in 3.3, 3.9).
+ */
+export function OpenToBuyFacts({ remaining, valueAtCost }: { remaining: OpenToBuyRemaining; valueAtCost?: number }) {
   if (remaining.kind === 'not-approved') {
     return <p className="m-0 text-body-sm">{t('booking.open-to-buy.not-approved')}</p>;
   }
@@ -25,8 +30,25 @@ export function OpenToBuyFacts({ remaining }: { remaining: OpenToBuyRemaining })
       <dd className="m-0 tabular-nums">{formatPaise(remaining.reserved)}</dd>
       <dt className="text-text-2">{t('budget.remaining')}</dt>
       <dd className="m-0 tabular-nums">{formatPaise(remaining.remaining)}</dd>
+      {valueAtCost !== undefined && (
+        <>
+          <dt className="text-text-2">{t('booking.open-to-buy.value')}</dt>
+          <dd className="m-0 tabular-nums">{formatPaise(valueAtCost)}</dd>
+        </>
+      )}
+      {valueAtCost !== undefined && valueAtCost > remaining.remaining && (
+        <>
+          <dt className="text-text-2">{t('booking.open-to-buy.short')}</dt>
+          <dd className="m-0 tabular-nums">{formatPaise(valueAtCost - remaining.remaining)}</dd>
+        </>
+      )}
     </dl>
   );
+}
+
+/** A booking's value at cost while it is not approved, which its approval checks the open-to-buy against (DM-8). */
+export function valueAtCostOf(booking: Booking): { readonly valueAtCost?: number } {
+  return booking.state === 'Approved' ? {} : { valueAtCost: booking.version.totals.cost };
 }
 
 /** The brand's Agreement terms, read-only (goods-in 3.2; DEC-129, DEC-132). */

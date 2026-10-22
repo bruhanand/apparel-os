@@ -13,6 +13,7 @@
     "test:e2e": "playwright test -c e2e/playwright.config.ts"
   },
   "dependencies": {
+    "@apparel-os/calculations": "workspace:*",
     "@apparel-os/schemas": "workspace:*",
     "@apparel-os/ui": "workspace:*",
     "@hookform/resolvers": "^5.9.1",

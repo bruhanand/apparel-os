@@ -2986,9 +2986,8 @@ export const englishIndia = {
   'error.booking.no-booking-series': 'No open number series for bookings is set up yet.',
   'error.booking.booking-series-paused': 'The number series for bookings is paused.',
   'missing.open-to-buy': 'An approved open-to-buy budget for the booking’s brand and season.',
-  'missing.open-to-buy-shortfall': 'More open-to-buy for the booking’s brand and season.',
-  'missing.open-to-buy-shortfall.named':
-    '{shortfall} more open-to-buy: the booking is {value} at cost, {remaining} is left.',
+  'missing.open-to-buy-shortfall':
+    'More open-to-buy for the booking’s brand and season: the open-to-buy shows the booking at cost and what is left.',
   'missing.number-series.booking.booking': 'An open number series for bookings.',
   'history.operation.record-booking': 'Recorded a booking',
   'history.operation.save-booking-draft': 'Saved a booking’s Draft',
@@ -3077,6 +3076,8 @@ export const englishIndia = {
   'booking.terms.fixed': 'Agreement {code}, the version from {from}, fixed when the booking was approved.',
   'booking.open-to-buy': 'Open-to-buy of the brand and season',
   'booking.open-to-buy.not-approved': 'Not approved yet: the brand and season have no approved budget.',
+  'booking.open-to-buy.value': 'This booking at cost',
+  'booking.open-to-buy.short': 'Short by',
   'booking.submit.title': 'Submit for approval',
   'booking.submit.intro':
     'A different person, whose booking limit covers its value at cost, approves or rejects the version submitted. Approval reserves open-to-buy, fixes the Agreement version and gives the number.',
