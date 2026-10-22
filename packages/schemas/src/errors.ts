@@ -1266,9 +1266,23 @@ export const receivingCodes = declareCodes({
  *   stands; `missing` names every problem, each by its code, row and field, as the validation report lists them
  *   (goods-in 5.6; PRD-IMP-007).
  * - `merchandise.pt-not-a-draft`: the revision is withdrawn, decided, or not the PT's newest (goods-in 5.7).
- * - `merchandise.pt-decision-not-available`: a PT revision is neither approved nor rejected until the PT approval is
- *   built, since its approval makes the PT official and values the stock in one transaction (goods-in 5.8, 6;
- *   `S2-F06-T01`); `missing` names the revision.
+ *
+ * Its approval (goods-in 6.3, 6.6; S2-F06-T01) is refused under the locks, besides the gate, `access`'s and the
+ * ledger's own refusals, by:
+ *
+ * - `merchandise.pt-grn-changed`: the GRN's good pieces per style and size are no longer those the PT covers, as after
+ *   a recount, a held line or a damage report decided since the upload; `missing` names the style and size.
+ * - `merchandise.no-pt-series`, `merchandise.pt-series-paused`: no Open PT number series (goods-in 10.4).
+ * - `merchandise.no-sku-code-series`, `merchandise.sku-code-series-paused`: no Open SKU code series, while the PT
+ *   proposes new products, whose codes it draws (RR-585; numbering-and-audit 2).
+ * - `merchandise.pt-size-not-in-size-set`: a new product's size, the row's size code, is not in its category's size set
+ *   in force; `missing` names the row, the category and the size.
+ * - `merchandise.pt-colour-not-identity`: a new product's category does not hold the colour list among its identity
+ *   attributes, so the SKU could not keep the row's colour; `missing` names the row and the category.
+ * - `merchandise.pt-tracking-unknown`: a new product's category has no tracking profile in force at the GRN's Site, so
+ *   how its goods are tracked is Unknown (structure-and-masters 4.6); `missing` names the row and the category.
+ *
+ * - `merchandise.pt-not-official`: a revision not Official is not downloaded (goods-in 6.5).
  *
  * The problems of a file are the issues of its validation report, by row and column (goods-in 5.3, 5.4, 5.6): a value
  * off its list, a brand not the GRN's, a barcode not digits, an HSN not of six or eight digits, a quantity not whole
@@ -1281,7 +1295,15 @@ export const ptCodes = declareCodes({
   'merchandise.pt-already-attached': 'refused',
   'merchandise.pt-file-refused': 'refused',
   'merchandise.pt-not-a-draft': 'refused',
-  'merchandise.pt-decision-not-available': 'refused',
+  'merchandise.pt-grn-changed': 'refused',
+  'merchandise.no-pt-series': 'unavailable',
+  'merchandise.pt-series-paused': 'unavailable',
+  'merchandise.no-sku-code-series': 'unavailable',
+  'merchandise.sku-code-series-paused': 'unavailable',
+  'merchandise.pt-size-not-in-size-set': 'refused',
+  'merchandise.pt-colour-not-identity': 'refused',
+  'merchandise.pt-tracking-unknown': 'refused',
+  'merchandise.pt-not-official': 'refused',
 });
 
 /**

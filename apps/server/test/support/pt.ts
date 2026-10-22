@@ -52,13 +52,18 @@ export interface PtWorld {
 
 /**
  * The lists, their markings, the categories and the PT template's layout. `label` keeps each world's codes apart;
- * `names` are each list's value names, turned into SYNTHETIC codes.
+ * `names` are each list's value names, turned into SYNTHETIC codes. With `sizes`, each category has a size set of them
+ * in force from the setup's today, as a PT's approval needs (goods-in 6.3; S2-F06-T01): a size set is fixed to its
+ * category, which names it by a later version (structure-and-masters 4.1), so the categories and their size sets are
+ * recorded on the setup's clock a day earlier, naming no identity, and each category's version from today names its
+ * size set and the colour list as its identity, as the products journey's category does (test/browser/serve.ts).
  */
 export async function ptWorld(
   setup: StructureSetup,
   database: string,
   label: string,
   people: { readonly proposer: string; readonly confirmer: string },
+  choices: { readonly sizes?: readonly string[] } = {},
 ): Promise<PtWorld> {
   const today = setup.today();
   const value = async (attributeId: string, code: string) => {
@@ -107,19 +112,56 @@ export async function ptWorld(
   const fit = await list('fit', ['SLIM']);
   const gstRate = await list('gst-rate', ['GST-5', 'GST-18']);
   const categories: Record<string, { id: string; code: string }> = {};
+  const { sizes } = choices;
+  if (sizes !== undefined) setup.advanceDays(-1);
+  const sizeSets: { categoryId: string; versionId: string; name: string; sizeSetId: string }[] = [];
   for (const name of ['CASUAL', 'FORMAL']) {
     const code = syntheticCode(`${label}-${name}`);
-    const id = ok(
+    const categoryName = syntheticName(`${label} ${name.toLowerCase()}`);
+    const made = ok(
       await setup.asPreparerDo((c, p) =>
         setup.catalogue.prepareCategory(c, p, {
           code,
-          name: syntheticName(`${label} ${name.toLowerCase()}`),
-          identityAttributeIds: [colour.attributeId],
-          validFrom: today,
+          name: categoryName,
+          identityAttributeIds: sizes === undefined ? [colour.attributeId] : [],
+          validFrom: setup.today(),
         }),
       ),
-    ).recordId;
-    categories[name] = { id, code };
+    );
+    categories[name] = { id: made.recordId, code };
+    if (sizes !== undefined) {
+      const sizeSet = ok(
+        await setup.asPreparerDo((c, p) =>
+          setup.catalogue.prepareSizeSet(c, p, {
+            code: syntheticCode(`${label}-${name}-SIZES`),
+            categoryId: made.recordId,
+            name: syntheticName(`${label} ${name.toLowerCase()} sizes`),
+            sizes: [...sizes],
+            validFrom: setup.today(),
+          }),
+        ),
+      );
+      sizeSets.push({
+        categoryId: made.recordId,
+        versionId: made.versionId,
+        name: categoryName,
+        sizeSetId: sizeSet.recordId,
+      });
+    }
+  }
+  if (sizes !== undefined) setup.advanceDays(1);
+  for (const each of sizeSets) {
+    ok(
+      await setup.asPreparerDo((c, p) =>
+        setup.catalogue.prepareCategoryVersion(c, p, each.categoryId, {
+          name: each.name,
+          sizeSetId: each.sizeSetId,
+          identityAttributeIds: [colour.attributeId],
+          validFrom: setup.today(),
+          versionToken: each.versionId,
+        }),
+      ),
+    );
   }
   const itemMarking = markings.item;
   const tshirt = item.values.TSHIRT?.id;

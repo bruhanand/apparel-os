@@ -461,7 +461,24 @@ export interface LedgerRequest {
   readonly approval?: { readonly decisionId: string; readonly useId: string };
   /** The command's idempotency key, for the audit record (code-house-rules 12.4). */
   readonly idempotencyKey?: string;
+  /**
+   * SKUs the caller's command makes, written in its transaction once every lock is held, which no read of `merchandise`
+   * answers before (stock-ledger 13.19; goods-in 6.3 step 2): their facts as the SKU read would give them, at the Site
+   * and on the request's business date. Plan takes these for them instead of reading. Their identifiers are UUIDv7s the
+   * caller made (PRD-MOD-008), which its own write of the SKUs holds unique.
+   */
+  readonly madeSkus?: readonly MadeSku[];
   readonly items: readonly LedgerItem[];
+}
+
+/** A SKU a request's command makes (13.19): its identifiers and facts, as `merchandise`'s SKU read would answer. */
+export interface MadeSku {
+  readonly skuId: string;
+  readonly versionId: string;
+  readonly brandId: string;
+  readonly stockUnit: 'piece' | 'pair' | 'pack';
+  readonly pieceTracked: boolean;
+  readonly batchTracked: boolean;
 }
 
 /** The reasons of 13.8, without the `stock.` of their codes. */

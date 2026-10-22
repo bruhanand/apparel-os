@@ -3,7 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import type { TransactionContext } from '../../../kernel/index.js';
 import { layout, layoutVersion, mapping, mappingVersion } from '../db/schema.js';
 import { layoutStructureSchema, mappingFieldsSchema, parsedOrDefect } from '../commands/import-common.js';
-import { blankWorkbook } from '../writers/xlsx-template.js';
+import { blankWorkbook, filledWorkbook } from '../writers/xlsx-template.js';
 
 /** A list of the template: the target's field whose values are on it, and the codes on it. */
 export interface TemplateList {
@@ -18,6 +18,49 @@ export interface TemplateList {
 // list as the column its field is read from by the mapping, so no word of the server's own is written in the file
 // (code-house-rules 12.13); a field the mapping does not read from one column has no list. A layout holds no data, so
 // reading it needs no scope (14). The file's name says the layout's code and version.
+
+/**
+ * A record's rows written in the columns of the layout version it was imported with (goods-in 6.5; S2-F06-T01): each
+ * row's value of a field in the column the mapping version reads that field from; a column no field is read from, or
+ * a field with no value, is left empty. The layout's sheet and header row. Undefined when the layout or mapping
+ * version is not found. The file's name is the caller's.
+ */
+export async function filledTemplate(
+  context: TransactionContext,
+  request: {
+    readonly layoutVersionId: string;
+    readonly mappingVersionId: string;
+    readonly rows: readonly Readonly<Record<string, string | number | null>>[];
+  },
+): Promise<Buffer | undefined> {
+  const [found] = await context.tx
+    .select({ structure: layoutVersion.structure })
+    .from(layoutVersion)
+    .where(eq(layoutVersion.id, request.layoutVersionId));
+  const [mapped] = await context.tx
+    .select({ fields: mappingVersion.fields })
+    .from(mappingVersion)
+    .where(eq(mappingVersion.id, request.mappingVersionId));
+  if (found === undefined || mapped === undefined) return undefined;
+  const structure = parsedOrDefect(layoutStructureSchema, found.structure, 'layout version');
+  const { fields } = parsedOrDefect(mappingFieldsSchema, mapped.fields, 'mapping version');
+  const columns = structure.columns.filter((column) => column.ignored !== true).map((column) => column.name);
+  const fieldOf = new Map<string, string>();
+  for (const [field, source] of Object.entries(fields)) {
+    if ('column' in source) fieldOf.set(normalisedName(source.column).toLowerCase(), field);
+  }
+  return filledWorkbook({
+    sheet: structure.sheet,
+    headerRow: structure.headerRow,
+    columns,
+    rows: request.rows.map((row) =>
+      columns.map((column) => {
+        const field = fieldOf.get(normalisedName(column).toLowerCase());
+        return field === undefined ? null : (row[field] ?? null);
+      }),
+    ),
+  });
+}
 
 export async function blankTemplate(
   context: TransactionContext,

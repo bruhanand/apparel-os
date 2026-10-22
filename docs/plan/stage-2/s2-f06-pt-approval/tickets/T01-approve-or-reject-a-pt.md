@@ -18,3 +18,12 @@ Feature: [Stage 2 first version](../../spec.md)
 ## Done when
 
 Design tests 11 and 12 pass, with the approval part of 21 posting through the job; after approval nothing is sellable (part of test 13); every check passes.
+
+## Notes
+
+- Built (22 Oct 2026, branch `s2/f06-t01-pt-approval`; `Status:` unchanged): migration `0109__merchandise.pt__pt_approval.sql`; the decision's effect (approve, reject), the posting in the decision's transaction and through the queued job, the review and download routes, the PT review in My work and the PT file's number, download and failure, and the browser journey `apps/web/e2e/pt-approval.spec.ts`. As built: goods-in 6.6; stock-ledger 13.19; structure-and-masters 4.2 and 4.3 as built with `S2-F06-T01`; access-and-approvals 9.8b; imports-and-opening-data 13.1; module-map section 5; design-language 7 (Queued and Failed for a PT).
+- RR-585 decided by the product owner (22 Oct 2026) and built: SKU code generated from the SKU code series, stock unit Piece, purpose Merchandise. The size of a new product is the size list value's code, which must be in the category's size set (a design choice, RR-603).
+- Measured (SYNTHETIC, local test container, 22 Oct 2026): a 10,000-line PT approval (100 styles of two sizes, 200 new products) answered the click in 0.5 seconds; the queued job had posted it 6.6 seconds after the click.
+- Beyond the ticket: the stock ledger's `madeSkus` and the identity step's new origin for each SKU and `P RATE` (stock-ledger 13.19, for review, RR-601); `merchandise` · catalogue's `checkPtProducts`, `confirmPtProducts`, `mapPtBarcodes`, `skuCodesOf` and the SKU code kind; `files-imports`' `filledTemplate` (imports-and-opening-data 13.1); `receiving`'s held-lines read gives each good part its SKU (`GoodPiecesPart.skuId`); the interim refusal `merchandise.pt-decision-not-available` removed; the Arrival's Refresh reads the GRN's PT again; the test supports `support/pt-gate.ts` (the book and the gate, shared by the integration tests and the journeys' server) and `ptWorld`'s size sets; the journeys' server gives the PT file journey's world a book, a tracking profile link, the PT and SKU code series, policies 3 and 9 and a PT approver.
+- Not built, each an open item: an exception for a refused posting and posting a failed one again (RR-604); the posting job in a worker composition (RR-602); the inbox's next step after approval (RR-606, `S2-F07-T01`); the seed's PT and SKU code series on `dev` (RR-607).
+- Open, for the product owner: RR-600, RR-601, RR-603, RR-605, RR-607.

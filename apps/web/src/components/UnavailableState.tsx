@@ -164,6 +164,10 @@ function ptText(item: MissingItem): string | undefined {
     return t('missing.header-row.named', { row: item.row });
   }
   if (item.kind === 'pt-style-size' && item.styleCode !== undefined) return styleSizeText(item, item.styleCode);
+  // A row of the PT a refusal of its approval names, and a size not in the size set (goods-in 6.3; S2-F06-T01).
+  const row = Number(item.rowNumber);
+  if (item.kind === 'pt-row' && Number.isInteger(row)) return t('missing.pt-row.named', { row: formatQuantity(row) });
+  if (item.kind === 'size' && item.size !== undefined) return t('missing.size.named', { size: item.size });
   return undefined;
 }
 

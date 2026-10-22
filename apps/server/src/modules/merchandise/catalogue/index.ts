@@ -34,3 +34,9 @@ export { codeMappingChanged, productConfirmed, trackingProfileChanged } from './
 export { catalogueRestoreParticipant } from './restore-participant.js';
 // The tracking profiles as policy 4's values, for the policy gate (module-map 4.4; goods-in 10.5; RR-558).
 export { TRACKING_PROFILES_CHECK, trackingProfilesCheck } from './queries/validity.js';
+// The new products a PT approval confirms, with the barcodes of its rows, and the SKU code kind it draws their codes
+// from (goods-in 6.3 step 2, 6.6; structure-and-masters 4.2, 4.3 "As built with S2-F06-T01"; RR-585).
+export { checkPtProducts, confirmPtProducts, mapPtBarcodes, ptProductLockTargets } from './commands/pt-products.js';
+export type { CheckedPtProducts, PtConfirmer, PtProductRequest } from './commands/pt-products.js';
+export { SKU_CODE_KIND, SKU_CODE_SCOPE_KEY } from './domain/kinds.js';
+export { skuCodesOf } from './queries/sku.js';

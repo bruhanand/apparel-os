@@ -1,4 +1,11 @@
-import { IMPORT_BATCH_TYPE, PT_PREVIEW_PAGE_CAP, PT_TYPE, routes, type FieldClass } from '@apparel-os/schemas';
+import {
+  IMPORT_BATCH_TYPE,
+  PT_PREVIEW_PAGE_CAP,
+  PT_REVISION_ROWS_PAGE_CAP,
+  PT_TYPE,
+  routes,
+  type FieldClass,
+} from '@apparel-os/schemas';
 import { Controller, Inject } from '@nestjs/common';
 import {
   ApiRefusal,
@@ -123,6 +130,74 @@ export class PtController {
       );
       if (preview === undefined) refuse(batchNotFound(batchId));
       return { asOf: context.startedAt.toISOString(), ...preview };
+    });
+  }
+
+  /**
+   * A PT revision as its approver reviews it in My work and its GRN's screen shows it (goods-in 6.2, 6.6; S2-F06-T01),
+   * its rows a page at a time, the cap itself when none is asked (code-house-rules 12.1 "Reads").
+   */
+  @ApiRoute(routes.readPtRevision)
+  async readPtRevision(
+    @RouteInput() input: RouteInputOf<typeof routes.readPtRevision>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    const { revisionId } = input.params;
+    return this.read(user, 'merchandise.read-pt-revision', async (context) => {
+      const found = await this.pt.revisionFacts(context, revisionId);
+      if (found === undefined) refuse(revisionNotFound(revisionId));
+      const authorised = await this.access.authorise(context, {
+        actorId: user.userId,
+        action: 'view',
+        recordType: PT_TYPE,
+        facts: found.facts,
+      });
+      if (authorised.kind === 'refused') refuse(authorised.refusal);
+      const masked = await this.maskedFor(context, user, authorised.roleAssignmentId);
+      const { after, limit } = input.query;
+      const request = (await this.access.approvalRequestsOf(context, [revisionId])).get(revisionId);
+      const read = await this.pt.revision(
+        context,
+        revisionId,
+        request,
+        {
+          ...(after === undefined ? {} : { after: Number(after) }),
+          limit: limit === undefined ? PT_REVISION_ROWS_PAGE_CAP : Number(limit),
+        },
+        masked,
+      );
+      if (read === undefined) refuse(revisionNotFound(revisionId));
+      const names = (await this.access.partyNames(context, read.people, [])).users;
+      return {
+        asOf: context.startedAt.toISOString(),
+        ...read.view,
+        people: [...names].map(([userId, name]) => ({ userId, name })),
+      };
+    });
+  }
+
+  /**
+   * An Official PT as an XLSX file in its template's columns (goods-in 6.5; PRD-PTW-008, PRD-PTW-009; S2-F06-T01). The
+   * file carries BASIC, P RATE and MARGIN, so its reader is authorised with the cost and margin classes besides view
+   * on the PT (access-and-approvals 6; PRD-ACS-008). Downloading changes nothing.
+   */
+  @ApiRoute(routes.downloadPt)
+  async downloadPt(@RouteInput() input: RouteInputOf<typeof routes.downloadPt>, @SignedIn() user: SignedInUser) {
+    const { revisionId } = input.params;
+    return this.read(user, 'merchandise.download-pt', async (context) => {
+      const found = await this.pt.revisionFacts(context, revisionId);
+      if (found === undefined) refuse(revisionNotFound(revisionId));
+      const authorised = await this.access.authorise(context, {
+        actorId: user.userId,
+        action: 'view',
+        recordType: PT_TYPE,
+        facts: found.facts,
+        fieldClasses: PT_CLASSES.map((fieldClass) => ({ fieldClass, use: 'view' as const })),
+      });
+      if (authorised.kind === 'refused') refuse(authorised.refusal);
+      const file = await this.pt.download(context, revisionId);
+      if ('code' in file) refuse(file);
+      return { fileName: file.fileName, contentBase64: file.bytes.toString('base64') };
     });
   }
 

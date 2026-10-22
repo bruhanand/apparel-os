@@ -74,7 +74,15 @@ import {
   type SupplierRoles,
 } from './modules/merchandise/catalogue/index.js';
 import { PartiesModule, partiesApprovals, partiesSupplierRoles } from './modules/merchandise/parties/index.js';
-import { PtModule, ptApprovals } from './modules/merchandise/pt/index.js';
+import {
+  PT,
+  PT_POSTING_QUEUE,
+  PtModule,
+  ptApprovals,
+  ptStockCaller,
+  type PtInterface,
+  type PtPostingQueue,
+} from './modules/merchandise/pt/index.js';
 import {
   LOCATION_IN_USE,
   OrganisationModule,
@@ -156,6 +164,7 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
         bookHeldStock: BookHeldStock,
         importHandlers: ImportHandlers,
         modules: ModuleRef,
+        ptQueue: PtPostingQueue,
       ) =>
         bothApprovals(
           organisationApprovals(audit, locationInUse),
@@ -228,11 +237,19 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
             }),
           }),
           // A PT revision's approval on its total proposed acquisition cost, requested when a PT file is submitted
-          // (goods-in 5.6, 6.1; S2-F04-T02); its decision's effect comes with S2-F06-T01.
-          ptApprovals(),
+          // (goods-in 5.6, 6.1; S2-F04-T02), and its decision's effect, which posts the PT through the stock ledger,
+          // verifying and using the decision under its locks, or ends the draft (goods-in 6.3; S2-F06-T01); `merchandise`
+          // · PT, with `access` and the ledger it posts through, reaches it when it runs, never at start (9.8b).
+          ptApprovals({
+            services: () => modules.get<PtInterface>(PT, { strict: false }).decisionServices(),
+            queue: ptQueue,
+          }),
         ),
-      inject: [AUDIT, LOCATION_IN_USE, CONFIGURATION, BOOK_HELD_STOCK, IMPORT_HANDLERS, ModuleRef],
+      inject: [AUDIT, LOCATION_IN_USE, CONFIGURATION, BOOK_HELD_STOCK, IMPORT_HANDLERS, ModuleRef, PT_POSTING_QUEUE],
     },
+    // How a PT's approval posts (goods-in 6.6): with its decision, since no worker composes the posting job of a large
+    // PT yet (RR-602); a test composition may queue it above a number of rows, with the job composed beside it.
+    { provide: PT_POSTING_QUEUE, useValue: { kind: 'with-decision' } satisfies PtPostingQueue },
     // The scope contract `access` defines: `organisation` answers legal entities and places (S1-F02-T03), and
     // `merchandise` · catalogue brands (S1-F03-T01).
     {
@@ -258,7 +275,12 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
     // stock-ledger 13.15; S2-F08-T01).
     {
       provide: STOCK_CALLERS,
-      useValue: [receivingStockCaller, stockDocumentsStockCaller] satisfies readonly CallerRegistration[],
+      useValue: [
+        receivingStockCaller,
+        stockDocumentsStockCaller,
+        // A PT's approval: the holds the PT route ends, the identity step, coverage and cost (goods-in 6.3; S2-F06-T01).
+        ptStockCaller,
+      ] satisfies readonly CallerRegistration[],
     },
     // The exception types the raising modules register (access-and-approvals 12.1): the damage a report raises, to
     // Operations as its routing says (goods-in 8.2; S2-F08-T01), the shortage and held lines a GRN's count finds, to
@@ -293,6 +315,7 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
     EXCEPTION_TYPES,
     DECISION_EVIDENCE,
     POLICY_EVIDENCE,
+    PT_POSTING_QUEUE,
   ],
 })
 export class ModuleApprovalsModule {}

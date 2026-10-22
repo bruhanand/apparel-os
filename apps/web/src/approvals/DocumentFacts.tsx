@@ -26,6 +26,7 @@ import {
   MAPPING_RULE_CONFIRMATION,
   PERIOD_REOPENING_APPROVAL,
   PRODUCT_CONFIRMATION,
+  PT_APPROVAL,
   RECOUNT_APPROVAL,
   SITE_READINESS_APPROVAL,
   VOCABULARY_CONFIRMATION,
@@ -54,6 +55,7 @@ import { StatusView } from '../booking/StatusView';
 import { useBookingNames } from '../booking/names';
 import { ImportFacts } from './ImportFacts';
 import { DamageReportFacts } from '../stock/DamageReport';
+import { PtReview } from '../receiving/PtReview';
 import { actionTitle } from './subject';
 
 // The material facts of the version an approval request binds to (PRD-ACS-007; access-and-approvals 9.1; spec
@@ -806,6 +808,9 @@ export function DocumentFacts({ view }: { view: ApprovalRequestView }) {
     // A recount's approval (goods-in 4.7, 4.11; S2-F02-T05).
     case RECOUNT_APPROVAL:
       return <RecountFacts view={view} />;
+    // A PT revision's approval: the PT review (goods-in 6.2; S2-F06-T01).
+    case PT_APPROVAL:
+      return <PtReview revisionId={view.document.versionId} />;
     // The season or size attribute (structure-and-masters 4.2 "As built"; RR-550, RR-556).
     case MARKED_ATTRIBUTE_CHANGE:
       return <MarkedAttributeFacts view={view} />;

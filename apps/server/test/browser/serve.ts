@@ -7,6 +7,7 @@ import { known, paise, uuidv7 } from '@apparel-os/domain';
 import {
   DAMAGE_DECISION,
   HELD_LINE_DECISION,
+  PT_APPROVAL,
   RECOUNT_APPROVAL,
   fieldClassSchema,
   permissionRegistry,
@@ -65,7 +66,7 @@ import {
 import { Inbox, inboxConsumers } from '../../src/modules/inbox/index.js';
 import { Numbering } from '../../src/modules/numbering/index.js';
 import { IMPORT_BATCH_KIND, IMPORT_HANDLERS, type ImportHandlers } from '../../src/modules/files-imports/index.js';
-import { CATALOGUE, type CatalogueInterface } from '../../src/modules/merchandise/catalogue/index.js';
+import { CATALOGUE, SKU_CODE_KIND, type CatalogueInterface } from '../../src/modules/merchandise/catalogue/index.js';
 import { ORGANISATION, type OrganisationInterface } from '../../src/modules/organisation/index.js';
 import {
   cellsOf,
@@ -128,10 +129,16 @@ import { BOOKING_KIND, overdueExceptionType } from '../../src/modules/booking/in
 import { defineSyntheticGrnSeries } from '../fixtures/grn-series.js';
 import { syntheticPtFileName, syntheticPtWorkbook, type SyntheticPtRow } from '../fixtures/pt.js';
 import { ptWorld } from '../support/pt.js';
+import { ptGateOpen, syntheticPtBook } from '../support/pt-gate.js';
+import { defineSyntheticPtSeries, defineSyntheticSkuCodeSeries } from '../fixtures/pt-series.js';
+import { PT_KIND } from '../../src/modules/merchandise/pt/index.js';
+import { ptApprovalRules } from '../../src/modules/merchandise/pt/domain/kinds.js';
+import { STOCK_POSTING_EVENT_KINDS } from '../../src/modules/stock/ledger/index.js';
 import { defineSyntheticBookingSeries } from '../fixtures/booking-series.js';
 import {
   BOOKING_POLICY_CHECKS,
   bookingGateOpen,
+  syntheticPolicyValues,
   bookingLimitApproved,
   writeSyntheticBudget,
 } from '../support/booking.js';
@@ -2414,6 +2421,9 @@ const receivingStructure = await structureSetup({
   organisationCode: receivingCode,
   keysEnvironment: keys,
   label: 'BROWSER-RCV',
+  // The stock ledger's posting event kinds, as the application declares them, so the PT approval journey's book maps
+  // `stock.cost-established` (books-and-posting 7.2; S2-F06-T01).
+  eventKinds: STOCK_POSTING_EVENT_KINDS,
 });
 const receivingWorld = await receivingFixture(receivingStructure, receivingDatabase, 'JOURNEY-RCV');
 const storeStaffWorld = await receivingFixture(receivingStructure, receivingDatabase, 'JOURNEY-STM');
@@ -2428,6 +2438,23 @@ const heldWorld = await receivingFixture(receivingStructure, receivingDatabase, 
 const againstWorld = await receivingFixture(receivingStructure, receivingDatabase, 'JOURNEY-RAB');
 // The PT file journey's world (pt-upload.spec.ts; S2-F04-T02), its own so its GRN and PT change no other journey's lists.
 const ptReceivingWorld = await receivingFixture(receivingStructure, receivingDatabase, 'JOURNEY-PTF');
+// The PT approval journey's SYNTHETIC quantity tracking profile (pt-approval.spec.ts; S2-F06-T01), for the Sub category
+// its PT names, a value of policy 4, so made before receiving's gate validates policy 4 (goods-in 10.5; catalogue's
+// tracking-profiles check).
+const ptQuantityProfile = await receivingStructure.asPreparerDo((c, p) =>
+  receivingStructure.catalogue.prepareTrackingProfile(c, p, {
+    code: syntheticCode('JOURNEY-PTA-QTY'),
+    name: syntheticName('PT approval quantity profile'),
+    pieceTracked: false,
+    batchExpiryRequired: false,
+    requiredIdentifiers: [],
+    origin: 'synthetic',
+    validFrom: receivingStructure.today(),
+  }),
+);
+if (ptQuantityProfile.kind !== 'success') {
+  throw new Error(`The PT approval tracking profile was refused: ${ptQuantityProfile.refusal.code}`);
+}
 // Policies 4 and 10 validated on the values the modules report, the receiving worlds', and on the readiness journey's
 // SYNTHETIC value of policy 4, which the application registers for every Organisation.
 await receivingGateOpen(receivingStructure, receivingDatabase, [readinessValuesCheck]);
@@ -3035,10 +3062,14 @@ for (const world of [receivingWorld, storeStaffWorld, damageWorld, heldWorld, pt
 // the cost and margin field classes, who counts, issues the GRN and uploads its PT file. Two SYNTHETIC files of the
 // GRN's style and size: one refused, its MARGIN wrong and its QTY one short of the count, and one that passes. Who
 // makes PTs, the lists and the template are the product owner's: SYNTHETIC here.
-const ptLists = await ptWorld(receivingStructure, receivingDatabase, 'JOURNEY-PTF', {
-  proposer: receivingStructure.preparer.id,
-  confirmer: receivingStructure.approver.id,
-});
+const ptLists = await ptWorld(
+  receivingStructure,
+  receivingDatabase,
+  'JOURNEY-PTF',
+  { proposer: receivingStructure.preparer.id, confirmer: receivingStructure.approver.id },
+  // The size sets of the categories, the PT approval journey's sizes, which its approval asks (S2-F06-T01).
+  { sizes: ptReceivingWorld.sizes.values.map((each) => each.code) },
+);
 const ptMaker = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
   label: 'BROWSER-PT-MAKER',
   enrolled: true,
@@ -3111,6 +3142,143 @@ writeFileSync(
   await syntheticPtWorkbook({
     rows: [ptRowOf('8900000000011'), ptRowOf('8900000000028')],
     marker: 'JOURNEY-PT-GOOD',
+  }),
+);
+// The PT approval journey (pt-approval.spec.ts; goods-in 6, section 11; S2-F06-T01), in the receiving Organisation, in
+// the PT file journey's world, on its lists and template, with a style of its own, since a world of its own would add
+// the many approvals of a receiving world to the events My work is fed from before the journeys start: the casual Sub
+// category takes the SYNTHETIC quantity tracking profile made above; the world's book a SYNTHETIC cost setting, chart, period, journal series and map of
+// `stock.cost-established` to a SYNTHETIC receipt account (support/pt-gate.ts; DEC-140); the PT and SKU code series
+// with SYNTHETIC formats (RR-449, RR-585); policies 3 and 9 Signed and validated, 1 and 10 being already, and the PT
+// approval capability switched on (goods-in 10.5); Warehouse (P-WHS), also assigned to make PTs, who counts, issues
+// the GRN and uploads its PT file; and Operations (P-OPS), assigned to approve PTs and to see cost and margin, within an
+// individual SYNTHETIC limit on the PT's cost, prepared and approved through `access`'s commands by the setup's two
+// people (access-and-approvals 9.2). One SYNTHETIC file of the world's style and first size. Who makes and who
+// approves PTs, the limit, the accounts and the series' formats are the product owner's: SYNTHETIC here.
+{
+  const casual = ptLists.categories.CASUAL?.id ?? '';
+  const link = await receivingStructure.run(receivingStructure.preparer.id, (c) =>
+    receivingStructure.catalogue.record(c, 'category_tracking_profile', casual, receivingStructure.today()),
+  );
+  const linked = await receivingStructure.asPreparerDo((c, p) =>
+    receivingStructure.catalogue.prepareCategoryTrackingProfileVersion(c, p, casual, {
+      trackingProfileId: ptQuantityProfile.answer.recordId,
+      validFrom: receivingStructure.today(),
+      versionToken: link?.versionToken,
+    }),
+  );
+  if (linked.kind !== 'success') throw new Error(`The PT approval tracking link was refused: ${linked.refusal.code}`);
+}
+await syntheticPtBook(receivingStructure, 'JOURNEY-PTA', ptReceivingWorld.bookId);
+await fixtureRunner.run(
+  {
+    commandName: 'test-syn-pt-series.fixture',
+    organisation: receivingRouted.organisation,
+    correlationId: newCorrelationId(),
+    actor: { kind: 'actor', actorId: receivingStructure.preparer.id },
+  },
+  async (context) => {
+    const numbering = new Numbering({ kinds: [PT_KIND, SKU_CODE_KIND] });
+    await defineSyntheticPtSeries(context, numbering);
+    await defineSyntheticSkuCodeSeries(context, numbering);
+  },
+);
+await ptGateOpen(receivingStructure, receivingDatabase, [3, 9]);
+const ptApprovalMaker = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-PTA-MAKER',
+  enrolled: true,
+  personas: ['P-WHS'],
+});
+await grantSynthetic(
+  receivingDatabase,
+  { kind: 'user', id: ptApprovalMaker.id },
+  [
+    ...RECEIVER_AUTHORITY,
+    ...RECEIVING_LISTS,
+    { recordType: 'files_imports.import_batch', action: 'view' },
+    { recordType: 'files_imports.import_batch', action: 'create' },
+    { recordType: 'files_imports.import_batch', action: 'edit' },
+    { recordType: 'merchandise.pt', action: 'view' },
+    { recordType: 'merchandise.pt', action: 'create' },
+    { recordType: 'merchandise.pt', action: 'edit' },
+    { recordType: 'access.approval_request', action: 'view' },
+  ],
+  {
+    fieldClasses: [
+      { fieldClass: 'cost', access: 'view' },
+      { fieldClass: 'margin', access: 'view' },
+    ],
+  },
+);
+const ptApprovalApprover = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-PTA-APPROVER',
+  enrolled: true,
+  personas: ['P-OPS'],
+});
+const ptApprovalDecider = await grantSynthetic(
+  receivingDatabase,
+  { kind: 'user', id: ptApprovalApprover.id },
+  [
+    { recordType: 'merchandise.pt', action: 'view' },
+    { recordType: 'merchandise.pt', action: 'approve' },
+    { recordType: 'receiving.arrival', action: 'view' },
+    { recordType: 'receiving.grn', action: 'view' },
+    { recordType: 'access.approval_request', action: 'view' },
+    { recordType: 'access.approval_reason', action: 'view' },
+    // The users, so My work names who prepared each PT: the PT file journey submits one in this world too.
+    { recordType: 'access.user', action: 'view' },
+    ...STOCK_VIEW,
+  ],
+  {
+    fieldClasses: [
+      { fieldClass: 'cost', access: 'view' },
+      { fieldClass: 'margin', access: 'view' },
+    ],
+  },
+);
+{
+  const limitAccess = receivingStructure.accessWith({ rules: ptApprovalRules, effects: new Map() });
+  const preparer = receivingStructure.preparer;
+  const preparing = await grantSynthetic(receivingDatabase, { kind: 'user', id: preparer.id }, LIMIT_ADMIN_AUTHORITY);
+  const prepared = await receivingStructure.run(preparer.id, (context) =>
+    limitAccess.prepareApprovalLimit(
+      context,
+      { userId: preparer.id, roleAssignmentId: preparing.assignmentId },
+      {
+        actionType: PT_APPROVAL,
+        holder: {
+          kind: 'individual',
+          userId: ptApprovalApprover.id,
+          roleAssignmentId: ptApprovalDecider.assignmentId,
+        },
+        // A SYNTHETIC ₹10,00,000.00 on the PT's total proposed acquisition cost.
+        limit: { kind: 'amount', amount: paise(100_000_000) },
+        coversUnknown: false,
+        origin: 'synthetic',
+        validFrom: receivingStructure.today(),
+      },
+    ),
+  );
+  if (prepared.kind !== 'success') throw new Error(`The PT limit was refused: ${prepared.refusal.code}`);
+  const decided = await receivingStructure.decideThrough(
+    limitAccess,
+    prepared.answer.requestId,
+    prepared.answer.limitId,
+  );
+  if (decided.kind !== 'success') throw new Error(`The PT limit was not approved: ${decided.refusal.code}`);
+}
+const ptApprovalStyle = syntheticCode(`JOURNEY-PTA-STYLE-${randomBytes(3).toString('hex').toUpperCase()}`);
+const ptApprovalFile = join(dirname(worldFile), syntheticPtFileName('journey-pt-approval'));
+// Two rows of the journey's style and the world's first size, each one piece at MRP 1,999.00, BASIC 700.00 and P RATE
+// 945.00.
+writeFileSync(
+  ptApprovalFile,
+  await syntheticPtWorkbook({
+    rows: [
+      ptRowOf('8900000000035', { DESIGN: ptApprovalStyle }),
+      ptRowOf('8900000000042', { DESIGN: ptApprovalStyle }),
+    ],
+    marker: 'JOURNEY-PT-APPROVAL',
   }),
 );
 // The setup's people approved the exception rules above, so its connections end only now.
@@ -3291,9 +3459,17 @@ const app = await startAccessApp(
     // booking journey's TEST-ONLY values of policies 5 and 1 (RR-561; S2-F01-T03) and policy 17's test-only check of the
     // damage journey (support/damage.ts; S2-F08-T01).
     gatedOperations: [policyOperation, readinessOperation],
-    validityChecks: [policyValuesCheck, readinessValuesCheck, ...BOOKING_POLICY_CHECKS, SYNTHETIC_POLICY_17_VALUES],
-    // The posting maps journey's SYNTHETIC event kinds (S1-F09-T02; code-house-rules 11.4).
-    postingEventKinds: POSTING_JOURNEY_KINDS,
+    validityChecks: [
+      policyValuesCheck,
+      readinessValuesCheck,
+      ...BOOKING_POLICY_CHECKS,
+      SYNTHETIC_POLICY_17_VALUES,
+      // Policy 3's TEST-ONLY value, for the PT approval journey, as no module reports policy 3's values yet (RR-605).
+      syntheticPolicyValues(3),
+    ],
+    // The stock ledger's event kinds, as the application declares them, which the PT approval journey posts
+    // (S2-F06-T01), and the posting maps journey's SYNTHETIC event kinds (S1-F09-T02; code-house-rules 11.4).
+    postingEventKinds: [...STOCK_POSTING_EVENT_KINDS, ...POSTING_JOURNEY_KINDS],
   },
 );
 
@@ -3650,6 +3826,15 @@ writeFileSync(
       styleCode: ptStyle,
       refusedFile: ptRefusedFile,
       goodFile: ptGoodFile,
+    },
+    ptApproval: {
+      organisationCode: receivingCode,
+      maker: credentialsOf(ptApprovalMaker),
+      approver: credentialsOf(ptApprovalApprover),
+      reasonId: bookingReasonId,
+      options: ptReceivingWorld.options,
+      styleCode: ptApprovalStyle,
+      file: ptApprovalFile,
     },
     openToBuy: {
       organisationCode: settingsCode,

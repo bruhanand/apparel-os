@@ -1,10 +1,12 @@
 import { paise } from '@apparel-os/domain';
-import type { FieldClass, GrnPtRead, MaskablePaise, PtRevisionState } from '@apparel-os/schemas';
+import type { FieldClass, GrnPtRead, MaskablePaise } from '@apparel-os/schemas';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { TransactionContext } from '../../../../kernel/index.js';
 import type { LatestRequest } from '../../../access/index.js';
 import type { PtMarkChangeView, ReceivingInterface } from '../../../receiving/index.js';
 import { ptProposedSku, ptRevision, ptRevisionWithdrawal, ptRow } from '../db/schema.js';
+import { revisionStateOf } from '../domain/state.js';
+import { decidedOf } from './approval.js';
 import { uploadBlock } from './plan.js';
 import { ptOfGrn, ptVersionToken } from './pt-records.js';
 
@@ -17,14 +19,6 @@ import { ptOfGrn, ptVersionToken } from './pt-records.js';
 /** An amount as a reader is shown it: masked where its class is not granted (access-and-approvals 6). */
 export function shownPaise(amount: number, fieldClass: FieldClass, masked: ReadonlySet<FieldClass>): MaskablePaise {
   return masked.has(fieldClass) ? { kind: 'masked', fieldClass } : { kind: 'amount', paise: paise(amount) };
-}
-
-/** A revision's state (design-language 7): Withdrawn, or its approval request's decision, Awaiting approval until. */
-function stateOf(withdrawn: boolean, request: LatestRequest | undefined): PtRevisionState {
-  if (withdrawn) return 'Withdrawn';
-  if (request?.state === 'Approved') return 'Approved';
-  if (request?.state === 'Rejected') return 'Rejected';
-  return 'Awaiting approval';
 }
 
 const changeOf = (change: PtMarkChangeView) => ({
@@ -65,18 +59,27 @@ export async function grnPtView(
     const repeated = await countsBy(context, ids, 'repeated');
     const differing = await countsBy(context, ids, 'differences');
     const latest = await requests(ids);
+    const decided = await decidedOf(context, ids);
     pt = {
       ptId: owner.id,
       versionToken: (await ptVersionToken(context, owner.id)) ?? owner.id,
       revisions: revisions.map((revision) => {
         const withdrawal = withdrawals.find((each) => each.ptRevisionId === revision.id);
         const request = latest.get(revision.id);
+        const decision = decided.get(revision.id);
         people.add(revision.uploadedByUserId);
         if (withdrawal !== undefined) people.add(withdrawal.withdrawnByUserId);
         return {
           revisionId: revision.id,
           revisionNumber: revision.revisionNumber,
-          state: stateOf(withdrawal !== undefined, request),
+          // Its state from its rows (domain/state.ts; goods-in 6.6; S2-F06-T01).
+          state: revisionStateOf({
+            withdrawn: withdrawal !== undefined,
+            approved: decision?.number !== undefined,
+            rejected: decision?.rejected ?? false,
+            postRequested: decision?.postRequested ?? false,
+            failed: decision?.failed ?? false,
+          }),
           batchId: revision.importBatchId,
           uploadedBy: revision.uploadedByUserId,
           submittedAt: revision.submittedAt.toISOString(),
@@ -94,6 +97,7 @@ export async function grnPtView(
           ...(withdrawal === undefined
             ? {}
             : { withdrawn: { by: withdrawal.withdrawnByUserId, at: withdrawal.occurredAt.toISOString() } }),
+          ...(decision?.number === undefined ? {} : { number: decision.number }),
         };
       }),
     };

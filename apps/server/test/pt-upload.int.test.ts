@@ -826,32 +826,6 @@ describe('the PT upload waits for every held line (goods-in 12 test 2; 5.1, 4.6;
   });
 });
 
-describe('the PT decision waits for the PT approval (goods-in 5.8, 6; S2-F06-T01)', () => {
-  it('PRD-REC-017 refuses approving or rejecting a PT revision, naming it, so no PT is called official without its coverage and value', async () => {
-    const style = syntheticCode('PTU-DECIDE');
-    const { grnId } = await issuedGrn([{ style, sizeAt: 0, counted: 1 }]);
-    const { batchId } = await uploaded(grnId, [ptRow(style, 0)]);
-    expect((await submitted(batchId)).status).toBe(200);
-    const revision = (await grnPt(grnId)).pt?.revisions[0];
-    const requestId = revision?.request?.id ?? '';
-    for (const outcome of ['approve', 'reject'] as const) {
-      const decided = await decide(ptApprover, requestId, revision?.revisionId ?? '', outcome);
-      expect(decided.status, JSON.stringify(decided.body)).toBe(422);
-      expect(errorOf(decided)).toMatchObject({
-        code: 'merchandise.pt-decision-not-available',
-        missing: [{ kind: 'record', recordType: 'merchandise.pt_revision', recordId: revision?.revisionId }],
-      });
-    }
-    // The draft keeps waiting, its request open, and the GRN keeps its mark (goods-in 5.8).
-    const after = await grnPt(grnId);
-    expect(after.pt?.revisions[0]).toMatchObject({
-      state: 'Awaiting approval',
-      request: { state: 'Awaiting approval' },
-    });
-    expect(after.mark).toMatchObject({ kind: 'set', ptRevisionId: revision?.revisionId });
-  });
-});
-
 describe('the Receive Goods inbox once a PT file is submitted (goods-in 4.1, 4.8; RR-584)', () => {
   it('PRD-UXP-003 keeps the GRN as "PT waiting for approval" while its PT file waits, and as waiting for its PT once withdrawn', async () => {
     const style = syntheticCode('PTU-INBOX');

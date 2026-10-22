@@ -288,6 +288,12 @@ export interface GoodPiecesPart {
   readonly grnLineId: string;
   /** The origin the line's count made; Unknown (null) where the reader may not see the ledger's rows. */
   readonly receiptOriginId: string | null;
+  /**
+   * The product the line names: the SKU it was counted as, or for unidentified goods the one Booking named for them;
+   * null for goods of a product not yet set up, or a product not named. PT approval's identity step gives such a line
+   * its own product first (goods-in 6.3 step 4; stock-ledger 13.14; S2-F06-T01).
+   */
+  readonly skuId: string | null;
   readonly quantity: number;
   /**
    * The hold the PT route ends at PT approval, for goods Booking took in: an excess hold by `pt-route`, a quarantine by
@@ -374,6 +380,7 @@ export async function ptBasisOf(
     const key = `${textKey(styleCode)}|${size === null ? '' : textKey(size)}`;
     const group = groups.get(key) ?? { styleCode, size, quantity: 0, parts: [] };
     group.quantity += quantity;
+    const skuId = line.goods === 'unidentified' ? (named?.skuId ?? null) : line.skuId;
     if (movements.some((each) => each.grnLineId === line.id)) {
       // A recounted line's goods are on the GRN's origin and on each a recount found, each with the pieces it holds
       // still; the damage confirmed is on the GRN's (goods-in 4.9, 4.11). A recounted line has no held line.
@@ -384,6 +391,7 @@ export async function ptBasisOf(
         group.parts.push({
           grnLineId: line.id,
           receiptOriginId: origin.receiptOriginId,
+          skuId,
           quantity: pieces,
           releases: [],
         });
@@ -399,6 +407,7 @@ export async function ptBasisOf(
     group.parts.push({
       grnLineId: line.id,
       receiptOriginId: origin,
+      skuId,
       quantity,
       releases:
         part !== undefined && takenIn
