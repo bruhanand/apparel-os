@@ -455,6 +455,7 @@ async function load(context: TransactionContext, locked: LockedPlan): Promise<Va
     originsSeen: plan.originsSeen,
     usedCodes: plan.usedCodes,
     lockedReservations: plan.reservationIds,
+    lockedHolds: plan.holdIds,
     newId: uuidv7,
     ...(await loadValuing(context, locked)),
   };
@@ -770,6 +771,19 @@ async function loadSale(context: TransactionContext, saleId: string, back: 'retu
       returnedFromLayer.set(row.from, sum);
     }
   }
+  // The holds a condition change carried with its goods, less what its reversals carried back (13.17). Moved rows are
+  // written under the hold's lock, which Plan took for each hold the change carried (14.3).
+  const carried = new Map<string, number>();
+  if (sale.kind === 'condition-change') {
+    const moved = await context.tx
+      .select({ holdId: holdRelease.holdId, quantity: holdRelease.quantity, movementId: holdRelease.movementId })
+      .from(holdRelease)
+      .where(and(eq(holdRelease.releaseEvent, 'moved'), inArray(holdRelease.movementId, [saleId, ...returnIds])));
+    for (const row of moved) {
+      const sign = row.movementId === saleId ? 1 : -1;
+      carried.set(row.holdId, (carried.get(row.holdId) ?? 0) + sign * (row.quantity ?? 0));
+    }
+  }
   return {
     id: sale.id,
     kind: sale.kind,
@@ -795,5 +809,6 @@ async function loadSale(context: TransactionContext, saleId: string, back: 'retu
     returnedFromLayer,
     valuedTotal: valuations.length === 0 ? null : valuedTotal,
     returnedTotal,
+    carried,
   };
 }

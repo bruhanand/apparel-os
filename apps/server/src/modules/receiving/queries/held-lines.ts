@@ -208,7 +208,7 @@ export async function heldLineFacts(context: TransactionContext, heldLineId: str
  * goods left held stay held until their supplier return, which comes with stage 3, so their follow-up stays open, and
  * so does one Booking has not decided yet, naming the held line. Extra pieces a GRN records as not received, linked to
  * the GRN, are not at the Site and nothing in the app settles them before supplier returns and claims, so Booking
- * resolves that one when followed up, with its resolution and evidence, as a shortage's (**Design choice**, RR-572).
+ * resolves that one when followed up, with its resolution and evidence, as a shortage's (**Design choice**, RR-579).
  */
 export async function extraFollowedUp(
   context: TransactionContext,
@@ -231,7 +231,7 @@ export async function extraFollowedUp(
 /**
  * The resolution check of a GRN's shortage follow-up (access-and-approvals 12.3): nothing in the app settles a
  * shortage before supplier invoices are matched (stage 5, DEC-137), so Booking resolves it when followed up, with its
- * resolution and evidence (PRD-EXC-002). **Design choice**, for the product owner to confirm (goods-in 4.9).
+ * resolution and evidence (PRD-EXC-002). Decided by the product owner, 22 Oct 2026, as built (RR-572; goods-in 4.9).
  */
 export function shortageFollowedUp(): Promise<ResolutionAnswer> {
   return Promise.resolve({ kind: 'verified' });

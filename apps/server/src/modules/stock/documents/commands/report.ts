@@ -230,6 +230,8 @@ export async function reportDamage(
       goods: draft.goods,
       skuId: placed.skuId,
       receiptOriginId: placed.receiptOriginId,
+      // A report made on its own names goods in good condition, where its damage hold falls (goods-in 8.2).
+      goodsCondition: 'good',
       quantity: draft.quantity,
       description: draft.description,
       photos: draft.photos ?? [],

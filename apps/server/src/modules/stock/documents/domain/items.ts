@@ -1,4 +1,5 @@
 import type { LedgerItem, NamedGoods, Place } from '../../ledger/index.js';
+import type { ReportedCondition } from './goods.js';
 
 // The ledger items a damage report, its decision and a reversal send (stock-ledger 6.1, 13.4, 13.5, 13.15; goods-in 8).
 // Plain functions: no database, no clock (code-house-rules 2).
@@ -6,15 +7,24 @@ import type { LedgerItem, NamedGoods, Place } from '../../ledger/index.js';
 /** A photo of the damage, attached to its report as evidence carrying no restricted class (goods-in 8.2; RR-453). */
 export const DAMAGE_PHOTO = { kind: 'stock.damage-photo', restrictedClasses: [] } as const;
 
-/** The damage hold a report places at once, on the goods in good condition where they are (6.1; PRD-DMG-001). */
-export function damageHoldItem(lineId: string, at: Place, goods: NamedGoods, reason: string): LedgerItem {
+/**
+ * The damage hold a report places at once, on the goods where they are in the condition they are in: good, or held
+ * wrong or unidentified when the count found them so (6.1; PRD-DMG-001; stock-ledger 13.17; RR-571).
+ */
+export function damageHoldItem(
+  lineId: string,
+  at: Place,
+  goods: NamedGoods,
+  reason: string,
+  condition: ReportedCondition = 'good',
+): LedgerItem {
   return {
     kind: 'place-hold',
     lineId,
     holdKind: 'damage',
     reason: reason.trim(),
     at,
-    condition: 'good',
+    condition,
     goods: [goods],
   };
 }
@@ -27,21 +37,24 @@ export const DAMAGE_CONFIRMED_REASON = 'stock.damage-confirmed';
 
 /**
  * A confirmation (goods-in 8.3; 6.1, 2.3): the report's damage hold ends by its own event, `damage-confirmed`; the goods
- * take the damaged condition where they are; and a quarantine holds them, released only by an approved decision, never
- * by time (PRD-DMG-006). The decision's value is on the condition change (DM-8): `valuedLineId` names its line.
+ * take the damaged condition where they are, from the condition they were reported in, any excess hold or quarantine
+ * of a count's findings carried with them (stock-ledger 13.17; RR-571); and a quarantine holds them, released only by
+ * an approved decision, never by time (PRD-DMG-006). The decision's value is on the condition change (DM-8):
+ * `valuedLineId` names its line.
  */
 export function confirmationItems(
   lines: () => string,
   at: Place,
   goods: NamedGoods,
   holdId: string,
+  from: ReportedCondition,
 ): { readonly items: LedgerItem[]; readonly valuedLineId: string } {
   const release = lines();
   const conditionChange = lines();
   return {
     items: [
       { kind: 'release-hold', lineId: release, holdId, event: 'damage-confirmed' },
-      { kind: 'condition-change', lineId: conditionChange, at, from: 'good', to: 'damaged', goods },
+      { kind: 'condition-change', lineId: conditionChange, at, from, to: 'damaged', goods },
       {
         kind: 'place-hold',
         lineId: lines(),
@@ -72,7 +85,7 @@ export function reversalItems(
   at: Place,
   goods: NamedGoods,
   confirmation: { readonly movementId: string; readonly quarantineHoldId: string },
-  reason: string,
+  reported: { readonly reason: string; readonly condition: ReportedCondition },
 ): { readonly items: LedgerItem[]; readonly valuedLineId: string; readonly restoredHoldLineId: string } {
   const release = lines();
   const reversal = lines();
@@ -81,7 +94,7 @@ export function reversalItems(
     items: [
       { kind: 'release-hold', lineId: release, holdId: confirmation.quarantineHoldId, event: 'approved-decision' },
       { kind: 'reversal', lineId: reversal, movementId: confirmation.movementId, at, goods },
-      damageHoldItem(restoredHold, at, goods, reason),
+      damageHoldItem(restoredHold, at, goods, reported.reason, reported.condition),
     ],
     valuedLineId: reversal,
     restoredHoldLineId: restoredHold,

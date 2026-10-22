@@ -346,6 +346,8 @@ export const holdRelease = stock.table('hold_release', {
   releaseEvent: text('release_event').notNull(),
   quantity: integer('quantity'),
   pieceId: uuid('piece_id'),
+  // For `moved`: the movement that carried the claim's units to another balance (0100; stock-ledger 13.17).
+  movementId: uuid('movement_id'),
   sourceModule: text('source_module').notNull(),
   sourceRecordType: text('source_record_type').notNull(),
   sourceRecordId: uuid('source_record_id').notNull(),

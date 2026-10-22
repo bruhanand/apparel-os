@@ -81,7 +81,7 @@ export async function renewDecision(
     actor,
     report,
     { recordType: DAMAGE_SOURCE_TYPE, recordId: reportId },
-    'good',
+    report.goodsCondition,
   );
   if (value.kind === 'refusal') return value;
   const roundId = uuidv7();

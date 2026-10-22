@@ -15,6 +15,7 @@ import type { NumberingInterface } from '../../../numbering/index.js';
 import type { ItemValue } from '../../ledger/index.js';
 import { damageReport, damageReportPhoto, damageRound } from '../db/schema.js';
 import { DAMAGE_EXCEPTION_TYPE, DOCUMENTS_MODULE, MISSING_DAMAGE_REPORT_SERIES } from '../domain/kinds.js';
+import type { ReportedCondition } from '../domain/goods.js';
 import { DAMAGE_PHOTO } from '../domain/items.js';
 import { damageReported } from '../events.js';
 import {
@@ -66,6 +67,8 @@ export interface ReportToRecord {
   readonly goods: DamagedGoods;
   readonly skuId: string | null;
   readonly receiptOriginId: string | null;
+  /** The condition the goods were in when reported (goods-in 4.9; RR-571). */
+  readonly goodsCondition: ReportedCondition;
   readonly quantity: number;
   readonly description: string;
   readonly photos: readonly EvidenceFile[];
@@ -105,6 +108,7 @@ export async function recordReport(
     grnLineId: report.goods.kind === 'grn-line' ? report.goods.grnLineId : null,
     skuId: report.skuId,
     receiptOriginId: report.receiptOriginId,
+    goodsCondition: report.goodsCondition,
     quantity: report.quantity,
     description,
     reportedByUserId: reporter.userId,

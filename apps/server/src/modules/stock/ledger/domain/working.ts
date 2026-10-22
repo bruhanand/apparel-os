@@ -217,6 +217,8 @@ export interface Entries {
   readonly acceptances: AcceptanceEntry[];
   readonly holds: HoldEntry[];
   readonly holdReleases: HoldReleaseEntry[];
+  /** Units of a hold's claim carried with its goods by a movement to another balance (13.17). */
+  readonly holdMoves: HoldMoveEntry[];
   readonly reservations: ReservationEntry[];
   readonly reservationEvents: ReservationEventEntry[];
 }
@@ -324,6 +326,22 @@ export interface HoldReleaseEntry {
   readonly scope: Scope;
 }
 
+/**
+ * Units of one hold claim carried with their goods to another balance by a movement (13.17; 6.2 "A hold moves with its
+ * goods"): the claim ends there by `moved`, written as a `hold_release` row naming the movement, and the hold claims
+ * the same units at the balance they move to by a new claim. The hold itself goes on: nothing releases it.
+ */
+export interface HoldMoveEntry {
+  readonly id: string;
+  readonly lineId: string;
+  readonly holdId: string;
+  readonly holdKind: string;
+  readonly claimId: string;
+  readonly quantity: number;
+  readonly movementId: string;
+  readonly scope: Scope;
+}
+
 export interface ReservationEntry {
   readonly id: string;
   readonly lineId: string;
@@ -408,8 +426,27 @@ const RESERVATION_EVENTS: Readonly<Record<string, readonly string[]>> = {
  */
 const IDENTITY_CONDITIONS: readonly Condition[] = ['good', 'wrong', 'unidentified'];
 
-/** Conditions goods may change to by a condition change, always from good (2.3; PRD-DMG-010, POL-17.02). */
+/** Conditions goods may change to by a condition change from good (2.3; PRD-DMG-010, POL-17.02). */
 const CHANGED_CONDITIONS: readonly Condition[] = ['damaged', 'wrong', 'unidentified'];
+
+/** Conditions of held goods that may become damaged too (2.3; 13.17; PRD-REC-006; RR-571). */
+const HELD_CONDITIONS: readonly Condition[] = ['wrong', 'unidentified'];
+
+/**
+ * The hold kinds a condition change to damaged carries with the units it takes (13.17; RR-571): the excess hold and the
+ * quarantine of what a count found, which stay on the goods as they become damaged. A damage hold is never carried: it
+ * ends by its own event first (6.1), and any other hold keeps its units where they are, `held` (6.2).
+ */
+const CARRIED_TO_DAMAGED: readonly string[] = ['excess', 'quarantine'];
+
+/**
+ * Which hold claims an item may carry with the units it takes, and how many units of each (13.17): `allows` answers
+ * the units of the claim's hold still carriable, zero for a hold it never carries; `use` counts units carried.
+ */
+export interface Carry {
+  readonly allows: (claim: ClaimState) => number;
+  readonly use: (claim: ClaimState, quantity: number) => void;
+}
 
 /** What the state needs that Plan read before the locks (13.1). */
 export interface WorkingInputs {
@@ -429,16 +466,23 @@ export interface WorkingInputs {
   readonly usedCodes: ReadonlySet<string>;
   /** The reservations the command locked at step 5, whose claims it may change (14.3). */
   readonly lockedReservations: ReadonlySet<string>;
+  /** The holds the command locked at step 5, whose claims it may change or carry (14.3; 13.17). */
+  readonly lockedHolds: ReadonlySet<string>;
   /** A new row's identifier, a UUIDv7 the caller makes (PRD-MOD-008). */
   readonly newId: () => string;
 }
 
-/** What one take found at a balance: free units, reserved units moved with their claims, and pieces. */
+/**
+ * What one take found at a balance: free units, reserved units moved with their claims, held units carried with their
+ * holds' claims (13.17), and pieces.
+ */
 interface Taken {
   readonly balance: BalanceState;
   quantity: number;
   reserved: number;
   readonly pieces: PieceState[];
+  /** The hold claims carried with held units, and how many units of each. */
+  carried?: { readonly claim: ClaimState; readonly quantity: number }[];
 }
 
 type ItemOf<K extends LedgerItem['kind']> = Extract<LedgerItem, { kind: K }>;
@@ -451,6 +495,7 @@ export class Working {
     acceptances: [],
     holds: [],
     holdReleases: [],
+    holdMoves: [],
     reservations: [],
     reservationEvents: [],
   };
@@ -860,9 +905,10 @@ export class Working {
   /**
    * Takes units of goods at a place for a movement or a reservation (6.2, 6.3): the pieces named, or a quantity
    * oldest first. Free units only, unless `moveReserved`: a location move inside one unit may then take reserved units
-   * too, whose claims move with them (13.9; product owner, 8 Oct 2026). Held units are never taken. Refuses
-   * `piece-not-at-place`, `held`, `reserved` or `insufficient-available`; a reservation names `reservation-overlap` for
-   * reserved units.
+   * too, whose claims move with them (13.9; product owner, 8 Oct 2026); or `carry`: a condition change may then take
+   * held units too, by quantity, whose holds' claims it carries with them (13.17). Other held units are never taken.
+   * Refuses `piece-not-at-place`, `held`, `reserved` or `insufficient-available`; a reservation names
+   * `reservation-overlap` for reserved units.
    */
   protected take(
     lineId: string,
@@ -873,6 +919,7 @@ export class Working {
       readonly reservation?: boolean;
       readonly moveReserved?: boolean;
       readonly fits?: (balance: BalanceState) => number;
+      readonly carry?: Carry;
     } = {},
   ): Taken[] {
     // Goods of Unknown SKU are counted by quantity (13.14, 13.15; DEC-137).
@@ -948,11 +995,83 @@ export class Working {
         left -= take;
       }
     }
+    if (left > 0 && options.carry !== undefined)
+      left = this.takeCarried(lineId, candidates, taken, left, options.carry);
     if (left > 0) this.shortfall(lineId, candidates, goods.quantity, options.reservation);
     for (const each of taken) {
-      this.leaveSpare(each.balance, freeUnits(this.claimsOn(each.balance)) - (each.quantity - each.reserved));
+      const carried = (each.carried ?? []).reduce((sum, move) => sum + move.quantity, 0);
+      this.leaveSpare(each.balance, freeUnits(this.claimsOn(each.balance)) - (each.quantity - each.reserved - carried));
     }
     return taken;
+  }
+
+  /**
+   * Takes held units, after the free ones, whose holds' claims the item carries with them (13.17; 6.2 "A hold moves with
+   * its goods"; RR-571): at each balance, the units held by holds it carries alone, other holds taken to fall on held
+   * units first (availability.ts `heldOnce`), each carried hold's claim moving as many units as are taken of it, in the
+   * order of the claims, and further where holds overlap, so no claim is left on more units than stay. A carried
+   * claim is changed only under its hold's lock (14.3), so one of a hold Plan did not lock is `plan-stale`. Answers the
+   * units still wanted.
+   */
+  protected takeCarried(
+    lineId: string,
+    candidates: readonly BalanceState[],
+    taken: Taken[],
+    wanted: number,
+    carry: Carry,
+  ): number {
+    let left = wanted;
+    for (const balance of candidates) {
+      if (left === 0) break;
+      const claims = this.claimsOn(balance);
+      const carriable = claims.holds
+        .filter((claim) => carry.allows(claim) > 0)
+        .sort((a, b) => compareCodeUnits(a.id, b.id));
+      if (carriable.length === 0) continue;
+      const others = claims.holds
+        .filter((claim) => carry.allows(claim) <= 0)
+        .reduce((sum, claim) => sum + claim.quantity, 0);
+      const carriedUnits = carriable.reduce((sum, claim) => sum + Math.min(claim.quantity, carry.allows(claim)), 0);
+      const held = heldOnce(claims);
+      const units = Math.max(0, Math.min(carriedUnits, held - Math.min(held, others)));
+      const take = Math.min(left, units);
+      if (take <= 0) continue;
+      const unlocked = carriable.find((claim) => !this.inputs.lockedHolds.has(claim.headerId));
+      if (unlocked !== undefined) refuse('plan-stale', lineId);
+      const entry = taken.find((each) => each.balance === balance);
+      const freeTaken = entry === undefined ? 0 : entry.quantity - entry.reserved;
+      const moves = new Map<ClaimState, number>();
+      const carryOf = (claim: ClaimState, quantity: number) => {
+        if (quantity <= 0) return;
+        moves.set(claim, (moves.get(claim) ?? 0) + quantity);
+        carry.use(claim, quantity);
+      };
+      let rest = take;
+      for (const claim of carriable) {
+        if (rest === 0) break;
+        const quantity = Math.min(rest, claim.quantity, carry.allows(claim));
+        carryOf(claim, quantity);
+        rest -= quantity;
+      }
+      // Holds overlapping on the same units: no claim stays on more units than stay outside reservations (6.2).
+      const stay = Math.max(0, balance.quantity - claims.reserved - freeTaken - take);
+      for (const claim of carriable) {
+        const over = claim.quantity - (moves.get(claim) ?? 0) - stay;
+        if (over <= 0) continue;
+        if (over > carry.allows(claim)) {
+          refuse('held', lineId, [{ kind: 'hold', holdKind: claim.headerKind, holdId: claim.headerId }]);
+        }
+        carryOf(claim, over);
+      }
+      const carried = [...moves].map(([claim, quantity]) => ({ claim, quantity }));
+      if (entry === undefined) taken.push({ balance, quantity: take, reserved: 0, pieces: [], carried });
+      else {
+        entry.quantity += take;
+        entry.carried = [...(entry.carried ?? []), ...carried];
+      }
+      left -= take;
+    }
+    return left;
   }
 
   /**
@@ -1445,7 +1564,7 @@ export class Working {
     taken: readonly Taken[],
     to: { readonly businessUnitId: string; readonly locationId: string; readonly condition: Condition },
   ): void {
-    for (const { balance, quantity, reserved, pieces } of taken) {
+    for (const { balance, quantity, reserved, pieces, carried } of taken) {
       const origin = this.origins.get(balance.receiptOriginId);
       if (origin === undefined) throw new Error('origin not loaded');
       const target = this.balanceFor(balance.siteId, to.businessUnitId, to.locationId, to.condition, origin);
@@ -1457,6 +1576,7 @@ export class Working {
       this.addTo(target, quantity, accepted);
       movement.legs.push(this.leg('out', balance, quantity, accepted), this.leg('in', target, quantity, accepted));
       if (reserved > 0) this.moveClaims(lineId, movement, balance, target, reserved);
+      for (const move of carried ?? []) this.carryHoldClaim(lineId, movement, move.claim, target, move.quantity);
       const unit = this.unit(balance.siteId, to.businessUnitId);
       for (const piece of pieces) {
         piece.businessUnitId = to.businessUnitId;
@@ -1506,6 +1626,34 @@ export class Working {
   }
 
   /**
+   * Carries `quantity` units of a hold's claim with its goods to the balance they move to (13.17; 6.2 "A hold moves with
+   * its goods"; POL-17.01): the claim there ends by `moved`, naming the movement, and the hold claims the same units at
+   * the target by a new claim, so it holds them still and is released only by its own event (6.1).
+   */
+  protected carryHoldClaim(
+    lineId: string,
+    movement: MovementEntry,
+    claim: ClaimState,
+    to: BalanceState,
+    quantity: number,
+  ): void {
+    if (quantity > claim.quantity) throw new Error('A hold claim carried beyond what it holds');
+    claim.quantity -= quantity;
+    claim.changed = true;
+    this.entries.holdMoves.push({
+      id: this.newId(),
+      lineId,
+      holdId: claim.headerId,
+      holdKind: claim.headerKind,
+      claimId: claim.id,
+      quantity,
+      movementId: movement.id,
+      scope: claim.scope,
+    });
+    this.newClaim('hold', claim.headerId, claim.headerKind, claim.withinReservationId, to.id, null, quantity, to.scope);
+  }
+
+  /**
    * Location move (13.4; PRD-STK-005): inside one Site; between two units only when book, legal entity and tax
    * registration are unchanged (7.1, DEC-066; MM-13). Held goods move only under their own authority, so they are
    * refused (6.2). Inside one unit a move may carry reserved units with their claims, so it never breaks a reservation
@@ -1536,19 +1684,29 @@ export class Working {
   }
 
   /**
-   * Condition change (2.3, 13.4; PRD-DMG-003, PRD-DMG-010, POL-17.02): only good to damaged, wrong or unidentified.
-   * Damaged goods never become good, and wrong or unidentified goods return to good only through the identity route, so
-   * every change from another condition is `condition-route`. Takes free units; the hold the new condition raises is
-   * its own item in the same request (13.5). Goods of Unknown SKU are named by their origin, and the movement records
-   * the brand they were counted under (13.15).
+   * Condition change (2.3, 13.4, 13.17; PRD-DMG-003, PRD-DMG-010, POL-17.02, PRD-REC-006): good to damaged, wrong or
+   * unidentified, and wrong or unidentified to damaged. Damaged goods never become good, and wrong or unidentified goods
+   * return to good only through the identity route, so every other change is `condition-route`. Takes free units; a
+   * change to damaged then takes units held by an excess hold or a quarantine too, carrying those holds' claims with
+   * them, so the goods stay held as they were besides their damage (13.17; RR-571); a damage hold ends first, by its
+   * own event. The hold the new condition raises is its own item in the same request (13.5). Goods of Unknown SKU are
+   * named by their origin, and the movement records the brand they were counted under (13.15).
    */
   protected conditionChange(item: ItemOf<'condition-change'>): ItemValue {
     this.checkGoodsShape(item.lineId, item.goods);
     if (item.from === item.to) refuse('invalid-item', item.lineId, [{ kind: 'same-condition' }]);
-    if (item.from !== 'good' || !CHANGED_CONDITIONS.includes(item.to)) {
-      refuse('condition-route', item.lineId, [{ kind: 'condition', from: item.from, to: item.to }]);
-    }
-    const taken = this.take(item.lineId, item.at, item.from, item.goods);
+    const allowed =
+      (item.from === 'good' && CHANGED_CONDITIONS.includes(item.to)) ||
+      (HELD_CONDITIONS.includes(item.from) && item.to === 'damaged');
+    if (!allowed) refuse('condition-route', item.lineId, [{ kind: 'condition', from: item.from, to: item.to }]);
+    const carry: Carry | undefined =
+      item.to === 'damaged'
+        ? {
+            allows: (claim) => (CARRIED_TO_DAMAGED.includes(claim.headerKind) ? claim.quantity : 0),
+            use: () => undefined,
+          }
+        : undefined;
+    const taken = this.take(item.lineId, item.at, item.from, item.goods, carry === undefined ? {} : { carry });
     const brand = this.goodsBrand(item.goods);
     const movement = this.newMovement(
       'condition-change',

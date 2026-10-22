@@ -3,6 +3,13 @@ import type { NamedGoods, Place } from '../../ledger/index.js';
 // The goods and place a report names, as its decision and a reversal send them to the ledger (goods-in 8.2;
 // stock-ledger 13.15). Plain functions over the report's fields (code-house-rules 2).
 
+/**
+ * The condition a report's goods were in when reported: good, or, for damage the count found, held wrong or
+ * unidentified too (goods-in 4.4, 4.9; stock-ledger 13.17; RR-571). A report made on its own names goods in good
+ * condition.
+ */
+export type ReportedCondition = 'good' | 'wrong' | 'unidentified';
+
 interface ReportGoods {
   readonly siteId: string;
   readonly businessUnitId: string;

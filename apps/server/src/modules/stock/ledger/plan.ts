@@ -7,6 +7,7 @@ import {
   coverage,
   hold,
   holdClaim,
+  holdRelease,
   movement,
   movementLeg,
   piece,
@@ -642,6 +643,35 @@ export async function planRequest(
         const unit = await place(item.lineId, item.at.siteId, item.at.businessUnitId, item.at.locationId);
         await namedGoodsAt(item.lineId, unit, item.goods);
         await valuedPoolOf(item.lineId, unit, item.goods);
+        // A change to damaged carries the excess holds and quarantines of the units it takes (13.17; RR-571): their
+        // claims change only under their hold's lock (14.3), so the holds claiming the goods at the place are locked.
+        if (item.to === 'damaged') {
+          const goods = item.goods;
+          const rows = await context.tx
+            .selectDistinct({ id: holdClaim.holdId })
+            .from(holdClaim)
+            .innerJoin(balance, eq(balance.id, holdClaim.balanceId))
+            .innerJoin(hold, eq(hold.id, holdClaim.holdId))
+            .where(
+              and(
+                eq(balance.siteId, unit.siteId),
+                eq(balance.businessUnitId, unit.businessUnitId),
+                eq(balance.locationId, item.at.locationId),
+                eq(balance.condition, item.from),
+                goods.skuId === null
+                  ? eq(balance.receiptOriginId, goods.receiptOriginId)
+                  : and(
+                      eq(balance.skuId, goods.skuId),
+                      goods.receiptOriginId === undefined
+                        ? undefined
+                        : eq(balance.receiptOriginId, goods.receiptOriginId),
+                    ),
+                inArray(hold.kind, ['excess', 'quarantine']),
+                gt(holdClaim.quantity, 0),
+              ),
+            );
+          for (const row of rows) holdIds.add(row.id);
+        }
         return;
       }
       case 'record-acceptance': {
@@ -876,6 +906,12 @@ export async function planRequest(
           for (const leg of legs) shared(leg.originId);
           await namedGoodsAt(item.lineId, unit, item.goods);
           await valuedPoolOf(item.lineId, unit, item.goods);
+          // The holds the change carried with its goods, whose claims its reversal carries back (13.17).
+          const carried = await context.tx
+            .selectDistinct({ id: holdRelease.holdId })
+            .from(holdRelease)
+            .where(and(eq(holdRelease.releaseEvent, 'moved'), eq(holdRelease.movementId, reversed.id)));
+          for (const row of carried) holdIds.add(row.id);
           return;
         }
         if (item.goods.skuId === null) {

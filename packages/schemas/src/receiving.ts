@@ -149,13 +149,16 @@ export function extraPiecesOf(line: Pick<CountedLine, 'goods' | 'invoiceQuantity
 }
 
 /**
- * The most pieces damage at the count may name (goods-in 4.9): pieces on the invoice, counted and in good condition,
- * held apart from any excess, since a damage confirmation takes free units and an excess hold ends only by the PT route
- * (stock-ledger 6.1, 13.15); none for wrong or unidentified goods, held wrong or unidentified, which the ledger never
- * confirms as damaged (stock-ledger 2.3).
+ * The most pieces damage at the count may name (goods-in 4.4, 4.9; PRD-REC-006): any piece received, excess, wrong or
+ * unidentified goods held too, since damage coexists with every other finding ("Damaged pieces, whatever else the line
+ * shows"; RR-571, decided by the product owner on 22 Oct 2026); never pieces recorded as not received, which are not
+ * at the Site. The ledger turns held goods damaged too, carrying their holds (stock-ledger 13.17).
  */
-export function damageablePiecesOf(line: Pick<CountedLine, 'goods' | 'invoiceQuantity' | 'countedQuantity'>): number {
-  return line.goods === 'on-invoice' ? Math.min(line.invoiceQuantity, line.countedQuantity) : 0;
+export function damageablePiecesOf(
+  line: Pick<CountedLine, 'goods' | 'invoiceQuantity' | 'countedQuantity' | 'extra'>,
+): number {
+  const extra = extraPiecesOf(line);
+  return line.countedQuantity - (extra > 0 && line.extra === 'not-received' ? extra : 0);
 }
 
 export function lineFindings(line: CountedLine): LineFindings {
@@ -245,7 +248,7 @@ export const countLineDraftSchema = z
     if (extra > 0 && line.extra === null) issue('extra', 'Say whether the extra pieces are received');
     if (extra === 0 && line.extra !== null) issue('extra', 'The line has no extra pieces');
     if (line.damage !== null && line.damage.quantity > damageablePiecesOf(line)) {
-      issue('damage', 'Damage at the count is of pieces on the invoice that were counted');
+      issue('damage', 'Damage at the count is of pieces received');
     }
   });
 export type CountLineDraft = z.infer<typeof countLineDraftSchema>;

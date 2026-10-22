@@ -212,7 +212,9 @@ export abstract class Corrections extends SaleItems {
    * the condition it gave them, return to the condition they left, of the same origins, within what it changed and was
    * not reversed (`exceeds-source`). The movement names the one it reverses; the change itself is never edited. Units
    * still held, such as by their quarantine, are `held` until that hold ends by its own event in the same request or
-   * before (6.2). No value moves; valued for its approval as the condition change was (13.10).
+   * before (6.2), except those of the holds the change carried with its goods (13.17), whose claims it carries back,
+   * as many units of each as the change carried and no reversal carried back yet. No value moves; valued for its
+   * approval as the condition change was (13.10).
    */
   private reverseConditionChange(item: ItemOf<'reversal'>, reversed: SaleState): ItemValue {
     const into = reversed.legs.filter((leg) => leg.direction === 'in');
@@ -232,6 +234,14 @@ export abstract class Corrections extends SaleItems {
       refuse('exceeds-source', item.lineId, [{ kind: 'movement', movementId: reversed.id }]);
     }
     const taken: ReturnType<typeof this.take> = [];
+    // The holds the change carried, back with their units, no more of each than it carried and is not back yet (13.17).
+    const carry = {
+      allows: (claim: { readonly headerId: string; readonly quantity: number }) =>
+        Math.min(claim.quantity, reversed.carried.get(claim.headerId) ?? 0),
+      use: (claim: { readonly headerId: string }, quantity: number) => {
+        reversed.carried.set(claim.headerId, (reversed.carried.get(claim.headerId) ?? 0) - quantity);
+      },
+    };
     if (goods.pieceCodes !== undefined) {
       for (const code of goods.pieceCodes) {
         if (!reversed.pieceIds.has(this.piece(item.lineId, code).id)) {
@@ -244,7 +254,9 @@ export abstract class Corrections extends SaleItems {
       for (const originId of origins) {
         const quantity = Math.min(wanted, room(originId));
         if (quantity <= 0) continue;
-        taken.push(...this.take(item.lineId, item.at, gave, { ...goods, quantity, receiptOriginId: originId }));
+        taken.push(
+          ...this.take(item.lineId, item.at, gave, { ...goods, quantity, receiptOriginId: originId }, { carry }),
+        );
         wanted -= quantity;
         if (wanted === 0) break;
       }

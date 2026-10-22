@@ -3423,11 +3423,11 @@ export const englishIndia = {
   'receive.extra.required': 'Say whether the extra pieces are received or not received.',
   'receive.damage-quantity': 'Damaged pieces',
   'receive.damage-quantity.help':
-    'Pieces on the invoice found damaged. Issuing the GRN reports the damage and holds them at once.',
+    'Pieces received found damaged, whatever else the line shows. Issuing the GRN reports the damage and holds them at once.',
   'receive.damage-description': 'What is wrong',
   'receive.damage-photo': 'Photo of the damage',
   'receive.damage.both': 'Enter both the damaged pieces and what is wrong.',
-  'receive.damage.too-many': 'Damaged pieces are among those on the invoice and counted.',
+  'receive.damage.too-many': 'Damaged pieces are among those received.',
   'receive.findings': 'Findings',
   'receive.received': 'Received',
   'receive.finding.short': { one: 'Short {count}', other: 'Short {count}' },

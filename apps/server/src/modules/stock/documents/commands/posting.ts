@@ -2,7 +2,7 @@ import { uuidv7 } from '@apparel-os/domain';
 import { CommandDefect, LOCK_STEP, type LockTarget, type TransactionContext } from '../../../../kernel/index.js';
 import type { AccessInterface } from '../../../access/index.js';
 import type { ItemValue, LedgerItem, LedgerSource, StockLedgerInterface, Written } from '../../ledger/index.js';
-import { goodsOf, placeOfReport } from '../domain/goods.js';
+import { goodsOf, placeOfReport, type ReportedCondition } from '../domain/goods.js';
 import { damageHoldItem } from '../domain/items.js';
 import {
   ledgerSource,
@@ -139,7 +139,8 @@ export async function post(
 /**
  * The cost of a report's goods now in the condition given, as a damage hold on them is valued (stock-ledger 13.10,
  * 13.15), under the ledger's locks with nothing written (13.1 "Recheck and value"): a renewal's and a reversal's request
- * is on the goods' cost now, read as the posting would read it (access-and-approvals 9.1).
+ * is on the goods' cost now, read as the posting would read it (access-and-approvals 9.1). A renewal reads them in the
+ * condition they were reported in, a reversal damaged.
  */
 export async function valueOfReportGoods(
   context: TransactionContext,
@@ -147,7 +148,7 @@ export async function valueOfReportGoods(
   actor: Actor,
   report: ReportRow,
   source: { readonly recordType: string; readonly recordId: string },
-  condition: 'good' | 'damaged',
+  condition: ReportedCondition | 'damaged',
 ): Promise<Outcome<RequestValue>> {
   const hold = damageHoldItem(uuidv7(), placeOfReport(report), goodsOf(report), report.description);
   const item = { ...hold, condition } as LedgerItem;

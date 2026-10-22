@@ -296,7 +296,12 @@ const lineFormSchema = z
     } else if (line.styleCode.trim() === '') issue('styleCode', 'receive.style-code.required');
     if (line.goods === 'on-invoice' && invoiceQuantity === 0) issue('invoiceQuantity', 'receive.invoice-quantity.none');
     if (line.goods !== 'on-invoice' && line.countedQuantity === 0) issue('countedQuantity', 'receive.pieces.none');
-    const counted = { goods: line.goods, invoiceQuantity, countedQuantity: line.countedQuantity };
+    const counted = {
+      goods: line.goods,
+      invoiceQuantity,
+      countedQuantity: line.countedQuantity,
+      extra: line.extra === '' ? null : line.extra,
+    };
     if (extraPiecesOf(counted) > 0 && line.extra === '') issue('extra', 'receive.extra.required');
     if ((line.damageQuantity === null) !== (line.damageDescription.trim() === '')) {
       issue('damageDescription', 'receive.damage.both');
@@ -419,8 +424,9 @@ function LineForm({
               invoiceQuantity: entered.goods === 'on-invoice' ? (entered.invoiceQuantity ?? 0) : 0,
               countedQuantity: entered.countedQuantity,
               extra: hasExtra && entered.extra !== '' ? entered.extra : null,
+              // Damage on any piece received, whatever the goods (goods-in 4.4, 4.9; RR-571).
               damage:
-                entered.goods === 'on-invoice' && entered.damageQuantity !== null
+                entered.damageQuantity !== null
                   ? { quantity: entered.damageQuantity, description: entered.damageDescription, photo }
                   : null,
               batch:
@@ -634,51 +640,45 @@ function LineForm({
             </FormField>
           </>
         )}
-        {goods === 'on-invoice' && (
-          <>
-            <FormField
-              id={field('damage')}
-              label="receive.damage-quantity"
-              error={errors.damageQuantity}
-              message={errors.damageQuantity === undefined ? undefined : 'receive.damage.too-many'}
-              help="receive.damage-quantity.help"
-            >
-              <input
-                id={field('damage')}
-                inputMode="numeric"
-                className={inputClass}
-                {...describedBy(field('damage'), { invalid: errors.damageQuantity !== undefined, help: true })}
-                {...form.register('damageQuantity')}
-              />
-            </FormField>
-            <FormField
-              id={field('damage-description')}
-              label="receive.damage-description"
-              error={errors.damageDescription}
-              message={errors.damageDescription === undefined ? undefined : 'receive.damage.both'}
-            >
-              <input
-                id={field('damage-description')}
-                maxLength={DAMAGE_CAPS.text}
-                className={inputClass}
-                {...describedBy(field('damage-description'), {
-                  invalid: errors.damageDescription !== undefined,
-                  help: false,
-                })}
-                {...form.register('damageDescription')}
-              />
-            </FormField>
-          </>
-        )}
+        <FormField
+          id={field('damage')}
+          label="receive.damage-quantity"
+          error={errors.damageQuantity}
+          message={errors.damageQuantity === undefined ? undefined : 'receive.damage.too-many'}
+          help="receive.damage-quantity.help"
+        >
+          <input
+            id={field('damage')}
+            inputMode="numeric"
+            className={inputClass}
+            {...describedBy(field('damage'), { invalid: errors.damageQuantity !== undefined, help: true })}
+            {...form.register('damageQuantity')}
+          />
+        </FormField>
+        <FormField
+          id={field('damage-description')}
+          label="receive.damage-description"
+          error={errors.damageDescription}
+          message={errors.damageDescription === undefined ? undefined : 'receive.damage.both'}
+        >
+          <input
+            id={field('damage-description')}
+            maxLength={DAMAGE_CAPS.text}
+            className={inputClass}
+            {...describedBy(field('damage-description'), {
+              invalid: errors.damageDescription !== undefined,
+              help: false,
+            })}
+            {...form.register('damageDescription')}
+          />
+        </FormField>
       </div>
-      {goods === 'on-invoice' && (
-        <EvidencePicker
-          id={field('damage-photo')}
-          label="receive.damage-photo"
-          resetKey={chosen.resetKey}
-          onChange={chosen.choose}
-        />
-      )}
+      <EvidencePicker
+        id={field('damage-photo')}
+        label="receive.damage-photo"
+        resetKey={chosen.resetKey}
+        onChange={chosen.choose}
+      />
       <div className="flex flex-wrap gap-2">
         <Button
           type="submit"

@@ -133,7 +133,7 @@ interface IssuedLine {
 }
 
 /** The condition a line's received goods are counted in (stock-ledger 2.3, 13.16; goods-in 4.4). */
-function conditionOf(line: CurrentLine): Condition {
+function conditionOf(line: CurrentLine): Extract<Condition, 'good' | 'wrong' | 'unidentified'> {
   return line.entry.goods === 'on-invoice' ? 'good' : line.entry.goods;
 }
 
@@ -280,7 +280,16 @@ export async function issueGrn(
     const damage = each.line.entry.damage;
     if (damage === null) continue;
     holdItems.push({ issued: each, kind: 'damage', index: items.length });
-    items.push(dependencies.documents.countDamageHold(each.id, at, goodsOf(each, damage.quantity), damage.description));
+    // On the goods in the condition the count receives them in, held or not (stock-ledger 13.17; RR-571).
+    items.push(
+      dependencies.documents.countDamageHold(
+        each.id,
+        at,
+        goodsOf(each, damage.quantity),
+        damage.description,
+        conditionOf(each.line),
+      ),
+    );
   }
   const grnId = uuidv7();
   let holdIds: readonly string[] = [];
@@ -371,6 +380,7 @@ export async function issueGrn(
             grnLineId: each.issued.id,
             receiptOriginId: each.issued.originId,
             skuId: each.issued.line.entry.skuId,
+            condition: conditionOf(each.issued.line),
             ...holdOf(each.index),
             quantity: damage.quantity,
             description: damage.description,

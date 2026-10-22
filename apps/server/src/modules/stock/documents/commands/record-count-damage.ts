@@ -2,6 +2,7 @@ import { uuidv7 } from '@apparel-os/domain';
 import type { EvidenceFile } from '@apparel-os/schemas';
 import type { TransactionContext } from '../../../../kernel/index.js';
 import type { ItemValue } from '../../ledger/index.js';
+import type { ReportedCondition } from '../domain/goods.js';
 import { refusalOf, today, type Actor, type Outcome } from './common.js';
 import { recordReport, type RecordDependencies } from './record.js';
 
@@ -15,6 +16,8 @@ export interface CountDamageWritten {
   readonly grnLineId: string;
   readonly receiptOriginId: string;
   readonly skuId: string | null;
+  /** The condition the count received the goods in, which their damage hold fell on (goods-in 4.9; RR-571). */
+  readonly condition: ReportedCondition;
   readonly holdId: string;
   /** The hold's value under the ledger's locks: the goods' cost, Unknown before their PT (13.15; DM-8). */
   readonly value: ItemValue;
@@ -71,6 +74,7 @@ export async function recordCountDamage(
         goods: { kind: 'grn-line', grnLineId: line.grnLineId },
         skuId: line.skuId,
         receiptOriginId: line.receiptOriginId,
+        goodsCondition: line.condition,
         quantity: line.quantity,
         description: line.description,
         photos: line.photo === null ? [] : [line.photo],
