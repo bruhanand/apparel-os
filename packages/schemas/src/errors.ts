@@ -575,6 +575,13 @@ export const inboxCodes = declareCodes({
  * - `files-imports.publish-request-not-found`, `files-imports.publish-request-answered`,
  *   `files-imports.publish-request-superseded`: a queued publish's job finds its request gone, answered already, or
  *   followed by a later one.
+ * A batch about one record (imports-and-opening-data 13.1, 13.2; S2-F04-T02), such as the GRN a PT file is for:
+ *
+ * - `files-imports.subject-required`: the target's handler imports a file for one record, and the request names
+ *   none; `files-imports.subject-not-taken`: it names one for a handler that takes none.
+ * - `files-imports.subject-not-found`: no record of the handler's type the person may see has that identifier.
+ * - `files-imports.subject-refused`: the handler refuses a file for the record now; `missing` names its reason as a
+ *   code (`import-subject`) and what it names, as `files-imports.document-refused` does.
  */
 export const filesImportsCodes = declareCodes({
   'files-imports.type-not-allowed': 'refused',
@@ -647,6 +654,11 @@ export const filesImportsCodes = declareCodes({
   'files-imports.publish-request-not-found': 'not-found',
   'files-imports.publish-request-answered': 'refused',
   'files-imports.publish-request-superseded': 'refused',
+  // A batch about one record (imports-and-opening-data 13.1, 13.2 "As built"; S2-F04-T02).
+  'files-imports.subject-required': 'refused',
+  'files-imports.subject-not-taken': 'refused',
+  'files-imports.subject-not-found': 'not-found',
+  'files-imports.subject-refused': 'refused',
 });
 
 /**
@@ -1193,6 +1205,34 @@ export const receivingCodes = declareCodes({
   'receiving.held-line-decided': 'refused',
   'receiving.not-unidentified': 'refused',
   'receiving.product-not-named': 'refused',
+  // The GRN's "PT attached" mark (goods-in 5.8; S2-F04-T02).
+  'receiving.pt-attached': 'refused',
+  'receiving.pt-not-attached': 'refused',
+});
+
+/**
+ * `merchandise` · PT's codes (goods-in 5, 10.3; S2-F04-T02). A PT file for a GRN is refused, before a batch starts, by
+ * the handler's reasons that `files-imports.subject-refused` names, and, at its submit, by those that
+ * `files-imports.document-refused` names (imports-and-opening-data 13.1):
+ *
+ * - `merchandise.pt-held-lines-open`: a held line or a damage report on the GRN's lines waits for its decision
+ *   (goods-in 5.1, 4.6; DEC-137); `missing` names each.
+ * - `merchandise.pt-already-attached`: the GRN has a PT revision waiting for approval, or approved and not reversed
+ *   (goods-in 5.1; one PT per GRN); `missing` names it.
+ * - `merchandise.pt-file-refused`: at submit, the file no longer passes the checks of 5.3 and 5.4 against the GRN as it
+ *   stands; `missing` names the first problem's code.
+ * - `merchandise.pt-not-a-draft`: the revision is withdrawn, decided, or not the PT's newest (goods-in 5.7).
+ *
+ * The problems of a file are the issues of its validation report, by row and column (goods-in 5.3, 5.4, 5.6): a value
+ * off its list, a brand not the GRN's, a barcode not digits, an HSN not of six or eight digits, a quantity not whole
+ * pieces above zero, an amount not above zero, P RATE above MRP, NAG not QTY, MARGIN that disagrees, a style and size
+ * whose quantity differs from the GRN's good pieces, one the GRN lacks and one the file misses.
+ */
+export const ptCodes = declareCodes({
+  'merchandise.pt-held-lines-open': 'refused',
+  'merchandise.pt-already-attached': 'refused',
+  'merchandise.pt-file-refused': 'refused',
+  'merchandise.pt-not-a-draft': 'refused',
 });
 
 /**
@@ -1242,6 +1282,7 @@ export const errorCodes = {
   ...eboImportsCodes,
   ...bookingCodes,
   ...receivingCodes,
+  ...ptCodes,
   ...stockDocumentsCodes,
 } as const;
 export type ErrorCode = keyof typeof errorCodes;

@@ -2177,9 +2177,16 @@
     {
       "table": "receiving.grn",
       "class": "scoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "goods-in 4.5, 4.7, 5.1, 10.3, 10.4; code-house-rules 6.2, 7.1, 8.2"
+    },
+    {
+      "table": "receiving.grn_pt_mark",
+      "class": "scoped",
       "marks": ["append-only"],
       "runtime": ["INSERT", "SELECT"],
-      "design": "goods-in 4.5, 10.3, 10.4; code-house-rules 6.2, 7.1"
+      "design": "goods-in 4.7, 5.1, 5.6, 5.8, 10.3; DEC-137; code-house-rules 6.2, 7.1"
     },
     {
       "table": "receiving.grn_line",
@@ -2215,6 +2222,48 @@
       "marks": ["append-only"],
       "runtime": ["INSERT", "SELECT"],
       "design": "goods-in 4.6, 4.9; PRD-REC-013, POL-17.02; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "merchandise.pt",
+      "class": "scoped",
+      "marks": ["append-only", "locked"],
+      "runtime": ["INSERT", "SELECT", "UPDATE (id)"],
+      "design": "goods-in 5.1, 5.6, 5.7, 5.8, 10.1, 10.3; code-house-rules 6.2, 7.1, 8.2"
+    },
+    {
+      "table": "merchandise.pt_revision",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 5.6, 5.7, 5.8; PRD-REC-017, PRD-REC-018; code-house-rules 6.2, 7.1, 7.2"
+    },
+    {
+      "table": "merchandise.pt_revision_withdrawal",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 5.7, 5.8; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "merchandise.pt_coverage",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 5.4, 5.7, 5.8; PRD-REC-016; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "merchandise.pt_proposed_sku",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 5.5, 5.7, 5.8; PRD-MER-013; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "merchandise.pt_row",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 5.3, 5.5, 5.7, 5.8; PRD-IMP-006, PRD-PTW-011; code-house-rules 3.3, 6.2, 7.1"
     },
     {
       "table": "merchandise.marked_attribute",

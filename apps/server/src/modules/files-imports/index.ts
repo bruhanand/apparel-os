@@ -9,6 +9,8 @@ export {
 export type { QueuedAnswer, QueuedPublisher, QueuedPublishingInterface } from './commands/publish-queued.js';
 export { OPENING_PUBLISHING } from './domain/opening-gate.js';
 export type { FilesImportsInterface } from './files-imports.js';
+// A batch as the module whose handler fills it reads it (13.2 "As built" with S2-F04-T02).
+export type { HandlerBatch } from './queries/handler-batch.js';
 export { decisionEvidence, policyEvidence } from './files-imports.js';
 export { ATTACHED_RECORD_READERS, AttachedRecordReaders } from './contracts/record-readers.js';
 export type { AttachedRecordReader } from './contracts/record-readers.js';
@@ -49,6 +51,8 @@ export type {
   ImportReview,
   ImportRevisions,
   ImportSource,
+  ImportSubject,
+  SubjectRead,
 } from './contracts/import-handlers.js';
 export type { StagedValue, SuppliedOrigin } from './domain/staging.js';
 export type { EffectiveValue } from './domain/report.js';

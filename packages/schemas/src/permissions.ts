@@ -469,6 +469,16 @@ const receivingRecordTypes = [
  * approved (approve) under its own type, so proposing and approving are held apart from deciding (PRD-STK-017).
  * **Design choice**; who holds them is the product owner's to name (V-01).
  */
+/**
+ * `merchandise` · PT (goods-in 5, 6, 10.1, section 11; module-map section 5; S2-F04-T02). A PT belongs to its GRN's
+ * place, the legal entity of the GRN's unit's mapping and the GRN's brand, so it carries every scope fact, and an
+ * assignment's place scope names who prepares PTs for a GRN's Site and business unit (goods-in 5.1; PRD-REC-014): the
+ * uploader may work at another Site, the goods staying at the GRN's. Create uploads and submits a PT file; edit
+ * withdraws a draft; view reads a GRN's PT; approve decides it, within the approver's limit on its total proposed
+ * acquisition cost (PRD-ACS-015; S2-F06-T01). **Design choice**; who holds them is the product owner's to name (V-01).
+ */
+const ptRecordTypes = [declare('merchandise.pt', ['view', 'create', 'edit', 'approve'], ALL)] as const;
+
 const stockDocumentsRecordTypes = [
   declare('stock.damage_report', ['view', 'create', 'approve'], ALL),
   declare('stock.damage_reversal', ['view', 'create', 'approve'], ALL),
@@ -494,6 +504,7 @@ export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...eboImportsRecordTypes,
   ...bookingRecordTypes,
   ...receivingRecordTypes,
+  ...ptRecordTypes,
   ...stockDocumentsRecordTypes,
 ];
 

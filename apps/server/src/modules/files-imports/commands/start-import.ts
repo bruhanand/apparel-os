@@ -15,7 +15,7 @@ import {
   type RequestContent,
   type TransactionContext,
 } from '../../../kernel/index.js';
-import type { ImportHandler } from '../contracts/import-handlers.js';
+import type { ImportHandler, ImportNeed, ImportPlace } from '../contracts/import-handlers.js';
 import { openReceiptText } from '../domain/receipt-seal.js';
 import { attach } from './attach.js';
 import {
@@ -124,6 +124,106 @@ interface Planned {
   readonly mapping: ReturnType<typeof mappingFieldsSchema.parse>;
   readonly layoutId: string;
   readonly rules: readonly RuleInForce[];
+  /** The batch's scope facts: the person's, or those of the record the batch is about (13.1). */
+  readonly facts: ImportPlace;
+  readonly subject?: { readonly recordType: string; readonly recordId: string };
+}
+
+/**
+ * The authority Start an import needs (13.1; access-and-approvals 7.1 step 3): create on the batch with its scope
+ * facts; and, for a batch about one record (S2-F04-T02), the record read as the person may see it, the batch taking its
+ * place from the record, with the handler's own permission on it and any refusal of a file for it now.
+ */
+interface Authority {
+  readonly facts: ImportPlace;
+  readonly need: { readonly action: 'create'; readonly recordType: string; readonly facts: ImportPlace };
+  readonly subject?: {
+    readonly recordType: string;
+    readonly recordId: string;
+    readonly need: ImportNeed;
+    readonly refusal?: CommandRefusal;
+  };
+}
+
+async function authorityOf(
+  deps: ImportDependencies,
+  context: TransactionContext,
+  body: StartImportRequest,
+): Promise<Authority | CommandRefusal> {
+  const handler = deps.handlers.for(body.target, body.kind);
+  const batchNeed = (facts: ImportPlace) => ({ action: 'create' as const, recordType: IMPORT_BATCH_TYPE, facts });
+  if (handler?.subject === undefined) {
+    if (handler !== undefined && body.subject !== undefined) {
+      return { kind: 'refused', code: 'files-imports.subject-not-taken', missing: [] };
+    }
+    const facts = scopeFactsOf(body.scope ?? {});
+    return { facts, need: batchNeed(facts) };
+  }
+  const { recordType } = handler.subject;
+  if (body.subject === undefined) {
+    return { kind: 'refused', code: 'files-imports.subject-required', missing: [{ kind: 'import-subject', recordType }] };
+  }
+  const read = await handler.subject.read(context, body.subject.recordId);
+  if (read === undefined) {
+    return {
+      kind: 'not-found',
+      code: 'files-imports.subject-not-found',
+      missing: [{ kind: 'record', recordType, recordId: body.subject.recordId }],
+    };
+  }
+  return {
+    facts: read.place,
+    need: batchNeed(read.place),
+    subject: {
+      recordType,
+      recordId: body.subject.recordId,
+      need: read.need,
+      ...(read.refusal === undefined ? {} : { refusal: read.refusal }),
+    },
+  };
+}
+
+/**
+ * Authorises the authority Start an import needs, first the batch's and then the handler's own permission on the
+ * record; answers the assignments that grant them, or the refusal: not authorised, then the handler's refusal of a file
+ * for the record, named as `files-imports.subject-refused` (S2-F04-T02).
+ */
+async function authorised(
+  deps: ImportDependencies,
+  context: TransactionContext,
+  input: StartImportInput,
+): Promise<
+  | {
+      readonly kind: 'allowed';
+      readonly authority: Authority;
+      readonly roleAssignmentId: string;
+      readonly further: { readonly roleAssignmentId: string; readonly need: ImportNeed }[];
+    }
+  | { readonly kind: 'refused'; readonly refusal: CommandRefusal }
+> {
+  const authority = await authorityOf(deps, context, input.body);
+  if ('code' in authority) return { kind: 'refused', refusal: authority };
+  const actorId = input.actor.userId;
+  const batch = await deps.access.authorise(context, { actorId, ...authority.need });
+  if (batch.kind === 'refused') return { kind: 'refused', refusal: { ...batch.refusal, kind: 'not-authorised' } };
+  const further: { roleAssignmentId: string; need: ImportNeed }[] = [];
+  if (authority.subject !== undefined) {
+    const own = await deps.access.authorise(context, { actorId, ...authority.subject.need });
+    if (own.kind === 'refused') return { kind: 'refused', refusal: { ...own.refusal, kind: 'not-authorised' } };
+    further.push({ roleAssignmentId: own.roleAssignmentId, need: authority.subject.need });
+    const { refusal } = authority.subject;
+    if (refusal !== undefined) {
+      return {
+        kind: 'refused',
+        refusal: {
+          kind: 'refused',
+          code: 'files-imports.subject-refused',
+          missing: [{ kind: 'import-subject', reason: refusal.code }, ...refusal.missing],
+        },
+      };
+    }
+  }
+  return { kind: 'allowed', authority, roleAssignmentId: batch.roleAssignmentId, further };
 }
 
 /** The read before any outside call: what the request names, as this person may use it. */
@@ -138,15 +238,11 @@ async function plan(deps: ImportDependencies, input: StartImportInput): Promise<
     },
     async (context) => {
       // Authorise first, before any other read or slow work (code-house-rules 8.1; module-map 6.1): a person who may
-      // not start a batch at this place learns nothing of the file, its layout or what is published.
-      const authorised = await deps.access.authorise(context, { actorId: input.actor.userId, ...needOf(input) });
-      if (authorised.kind === 'refused') {
-        throw new ApiRefusal({
-          kind: 'not-authorised',
-          code: authorised.refusal.code,
-          missing: [...authorised.refusal.missing],
-        });
-      }
+      // not start a batch at this place learns nothing of the file, its layout or what is published. A batch about one
+      // record reads the record first, as the person may see it, since it gives the batch its place (S2-F04-T02).
+      const allowed = await authorised(deps, context, input);
+      if (allowed.kind === 'refused') refuse(allowed.refusal);
+      const { authority } = allowed;
       const file = await handedInFile(context, input.actor.userId, body.storedFileId, body.fileReceiptId);
       const [versions] = await context.tx
         .select({
@@ -182,7 +278,7 @@ async function plan(deps: ImportDependencies, input: StartImportInput): Promise<
       }
       // A new opening batch for a unit whose cutover is complete is refused: a later correction is a live correction
       // in the owning module (10.1, 10.5; PRD-LIF-011; S1-F13-T03).
-      const cutover = await cutoverRefusal(context, handler, body.kind, scopeFactsOf(body.scope ?? {}));
+      const cutover = await cutoverRefusal(context, handler, body.kind, authority.facts);
       if (cutover !== undefined) refuse(cutover);
       const repeated = await repeatRefusal(deps, context, input, handler, versions.layoutId);
       if (repeated !== undefined) refuse(repeated);
@@ -205,14 +301,13 @@ async function plan(deps: ImportDependencies, input: StartImportInput): Promise<
         classes: classesHeld(versions.layoutState, layout),
         layout,
         mapping: parsedOrDefect(mappingFieldsSchema, versions.fields, 'mapping version'),
+        facts: authority.facts,
+        ...(authority.subject === undefined
+          ? {}
+          : { subject: { recordType: authority.subject.recordType, recordId: authority.subject.recordId } }),
       };
     },
   );
-}
-
-/** The permission Start an import needs: create on the batch, with the scope facts the person names (13.1). */
-function needOf(input: StartImportInput) {
-  return { action: 'create' as const, recordType: IMPORT_BATCH_TYPE, facts: input.body.scope ?? {} };
 }
 
 /**
@@ -357,11 +452,18 @@ export async function storedGrid(
 async function staged(deps: ImportDependencies, input: StartImportInput, planned: Planned): Promise<StagedFile> {
   const grid = await storedGrid(deps, input.actor.organisation.organisationCode, planned);
   const source = input.body.source ?? {};
-  const result = stage(grid, planned.layout, planned.mapping, {
-    target: input.body.target,
-    rules: planned.rules,
-    scopes: { layoutId: planned.layoutId, supplierId: source.supplierId, brandId: source.brandId },
-  });
+  const result = stage(
+    grid,
+    planned.layout,
+    planned.mapping,
+    {
+      target: input.body.target,
+      rules: planned.rules,
+      scopes: { layoutId: planned.layoutId, supplierId: source.supplierId, brandId: source.brandId },
+    },
+    // A batch about one record stages every data row into one document (S2-F04-T02).
+    { oneDocument: planned.subject !== undefined },
+  );
   if (result.kind === 'refused') refuse({ kind: 'refused', code: result.code, missing: [...result.missing] });
   return { documents: result.documents, others: result.others, sheets: result.sheets, notes: grid.notes };
 }
@@ -372,14 +474,13 @@ export async function startImport(
 ): Promise<IdempotentAnswer<JsonValue>> {
   const planned = await plan(deps, input);
   const file = await staged(deps, input, planned);
-  const need = needOf(input);
+  // A replay is answered while the same Authorise passes; a record no longer found stays not found (12.3, 12.4).
   const authoriseReplay: ReplayAuthorisation = async (context) => {
-    const authorised = await deps.access.authorise(context, { actorId: input.actor.userId, ...need });
-    if (authorised.kind === 'allowed') return { kind: 'allowed' };
-    return {
-      kind: 'refused',
-      refusal: { kind: 'not-authorised', code: authorised.refusal.code, missing: authorised.refusal.missing },
-    };
+    const allowed = await authorised(deps, context, input);
+    if (allowed.kind === 'allowed') return { kind: 'allowed' };
+    const { refusal } = allowed;
+    if (refusal.kind !== 'not-authorised' && refusal.kind !== 'not-found') return { kind: 'allowed' };
+    return { kind: 'refused', refusal: { ...refusal, kind: refusal.kind } };
   };
   return deps.helper.run(
     {
@@ -393,22 +494,23 @@ export async function startImport(
       content: input.content,
       authoriseReplay,
       work: async (context): Promise<CommandOutcome<JsonValue>> => {
-        // Authorise with the batch's scope facts, then hold it at step 0 (access-and-approvals 7.1 steps 3 and 4).
-        const authorised = await deps.access.authorise(context, { actorId: input.actor.userId, ...need });
-        if (authorised.kind === 'refused') {
-          return { kind: 'refusal', refusal: authorised.refusal, causedBySecret: false };
-        }
+        // Authorise with the batch's scope facts, and the handler's own permission on the record a batch is about,
+        // then hold them at step 0 (access-and-approvals 7.1 steps 3 and 4).
+        const allowed = await authorised(deps, context, input);
+        if (allowed.kind === 'refused') return { kind: 'refusal', refusal: allowed.refusal, causedBySecret: false };
         const held = await deps.access.holdAuthority(
           context,
           { kind: 'user', id: input.actor.userId },
-          authorised.roleAssignmentId,
-          need,
+          allowed.roleAssignmentId,
+          allowed.authority.need,
+          [],
+          allowed.further,
         );
         if (held !== undefined) return { kind: 'refusal', refusal: held, causedBySecret: false };
         const rechecked = await underLocks(context, input, planned);
         if ('code' in rechecked) return { kind: 'refusal', refusal: rechecked, causedBySecret: false };
-        const now = { ...planned, classes: rechecked.classes };
-        return record(deps, context, input, now, file, authorised.roleAssignmentId);
+        const now = { ...planned, facts: allowed.authority.facts, classes: rechecked.classes };
+        return record(deps, context, input, now, file, allowed.roleAssignmentId);
       },
     },
   );
@@ -522,7 +624,7 @@ async function record(
       causedBySecret: false,
     };
   }
-  const scope = body.scope ?? {};
+  const scope = planned.facts;
   const columns = scopeColumnsOf({
     legalEntityId: scope.legalEntityId ?? null,
     siteId: scope.siteId ?? null,
@@ -549,6 +651,8 @@ async function record(
     sheets: [...file.sheets],
     sourceSupplierId: body.source?.supplierId ?? null,
     sourceBrandId: body.source?.brandId ?? null,
+    subjectRecordType: planned.subject?.recordType ?? null,
+    subjectRecordId: planned.subject?.recordId ?? null,
   });
   const rows: (typeof stagedRow.$inferInsert)[] = [];
   const asRow = (row: StagedRowDraft, documentId: string | null) => ({
@@ -568,14 +672,17 @@ async function record(
   for (const document of file.documents) {
     const documentId = uuidv7();
     // Its source identity (7.1): the target, the scope key its handler names and the reference.
+    // A batch about one record holds one document, whose reference is the batch's own code, so each upload is a
+    // source identity of its own (7.1; S2-F04-T02).
+    const reference = planned.subject === undefined ? document.reference : allocated.value.formattedText;
     await context.tx.insert(importDocument).values({
       id: documentId,
       batchId,
-      reference: document.reference,
+      reference,
       state: 'Staged',
       excluded: false,
       target: body.target,
-      scopeKey: handler.sourceScope({ reference: document.reference, rows: [], place: scopeFactsOf(body.scope ?? {}) }),
+      scopeKey: handler.sourceScope({ reference, rows: [], place: scope }),
       ...columns,
     });
     for (const row of document.rows) rows.push(asRow(row, documentId));
@@ -586,7 +693,7 @@ async function record(
   for (let at = 0; at < rows.length; at += SET) await context.tx.insert(stagedRow).values(rows.slice(at, at + SET));
   // The file is read through its batch: served only to a reader whose assignment covers the batch's scope and every
   // class the file is held to carry (section 11).
-  const facts = scopeFactsOf(scope);
+  const facts = scopeFactsOf({ ...scope });
   const attached = await attach(context, deps.audit, {
     storedFileId: body.storedFileId,
     fileReceiptId: body.fileReceiptId,

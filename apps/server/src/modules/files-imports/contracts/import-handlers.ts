@@ -68,6 +68,31 @@ export interface HandlerDocument {
   readonly kind: ImportKind;
   readonly rows: readonly HandlerRow[];
   readonly place: ImportPlace;
+  /** The record the batch is about, where its handler imports a file for one record (S2-F04-T02). */
+  readonly subject?: { readonly recordType: string; readonly recordId: string };
+}
+
+/**
+ * The record a batch is about, as its handler reads it for the person starting the batch (13.1, 13.2 "As built" with
+ * S2-F04-T02; goods-in 5.1, 5.6): the place the batch is scoped to, the handler's own permission the person needs on the
+ * record, and, where the handler refuses a file for it now, the refusal, which Start an import answers once the person
+ * is authorised. Undefined when no record of the handler's type the person may see has the identifier.
+ */
+export interface SubjectRead {
+  readonly place: ImportPlace;
+  readonly need: ImportNeed;
+  readonly refusal?: CommandRefusal;
+}
+
+/**
+ * A handler that imports a file for one record (S2-F04-T02), such as the GRN a PT file is for: Start an import requires
+ * the record, takes the batch's place from it, and stages every data row into one document whose reference is the
+ * batch's own code, so each upload is a source identity of its own (7.1); the handler's own rules say how many may
+ * stand for the record.
+ */
+export interface ImportSubject {
+  readonly recordType: string;
+  read(context: TransactionContext, recordId: string): Promise<SubjectRead | undefined>;
 }
 
 /**
@@ -124,6 +149,15 @@ export interface ImportSource {
   readonly documentId: string;
   readonly stagedRowIds: readonly string[];
   readonly firstRowNumber: number;
+  /** The stored file the batch read and the layout and mapping versions it read it with (6.1, 6.2; S2-F04-T02). */
+  readonly storedFileId: string;
+  readonly layoutVersionId: string;
+  readonly mappingVersionId: string;
+  /**
+   * Every user who recorded a change in the batch version: who started it, entered values, submitted and publishes it
+   * (access-and-approvals 9.1), for a handler whose records ask an approval of their own (S2-F04-T02).
+   */
+  readonly preparers: readonly string[];
 }
 
 /** The permission a document's publish needs: the action, the record type, and its facts where a place scopes it. */
@@ -177,9 +211,17 @@ export interface ImportHandler {
   readonly kinds: readonly ImportKind[];
   /**
    * The effects it may have (4.2): master records; reference records, for a historical-reference handler, which never
-   * moves stock or money (PRD-LIF-014, PRD-IMP-010); or stock, for an opening-balance handler (10.2).
+   * moves stock or money (PRD-LIF-014, PRD-IMP-010); or stock, for an opening-balance handler (10.2); or none, for a
+   * transaction handler whose documents are drafts another person approves, such as a draft PT (4.1; S2-F04-T02).
    */
-  readonly effects: 'master-records' | 'reference-records' | 'stock' | 'money';
+  readonly effects: 'master-records' | 'reference-records' | 'stock' | 'money' | 'none';
+  /** The record its batches are about, for a handler that imports a file for one record (S2-F04-T02). */
+  readonly subject?: ImportSubject;
+  /**
+   * Whether its preview runs where a required field is Unknown, checking everything else, so every problem of a file
+   * is listed at once (PRD-IMP-007; goods-in 5.6; S2-F04-T02). Otherwise the preview waits for every required field.
+   */
+  readonly checksUnknown?: boolean;
   /**
    * The opening kind an opening-balance handler fills (10.1, 10.2, 10.4): opening stock, whose approved, unpublished
    * batch is the unit's opening plan for the stock-plan readiness check (module-map 4.16; DEC-117); or, each its own

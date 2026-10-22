@@ -195,6 +195,25 @@ export const heldLineVersion = receiving.table('held_line_version', {
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });
 
+/** Why the GRN's "PT attached" mark was set or cleared (goods-in 5.8; migration 0103). */
+export type PtMarkReason = 'pt-submitted' | 'pt-withdrawn' | 'pt-rejected' | 'pt-reversed';
+
+/** Each set and clear of a GRN's "PT attached" mark, numbered per GRN; the newest is the mark now (goods-in 5.8). */
+export const grnPtMark = receiving.table('grn_pt_mark', {
+  id: uuid('id').primaryKey(),
+  grnId: uuid('grn_id').notNull(),
+  changeNumber: integer('change_number').notNull(),
+  ...facts(),
+  change: text('change').$type<'set' | 'cleared'>().notNull(),
+  ptRevisionId: uuid('pt_revision_id').notNull(),
+  reason: text('reason').$type<PtMarkReason>().notNull(),
+  changedByUserId: uuid('changed_by_user_id').notNull(),
+  roleAssignmentId: uuid('role_assignment_id').notNull(),
+  occurredAt: at('occurred_at').notNull(),
+  businessDate: day('business_date').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
 /** A held line's decision: taken in or left held, once (goods-in 4.6). */
 export const heldLineDecision = receiving.table('held_line_decision', {
   id: uuid('id').primaryKey(),

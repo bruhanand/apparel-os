@@ -235,6 +235,9 @@ export async function readBatch(
               state: 'queued' as const,
             },
           }),
+      ...(batch.subjectRecordType === null || batch.subjectRecordId === null
+        ? {}
+        : { subject: { recordType: batch.subjectRecordType, recordId: batch.subjectRecordId } }),
     },
     documents: documentViews,
     ignoredRows: rows

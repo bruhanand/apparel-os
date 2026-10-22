@@ -29,6 +29,12 @@ import { MARK_LABEL } from './marked';
 const CHANGE: Readonly<Record<AttributeMark, MessageId>> = {
   season: 'marked.change.season',
   size: 'marked.change.size',
+  colour: 'marked.change.colour',
+  gender: 'marked.change.gender',
+  type: 'marked.change.type',
+  item: 'marked.change.item',
+  fit: 'marked.change.fit',
+  'gst-rate': 'marked.change.gst-rate',
 };
 
 const READS = ['listMarkedAttributes', 'listMarkedAttributeVersions', 'listMyWork'] as const;

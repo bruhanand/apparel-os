@@ -13,6 +13,12 @@ import { useGranted } from '../setup/parts';
 export const MARK_LABEL: Readonly<Record<AttributeMark, MessageId>> = {
   season: 'marked.mark.season',
   size: 'marked.mark.size',
+  colour: 'marked.mark.colour',
+  gender: 'marked.mark.gender',
+  type: 'marked.mark.type',
+  item: 'marked.mark.item',
+  fit: 'marked.mark.fit',
+  'gst-rate': 'marked.mark.gst-rate',
 };
 
 export type MarkedAttributeRead =

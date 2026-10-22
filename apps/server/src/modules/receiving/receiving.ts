@@ -11,7 +11,7 @@ import type {
   InvoiceDraft,
   PhotosDraft,
 } from '@apparel-os/schemas';
-import type { TransactionContext } from '../../kernel/index.js';
+import type { LockTarget, TransactionContext } from '../../kernel/index.js';
 import type { AccessInterface, RecordFacts } from '../access/index.js';
 import type { AuditInterface } from '../audit/index.js';
 import type { ConfigurationInterface } from '../configuration/index.js';
@@ -26,6 +26,8 @@ import { arrivalRow, entriesOf, type Actor } from './commands/common.js';
 import { removeCountLine, saveCountLine } from './commands/count.js';
 import { nameHeldLineProduct } from './commands/name-held-line-product.js';
 import { issueGrn } from './commands/issue.js';
+import { clearPtMark, ptMarkLock, setPtMark, type PtMarkChange } from './commands/pt-mark.js';
+import { grnForPt, ptMarkOf, type GrnForPt, type PtMark } from './queries/pt-mark.js';
 import { currentLines } from './domain/lines.js';
 import { arrivalFacts, arrivalView, inboxOf, peopleOf } from './queries/arrivals.js';
 import {
@@ -182,6 +184,44 @@ export class Receiving {
    */
   ptBasis(context: TransactionContext, grnId: string): Promise<PtBasis | undefined> {
     return ptBasisOf(context, grnId, (lineIds) => this.dependencies.documents.damageOfGrnLines(context, lineIds));
+  }
+
+  /** The GRN as `merchandise` · PT names it, with its number and scope facts, or undefined (goods-in 5.7). */
+  grnForPt(context: TransactionContext, grnId: string): Promise<GrnForPt | undefined> {
+    return grnForPt(context, grnId);
+  }
+
+  /**
+   * The GRN's row as a lock target, exclusively at step 1 (code-house-rules 8.2): what a caller of setPtMark or
+   * clearPtMark locks with its own rows first, and what a recount locks (goods-in 4.7, 5.8).
+   */
+  ptMarkLock(grnId: string): LockTarget {
+    return ptMarkLock(grnId);
+  }
+
+  /** The GRN's "PT attached" mark now, as the reader may see it (goods-in 5.8). */
+  ptMark(context: TransactionContext, grnId: string): Promise<PtMark> {
+    return ptMarkOf(context, grnId);
+  }
+
+  /**
+   * Sets the GRN's "PT attached" mark for a PT revision submitted for it, under the GRN's lock the caller took; refused
+   * while it is set (goods-in 5.1, 5.8; DEC-137).
+   */
+  setPtMark(context: TransactionContext, actor: Actor, change: PtMarkChange) {
+    return setPtMark(context, this.dependencies.audit, actor, change);
+  }
+
+  /**
+   * Clears the mark the PT revision set: its draft withdrawn, or, with S2-F06-T01 and S2-F09-T01, the PT rejected or
+   * reversed (goods-in 5.8).
+   */
+  clearPtMark(
+    context: TransactionContext,
+    actor: Actor,
+    change: PtMarkChange & { readonly reason: 'pt-withdrawn' | 'pt-rejected' | 'pt-reversed' },
+  ) {
+    return clearPtMark(context, this.dependencies.audit, actor, change);
   }
 
   /** The receipt problems read model of the stage 2 report (goods-in 9.3), as the reader may see it. */

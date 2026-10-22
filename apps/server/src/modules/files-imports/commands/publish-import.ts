@@ -496,6 +496,10 @@ export async function publishOne(
     documentId,
     stagedRowIds: document.rows.map((row) => row.stagedRowId),
     firstRowNumber: document.rows[0]?.rowNumber ?? 1,
+    storedFileId: batch.storedFileId,
+    layoutVersionId: batch.layoutVersionId,
+    mappingVersionId: batch.mappingVersionId,
+    preparers: await batchPreparers(context, batch, publishing.publisher.userId),
   });
   if (published.kind === 'refused') {
     // Everything the document's run wrote rolls back; the batch's run keeps its outcome (7.4; PRD-IMP-012).

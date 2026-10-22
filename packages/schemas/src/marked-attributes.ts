@@ -14,8 +14,11 @@ export const MARKED_ATTRIBUTE_TYPE = 'merchandise.marked_attribute';
 /** The action type of a marking's approval, by a different person from its preparer (POL-02.07). */
 export const MARKED_ATTRIBUTE_CHANGE = 'merchandise.marked_attribute.change';
 
-/** What an attribute is marked as: the season or the size list. */
-export const attributeMarkSchema = z.enum(['season', 'size']);
+/**
+ * What an attribute is marked as: the season or the size list; and, for the Organisation's PT template, the colours,
+ * genders, types, items, fits and GST rates its values must be on (goods-in 5.2, 5.3; S2-F04-T02).
+ */
+export const attributeMarkSchema = z.enum(['season', 'size', 'colour', 'gender', 'type', 'item', 'fit', 'gst-rate']);
 export type AttributeMark = z.infer<typeof attributeMarkSchema>;
 export const attributeMarks = attributeMarkSchema.options;
 
