@@ -11,7 +11,7 @@ import {
   type BookingStatus,
   type EvidenceFile,
 } from '@apparel-os/schemas';
-import type { TransactionContext } from '../../../kernel/index.js';
+import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
 import {
   bookingAmendment,
   bookingAmendmentLine,
@@ -56,7 +56,7 @@ async function approvedForChange(
   const row = await lockBooking(context, bookingId);
   if (row === undefined) return refused('not-found', 'booking.record-not-found', [bookingItem(bookingId)]);
   const newest = (await changesOf(context, row.id)).at(-1);
-  if (newest === undefined) throw new Error(`A booking has no change: ${row.id}`);
+  if (newest === undefined) throw new CommandDefect(`A booking has no change: ${row.id}`);
   if (newest.id !== versionToken) return refused('conflict', 'kernel.stale-version', [bookingItem(row.id)]);
   const approval = await approvalInForce(context, row.id);
   if (approval === undefined) return refused('refused', 'booking.not-approved', [bookingItem(row.id)]);
@@ -240,7 +240,7 @@ async function propose(
 /** The status of the version in force, which an approved booking always has. */
 async function statusInForce(context: TransactionContext, bookingId: string, date: string): Promise<BookingStatus> {
   const status = await statusOfBooking(context, bookingId, date);
-  if (status === undefined) throw new Error(`An approved booking has no status: ${bookingId}`);
+  if (status === undefined) throw new CommandDefect(`An approved booking has no status: ${bookingId}`);
   return status;
 }
 

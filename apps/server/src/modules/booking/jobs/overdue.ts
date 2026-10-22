@@ -2,6 +2,7 @@ import { paise, uuidv7 } from '@apparel-os/domain';
 import { BOOKING_TYPE, type BookingLineStatus } from '@apparel-os/schemas';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import {
+  CommandDefect,
   defineJobKind,
   LOCK_STEP,
   type JobKindDefinition,
@@ -158,7 +159,7 @@ export async function markOverdue(
   if (series.kind === 'refused') return { marked: 0, raised: 0, refused: series.refusal.code };
   await context.lock(LOCK_STEP.numberSeries, [series.value]);
   const actorId = context.actor.kind === 'actor' ? context.actor.actorId : undefined;
-  if (actorId === undefined) throw new Error('The overdue job ran with no actor');
+  if (actorId === undefined) throw new CommandDefect('The overdue job ran with no actor');
   let marked = 0;
   let raised = 0;
   const notRaised: { bookingId: string; code: string }[] = [];
