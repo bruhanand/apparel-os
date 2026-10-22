@@ -1,6 +1,8 @@
 import {
   ACTIVITY_APPROVAL,
   BOOKING_APPROVAL,
+  BOOKING_CANCELLATION,
+  BOOKING_EXTENSION,
   BOOKING_TYPE,
   OPEN_TO_BUY_APPROVAL,
   OPEN_TO_BUY_BUDGET_TYPE,
@@ -42,6 +44,7 @@ import { missingText } from '../components/UnavailableState';
 import { AttributeName } from '../merchandise/AttributeName';
 import { MARK_LABEL } from '../merchandise/marked';
 import { OpenToBuyFacts, TermsFacts, TotalsView } from '../booking/facts';
+import { StatusView } from '../booking/StatusView';
 import { useBookingNames } from '../booking/names';
 import { ImportFacts } from './ImportFacts';
 import { DamageReportFacts } from '../stock/DamageReport';
@@ -523,6 +526,53 @@ function BookingFacts({ view }: { view: ApprovalRequestView }) {
 }
 
 /**
+ * A cancellation of a booking's undelivered balance, or an extension of its window, for its approval (goods-in 3.5;
+ * S2-F01-T04): the booking's brand, supplier and destination, what it cancels line by line or the dates it gives, and
+ * the version in force with each line's quantities now, so the approver sees what is outstanding. The booking is read
+ * with view on its own type, within the reader's scope.
+ */
+function AmendmentFacts({ view }: { view: ApprovalRequestView }) {
+  const names = useBookingNames();
+  const query = useQuery({
+    ...readQuery(api, 'readBooking', { params: { bookingId: view.document.recordId } }),
+    enabled: useViewable(BOOKING_TYPE),
+  });
+  const booking = query.data?.booking;
+  const amendment = booking?.amendments.find((each) => each.id === view.document.versionId);
+  if (booking === undefined || amendment === undefined) return null;
+  const numberOf = (lineKey: string) => booking.status?.lines.find((line) => line.lineKey === lineKey)?.lineNumber;
+  return (
+    <div className="flex flex-col gap-3">
+      <Facts>
+        <Fact label="booking.brand">{names.brand.field(booking.brandId)}</Fact>
+        <Fact label="booking.supplier">{names.party.field(booking.version.supplierPartyId)}</Fact>
+        <Fact label="booking.destination">{names.site.field(booking.destinationSiteId)}</Fact>
+        {amendment.windowTo !== undefined && (
+          <Fact label="booking.extend.window-to">{formatDate(amendment.windowTo)}</Fact>
+        )}
+        <Fact label="booking.amendments">
+          <ul className="m-0 list-disc pl-5">
+            {amendment.lines.map((line) => {
+              const number = numberOf(line.lineKey);
+              if (number === undefined) return <li key={line.lineKey}>{t('booking.amendment.line-unknown')}</li>;
+              return (
+                <li key={line.lineKey}>
+                  {line.quantity !== undefined &&
+                    t('booking.amendment.line-quantity', { number, quantity: String(line.quantity) })}
+                  {line.deliveryDate !== undefined &&
+                    t('booking.amendment.line-date', { number, date: formatDate(line.deliveryDate) })}
+                </li>
+              );
+            })}
+          </ul>
+        </Fact>
+      </Facts>
+      {booking.status !== undefined && <StatusView status={booking.status} />}
+    </div>
+  );
+}
+
+/**
  * A version of the season or size attribute: which it marks, the attribute it names and what is in force now, and
  * where the choice came from (structure-and-masters 4.2 "As built"; RR-550, RR-556).
  */
@@ -617,6 +667,10 @@ export function DocumentFacts({ view }: { view: ApprovalRequestView }) {
     // A booking version's approval (goods-in 3.4; S2-F01-T03).
     case BOOKING_APPROVAL:
       return <BookingFacts view={view} />;
+    // A cancellation of a booking's balance and an extension of its window (goods-in 3.5; S2-F01-T04).
+    case BOOKING_CANCELLATION:
+    case BOOKING_EXTENSION:
+      return <AmendmentFacts view={view} />;
     // A damage report's decision and a reversal's approval (goods-in 8.3; S2-F08-T01).
     case DAMAGE_DECISION:
       return <DamageFacts view={view} reversal={false} />;

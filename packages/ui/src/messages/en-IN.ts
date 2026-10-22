@@ -3182,6 +3182,9 @@ export const englishIndia = {
   'booking.amendment.line-quantity': 'Line {number}: {quantity} pieces',
   'booking.amendment.line-date': 'Line {number}: to {date}',
   'booking.amendment.line-unknown': 'A line of an earlier version',
+  'booking.needs-date': 'Enter the date first.',
+  'booking.needs-file': 'Choose the file first.',
+  'booking.needs-lines': 'Choose the lines first.',
   'budget.what': 'open-to-buy budgets',
   'budget.intro':
     'One budget for each brand and season. Booking prepares it, Accounts checks it and the Owner approves it, each a different person, from My work. Only an approved version is used.',

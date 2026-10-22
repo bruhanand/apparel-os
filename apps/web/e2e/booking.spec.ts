@@ -8,7 +8,10 @@ import { readWorld, type EnrolledUser } from './support/world';
 // size-colour grid, one line of them changed, and a line at style level alone, with the totals shown as typed; saves it
 // as a Draft; is refused the submission until the booking document is attached; attaches it and submits. The Owner
 // approves it from My work, a different person whose SYNTHETIC limit covers its value at cost. The booking is then
-// Approved with its number, its open-to-buy reserved and the Agreement version fixed. Every value is SYNTHETIC.
+// Approved with its number, its open-to-buy reserved and the Agreement version fixed. S2-F01-T04: Booking records it
+// Issued, refused once for a date later than today, and proposes cancelling one line's balance with the supplier's
+// communication; the Owner approves the cancellation from My work, and the line shows it cancelled. Every value is
+// SYNTHETIC.
 
 /** A SYNTHETIC PDF, as the booking document the brand gave. */
 const BOOKING_PDF = {
@@ -103,15 +106,21 @@ test('PRD-BKG-001 PRD-BKG-004 POL-02.07 Booking records a booking with the size-
     });
 
     await test.step('Booking submits the Draft; it waits for a different person', async () => {
+      // Submitted, the booking is read again and the submission's card gives way to its approval, so the step looks
+      // for the approval, not the card's banner, which may be gone by then.
       await expect(async () => {
-        await booking.getByRole('button', { name: 'Submit for approval' }).click();
-        await expect(booking.getByRole('status').filter({ hasText: 'Submitted.' })).toBeVisible({ timeout: 2_000 });
+        const submit = booking.getByRole('button', { name: 'Submit for approval' });
+        if ((await submit.count()) > 0) await submit.click({ timeout: 2_000 });
+        await expect(booking.getByText('This version waits for approval by a different person.')).toBeVisible({
+          timeout: 2_000,
+        });
       }).toPass({ timeout: 30_000 });
-      await expect(booking.getByText('This version waits for approval by a different person.')).toBeVisible();
     });
 
+    let ownerApp: Authenticator | undefined;
     await test.step('the Owner approves it from My work, seeing its totals and open-to-buy', async () => {
       const app = await signedIn(owner, world.organisationCode, world.owner);
+      ownerApp = app;
       await owner
         .getByRole('navigation', { name: 'Main menu' })
         .getByRole('link', { name: /^My work/ })
@@ -145,6 +154,65 @@ test('PRD-BKG-001 PRD-BKG-004 POL-02.07 Booking records a booking with the size-
       await expect(booking.getByText('Open-to-buy reserved')).toBeVisible();
       await expect(booking.getByText(/fixed when the booking was approved/)).toBeVisible();
       await expect(booking.getByRole('button', { name: 'Submit for approval' })).toHaveCount(0);
+    });
+
+    // S2-F01-T04: the lifecycle of the approved booking (goods-in 3.4 to 3.6; POL-05.01, POL-05.04, POL-05.07;
+    // PRD-BKG-005, PRD-BKG-013; DEC-099).
+    await test.step('Booking records it Issued, refused once for a date later than today (DEC-099)', async () => {
+      await booking.locator('#booking-issued-on').fill(daysFromToday(1));
+      await booking.getByRole('button', { name: 'Record as issued' }).click();
+      await expect(booking.getByText('This date is later than today.').first()).toBeVisible();
+      await booking.locator('#booking-issued-on').fill(daysFromToday(0));
+      await expect(booking.getByRole('button', { name: 'Record as issued' })).toBeEnabled();
+      await booking.getByRole('button', { name: 'Record as issued' }).click();
+      // Issued, the booking asks for the supplier's confirmation next (POL-05.01).
+      await expect(booking.getByText(/^Issued on \d/).first()).toBeVisible();
+      await expect(booking.getByRole('button', { name: 'Record as confirmed' })).toBeVisible();
+    });
+
+    await test.step('Booking proposes cancelling the style-level line’s balance, with the supplier’s communication', async () => {
+      await booking.getByLabel(/^Line 5: SYN-JOURNEY-ST-2/).check();
+      await booking.locator('#booking-cancel-communication').setInputFiles(BOOKING_PDF);
+      await expect(booking.getByRole('button', { name: 'Propose the cancellation' })).toBeEnabled();
+      await booking.getByRole('button', { name: 'Propose the cancellation' }).click();
+      await expect(booking.getByRole('status').filter({ hasText: 'Proposed. It waits for approval' })).toBeVisible();
+      await expect(
+        booking.getByRole('list', { name: 'Cancellations and extensions' }).getByText('Line 5: 6 pieces'),
+      ).toBeVisible();
+    });
+
+    await test.step('the Owner approves the cancellation from My work; the balance is cancelled, nothing else', async () => {
+      const app = ownerApp;
+      if (app === undefined) throw new Error('The Owner is not signed in');
+      await owner
+        .getByRole('navigation', { name: 'Main menu' })
+        .getByRole('link', { name: /^My work/ })
+        .click();
+      await expect(async () => {
+        await owner.getByRole('button', { name: 'Refresh' }).click();
+        await expect(owner.getByRole('listitem').filter({ hasText: 'Cancellation of a booking balance' })).toHaveCount(
+          1,
+          { timeout: 1_000 },
+        );
+      }).toPass({ timeout: 180_000 });
+      await owner
+        .getByRole('listitem')
+        .filter({ hasText: 'Cancellation of a booking balance' })
+        .getByRole('button', { name: 'Open and decide' })
+        .click();
+      const drawer = owner.getByRole('dialog');
+      await expect(drawer.getByText('Line 5: 6 pieces')).toBeVisible();
+      await drawer.getByLabel(/^Reason/).selectOption(world.reasonId);
+      await drawer.getByLabel(/^Authenticator code/).fill(await app.nextCode());
+      await drawer.getByRole('button', { name: 'Approve', exact: true }).click();
+      await expect(drawer.getByText(/^Approved by /)).toBeVisible();
+      await owner.keyboard.press('Escape');
+      await booking.getByRole('button', { name: 'Refresh' }).click();
+      const inForce = booking.getByRole('table', { name: 'The version in force' });
+      // 36 ordered, 6 cancelled, 30 outstanding: worked by hand.
+      await expect(inForce.getByRole('row').filter({ hasText: 'SYN-JOURNEY-ST-2' })).toContainText('6');
+      await expect(inForce.getByRole('row').filter({ hasText: 'The booking' })).toContainText('30');
+      await expect(booking.getByRole('heading', { level: 2, name: /^Booking SYN-BKG-\d{5}$/ })).toBeVisible();
     });
   } finally {
     await bookingContext.close();
