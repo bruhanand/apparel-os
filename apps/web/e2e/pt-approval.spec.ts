@@ -10,7 +10,9 @@ import { anHourAgo } from './support/clock';
 // approve PTs, finds it in My work and reviews it there, the GRN's invoice, the totals with BASIC beside P RATE and the
 // new product it sets up, and approves it; the PT is then Official with its number from the PT series, and its maker
 // downloads it in the template's columns; then, at phone width, scans its two pieces in to the Store's floor, a barcode
-// not on the PT refused and kept (goods-in 7, section 11; S2-F07-T01). Every value is SYNTHETIC.
+// not on the PT refused and kept (goods-in 7, section 11; S2-F07-T01); then finds them in Stock search, physical,
+// available to sell, waiting and held as the ledger holds them, exports the search, and is refused damage on the
+// product once, with the reason shown (goods-in 9.2, 8.1; S2-F11-T01). Every value is SYNTHETIC.
 
 /** A SYNTHETIC invoice PDF, as the supplier sent it. */
 const INVOICE_PDF = {
@@ -53,7 +55,7 @@ async function arrivalWithInvoice(page: Page, options: ReceivingOptions): Promis
   await expect(invoice.getByRole('status').filter({ hasText: 'Invoice recorded.' })).toBeVisible();
 }
 
-test('PRD-REC-017 PRD-REC-018 POL-02.07 PRD-REC-021 a PT submitted for approval is reviewed and approved from My work, then Official, downloaded and scanned in', async ({
+test('PRD-REC-017 PRD-REC-018 POL-02.07 PRD-REC-021 PRD-STK-006 a PT submitted for approval is reviewed and approved from My work, then Official, downloaded, scanned in and found in stock search', async ({
   browser,
 }) => {
   test.setTimeout(600_000);
@@ -184,6 +186,44 @@ test('PRD-REC-017 PRD-REC-018 POL-02.07 PRD-REC-021 a PT submitted for approval 
       await expect(scans.getByRole('listitem').last()).toContainText('refused: on no product of this PT');
       // One column at phone width: nothing scrolls sideways (design-language; PRD-PRO-009).
       expect(await maker.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    });
+
+    await test.step('Warehouse finds the two pieces in Stock search as the ledger holds them, exports it, and is refused damage once', async () => {
+      // S2-F11-T01 (goods-in 9.1, 9.2, 9.4; PRD-STK-001, PRD-STK-006, PRD-DMG-004): on the journey's own data.
+      await maker.setViewportSize({ width: 1280, height: 900 });
+      await maker
+        .getByRole('navigation', { name: 'Main menu' })
+        .getByRole('link', { name: 'Stock search', exact: true })
+        .click();
+      await expect(maker.getByRole('heading', { level: 1, name: 'Stock search' })).toBeVisible();
+      const form = maker.getByRole('search', { name: 'Search stock' });
+      await form.getByLabel('Style code or product').fill(styleCode.toLowerCase());
+      await form.getByRole('button', { name: 'Search', exact: true }).click();
+      const row = maker.getByRole('table', { name: 'Stock found' }).getByRole('row').filter({ hasText: styleCode });
+      // The two pieces scanned in are on the floor, accepted, covered and free: physical 2, available to sell 2, none
+      // waiting and none held, as the ledger holds them; nothing is left at the receiving location. Their cost, at
+      // P RATE 945.00 a piece, shows for whoever may see cost (SYNTHETIC; goods-in 9.4).
+      await expect(row).toHaveCount(1);
+      await expect(row).toContainText(world.floorName);
+      const cells = row.getByRole('cell');
+      await expect(cells.nth(3)).toHaveText('2');
+      await expect(cells.nth(4)).toHaveText(/^2\s*to sell$/);
+      await expect(cells.nth(5)).toHaveText('0');
+      await expect(cells.nth(6)).toHaveText('0');
+      await expect(cells.nth(7)).toHaveText('₹1,890.00');
+      const downloading = maker.waitForEvent('download');
+      await maker.getByRole('button', { name: 'Export to XLSX' }).click();
+      expect((await downloading).suggestedFilename()).toBe(`stock-search-${organisationToday()}.xlsx`);
+      // Damage reported on the product where it is, from its result (goods-in 8.1, 8.5): refused once with the reason
+      // on screen, since no rule routes damage at this Site yet, so nothing is held.
+      await row.getByRole('button', { name: 'Report damage' }).click();
+      const damage = maker.getByRole('form', { name: 'Report damage' });
+      await damage.getByLabel(/^Damaged pieces/).fill('1');
+      await damage.getByLabel(/^What is wrong/).fill('SYNTHETIC stain seen on the shop floor');
+      await damage.getByRole('button', { name: 'Report and hold the pieces' }).click();
+      await expect(damage.getByRole('alert').filter({ hasText: 'This action is not available yet.' })).toBeVisible();
+      await maker.getByRole('button', { name: 'Refresh' }).click();
+      await expect(cells.nth(4)).toHaveText(/^2\s*to sell$/);
     });
   } finally {
     await makerContext.close();

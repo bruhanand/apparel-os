@@ -1352,6 +1352,16 @@ export const stockDocumentsCodes = declareCodes({
   'stock.damage-report-series-paused': 'unavailable',
 });
 
+/**
+ * `reports`' codes (goods-in 9.1, 9.4; S2-F11-T01):
+ *
+ * - `reports.export-too-large`: the search finds more results than one export holds (`STOCK_SEARCH_EXPORT_CAP`, a
+ *   technical cap); `missing` names the cap. Narrow the search.
+ */
+export const reportsCodes = declareCodes({
+  'reports.export-too-large': 'refused',
+});
+
 /** Every declared code, of every unit. A unit adds its own here as it declares them (code-house-rules 12.3). */
 export const errorCodes = {
   ...kernelCodes,
@@ -1378,6 +1388,7 @@ export const errorCodes = {
   ...receivingCodes,
   ...ptCodes,
   ...stockDocumentsCodes,
+  ...reportsCodes,
 } as const;
 export type ErrorCode = keyof typeof errorCodes;
 
