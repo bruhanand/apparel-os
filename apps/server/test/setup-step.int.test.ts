@@ -288,6 +288,16 @@ describe('a new Organisation (access-and-approvals 9.11; S1-F01-AT01, test 19a)'
       { code: 'exceptions', permissions: 'exceptions.exception create,exceptions.exception edit' },
       // The inbox's consumers of access events (S1-F01-T13).
       { code: 'inbox', permissions: 'inbox.work_item edit' },
+      // The PT's posting job and the consumer that raises a refused posting, with the views the posting's lock and
+      // recheck reach, its steps' `holds` (goods-in 6.6; code review 7).
+      {
+        code: 'merchandise-pt-posting',
+        permissions:
+          'exceptions.exception create,merchandise.pt edit,merchandise.pt view,receiving.arrival view,receiving.grn view,' +
+          'stock.acceptance view,stock.balance view,stock.cost_pool view,stock.coverage view,stock.damage_report view,' +
+          'stock.damage_reversal view,stock.hold view,stock.movement view,stock.piece view,stock.receipt_origin view,' +
+          'stock.reservation view,stock.transit_value view,stock.valuation view',
+      },
       { code: 'outbox', permissions: 'kernel.outbox_event edit' },
       // pos's consumer of mapping changes, which defines a billing device's series (S1-F12-T02).
       { code: 'pos', permissions: 'pos.billing_device edit' },
@@ -347,11 +357,11 @@ describe('a new Organisation (access-and-approvals 9.11; S1-F01-AT01, test 19a)'
        group by 1 order by 1`,
     );
     expect(types).toEqual([
-      // One role and assignment each for the two first users and the eight worker and restore identities; the setup
-      // identity besides, which holds none (S2-F01-T04 adds `booking`).
-      { record_type: 'access.role', count: '10' },
-      { record_type: 'access.role_assignment', count: '10' },
-      { record_type: 'access.service_identity', count: '9' },
+      // One role and assignment each for the two first users and the nine worker and restore identities; the setup
+      // identity besides, which holds none (S2-F01-T04 adds `booking`, code review 7 `merchandise-pt-posting`).
+      { record_type: 'access.role', count: '11' },
+      { record_type: 'access.role_assignment', count: '11' },
+      { record_type: 'access.service_identity', count: '10' },
       { record_type: 'access.setting', count: '3' },
       { record_type: 'access.setup_record', count: '1' },
       { record_type: 'access.user', count: '2' },
@@ -361,7 +371,7 @@ describe('a new Organisation (access-and-approvals 9.11; S1-F01-AT01, test 19a)'
       organisation.databaseName,
       "select count(*)::text as count from audit.access_record where kind = 'permission-changed'",
     );
-    expect(changes).toEqual([{ count: '10' }]);
+    expect(changes).toEqual([{ count: '11' }]);
   });
 
   it('PRD-ACS-023 the first users sign in to the new Organisation, which the running app finds by its code (RR-250)', async () => {
