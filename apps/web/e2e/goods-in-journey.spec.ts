@@ -60,7 +60,7 @@ async function menu(page: Page, name: string | RegExp): Promise<void> {
     .click();
 }
 
-/** The one item of My work titled so, among those prepared by the person named, read again until it arrives. */
+/** The one item of My work titled so, of the preparer named if any, My work read again until it arrives. */
 async function myWorkItem(page: Page, title: string, preparedBy?: string) {
   await menu(page, /^My work/);
   const titled = page.getByRole('listitem').filter({ hasText: title });
@@ -93,7 +93,7 @@ async function inbox(page: Page, options: ReceivingOptions): Promise<void> {
   await page.getByLabel('Site').selectOption({ label: options.site });
 }
 
-test('PRD-ACP-001 PRD-REC-017 PRD-STK-003 POL-02.07 goods-in 12 test 22 a booking becomes stock sold at a Store, each person refused once on the way and recovering', async ({
+test('PRD-ACP-001 PRD-REC-017 PRD-STK-003 POL-02.07 goods-in 12 test 22 a booking becomes stock that can be sold at a Store, each person refused once on the way and recovering', async ({
   browser,
 }) => {
   test.setTimeout(900_000);

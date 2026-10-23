@@ -6,7 +6,16 @@
 
 ## 1. The runs
 
-RESULTS
+Local runs on branch `s2/f07-t02-acceptance`, 23 Oct 2026, on a development laptop whose Docker and processors were **shared with other work** (load average 2 to 7 during the runs).
+
+| Check | Result |
+| --- | --- |
+| `pnpm build`, `pnpm lint`, `pnpm typecheck`, `pnpm check:modules`, `pnpm check:links`, `pnpm format:check` | Passed |
+| `pnpm test` (unit tests) | Passed: server 85 files, 623 tests; web 187; calculations 193; schemas 93; domain 18; counter 5; ui 2 |
+| `pnpm test:integration` (two files at a time) | 118 files, 1,645 tests passed (830 s) |
+| `pnpm test:e2e` (two journeys at a time) | 49 browser journeys passed (5.6 min, the server's start included); the joined journey took 41 s |
+
+An earlier integration run, started with the default number of files at a time and stopped part way, had one failure in `stage-2-reports.int.test.ts` under that load; it did not come back in the full run above.
 
 CI (the checks GitHub runs on every push) has **not run**: the branch is not pushed. It runs once the product owner allows the push.
 
@@ -23,7 +32,7 @@ CI (the checks GitHub runs on every push) has **not run**: the branch is not pus
   8. A Store's staff (P-STM) scan the pieces in on a phone-sized screen: a barcode not on the PT is refused; after one piece the browser restarts and the scan-in carries on where it stopped.
   9. Stock search shows both pieces on the floor, available to sell, cost hidden from the Store's staff and ₹1,890.00 at cost to Accounts. Booking is refused Stock search, naming the permission, and Booking status shows the booking delivered in full.
 - **Test 19 across the whole flow**, `goods-in-acceptance.int.test.ts`: every write from the budget to the scan-in is sent twice under the same idempotency key (the label a client puts on a request so that sending it again is recognised). Every second answer must equal the first, and the end state must be what one sending makes: one budget reserving ₹1,000.00 once, one booking delivered once, one Arrival, one GRN, one PT posting ₹1,890.00 once, two pieces on sale.
-- **A defect it found, fixed:** starting a PT file's import sent twice under one key was refused the second time (`files-imports.file-already-imported`, "this file is already being imported") instead of getting its first answer, against `PRD-INT-002` and code-house-rules 12.4. The refusal is now decided under the key ([imports-and-opening-data.md](../../../design/platform/imports-and-opening-data.md) section 7 "As built", "Checked three times").
+- **A defect it found, fixed:** starting a PT file's import sent twice under one key was refused the second time (`files-imports.file-already-imported`, "this file is already being imported") instead of getting its first answer, against `PRD-INT-002` and code-house-rules 12.4. The refusal is now decided under the key ([imports-and-opening-data.md](../../../design/platform/imports-and-opening-data.md) section 7 "As built", "Checked three times"), and a test at the import's own seam proves it (`imports-duplicates.int.test.ts`). The same fault would have hit any import, opening data included, whose client sent its start again after losing the answer.
 
 ## 3. Each design test of goods-in section 12, and where it is proved
 
@@ -80,7 +89,7 @@ Measured 23 Oct 2026 on a development laptop (10 cores) **shared with other work
 | A 10,000-line PT approved: the click, which records the approval and a request to post | 0.6 s | 0.6 s |
 | The approval posted whole by the queued job the worker runs, from the click | 7.9 s | 6.9 s |
 
-During a whole integration run, with many test files at once on the same laptop, the check took 8.1 s and the submit 14.6 s. The job posts 10,000 pieces at a P RATE of 945.00, ₹94,50,000.00 into stock value, which the test checks in the trial balance (`pt-approval-large.int.test.ts`; `pt-upload.int.test.ts` for the check). These are a laptop's numbers; the measurement that counts is on the defined workload, devices and connections (RR-189).
+During the whole integration run of section 1, two test files at a time and the load average up to 7, the check took 5.3 s, the submit 10.3 s, the click 1.0 s and the job 14.7 s from the click. The job posts 10,000 pieces at a P RATE of 945.00, ₹94,50,000.00 into stock value, which the test checks in the trial balance (`pt-approval-large.int.test.ts`; `pt-upload.int.test.ts` for the check). These are a laptop's numbers; the measurement that counts is on the defined workload, devices and connections (RR-189).
 
 ## 6. The stage 2 exit checks
 
@@ -91,8 +100,8 @@ During a whole integration run, with many test files at once on the same laptop,
 | Supplier, direct-store and opening goods meet the same acceptance and hold checks (`PRD-ACP-003`) | **Proved for goods received at a Store and at a warehouse**: test 17. Opening goods arrive with the stage 4 switch |
 | Damage blocks stock at once; independent rejection clears only the mistaken hold (`PRD-ACP-005`) | **Proved**: test 16 |
 | Goods owned before receipt shown as inbound ownership (`PRD-ACP-020`) | **Waits**: inbound ownership is after the first version (`DEC-139`; placement RR-546) |
-| A side-by-side import changes no stock (`PRD-LIF-014`) | **Waits**: the side-by-side test imports are parked (`S2-F12`) |
-| Checks every stage owes (roadmap 2.2): concurrency, isolation, self-approval, stale versions, duplicates, rollback; persona journeys; the stage 2 reports | **Proved** for the first version (sections 3 and 4; the reports in `stage-2-reports.int.test.ts` and `.spec.ts`) |
+| A side-by-side import changes no stock (`PRD-LIF-014`) | **Waits**: the side-by-side test imports (feature `S2-F12`) are parked |
+| Checks every stage owes (roadmap 2.2): concurrency, isolation, self-approval, stale versions, duplicates, rollback; persona journeys; the stage 2 reports | **Proved** for the first version: the preparer refused their own approval of a PT (`pt-approval.int.test.ts`), a damage report (`damage-reports.int.test.ts`), excess and wrong goods (`receiving-findings.int.test.ts`) and a booking (`bookings.int.test.ts`); stale versions, duplicates and rolled-back refusals in each feature's file; concurrency and isolation in section 3; the persona journeys in section 4; the reports in `stage-2-reports.int.test.ts` and `stage-2-reports.spec.ts` |
 
 Stage 2 exits only once inbound ownership and the side-by-side import are placed and proved, and after stage 1 exits.
 
