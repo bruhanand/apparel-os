@@ -13,6 +13,7 @@ import { inputClass, SubmissionBanner, Th, useGranted } from '../setup/parts';
 import { stateIdOf } from '../setup/states';
 import { useTimeZone } from '../shell/session';
 import { unknownText } from './names';
+import type { Reading } from './reading';
 
 // A recount of a GRN's lines on the GRN (goods-in 4.7, 4.11, section 11; PRD-REC-019; S2-F02-T05): the recounts with
 // their state, the lines each recounts and why; and, for whoever may propose one, the proposal: the pieces counted
@@ -22,12 +23,6 @@ import { unknownText } from './names';
 
 /** The reads a recount makes stale. */
 const RECOUNT_READS = ['readArrival', 'readReceivingInbox'] as const;
-
-/** Whether the Arrival is being read again, which makes the recount version it showed stale (12.7). */
-interface Reading {
-  readonly shown: boolean;
-  readonly now: () => boolean;
-}
 
 /** A person's name from their sign-in, as the Arrival names them; Unknown when it does not (PRD-MOD-015). */
 function personOf(arrival: Arrival, userId: string): string {

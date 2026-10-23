@@ -47,6 +47,7 @@ export type {
   EffectDecider,
   EffectOutcome,
   ModuleApprovals,
+  RefusedDecision,
   ValueBasis,
 } from './domain/approval-rules.js';
 export type { LatestRequest } from './queries/access-records.js';

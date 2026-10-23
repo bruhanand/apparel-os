@@ -11,6 +11,7 @@ import { formatDate, formatQuantity } from '../setup/format';
 import { Card, inputClass, SubmissionBanner, Th, useGranted } from '../setup/parts';
 import { goodsOf, linkableLines, matchingLines, standingOf, type CountedGoods } from './booking-links';
 import { unknownText } from './names';
+import type { Reading } from './reading';
 
 // Receiving against a booking on the Arrival's screen (goods-in 3.7, 4.1, 4.10, section 11; PRD-REC-002,
 // PRD-BKG-007, PRD-BKG-008; POL-05.08; S2-F02-T04): the booking an Arrival names, with its open lines as the expected
@@ -21,12 +22,6 @@ import { unknownText } from './names';
 
 /** The reads a later link makes stale. */
 const LINK_READS = ['readArrival', 'readReceivingInbox', 'readBooking'] as const;
-
-/** Whether the screen waits while the Arrival is read again (ArrivalView's Reading). */
-interface Reading {
-  readonly shown: boolean;
-  readonly now: () => boolean;
-}
 
 /** The bookings an Arrival and its GRN name, read as the person may (goods-in 3.7, 4.10). */
 export interface Bookings {
@@ -122,7 +117,7 @@ export function ExpectedGoods({ booking, reading }: { booking: Booking | undefin
 }
 
 /** The number of a booking line by its key, or undefined when the booking is unread or the line not in force. */
-function lineNumberOf(booking: Booking | undefined, lineKey: string): number | undefined {
+export function lineNumberOf(booking: Booking | undefined, lineKey: string): number | undefined {
   return booking?.status?.lines.find((line) => line.lineKey === lineKey)?.lineNumber;
 }
 

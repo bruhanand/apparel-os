@@ -20,3 +20,14 @@ export const ptPostRequested = defineEvent({
   version: 1,
   payload: z.strictObject({ postRequestId: z.uuid(), revisionId: z.uuid(), bookId: z.uuid() }),
 });
+
+/**
+ * A queued posting of an approved PT revision refused under its locks: nothing posted, the decision unused, the PT
+ * Failed (access-and-approvals 9.8 step 4). Its consumer raises the unfinished-operation exception in a step of its own
+ * (books-and-posting 10 step 3; code review 7).
+ */
+export const ptPostingFailed = defineEvent({
+  type: 'merchandise.pt-posting-failed',
+  version: 1,
+  payload: z.strictObject({ failureId: z.uuid(), postRequestId: z.uuid(), revisionId: z.uuid() }),
+});

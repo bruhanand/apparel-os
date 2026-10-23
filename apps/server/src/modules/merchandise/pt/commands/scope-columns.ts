@@ -17,3 +17,17 @@ export function scopeColumnsOf(scope: PtScope) {
     brandId: scope.brandId,
   };
 }
+
+/**
+ * The same facts as an audit record, an event or an exception of a PT carries them: no Store is left out, never a null
+ * as a fact (numbering-and-audit 4.1; code-house-rules 12.8).
+ */
+export function auditScopeOf(scope: PtScope) {
+  return {
+    siteId: scope.siteId,
+    businessUnitId: scope.businessUnitId,
+    legalEntityId: scope.legalEntityId,
+    brandId: scope.brandId,
+    ...(scope.storeId === null || scope.storeId === undefined ? {} : { storeId: scope.storeId }),
+  };
+}

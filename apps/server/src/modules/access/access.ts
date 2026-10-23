@@ -317,6 +317,17 @@ export interface AccessInterface {
   openBulkBatch(context: TransactionContext, actor: DecidingActor, input: BatchInput): Promise<BatchOutcome>;
   /** One item of a bulk approval: its own decision in its own transaction, under its batch (9.9). */
   decideInBatch(context: TransactionContext, actor: DecidingActor, input: BatchItemInput): Promise<DecisionOutcome>;
+  /**
+   * After a decision its effect refused was kept, in a command of its own: the request's module effect follows the
+   * refusal, such as by raising the unfinished-operation exception of a refused posting (9.8b; books-and-posting 10
+   * step 3), keyed by the raising event so a replay raises none twice.
+   */
+  followRefusedDecision(
+    context: TransactionContext,
+    actor: DecidingActor,
+    requestId: string,
+    decision: { readonly raisingEvent: string; readonly refusal: CommandRefusal<string> },
+  ): Promise<void>;
   /** Every approval rule's action type, its module and value basis: what task and approval routing routes (9.4). */
   approvalActionTypes(): readonly { readonly actionType: string; readonly module: string }[];
   /**
@@ -715,6 +726,15 @@ export class Access implements AccessInterface {
 
   decideInBatch(context: TransactionContext, actor: DecidingActor, input: BatchItemInput) {
     return this.approvals.decideInBatch(context, actor, input);
+  }
+
+  followRefusedDecision(
+    context: TransactionContext,
+    actor: DecidingActor,
+    requestId: string,
+    decision: { readonly raisingEvent: string; readonly refusal: CommandRefusal<string> },
+  ) {
+    return this.approvals.followRefusal(context, actor, requestId, decision);
   }
 
   approvalActionTypes() {

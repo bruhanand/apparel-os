@@ -118,6 +118,17 @@ export const EXTRA_EXCEPTION_TYPES = {
 export const BOOKING_REVIEW_EXCEPTION_TYPE = 'receiving.booking-review';
 
 /**
+ * The unfinished-operation exception of a recount's approval refused by the ledger's posting under the locks
+ * (books-and-posting 10 step 3; goods-in 4.11; PRD-EXC-001; code review 7 of stage 2): raised in a command of its own
+ * once the refusal is kept, linking the recount, whose request stays waiting so it is approved again once the cause is
+ * fixed (step 5). Its owner is whoever the routing of the type at the Site names (POL-02.16), never set here.
+ */
+export const RECOUNT_POSTING_REFUSED_TYPE = 'receiving.recount-posting-refused';
+
+/** The record type a GRN line is named by in a refusal (PRD-UXP-003). */
+export const GRN_LINE_TYPE = 'receiving.grn_line';
+
+/**
  * The reason each hold of a GRN's held part records (stock-ledger 6.1, 13.16; goods-in 4.4): a code, which a screen
  * names from the message catalogue, never stored text (code-house-rules 12.13).
  */

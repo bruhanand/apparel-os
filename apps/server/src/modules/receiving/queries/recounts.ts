@@ -1,6 +1,7 @@
-import type { Recount, RecountRead } from '@apparel-os/schemas';
+import { RECOUNT_TYPE, type MissingItem, type Recount, type RecountRead } from '@apparel-os/schemas';
 import { asc, eq, inArray } from 'drizzle-orm';
 import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
+import type { ResolutionAnswer, ResolutionSubject } from '../../exceptions/index.js';
 import { receiptCountOfLine } from '../../stock/ledger/index.js';
 import {
   arrival,
@@ -31,6 +32,27 @@ export interface RecountRecord {
   readonly lines: readonly RecountLineRow[];
   readonly decision: typeof recountDecision.$inferSelect | undefined;
   readonly movements: readonly RecountMovementRow[];
+}
+
+/**
+ * The resolution check of a recount's refused posting (access-and-approvals 12.3; books-and-posting 10; code review 7):
+ * finished once each recount it links is decided, approved after its cause was fixed or rejected. A recount the closer
+ * may not see is named as missing.
+ */
+export async function recountDecided(
+  context: TransactionContext,
+  subject: ResolutionSubject,
+): Promise<ResolutionAnswer> {
+  const missing: MissingItem[] = [];
+  for (const link of subject.links) {
+    if (link.recordType !== RECOUNT_TYPE) continue;
+    const [decided] = await context.tx
+      .select({ id: recountDecision.id })
+      .from(recountDecision)
+      .where(eq(recountDecision.recountId, link.recordId));
+    if (decided === undefined) missing.push({ kind: 'record', recordType: RECOUNT_TYPE, recordId: link.recordId });
+  }
+  return missing.length === 0 ? { kind: 'verified' } : { kind: 'not-verified', missing };
 }
 
 /** One recount as the actor may see it, or undefined (code-house-rules 6.2). */

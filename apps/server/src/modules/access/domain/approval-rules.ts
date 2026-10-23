@@ -123,6 +123,26 @@ export interface DocumentEffect {
   readonly decisionWritten?: DecisionWritten;
   approve(context: TransactionContext, decider: EffectDecider, versionId: string): Promise<EffectOutcome>;
   reject(context: TransactionContext, decider: EffectDecider, versionId: string): Promise<EffectOutcome>;
+  /**
+   * What the owning module does once a decision its effect refused has rolled back, in a command of its own so the
+   * rollback does not lose it: the unfinished-operation exception a posting refused under the locks raises
+   * (books-and-posting 10 step 3; PRD-EXC-001; S2-F06-T01 code review 7). Decide's route calls it after the refusal is
+   * kept, and again for each replay of it; the module keys what it writes by the raising event, so a replay writes
+   * nothing more (PRD-INT-008). The effect looks at the refusal and does nothing for one it does not follow.
+   */
+  refused?(context: TransactionContext, versionId: string, decision: RefusedDecision): Promise<void>;
+}
+
+/** A decision its effect refused, as the effect's follow-up is given it (access-and-approvals 9.8b). */
+export interface RefusedDecision {
+  /** Who decided: the approver. */
+  readonly actor: { readonly kind: 'user'; readonly id: string };
+  /**
+   * Unique to the decision's command: its operation, its actor and its idempotency key, so a replay of the same
+   * request names the same event (code-house-rules 12.4).
+   */
+  readonly raisingEvent: string;
+  readonly refusal: CommandRefusal<string>;
 }
 
 /** When Decide writes an approval's decision, against its effect (access-and-approvals 9.8b). */

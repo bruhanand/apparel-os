@@ -240,12 +240,12 @@ export async function ptPlanOf(
   issues.push(...match.issues);
   if (document.rows.length === 0)
     issues.push({ code: 'merchandise.pt-file-refused', missing: [{ kind: 'pt-rows', rows: '0' }] });
-  const [first, ...rest] = issues;
-  if (first !== undefined) return { kind: 'issues', issues: [first, ...rest] };
   // A row with no issue is not kept only while a value of it is Unknown, whose checks are skipped (domain/rows.ts).
-  if (checked.length !== document.rows.length) return { kind: 'unknown' };
+  if (issues.length === 0 && checked.length !== document.rows.length) return { kind: 'unknown' };
 
-  // The barcodes' products first, so the styles they name are read with the file's (goods-in 5.5).
+  // The barcodes' products first, so the styles they name are read with the file's (goods-in 5.5). The rows that pass
+  // their own checks are found their products even while others fail, so the products' problems are listed with
+  // every other at once (PRD-IMP-007; code review 7).
   const barcodes = await barcodeSkusOn(context, {
     brandId,
     barcodes: checked.map((each) => each.checked.barcode),
@@ -297,6 +297,9 @@ export async function ptPlanOf(
       codes,
     },
   );
+  issues.push(...found.issues);
+  const [first, ...rest] = issues;
+  if (first !== undefined) return { kind: 'issues', issues: [first, ...rest] };
   const byRow = new Map(found.rows.map((finding) => [finding.rowNumber, finding]));
   const rows: DraftRow[] = checked.map(({ row, checked: values }) => {
     const finding = byRow.get(row.rowNumber);

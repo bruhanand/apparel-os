@@ -25,7 +25,8 @@ const logger = new PinoLoggerService();
 
 /**
  * The internal service identities the worker runs as, from what it runs (RR-271, RR-290): the outbox processor, and
- * the identity of each job kind and consumer with the action its steps declare; and the restore's, with what its
+ * the identity of each job kind and consumer with the action its steps declare and what a consumer holds besides
+ * (`holds`; S2-F06-T01 code review 7); and the restore's, with what its
  * after-restore steps declare (access-and-approvals 2.3; backup-and-restore 4.2 step 7; S1-F14-T03).
  */
 export function serviceIdentitiesOf(registry: JobRegistry): ServiceIdentityGrant[] {
@@ -36,16 +37,21 @@ function workerIdentitiesOf(registry: JobRegistry): ServiceIdentityGrant[] {
   const byCode = new Map<string, ServiceIdentityGrant['authorities'][number][]>([
     [OUTBOX_PROCESSOR_IDENTITY, [OUTBOX_AUTHORITY]],
   ]);
-  for (const step of [...registry.jobKinds, ...registry.consumers]) {
-    const authorities = byCode.get(step.serviceIdentity) ?? [];
-    if (
-      !authorities.some(
-        (each) => each.action === step.authorises.action && each.recordType === step.authorises.recordType,
-      )
-    ) {
-      authorities.push(step.authorises);
+  const steps = [
+    ...registry.jobKinds.map((kind) => ({ code: kind.serviceIdentity, needs: [kind.authorises] })),
+    ...registry.consumers.map((consumer) => ({
+      code: consumer.serviceIdentity,
+      needs: [consumer.authorises, ...(consumer.holds ?? [])],
+    })),
+  ];
+  for (const step of steps) {
+    const authorities = byCode.get(step.code) ?? [];
+    for (const need of step.needs) {
+      if (!authorities.some((each) => each.action === need.action && each.recordType === need.recordType)) {
+        authorities.push(need);
+      }
     }
-    byCode.set(step.serviceIdentity, authorities);
+    byCode.set(step.code, authorities);
   }
   return [...byCode].map(([code, authorities]) => ({ code, authorities }));
 }
