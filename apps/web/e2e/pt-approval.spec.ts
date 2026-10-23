@@ -9,8 +9,10 @@ import { anHourAgo } from './support/clock';
 // of a style not set up yet, issues the GRN and submits its PT file for approval; Operations (P-OPS), assigned to
 // approve PTs, finds it in My work and reviews it there, the GRN's invoice, the totals with BASIC beside P RATE and the
 // new product it sets up, and approves it; the PT is then Official with its number from the PT series, and its maker
-// downloads it in the template's columns; then, at phone width, scans its two pieces in to the Store's floor, a barcode
-// not on the PT refused and kept (goods-in 7, section 11; S2-F07-T01). Every value is SYNTHETIC.
+// downloads it in the template's columns; then proposes reversing it with a reason, which Operations approves from My
+// work, the PT then Reversed, and uploads the corrected file at another P RATE, which Operations approves again
+// (goods-in 6.4, 6.7; DEC-137, PRD-REC-019; S2-F09-T01); then, at phone width, scans its two pieces in to the Store's
+// floor, a barcode not on the PT refused and kept (goods-in 7, section 11; S2-F07-T01). Every value is SYNTHETIC.
 
 /** A SYNTHETIC invoice PDF, as the supplier sent it. */
 const INVOICE_PDF = {
@@ -53,10 +55,10 @@ async function arrivalWithInvoice(page: Page, options: ReceivingOptions): Promis
   await expect(invoice.getByRole('status').filter({ hasText: 'Invoice recorded.' })).toBeVisible();
 }
 
-test('PRD-REC-017 PRD-REC-018 POL-02.07 PRD-REC-021 a PT submitted for approval is reviewed and approved from My work, then Official, downloaded and scanned in', async ({
+test('PRD-REC-017 PRD-REC-018 POL-02.07 PRD-REC-019 PRD-REC-021 a PT submitted for approval is reviewed and approved from My work, then Official, downloaded, reversed and approved again, and scanned in', async ({
   browser,
 }) => {
-  test.setTimeout(600_000);
+  test.setTimeout(900_000);
   const world = readWorld().ptApproval;
   const { options, styleCode } = world;
   const makerContext = await browser.newContext({ acceptDownloads: true });
@@ -64,6 +66,8 @@ test('PRD-REC-017 PRD-REC-018 POL-02.07 PRD-REC-021 a PT submitted for approval 
   const maker = await makerContext.newPage();
   const approver = await approverContext.newPage();
   let grnNumber = '';
+  // The approver's authenticator app, which gives each code for a later step than the last (support/authenticator.ts).
+  let approverApp: Authenticator | undefined;
   try {
     await test.step('Warehouse counts two pieces of a new style, issues the GRN and submits its PT file', async () => {
       await signedIn(maker, world.organisationCode, world.maker);
@@ -96,6 +100,7 @@ test('PRD-REC-017 PRD-REC-018 POL-02.07 PRD-REC-021 a PT submitted for approval 
 
     await test.step('Operations reviews the PT in My work: the invoice, BASIC beside P RATE and the new product', async () => {
       const app = await signedIn(approver, world.organisationCode, world.approver);
+      approverApp = app;
       await approver
         .getByRole('navigation', { name: 'Main menu' })
         .getByRole('link', { name: /^My work/ })
@@ -146,6 +151,83 @@ test('PRD-REC-017 PRD-REC-018 POL-02.07 PRD-REC-021 a PT submitted for approval 
       await maker.getByRole('button', { name: 'Download the PT' }).click();
       const download = await downloading;
       expect(download.suggestedFilename()).toBe(`${number}.xlsx`);
+    });
+
+    await test.step('Warehouse proposes reversing the PT with a reason; Operations approves it from My work; the corrected file is approved again', async () => {
+      // Before any piece is scanned in (goods-in 6.4, 6.7; DEC-137, PRD-REC-019; S2-F09-T01).
+      const proposal = maker.getByRole('form', { name: 'Reverse this PT' });
+      await proposal.getByLabel(/^Why the PT is wrong/).fill('SYNTHETIC: P RATE keyed with the handling left out');
+      await proposal.getByRole('button', { name: 'Propose the reversal' }).click();
+      await expect(maker.getByRole('status').filter({ hasText: 'Reversal proposed.' })).toBeVisible();
+      await expect(maker.getByRole('list', { name: 'Reversals' })).toContainText('Awaiting approval');
+      // The PT approval's drawer closes with Esc; My work is read again for the reversal.
+      await approver.keyboard.press('Escape');
+      await expect(approver.getByRole('dialog')).toHaveCount(0);
+      const reversal = approver
+        .getByRole('listitem')
+        .filter({ hasText: 'PT reversal' })
+        .filter({ hasText: world.maker.displayName });
+      await expect(async () => {
+        await approver.getByRole('button', { name: 'Refresh' }).click();
+        await expect(reversal).toHaveCount(1, { timeout: 1_000 });
+      }).toPass({ timeout: 120_000 });
+      await reversal.getByRole('button', { name: 'Open and decide' }).click();
+      const drawer = approver.getByRole('dialog');
+      await expect(drawer.getByRole('heading', { level: 2, name: 'PT reversal', exact: true })).toBeVisible();
+      // The approval panel's facts: why, and the PT it reverses (goods-in 6.7, section 11).
+      await expect(drawer.getByText('SYNTHETIC: P RATE keyed with the handling left out')).toBeVisible({
+        timeout: 30_000,
+      });
+      await expect(drawer.getByRole('heading', { level: 3, name: 'The PT it reverses' })).toBeVisible({
+        timeout: 30_000,
+      });
+      const app = approverApp;
+      if (app === undefined) throw new Error('The approver is not signed in');
+      await drawer.getByLabel(/^Reason/).selectOption(world.reasonId);
+      await drawer.getByLabel(/^Authenticator code/).fill(await app.nextCode());
+      await drawer.getByRole('button', { name: 'Approve', exact: true }).click();
+      await expect(drawer.getByText(/^Approved by /)).toBeVisible({ timeout: 60_000 });
+      await approver.keyboard.press('Escape');
+      await expect(approver.getByRole('dialog')).toHaveCount(0);
+
+      // The PT is Reversed and the GRN takes the corrected file (goods-in 6.4).
+      await maker.getByRole('button', { name: 'Refresh' }).click();
+      const revisions = maker.getByRole('table', { name: 'PT revisions' });
+      await expect(revisions.getByRole('row').nth(1)).toContainText('Reversed', { timeout: 30_000 });
+      await expect(maker.getByRole('list', { name: 'Reversals' })).toContainText('Approved');
+      const upload = maker.getByRole('form', { name: 'Upload a PT file' });
+      await upload.getByLabel('PT file', { exact: true }).setInputFiles(world.correctedFile);
+      await upload.getByRole('button', { name: 'Upload and check' }).click();
+      await expect(maker.getByRole('heading', { level: 3, name: 'What submitting it makes' })).toBeVisible({
+        timeout: 60_000,
+      });
+      await maker.getByRole('button', { name: 'Submit for approval' }).click();
+      await expect(revisions.getByRole('row').nth(1)).toContainText('Awaiting approval', { timeout: 60_000 });
+
+      const corrected = approver
+        .getByRole('listitem')
+        .filter({ hasText: 'PT approval' })
+        .filter({ hasText: world.maker.displayName });
+      await expect(async () => {
+        await approver.getByRole('button', { name: 'Refresh' }).click();
+        await expect(corrected).toHaveCount(1, { timeout: 1_000 });
+      }).toPass({ timeout: 120_000 });
+      await corrected.getByRole('button', { name: 'Open and decide' }).click();
+      const again = approver.getByRole('dialog');
+      await expect(again.getByRole('heading', { level: 3, name: 'What approving it makes' })).toBeVisible({
+        timeout: 30_000,
+      });
+      // SYNTHETIC: the corrected P RATE, 900.00.
+      await expect(again.getByRole('table', { name: 'Rows of the file' }).getByRole('row').nth(1)).toContainText(
+        '900.00',
+      );
+      await again.getByLabel(/^Reason/).selectOption(world.reasonId);
+      await again.getByLabel(/^Authenticator code/).fill(await app.nextCode());
+      await again.getByRole('button', { name: 'Approve', exact: true }).click();
+      await expect(again.getByText(/^Approved by /)).toBeVisible({ timeout: 60_000 });
+      await maker.getByRole('button', { name: 'Refresh' }).click();
+      await expect(revisions.getByRole('row').nth(1)).toContainText('Official', { timeout: 30_000 });
+      await expect(revisions.getByRole('row').nth(2)).toContainText('Reversed');
     });
 
     await test.step('Warehouse scans the two pieces in to the floor at phone width, a barcode not on the PT refused', async () => {

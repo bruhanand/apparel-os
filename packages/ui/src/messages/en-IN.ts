@@ -3922,9 +3922,34 @@ export const englishIndia = {
     'The colour is not part of this category’s product identity. Nothing is approved: reject this revision.',
   'error.merchandise.pt-tracking-unknown':
     'The category of a new product has no tracking in force. Nothing is approved until the category has one.',
-  'error.merchandise.pt-not-official': 'Only an Official PT can be downloaded.',
   'missing.number-series.merchandise.pt': 'An open number series for PTs.',
   'missing.number-series.merchandise.sku-code': 'An open number series for SKU codes.',
   'missing.pt-row.named': 'Row {row}.',
   'missing.size.named': 'Size {size}.',
+  // A PT reversed before the scan-in (goods-in 6.4, 6.7, section 11; S2-F09-T01).
+  'approval.action.merchandise.pt.reversal': 'PT reversal',
+  'history.operation.propose-pt-reversal': 'Proposed reversing a PT before the scan-in',
+  'history.operation.reverse-pt': 'Reversed a PT before the scan-in',
+  'history.operation.reject-pt-reversal': 'Rejected reversing a PT',
+  'pt.reversals': 'Reversals',
+  'pt.reversal.title': 'Reverse this PT',
+  'pt.reversal.intro':
+    'A wrong PT is reversed before any of its pieces is scanned in: its coverage and cost are taken off, and a corrected file is uploaded once a different person approves the reversal.',
+  'pt.reversal.reason': 'Why the PT is wrong',
+  'pt.reversal.propose': 'Propose the reversal',
+  'pt.reversal.proposed': 'Reversal proposed. A different person approves it in My work.',
+  'pt.reversal.by': 'Proposed by {name}, {at}',
+  'pt.reversal.decided': 'Decided by {name}, {at}',
+  'pt.reversal.what': 'the PT reversal',
+  'pt.reversal.panel.reason': 'Why it is reversed',
+  'pt.reversal.panel.proposed': 'Proposed',
+  'pt.reversal.panel.rows': 'The PT it reverses',
+  'pt.reversal.panel.effect':
+    'Approving takes off the PT’s coverage and cost and reverses its journal; the pieces keep their products, and the GRN waits for a corrected file.',
+  'error.merchandise.pt-not-official': 'Only an Official PT can be downloaded or reversed.',
+  'error.merchandise.pt-scanned-in': 'A piece of this GRN is scanned in, so its PT is no longer reversed.',
+  'error.merchandise.pt-goods-held':
+    'A piece this PT covers is held or damaged since its approval. Settle its damage report first.',
+  'error.merchandise.pt-reversal-open': 'A reversal of this PT waits for its approval already.',
+  'error.merchandise.pt-reversal-decided': 'This reversal is decided already, or its PT is no longer the one reversed.',
 } as const satisfies Record<string, string | Readonly<Partial<Record<Intl.LDMLPluralRule, string>>>>;

@@ -20,6 +20,10 @@ import { postingFailureOf, postRequestOf, revisionStanding, type RevisionRow } f
 
 export interface PostingRefusal {
   readonly revision: RevisionRow;
+  /**
+   * The version the exception links under the PT: the revision whose approval was refused, or the reversal whose
+   * posting was (goods-in 6.7; S2-F09-T01), which the resolution check reads apart (exception-types.ts).
+   */
   readonly revisionId: string;
   readonly raisingEvent: string;
   readonly refusal: CommandRefusal<string>;

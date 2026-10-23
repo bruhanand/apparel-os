@@ -7,6 +7,7 @@ import { skuCodesOf } from '../../catalogue/index.js';
 import type { ReceivingInterface } from '../../../receiving/index.js';
 import { ptProduct, ptProposedSku, ptRow } from '../db/schema.js';
 import { revisionStateOf } from '../domain/state.js';
+import { reversalsOf, reversedBy } from './reversal.js';
 import { revisionStanding } from './approval.js';
 import { shownPaise } from './grn-pt.js';
 
@@ -116,6 +117,7 @@ export async function revisionReview(
         rejected: standing.rejected,
         postRequested: standing.postRequest !== undefined,
         failed: standing.failure !== undefined,
+        reversed: reversedBy((await reversalsOf(context, [revisionId])).get(revisionId)),
       }),
       number: standing.approval?.number ?? null,
       grn: { grnId: grn.grnId, number: grn.number, arrivalId: grn.arrivalId },
