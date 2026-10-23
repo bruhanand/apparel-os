@@ -8,11 +8,15 @@ import { exportText, holdKindText, instantText, listText } from './export-text.j
 // (PRD-EXC-010, PRD-MOD-015). A cost the reader may not see is left out of the file (access-and-approvals 6): its
 // column is there only when some result's cost is shown, and a masked cell stays empty. Pure (code-house-rules 2).
 
-/** A cell: text, a whole quantity, an amount in paise, or empty. */
+/**
+ * A cell: text, a whole quantity, an amount in paise, a rate of two whole numbers shown as a percentage (the stage 2
+ * reports; S2-F11-T02), or empty.
+ */
 export type Cell =
   | { readonly kind: 'text'; readonly text: string }
   | { readonly kind: 'quantity'; readonly quantity: number }
   | { readonly kind: 'paise'; readonly paise: number }
+  | { readonly kind: 'rate'; readonly numerator: number; readonly denominator: number }
   | { readonly kind: 'empty' };
 
 export interface Sheet {
@@ -22,19 +26,23 @@ export interface Sheet {
   readonly rows: readonly (readonly Cell[])[];
 }
 
-const text = (value: string): Cell => ({ kind: 'text', text: value });
-const quantity = (value: number): Cell => ({ kind: 'quantity', quantity: value });
-const unknownCell = (): Cell => text(exportText('stock-search.unknown'));
-const orUnknown = (value: string | null): Cell => (value === null ? unknownCell() : text(value));
+export const text = (value: string): Cell => ({ kind: 'text', text: value });
+export const quantity = (value: number): Cell => ({ kind: 'quantity', quantity: value });
+export const emptyCell = (): Cell => ({ kind: 'empty' });
+export const unknownCell = (): Cell => text(exportText('stock-search.unknown'));
+export const orUnknown = (value: string | null): Cell => (value === null ? unknownCell() : text(value));
 
 /** A named record as "CODE · Name", Unknown when the read did not name it. */
-function namedCell(list: readonly { readonly id: string; readonly code: string; readonly name: string }[], id: string) {
+export function namedCell(
+  list: readonly { readonly id: string; readonly code: string; readonly name: string }[],
+  id: string,
+): Cell {
   const found = list.find((each) => each.id === id);
   return found === undefined ? unknownCell() : text(exportText('stock-search.named', found));
 }
 
 /** The goods' columns: what they are, product code, style code, size, identity and article number. */
-function goodsCells(product: StockProduct | undefined): Cell[] {
+export function goodsCells(product: StockProduct | undefined): Cell[] {
   if (product === undefined) return Array.from({ length: 6 }, unknownCell);
   if (product.kind === 'unidentified') {
     const none: Cell = { kind: 'empty' };
@@ -65,7 +73,7 @@ function goodsCells(product: StockProduct | undefined): Cell[] {
   ];
 }
 
-const goodsHeader = () => [
+export const goodsHeader = () => [
   exportText('stock-search.column.goods'),
   exportText('stock-search.column.code'),
   exportText('stock-search.column.style'),

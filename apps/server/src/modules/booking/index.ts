@@ -18,3 +18,7 @@ export type { GrnLineReceipt } from './queries/receipt-links.js';
 export { BOOKING_JOBS_IDENTITY, bookingJobKinds, overdueExceptionType } from './jobs/overdue.js';
 export type { OverdueJobDependencies } from './jobs/overdue.js';
 export { bookingAmended } from './events.js';
+// The booking status read model of the stage 2 reports, served through the read-model gateway (goods-in 9.5;
+// S2-F11-T02).
+export { BOOKING_STATUSES, bookingReadModels } from './queries/statuses.js';
+export type { BookingDelivery, BookingStatusEntry } from './queries/statuses.js';

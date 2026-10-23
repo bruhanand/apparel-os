@@ -2858,6 +2858,54 @@ await bookingLimitApproved(
   { userId: againstFixtureOwner.id, roleAssignmentId: againstFixtureOwnerAssignment.assignmentId },
   100_000_000,
 );
+// The reports journey (S2-F11-T02), in the receive-against-booking world: Booking (P-BKG), who reads the booking status
+// and the receipt problems and may not read stock; and a pair of fixture users who record and approve the booking it
+// reads, as the receive-against-booking journey's do theirs. SYNTHETIC grants and limit: who holds them is the product
+// owner's.
+const reportsReader = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-RPT-BOOKING',
+  enrolled: true,
+  personas: ['P-BKG'],
+});
+await grantSynthetic(receivingDatabase, { kind: 'user', id: reportsReader.id }, [
+  ...BOOKING_LISTS,
+  { recordType: 'booking.booking', action: 'view' },
+  { recordType: 'receiving.arrival', action: 'view' },
+  { recordType: 'receiving.grn', action: 'view' },
+]);
+const reportsFixtureBooker = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-RPT-FIXTURE-BOOKING',
+  enrolled: true,
+  personas: ['P-BKG'],
+});
+await grantSynthetic(receivingDatabase, { kind: 'user', id: reportsFixtureBooker.id }, [
+  ...BOOKING_LISTS,
+  { recordType: 'booking.booking', action: 'view' },
+  { recordType: 'booking.booking', action: 'create' },
+  { recordType: 'booking.booking', action: 'edit' },
+  { recordType: 'files_imports.stored_file', action: 'create' },
+]);
+const reportsFixtureOwner = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-RPT-FIXTURE-OWNER',
+  enrolled: true,
+  personas: ['P-OWN'],
+});
+const reportsFixtureOwnerAssignment = await grantSynthetic(
+  receivingDatabase,
+  { kind: 'user', id: reportsFixtureOwner.id },
+  [
+    ...BOOKING_LISTS,
+    { recordType: 'booking.booking', action: 'view' },
+    { recordType: 'booking.booking', action: 'approve' },
+    { recordType: 'access.approval_reason', action: 'view' },
+  ],
+);
+await bookingLimitApproved(
+  receivingStructure,
+  receivingDatabase,
+  { userId: reportsFixtureOwner.id, roleAssignmentId: reportsFixtureOwnerAssignment.assignmentId },
+  100_000_000,
+);
 // And for the damage journey: the reporter's lists of masters; an approve reason; the exception-code series and the damage-report series with SYNTHETIC
 // formats (RR-449; DEC-118); and the damage exception routed at the world's Site to Operations by a SYNTHETIC rule
 // approved here as a fixture (code-house-rules 11.2), as the other journeys' rules are. The routing is the product
@@ -3547,13 +3595,21 @@ const app = await startAccessApp(
   if (prepared.status !== 200) throw new Error(`The evidence rule change was refused: ${await prepared.text()}`);
 }
 
-// The booking the receive-against-booking journey receives against (S2-F02-T04): recorded with its document and
-// submitted by the fixture's Booking user, and approved by the fixture's Owner, through the API once the server listens, as the booking
-// journey proves on screen (booking.spec.ts): two pieces of one style and size, so a delivery of three is excess
-// (POL-05.08). Each authenticator code is for a step not used before: sign-in one step back, the decision now, both
-// within the step either side of now the server accepts (access-and-approvals 3.1). Every value is SYNTHETIC.
-const againstStyle = syntheticCode('JOURNEY-RAB-STYLE');
-const againstBookingNumber = await (async (): Promise<string> => {
+/**
+ * An approved booking for a journey, recorded with its document and submitted by a fixture's Booking user, and approved
+ * by a fixture's Owner, through the API once the server listens, as the booking journey proves on screen
+ * (booking.spec.ts): one line of the style given, in the receive-against-booking world's first size. Each
+ * authenticator code is for a step not used before: sign-in one step back, the decision now, both within the step
+ * either side of now the server accepts (access-and-approvals 3.1); so each pair of fixture users records one booking.
+ * Answers its number. Every value is SYNTHETIC.
+ */
+async function journeyBooking(
+  fixtureBooker: SyntheticUser,
+  fixtureOwner: SyntheticUser,
+  style: string,
+  quantity: number,
+  label: string,
+): Promise<string> {
   const at = { 'content-type': 'application/json', origin, 'x-forwarded-for': '10.8.8.51' };
   const signIn = async (user: SyntheticUser) => {
     const signedIn = await fetch(`${app.baseUrl}/api/access/sign-in`, {
@@ -3579,8 +3635,8 @@ const againstBookingNumber = await (async (): Promise<string> => {
     if (answer.status !== 200) throw new Error(`The booking fixture was refused at ${path}: ${await answer.text()}`);
     return (await answer.json()) as Record<string, string>;
   };
-  const booker = await signIn(againstFixtureBooker);
-  const stored = await call(booker, STORE_FILE_PATH, syntheticPdfUpload('BOOKING', 'JOURNEY-RAB'));
+  const booker = await signIn(fixtureBooker);
+  const stored = await call(booker, STORE_FILE_PATH, syntheticPdfUpload('BOOKING', label));
   const made = await call(booker, '/api/booking/bookings', {
     brandId: againstWorld.brand.id,
     destinationSiteId: againstWorld.siteId,
@@ -3589,10 +3645,10 @@ const againstBookingNumber = await (async (): Promise<string> => {
     deliveryWindow: { from: receivingStructure.today(), to: receivingStructure.day(30) },
     lines: [
       {
-        styleCode: againstStyle,
+        styleCode: style,
         colour: 'SYNTHETIC NAVY',
         size: againstWorld.sizes.values[0]?.code ?? null,
-        quantity: 2,
+        quantity,
         indicativeCost: 50_000,
         mrp: 99_900,
         deliveryDate: null,
@@ -3607,18 +3663,39 @@ const againstBookingNumber = await (async (): Promise<string> => {
   const submitted = await call(booker, `/api/booking/bookings/${bookingId}/submission`, {
     versionToken: attached.versionToken,
   });
-  const owner = await signIn(againstFixtureOwner);
+  const owner = await signIn(fixtureOwner);
   await call(owner, `/api/access/approval-requests/${submitted.requestId ?? ''}/decision`, {
     versionId: submitted.versionId,
     outcome: 'approve',
     reason: { kind: 'listed', reasonId: bookingReasonId },
-    totpCode: codeFor(againstFixtureOwner.factorSecret ?? Buffer.alloc(0)),
+    totpCode: codeFor(fixtureOwner.factorSecret ?? Buffer.alloc(0)),
   });
   const read = await fetch(`${app.baseUrl}/api/booking/bookings/${bookingId}`, { headers: { cookie: owner } });
   const number = ((await read.json()) as { booking: { number?: string } }).booking.number;
-  if (number === undefined) throw new Error('The booking of the receive-against-booking journey has no number');
+  if (number === undefined) throw new Error(`The booking of the ${label} journey has no number`);
   return number;
-})();
+}
+
+// The booking the receive-against-booking journey receives against (S2-F02-T04): two pieces of one style and size, so
+// a delivery of three is excess (POL-05.08).
+const againstStyle = syntheticCode('JOURNEY-RAB-STYLE');
+const againstBookingNumber = await journeyBooking(
+  againstFixtureBooker,
+  againstFixtureOwner,
+  againstStyle,
+  2,
+  'JOURNEY-RAB',
+);
+// The booking the reports journey reads (S2-F11-T02): four pieces of a style of its own, in the same world, by a pair
+// of fixture users of its own, so the receive-against-booking journey, which runs at once, never changes it.
+const reportsStyle = syntheticCode('JOURNEY-RPT-STYLE');
+const reportsBookingNumber = await journeyBooking(
+  reportsFixtureBooker,
+  reportsFixtureOwner,
+  reportsStyle,
+  4,
+  'JOURNEY-RPT',
+);
 
 // The import outcomes report journey's two batches, one in each Store, started through the API by the seeding
 // importer once the server listens (imports-and-opening-data 13.1; S1-F06-T04). Every value is SYNTHETIC.
@@ -3905,6 +3982,13 @@ writeFileSync(
       options: againstWorld.options,
       bookingNumber: againstBookingNumber,
       styleCode: againstStyle,
+    },
+    reports: {
+      organisationCode: receivingCode,
+      reader: credentialsOf(reportsReader),
+      options: againstWorld.options,
+      bookingNumber: reportsBookingNumber,
+      styleCode: reportsStyle,
     },
     ptUpload: {
       organisationCode: receivingCode,

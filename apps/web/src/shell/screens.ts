@@ -18,7 +18,7 @@ export interface Grant {
  */
 export type ScreenNeed = { readonly kind: 'none' } | { readonly kind: 'grant'; readonly grant: Grant };
 
-export const sections = ['home', 'booking', 'receive-goods', 'stock', 'money', 'setup'] as const;
+export const sections = ['home', 'booking', 'receive-goods', 'stock', 'reports', 'money', 'setup'] as const;
 export type Section = (typeof sections)[number];
 
 export interface Screen {
@@ -49,6 +49,21 @@ export const screens = {
   // Stock › Stock search: each product at each place with its quantities apart, and the same product elsewhere
   // (goods-in 9.2, section 11; ui-blueprint Stock "Stock explorer"; S2-F11-T01).
   'stock.search': { section: 'stock', path: '/stock/search', need: view('stock.balance') },
+  // Reports › the stage 2 reports: booking status, receipt problems, supplier performance and stock by product, size,
+  // location, condition and owner, each opened by a grant of view on what it reads (goods-in 9.3, 9.5, section 11;
+  // ui-blueprint Reports; S2-F11-T02).
+  'reports.booking-status': { section: 'reports', path: '/reports/booking-status', need: view('booking.booking') },
+  'reports.receipt-problems': {
+    section: 'reports',
+    path: '/reports/receipt-problems',
+    need: view('receiving.arrival'),
+  },
+  'reports.supplier-performance': {
+    section: 'reports',
+    path: '/reports/supplier-performance',
+    need: view('booking.booking'),
+  },
+  'reports.stock': { section: 'reports', path: '/reports/stock', need: view('stock.balance') },
   'setup.users': { section: 'setup', path: '/setup/users', need: view('access.user') },
   'setup.roles': { section: 'setup', path: '/setup/roles', need: view('access.role') },
   'setup.role-assignments': {
@@ -144,7 +159,17 @@ export const personaMenus: Readonly<Record<PersonaId, { home: ScreenId | null; m
   // Booking (open-to-buy, approve) arrives with S2-F01-T02 (ui-blueprint "Menus by persona").
   'P-OWN': {
     home: 'my-work',
-    menu: ['my-work', 'booking.open-to-buy', 'stock.search', 'setup.policy-readiness', 'setup.approval-limits'],
+    menu: [
+      'my-work',
+      'booking.open-to-buy',
+      'stock.search',
+      'reports.booking-status',
+      'reports.receipt-problems',
+      'reports.supplier-performance',
+      'reports.stock',
+      'setup.policy-readiness',
+      'setup.approval-limits',
+    ],
   },
   'P-ADM': {
     home: 'setup.policy-readiness',
@@ -174,6 +199,10 @@ export const personaMenus: Readonly<Record<PersonaId, { home: ScreenId | null; m
     home: null,
     menu: [
       'stock.search',
+      'reports.booking-status',
+      'reports.receipt-problems',
+      'reports.supplier-performance',
+      'reports.stock',
       'money.internal-ledger',
       'money.period-close',
       'setup.organisation-structure',
@@ -186,14 +215,45 @@ export const personaMenus: Readonly<Record<PersonaId, { home: ScreenId | null; m
   // Booking's Setup is "Products · Suppliers and agreements" (ui-blueprint); Products arrives with S1-F03-T02.
   // Booking › Open-to-buy arrives with S2-F01-T02, Booking › Bookings with S2-F01-T03 (ui-blueprint; goods-in
   // section 11).
-  'P-BKG': { home: null, menu: ['booking.bookings', 'booking.open-to-buy', 'stock.search', 'setup.products'] },
+  // The stage 2 reports arrive with S2-F11-T02 for every persona whose ui-blueprint menu has Reports or Booking's
+  // Supplier performance; what each sees is its grants' (goods-in 9.5).
+  'P-BKG': {
+    home: null,
+    menu: [
+      'booking.bookings',
+      'booking.open-to-buy',
+      'reports.supplier-performance',
+      'stock.search',
+      'reports.booking-status',
+      'reports.receipt-problems',
+      'reports.stock',
+      'setup.products',
+    ],
+  },
   // Operations' Setup is "Site opening and closure" (ui-blueprint; S1-F04-T02).
-  'P-OPS': { home: 'my-work', menu: ['my-work', 'stock.search', 'setup.site-opening'] },
+  'P-OPS': {
+    home: 'my-work',
+    menu: [
+      'my-work',
+      'stock.search',
+      'reports.booking-status',
+      'reports.receipt-problems',
+      'reports.supplier-performance',
+      'reports.stock',
+      'setup.site-opening',
+    ],
+  },
   // Warehouse lands on Receive Goods › Inbox (Pending), from S2-F02-T02 (ui-blueprint "Menus by persona").
-  'P-WHS': { home: 'receiving.inbox', menu: ['my-work', 'receiving.inbox', 'stock.search'] },
-  'P-BRM': { home: null, menu: ['stock.search'] },
+  'P-WHS': {
+    home: 'receiving.inbox',
+    menu: ['my-work', 'receiving.inbox', 'stock.search', 'reports.receipt-problems', 'reports.stock'],
+  },
+  'P-BRM': { home: null, menu: ['stock.search', 'reports.stock'] },
   // A Store's staff receive goods at their Store, from S2-F02-T02 (ui-blueprint "Menus by persona").
-  'P-STM': { home: null, menu: ['my-work', 'receiving.inbox', 'stock.search'] },
+  'P-STM': {
+    home: null,
+    menu: ['my-work', 'receiving.inbox', 'stock.search', 'reports.receipt-problems', 'reports.stock'],
+  },
   'P-CSH': { home: null, menu: ['stock.search'] },
   'P-SLS': { home: null, menu: ['stock.search'] },
   'P-EBO': { home: null, menu: ['stock.search'] },

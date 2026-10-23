@@ -571,3 +571,6 @@ export * from './pt.js';
 
 // `reports`' stock search (goods-in 9.1, 9.2; S2-F11-T01).
 export * from './stock-search.js';
+
+// `reports`' stage 2 reports (goods-in 9.1, 9.3, 9.5; S2-F11-T02).
+export * from './reports.js';

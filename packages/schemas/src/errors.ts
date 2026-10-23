@@ -1368,13 +1368,17 @@ export const stockDocumentsCodes = declareCodes({
 });
 
 /**
- * `reports`' codes (goods-in 9.1, 9.4; S2-F11-T01):
+ * `reports`' codes (goods-in 9.1, 9.4, 9.5; S2-F11-T01, S2-F11-T02):
  *
- * - `reports.export-too-large`: the search finds more results than one export holds (`STOCK_SEARCH_EXPORT_CAP`, a
- *   technical cap); `missing` names the cap. Narrow the search.
+ * - `reports.export-too-large`: the search or report finds more results than one export holds
+ *   (`STOCK_SEARCH_EXPORT_CAP` and the reports' export caps, technical caps). Narrow the search or the report.
+ * - `reports.report-too-large`: the supplier report would read more bookings or GRN lines than it reads to work out
+ *   its figures (`SUPPLIER_REPORT_BOOKING_CAP`, `SUPPLIER_REPORT_LINE_CAP`, technical caps), so it shows none from
+ *   part of its records (PRD-PRF-004). Narrow it by supplier, brand or season.
  */
 export const reportsCodes = declareCodes({
   'reports.export-too-large': 'refused',
+  'reports.report-too-large': 'refused',
 });
 
 /** Every declared code, of every unit. A unit adds its own here as it declares them (code-house-rules 12.3). */

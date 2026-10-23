@@ -6,7 +6,8 @@ import type { Sheet } from '../domain/export.js';
 // row Documents: ExcelJS; code-house-rules 2 `writers/`; S2-F11-T01): one sheet a table, its lines of preface above the
 // header row, then the rows. A quantity is a whole number; an amount in paise is written as its exact text in rupees
 // with two decimals, never through a binary fraction, as the PT's download writes its amounts (goods-in 6.6;
-// PRD-MOD-014). It writes no formula, no link and no macro. Pure: bytes in memory, no file, no network.
+// PRD-MOD-014); a rate of the stage 2 reports as a percentage (S2-F11-T02). It writes no formula, no link and no
+// macro. Pure: bytes in memory, no file, no network.
 
 export async function workbookOf(sheets: readonly Sheet[]): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
@@ -29,6 +30,11 @@ export async function workbookOf(sheets: readonly Sheet[]): Promise<Buffer> {
         if (cell.kind === 'text') target.value = cell.text;
         if (cell.kind === 'quantity') target.value = cell.quantity;
         if (cell.kind === 'paise') target.value = rupeesText(paise(cell.paise));
+        // A rate as the fraction of its two whole numbers, shown as a percentage (S2-F11-T02). Not money.
+        if (cell.kind === 'rate') {
+          target.value = cell.numerator / cell.denominator;
+          target.numFmt = '0.0%';
+        }
       });
       row.commit();
     });

@@ -187,6 +187,8 @@ Events: `organisation.structure-changed`, `organisation.mapping-changed` (module
 
 **The places a report names, as built** (`S2-F11-T01`; goods-in 9.4). **Design choice.** `organisation` serves the read model `organisation.places` through the kernel's read-model gateway (module-map 4.1 "As built"): given Sites, business units and locations by identifier and a date, each with its code and its name in force on the date, a unit with its Site and Store, a location with its kind, Site and unit; one that does not exist, or has no approved version in force on the date, is not answered, and the reader shows it as Unknown. The tables carry no row-level security (6.1): a reader learns of a place only through the records its own grants show it.
 
+**The legal entities a report names, as built** (`S2-F11-T02`; goods-in 9.5). **Design choice.** `organisation.places` also names legal entities given by identifier, each with its code and its legal name in force on the date, which the stock report shows as the Organisation owning goods (`PRD-ORG-015`); one not answered is Unknown to the reader. The query names them only when it is given them, so stock search's reads are unchanged.
+
 ### 3.9 The place tree for access
 
 - A role assignment's places form one tree: a Site, the Stores linked to it on a date, and the business units of each Store; warehouse and office units hang directly under their Site (`PRD-ACS-021`, DEC-094).
@@ -327,6 +329,8 @@ Events: `merchandise.product-confirmed`, `merchandise.code-mapping-changed`, `me
 
 **The products a stock search names, as built** (`S2-F11-T01`; goods-in 9.2, 9.4). **Design choice.** The catalogue serves two read models through the kernel's read-model gateway (module-map 4.1 "As built"). `merchandise.product-search` answers the SKUs a search names, every filter together: a text found as a part, ignoring case, in the style code, the SKU code or the brand's article number of the style version in force today, through trigram indexes (migration `merchandise.catalogue__product_search`); a size equal to the SKU's, ignoring case and spaces at the ends; a barcode, every SKU a mapping of it in force today names, of the kinds supplier barcode and internal, in any scope, an alias too, so a barcode a brand repeats across products names each (4.3; `PRD-MER-007`); a brand, the style's. It answers at most the caller's cap in identifier order and says when more match. The catalogue keeps no product name (4.1), so a text cannot find one (RR-640). `merchandise.product-facts` answers, for the SKUs and brands given, each SKU's code, style code, size (null while Unknown), the article number of its style version in force and its identity, each value a list value's code and name in force, a text, or Unknown; and each brand's code and name in force. The masters carry no row-level security (6.2): a reader learns of a product only through the stock its own grants show it.
 
+**The values a report names, as built** (`S2-F11-T02`; goods-in 9.5). **Design choice.** The catalogue serves `merchandise.value-names` through the kernel's read-model gateway (module-map 4.1 "As built"): vocabulary values by identifier, each with its code and its name in force on the date, such as a booking's season; one that does not exist, or has no name in force, is not answered, and the reader shows it as Unknown. The masters carry no row-level security (6.2): a reader learns of a value only through the records its own grants show it.
+
 ## 5. Parties and agreements
 
 Owner: `merchandise` · parties. Commercial ownership policy (`POL-01`).
@@ -389,6 +393,8 @@ Owner: `merchandise` · parties. Commercial ownership policy (`POL-01`).
 | Change bank details | A new version; it waits for approval by a different authorised person: a supplier's under `POL-02.07`, every other party's under the baseline (GC2-6, DEC-105) | A change is approved by its preparer |
 
 Event: `merchandise.agreement-changed` (module-map section 8).
+
+**The parties a report names, as built** (`S2-F11-T02`; goods-in 9.5). **Design choice.** The parties part serves `merchandise.party-names` through the kernel's read-model gateway (module-map 4.1 "As built"): parties by identifier, each with its code and its legal name in force on the date, such as a booking's or an Arrival's supplier; one that does not exist, or has no version in force, is not answered, and the reader shows it as Unknown. The masters carry no row-level security (6.2): a reader learns of a party only through the records its own grants show it.
 
 ## 6. Tables
 

@@ -13,3 +13,6 @@ export { ptPostingConsumers } from './jobs/posting.js';
 export { ptExceptionTypes } from './exception-types.js';
 export { ptApproved, ptPostingFailed, ptPostRequested } from './events.js';
 export { ptRestoreParticipant } from './restore-participant.js';
+// The MRP of the goods a PT established, through the read-model gateway, for the stage 2 stock report (goods-in 9.5;
+// S2-F11-T02).
+export { PT_ORIGIN_MRP, ptReadModels } from './queries/origin-mrp.js';

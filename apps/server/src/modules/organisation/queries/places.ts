@@ -1,9 +1,11 @@
 import { sql } from 'drizzle-orm';
 import { declareReadModel, serveReadModel, type TransactionContext } from '../../../kernel/index.js';
 
-// The places a report names (goods-in 9.2, 9.4; structure-and-masters 3.5, 3.8; module-map section 3 rule 5;
-// S2-F11-T01), served through the kernel's read-model gateway: Sites, business units and locations by identifier, each
-// with its code and its name in force on the date, a unit with its Site and Store, a location with its kind and unit.
+// The places a report names (goods-in 9.2, 9.4, 9.5; structure-and-masters 3.5, 3.8; module-map section 3 rule 5;
+// S2-F11-T01, S2-F11-T02), served through the kernel's read-model gateway: Sites, business units and locations by
+// identifier, each with its code and its name in force on the date, a unit with its Site and Store, a location with its
+// kind and unit; and legal entities, by their legal name, which the stock report names as the Organisation owning goods
+// (PRD-ORG-015; S2-F11-T02).
 // The masters are unscoped (structure-and-masters 6.1): a reader learns of a place only through the records its own
 // grants show it. One that does not exist, or has no version in force on the date, is not answered.
 
@@ -11,6 +13,8 @@ export interface PlacesQuery {
   readonly siteIds: readonly string[];
   readonly businessUnitIds: readonly string[];
   readonly locationIds: readonly string[];
+  /** The legal entities to name; none when not given (S2-F11-T02). */
+  readonly legalEntityIds?: readonly string[];
   readonly date: string;
 }
 
@@ -28,6 +32,7 @@ export interface PlacesAnswer {
     readonly businessUnitId: string;
     readonly kind: string;
   })[];
+  readonly legalEntities: readonly PlaceName[];
 }
 
 const ids = (values: readonly string[]) => sql.param([...new Set(values)]);
@@ -82,8 +87,21 @@ export async function placesNamed(context: TransactionContext, query: PlacesQuer
         and v.valid_during @> ${query.date}::date
       order by l.id`)
         ).rows;
+  const entityIds = query.legalEntityIds ?? [];
+  const legalEntities =
+    entityIds.length === 0
+      ? []
+      : (
+          await context.tx.execute<{ id: string; code: string; name: string }>(sql`
+      select e.id::text as id, e.code, v.legal_name as name
+      from organisation.legal_entity e join organisation.legal_entity_version v on v.legal_entity_id = e.id
+      where e.id = any(${ids(entityIds)}::uuid[]) and v.decision = 'Approved'
+        and v.valid_during @> ${query.date}::date
+      order by e.id`)
+        ).rows;
   return {
     sites,
+    legalEntities,
     businessUnits: units.map((row) => ({
       id: row.id,
       code: row.code,

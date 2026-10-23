@@ -324,13 +324,13 @@ export async function bookingView(
  * its first approval, Awaiting approval after a submission and a Draft otherwise; once approved, the state of the
  * approved version of the highest number, Confirmed, Issued or Approved.
  */
-const approvedVersionId = sql`(select a.booking_version_id from booking.booking_approval a
+export const approvedVersionId = sql`(select a.booking_version_id from booking.booking_approval a
   join booking.booking_version av on av.id = a.booking_version_id
   where a.booking_id = ${booking.id} order by av.version_number desc limit 1)`;
 const newestContentKind = sql`(select c.change from booking.booking_change c
   where c.booking_id = ${booking.id} and c.change in ('draft', 'documents', 'submission', 'approval', 'rejection')
   order by c.change_number desc limit 1)`;
-const stateOfRow = sql<BookingSummary['state']>`(case
+export const stateOfRow = sql<BookingSummary['state']>`(case
   when ${approvedVersionId} is null then
     (case when ${newestContentKind} = 'submission' then 'Awaiting approval' else 'Draft' end)
   when exists (select 1 from booking.booking_confirmation f where f.booking_version_id = ${approvedVersionId})

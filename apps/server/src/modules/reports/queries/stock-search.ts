@@ -76,8 +76,11 @@ const factsOf = (row: {
   brandId: row.brandId,
 });
 
-/** The product of a result as the reader sees it; a SKU the catalogue does not answer is Unknown (PRD-MOD-015). */
-function productOf(position: Position, facts: ReadonlyMap<string, ProductFacts>): StockProduct {
+/**
+ * The product of a result as the reader sees it; a SKU the catalogue does not answer is Unknown (PRD-MOD-015). The
+ * stock report names its products the same way (goods-in 9.5; S2-F11-T02).
+ */
+export function productOf(position: Pick<Position, 'product'>, facts: ReadonlyMap<string, ProductFacts>): StockProduct {
   const { product } = position;
   if (product.kind === 'counted') return { ...product };
   if (product.kind === 'unidentified') return { kind: 'unidentified' };
