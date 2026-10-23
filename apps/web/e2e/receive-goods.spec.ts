@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { Authenticator } from './support/authenticator';
 import { organisationToday, signIn } from './support/journey';
 import { readWorld, type EnrolledUser, type ReceivingOptions } from './support/world';
+import { anHourAgo } from './support/clock';
 
 // S2-F02-T02: the journeys of Receive Goods, one per persona that receives (code-house-rules 10.1; goods-in 4.1 to
 // 4.5, section 11; PRD-REC-001 to PRD-REC-008; DEC-133), each in a SYNTHETIC world of its own. A Warehouse receiver
@@ -43,14 +44,6 @@ function shown(date: string): string {
   return `${day} ${MONTHS[Number(month) - 1] ?? ''} ${year}`;
 }
 
-/**
- * An hour ago, as a `datetime-local` field takes it: the Organisation's wall clock, Etc/UTC on the journeys' server
- * (apps/server/test/browser/serve.ts), whatever the browser's time zone (code-house-rules 9).
- */
-function anHourAgo(): string {
-  return new Date(Date.now() - 3_600_000).toISOString().slice(0, 16);
-}
-
 /** The Organisation's business date so many days from today (Etc/UTC on the journeys' server). */
 function daysFromToday(days: number): string {
   return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
@@ -83,7 +76,7 @@ async function recordArrival(page: Page, options: ReceivingOptions, lorryReceipt
   await form.getByLabel(/^Lorry receipt number/).fill(lorryReceipt);
   await form.getByLabel(/^Lorry receipt date/).fill(organisationToday());
   await form.getByLabel(/^Cartons/).fill('2');
-  await form.getByLabel(/^Arrived/).fill(anHourAgo());
+  await form.getByLabel(/^Arrived/).fill(await anHourAgo());
   await page.getByRole('dialog').getByRole('button', { name: 'Record the Arrival' }).click();
   await expect(page.getByRole('heading', { level: 2, name: `Arrival from ${options.supplier}` })).toBeVisible();
 }

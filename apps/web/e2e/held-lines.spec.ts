@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { Authenticator } from './support/authenticator';
 import { organisationToday, signIn } from './support/journey';
 import { readWorld, type EnrolledUser, type ReceivingOptions } from './support/world';
+import { anHourAgo } from './support/clock';
 
 // S2-F02-T03: the held-line journey (goods-in 4.4 to 4.6, section 11; PRD-REC-006, PRD-REC-013, POL-17.02,
 // POL-17.11; code-house-rules 10.1). Warehouse (P-WHS) counts one piece more than the invoice lists: saving the line
@@ -18,14 +19,6 @@ const INVOICE_PDF = {
 };
 
 const STYLE = 'SYN-STYLE-HELD';
-
-/**
- * An hour ago, as a `datetime-local` field takes it: the Organisation's wall clock, Etc/UTC on the journeys' server
- * (apps/server/test/browser/serve.ts), whatever the browser's time zone (code-house-rules 9).
- */
-function anHourAgo(): string {
-  return new Date(Date.now() - 3_600_000).toISOString().slice(0, 16);
-}
 
 async function signedIn(page: Page, code: string, user: EnrolledUser): Promise<Authenticator> {
   const app = new Authenticator(Buffer.from(user.factorSecretHex, 'hex'));
@@ -50,7 +43,7 @@ async function arrivalWithInvoice(page: Page, options: ReceivingOptions): Promis
   await form.getByLabel(/^Lorry receipt number/).fill('SYN-LR-HELD');
   await form.getByLabel(/^Lorry receipt date/).fill(organisationToday());
   await form.getByLabel(/^Cartons/).fill('1');
-  await form.getByLabel(/^Arrived/).fill(anHourAgo());
+  await form.getByLabel(/^Arrived/).fill(await anHourAgo());
   await page.getByRole('dialog').getByRole('button', { name: 'Record the Arrival' }).click();
   await expect(page.getByRole('heading', { level: 2, name: `Arrival from ${options.supplier}` })).toBeVisible();
   const invoice = page.getByRole('form', { name: 'Add the invoice' });

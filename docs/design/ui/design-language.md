@@ -234,7 +234,7 @@ Rules:
 
 ### All states
 
-Names follow the PRD and the KDPS policies. The state names for Site, Store and business unit, master version, user, import batch, proposal, financial period, number series, exception and approval request are the baseline set by `DEC-105` (DM-4): states 50 to 63 are new, and the "Where it appears" cells of Closed, Ended, Confirmed, Paused, Reopened, Rejected and Failed are extended. Design review confirms the names. The product owner approved on 6 Oct 2026 state 64, Withdrawn (RR-202, code-house-rules CH-11; its Neutral family, like Cancelled and Superseded, confirmed by the product owner, `DEC-117`), and the billing-device states Setting up, Active, Ended and Revoked ([offline-counter.md](../pos/offline-counter.md) 3.1, GC8-7).
+Names follow the PRD and the KDPS policies. The state names for Site, Store and business unit, master version, user, import batch, proposal, financial period, number series, exception and approval request are the baseline set by `DEC-105` (DM-4): states 50 to 63 are new, and the "Where it appears" cells of Closed, Ended, Confirmed, Paused, Reopened, Rejected and Failed are extended. Design review confirms the names. The product owner approved on 6 Oct 2026 state 64, Withdrawn (RR-202, code-house-rules CH-11; its Neutral family, like Cancelled and Superseded, confirmed by the product owner, `DEC-117`), and the billing-device states Setting up, Active, Ended and Revoked ([offline-counter.md](../pos/offline-counter.md) 3.1, GC8-7). State 65, Posting, is the name the approved [stock-ledger.md](../stock/stock-ledger.md) 10.6 gives a document waiting for its queued posting job, which a large PT's revision shows (code review 7 of stage 2).
 
 | # | State | Family | Glyph | Where it appears |
 |---|---|---|---|---|
@@ -248,7 +248,7 @@ Names follow the PRD and the KDPS policies. The state names for Site, Store and 
 | 8 | Submitted | Pending | ◔ | PT, adjustment, offer, damage report |
 | 9 | Awaiting approval | Pending | ◔ | Any record that needs independent approval, a period reopening among them |
 | 10 | Awaiting outcome | Pending | ◔ | Card or UPI payment, refund, IRN, e-way bill, Tally voucher, bank payment |
-| 11 | Queued | Pending | ◔ | Offline counter upload queue, export, Tally batch, an approved PT waiting for its posting job (goods-in 6.6) |
+| 11 | Queued | Pending | ◔ | Offline counter upload queue, export, Tally batch |
 | 12 | Recorded manually | Pending | ◔ | Card or UPI payment recorded by the cashier without provider evidence (`PRD-POS-010`) |
 | 13 | Partly received | Pending | ◔ | Booking, transfer |
 | 14 | In transit | Moving | ▸ | Transfer while any dispatch has not yet arrived (`PRD-TRF-013`), supplier-return shipment, cash in transit |
@@ -302,6 +302,7 @@ Names follow the PRD and the KDPS policies. The state names for Site, Store and 
 | 62 | Unresolved | Attention | ! | Exception raised and not yet resolved |
 | 63 | Superseded | Neutral | ○ | Approval request ended by a material change |
 | 64 | Withdrawn | Neutral | ○ | A Scheduled master version or dated row, such as a role assignment, withdrawn before its start through an approved change, or a request withdrawn before approval, such as a rejected user's pending assignments; the record keeps which and why; never in force ([code-house-rules.md](../platform/code-house-rules.md) 7.3; `DEC-117`); a period reopening withdrawn before its approval (product owner, 20 Oct 2026; RR-490) |
+| 65 | Posting | Pending | ◔ | An approved document waiting for its queued posting job, as stock-ledger 10.6 names it: a PT approved above the rows posted with their decision (goods-in 6.6; code review 7 of stage 2) |
 
 Rules:
 

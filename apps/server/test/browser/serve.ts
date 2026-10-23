@@ -1290,13 +1290,20 @@ const periodApprover = await postingUser('BROWSER-PERIOD-APPROVER', [
 ]);
 // The harness the journey asks to post the correction (code-house-rules 11.4: test code, composed only here), on a
 // local port of its own beside the server of the journeys. It also answers `GET /ready` once the world file is
-// written, which Playwright waits for: the API answers before the seeding done through it ends, so its health alone
-// would let the journeys read a world file that is missing or left by an earlier run.
+// written and the worker has delivered every event the fixtures recorded, which Playwright waits for: the API answers
+// before the seeding done through it ends, so its health alone would let the journeys read a world file that is
+// missing or left by an earlier run, and a journey would wait in My work behind other fixtures' approvals (code-house-
+// rules 10.1; code review 7 of stage 2). And `GET /now`, the server's clock, the one the application runs on, which
+// the journeys' times are taken from (e2e/support/clock.ts).
 const harnessPort = port + 11;
 let worldWritten = false;
 const harness = createServer((request, response) => {
   if (request.method === 'GET' && request.url === '/ready') {
     response.writeHead(worldWritten ? 200 : 503).end();
+    return;
+  }
+  if (request.method === 'GET' && request.url === '/now') {
+    response.writeHead(200, { 'content-type': 'text/plain' }).end(new Date().toISOString());
     return;
   }
   if (request.method !== 'POST' || request.url !== '/post-period-correction') {
@@ -3718,6 +3725,53 @@ let openingBatchCode: string;
   if (started.status !== 200) throw new Error(`The opening batch was refused: ${await started.text()}`);
   openingBatchCode = ((await started.json()) as { code: string }).code;
 }
+
+/**
+ * Waits until the worker has delivered every event the fixtures recorded for its consumers, in every Organisation the
+ * directory lists: none left undispatched since its consumer registered, and no delivery job created, retried or
+ * active. So no journey waits in My work behind another's fixtures (code-house-rules 10.1; code review 7 of stage 2).
+ * At most ten minutes, a technical bound of this test plumbing.
+ */
+async function fixtureEventsDelivered(): Promise<void> {
+  const directory = await connect(world.directory, 'migration');
+  let databases: string[];
+  try {
+    databases = (
+      await directory.query<{ name: string }>('select database_name as name from kernel.directory_entry')
+    ).rows.map((row) => row.name);
+  } finally {
+    await directory.end();
+  }
+  const until = Date.now() + 600_000;
+  for (;;) {
+    let waiting = 0;
+    for (const database of databases) {
+      const owner = await connect(database, 'migration');
+      try {
+        const [undispatched] = (
+          await owner.query<{ count: number }>(
+            `select count(*)::int as count from kernel.outbox_event e
+               join kernel.outbox_consumer c on c.event_type = e.event_type and e.recorded_at >= c.recorded_at
+              where not exists (select 1 from kernel.outbox_dispatch d
+                                 where d.outbox_event_id = e.id and d.outbox_consumer_id = c.id)`,
+          )
+        ).rows;
+        const [delivering] = (
+          await owner.query<{ count: number }>(
+            `select count(*)::int as count from pgboss.job where state in ('created', 'retry', 'active')`,
+          )
+        ).rows;
+        waiting += (undispatched?.count ?? 0) + (delivering?.count ?? 0);
+      } finally {
+        await owner.end();
+      }
+    }
+    if (waiting === 0) return;
+    if (Date.now() > until) throw new Error(`The worker still had ${String(waiting)} fixture events to deliver`);
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+  }
+}
+await fixtureEventsDelivered();
 
 mkdirSync(dirname(worldFile), { recursive: true });
 writeFileSync(
