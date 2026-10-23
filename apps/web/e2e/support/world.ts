@@ -343,6 +343,34 @@ export interface SyntheticWorld {
     /** How Stock search names the floor in a result's place: its code and name (S2-F11-T01). */
     readonly floorName: string;
   };
+  /**
+   * The joined journey of the first version (goods-in 12 test 22; S2-F07-T02), in the receiving Organisation, in the PT
+   * approval journey's world, on its lists, template and floor, with a style of its own: Booking (P-BKG), Accounts
+   * (P-ACC), the Owner (P-OWN), Warehouse (P-WHS), also assigned to make PTs, Operations (P-OPS) and a Store's staff
+   * (P-STM) at the world's Store; the approve and reject reasons; how the booking and budget forms name the booking
+   * journey's SYNTHETIC season; and three SYNTHETIC PT files of the style and the world's first size, two pieces: one
+   * refused, one Operations rejects, and the corrected one, with their two barcodes.
+   */
+  readonly goodsIn: {
+    readonly organisationCode: string;
+    readonly booker: EnrolledUser;
+    readonly accounts: EnrolledUser;
+    readonly owner: EnrolledUser;
+    readonly receiver: EnrolledUser;
+    readonly operations: EnrolledUser;
+    readonly storeStaff: EnrolledUser;
+    readonly approveReasonId: string;
+    readonly rejectReasonId: string;
+    readonly options: ReceivingOptions;
+    readonly seasonOption: string;
+    readonly styleCode: string;
+    readonly refusedFile: string;
+    readonly rejectedFile: string;
+    readonly correctedFile: string;
+    readonly barcodes: readonly string[];
+    readonly floor: string;
+    readonly floorName: string;
+  };
   readonly openToBuy: {
     readonly organisationCode: string;
     readonly booking: EnrolledUser;

@@ -3385,6 +3385,215 @@ const ptApprovalFloor = await approved(receivingStructure, (c, p) =>
     validFrom: receivingStructure.today(),
   }),
 );
+// The joined journey of the first version (goods-in-journey.spec.ts; goods-in 12 test 22, section 11; roadmap 2.2;
+// S2-F07-T02), in the receiving Organisation, in the PT file journey's world, on its lists, template, book and floor,
+// with a style of its own, as the PT approval journey's: Booking (P-BKG), who records the booking, prepares the
+// open-to-buy budget of the world's brand and the booking journey's season, may not see stock and reads the booking
+// status; Accounts (P-ACC), who checks the budget from My work, holds approve on budgets too, so the refusal of their
+// approving it is for having checked it alone (DEC-142), and sees stock with its cost; the Owner (P-OWN), who approves
+// the budget and, at the world's Site only, the booking within an individual SYNTHETIC limit below the other Owners',
+// so the booking is offered to this Owner alone and no other journey's booking to them (access-and-approvals 9.4 "As
+// built"); Warehouse (P-WHS), also assigned to make PTs, who receives against the booking, counts, issues the GRN and
+// uploads its PT files; Operations (P-OPS), who rejects the first PT and approves the corrected one within a SYNTHETIC
+// limit equal to the PT approval journey's approver's, so each of them is offered both journeys' PTs and chooses its
+// own maker's; and a Store's staff (P-STM) at the world's Store, who scans the pieces in and finds them in Stock search.
+// A reject reason in force. Three SYNTHETIC files of the style and the world's first size, two pieces: one refused,
+// its MARGIN wrong and one piece short; one at P RATE 900.00, which Operations rejects; and the corrected one at P RATE
+// 945.00. Who holds what, the limits and every value are the product owner's: SYNTHETIC here.
+const goodsInBooker = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-GI-BOOKING',
+  enrolled: true,
+  personas: ['P-BKG'],
+});
+await grantSynthetic(receivingDatabase, { kind: 'user', id: goodsInBooker.id }, [
+  ...BOOKING_LISTS,
+  { recordType: 'booking.booking', action: 'view' },
+  { recordType: 'booking.booking', action: 'create' },
+  { recordType: 'booking.booking', action: 'edit' },
+  { recordType: 'booking.open_to_buy_budget', action: 'view' },
+  { recordType: 'booking.open_to_buy_budget', action: 'create' },
+  { recordType: 'booking.open_to_buy_budget', action: 'edit' },
+  { recordType: 'files_imports.stored_file', action: 'create' },
+  // The booking status report reads the receipts that deliver to a booking (goods-in 9.3).
+  { recordType: 'receiving.arrival', action: 'view' },
+  { recordType: 'receiving.grn', action: 'view' },
+]);
+const goodsInAccounts = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-GI-ACCOUNTS',
+  enrolled: true,
+  personas: ['P-ACC'],
+});
+await grantSynthetic(
+  receivingDatabase,
+  { kind: 'user', id: goodsInAccounts.id },
+  [
+    ...BOOKING_LISTS,
+    ...STOCK_VIEW,
+    { recordType: 'booking.open_to_buy_budget', action: 'view' },
+    { recordType: 'booking.open_to_buy_budget', action: 'approve' },
+    { recordType: 'booking.open_to_buy_check', action: 'view' },
+    { recordType: 'booking.open_to_buy_check', action: 'approve' },
+    { recordType: 'access.approval_reason', action: 'view' },
+  ],
+  { fieldClasses: [{ fieldClass: 'cost', access: 'view' }] },
+);
+const goodsInOwner = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-GI-OWNER',
+  enrolled: true,
+  personas: ['P-OWN'],
+});
+await grantSynthetic(receivingDatabase, { kind: 'user', id: goodsInOwner.id }, [
+  ...BOOKING_LISTS,
+  { recordType: 'booking.open_to_buy_budget', action: 'view' },
+  { recordType: 'booking.open_to_buy_budget', action: 'approve' },
+  { recordType: 'access.approval_reason', action: 'view' },
+  // The users, so My work names who prepared each request.
+  { recordType: 'access.user', action: 'view' },
+]);
+const goodsInOwnerBookings = await grantSynthetic(
+  receivingDatabase,
+  { kind: 'user', id: goodsInOwner.id },
+  [
+    { recordType: 'booking.booking', action: 'view' },
+    { recordType: 'booking.booking', action: 'approve' },
+    { recordType: 'access.approval_request', action: 'view' },
+    { recordType: 'access.approval_reason', action: 'view' },
+  ],
+  { scope: placeScope([{ type: 'site', id: ptReceivingWorld.siteId }]) },
+);
+// A SYNTHETIC limit of ₹5,00,000.00 on cost, prepared and approved by two other people through access's commands.
+await bookingLimitApproved(
+  receivingStructure,
+  receivingDatabase,
+  { userId: goodsInOwner.id, roleAssignmentId: goodsInOwnerBookings.assignmentId },
+  50_000_000,
+);
+const goodsInReceiver = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-GI-WAREHOUSE',
+  enrolled: true,
+  personas: ['P-WHS'],
+});
+await grantSynthetic(
+  receivingDatabase,
+  { kind: 'user', id: goodsInReceiver.id },
+  [
+    ...RECEIVER_AUTHORITY,
+    ...RECEIVING_LISTS,
+    { recordType: 'booking.booking', action: 'view' },
+    { recordType: 'files_imports.import_batch', action: 'view' },
+    { recordType: 'files_imports.import_batch', action: 'create' },
+    { recordType: 'files_imports.import_batch', action: 'edit' },
+    { recordType: 'merchandise.pt', action: 'view' },
+    { recordType: 'merchandise.pt', action: 'create' },
+    { recordType: 'merchandise.pt', action: 'edit' },
+    { recordType: 'access.approval_request', action: 'view' },
+  ],
+  {
+    fieldClasses: [
+      { fieldClass: 'cost', access: 'view' },
+      { fieldClass: 'margin', access: 'view' },
+    ],
+  },
+);
+const goodsInOperations = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-GI-OPS',
+  enrolled: true,
+  personas: ['P-OPS'],
+});
+const goodsInDecider = await grantSynthetic(
+  receivingDatabase,
+  { kind: 'user', id: goodsInOperations.id },
+  [
+    { recordType: 'merchandise.pt', action: 'view' },
+    { recordType: 'merchandise.pt', action: 'approve' },
+    { recordType: 'receiving.arrival', action: 'view' },
+    { recordType: 'receiving.grn', action: 'view' },
+    { recordType: 'access.approval_request', action: 'view' },
+    { recordType: 'access.approval_reason', action: 'view' },
+    // The users, so My work names who prepared each PT: the PT file and PT approval journeys submit some here too.
+    { recordType: 'access.user', action: 'view' },
+    ...STOCK_VIEW,
+  ],
+  {
+    fieldClasses: [
+      { fieldClass: 'cost', access: 'view' },
+      { fieldClass: 'margin', access: 'view' },
+    ],
+  },
+);
+{
+  const limitAccess = receivingStructure.accessWith({ rules: ptApprovalRules, effects: new Map() });
+  const preparer = receivingStructure.preparer;
+  const preparing = await grantSynthetic(receivingDatabase, { kind: 'user', id: preparer.id }, LIMIT_ADMIN_AUTHORITY);
+  const prepared = await receivingStructure.run(preparer.id, (context) =>
+    limitAccess.prepareApprovalLimit(
+      context,
+      { userId: preparer.id, roleAssignmentId: preparing.assignmentId },
+      {
+        actionType: PT_APPROVAL,
+        holder: { kind: 'individual', userId: goodsInOperations.id, roleAssignmentId: goodsInDecider.assignmentId },
+        // A SYNTHETIC ₹10,00,000.00 on the PT's total proposed acquisition cost, as the PT approval journey's approver.
+        limit: { kind: 'amount', amount: paise(100_000_000) },
+        coversUnknown: false,
+        origin: 'synthetic',
+        validFrom: receivingStructure.today(),
+      },
+    ),
+  );
+  if (prepared.kind !== 'success')
+    throw new Error(`The joined journey's PT limit was refused: ${prepared.refusal.code}`);
+  const decided = await receivingStructure.decideThrough(
+    limitAccess,
+    prepared.answer.requestId,
+    prepared.answer.limitId,
+  );
+  if (decided.kind !== 'success') {
+    throw new Error(`The joined journey's PT limit was not approved: ${decided.refusal.code}`);
+  }
+}
+const goodsInStoreStaff = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-GI-STORE',
+  enrolled: true,
+  personas: ['P-STM'],
+});
+await grantSynthetic(
+  receivingDatabase,
+  { kind: 'user', id: goodsInStoreStaff.id },
+  [...RECEIVER_AUTHORITY, { recordType: 'receiving.scan', action: 'create' }],
+  { scope: placeScope([{ type: 'store', id: ptReceivingWorld.storeId }]) },
+);
+await grantSynthetic(receivingDatabase, { kind: 'user', id: goodsInStoreStaff.id }, RECEIVING_LISTS);
+const goodsInRejectReasonId = await writeSyntheticReason(receivingDatabase, 'reject');
+const goodsInStyle = syntheticCode(`JOURNEY-GI-STYLE-${randomBytes(3).toString('hex').toUpperCase()}`);
+const goodsInBarcodes = ['8900000000059', '8900000000066'] as const;
+/** The journey's style on a row of the PT world's, at the P RATE given: MARGIN (MRP − P RATE) ÷ MRP, by hand. */
+const goodsInRow = (barcode: string, pRate: 900 | 945, values: SyntheticPtRow = {}): SyntheticPtRow =>
+  ptRowOf(barcode, { DESIGN: goodsInStyle, 'P RATE': pRate, MARGIN: pRate === 900 ? 54.98 : 52.73, ...values });
+const goodsInRefusedFile = join(dirname(worldFile), syntheticPtFileName('journey-gi-refused'));
+writeFileSync(
+  goodsInRefusedFile,
+  await syntheticPtWorkbook({
+    rows: [goodsInRow(goodsInBarcodes[0], 945, { MARGIN: 50 })],
+    marker: 'JOURNEY-GI-REFUSED',
+  }),
+);
+const goodsInRejectedFile = join(dirname(worldFile), syntheticPtFileName('journey-gi-rejected'));
+writeFileSync(
+  goodsInRejectedFile,
+  await syntheticPtWorkbook({
+    rows: [goodsInRow(goodsInBarcodes[0], 900), goodsInRow(goodsInBarcodes[1], 900)],
+    marker: 'JOURNEY-GI-REJECTED',
+  }),
+);
+const goodsInCorrectedFile = join(dirname(worldFile), syntheticPtFileName('journey-gi-corrected'));
+writeFileSync(
+  goodsInCorrectedFile,
+  await syntheticPtWorkbook({
+    rows: [goodsInRow(goodsInBarcodes[0], 945), goodsInRow(goodsInBarcodes[1], 945)],
+    marker: 'JOURNEY-GI-CORRECTED',
+  }),
+);
+
 // The setup's people approved the exception rules above, so its connections end only now.
 await receivingStructure.close();
 await receivingRouter.close();
@@ -4028,6 +4237,28 @@ writeFileSync(
       barcodes: ['8900000000035', '8900000000042'],
       floor: `Floor: ${syntheticCode('JOURNEY-PTA-FLOOR')} · ${syntheticName('Journey shop floor')}`,
       floorId: ptApprovalFloor.recordId,
+      floorName: `${syntheticCode('JOURNEY-PTA-FLOOR')} · ${syntheticName('Journey shop floor')}`,
+    },
+    goodsIn: {
+      organisationCode: receivingCode,
+      booker: credentialsOf(goodsInBooker),
+      accounts: credentialsOf(goodsInAccounts),
+      owner: credentialsOf(goodsInOwner),
+      receiver: credentialsOf(goodsInReceiver),
+      operations: credentialsOf(goodsInOperations),
+      storeStaff: credentialsOf(goodsInStoreStaff),
+      approveReasonId: bookingReasonId,
+      rejectReasonId: goodsInRejectReasonId,
+      options: ptReceivingWorld.options,
+      // How the booking and budget forms name the booking journey's SYNTHETIC season (receive.option, budget.option).
+      seasonOption: `${bookingSeason.code} · ${bookingSeason.name}`,
+      styleCode: goodsInStyle,
+      refusedFile: goodsInRefusedFile,
+      rejectedFile: goodsInRejectedFile,
+      correctedFile: goodsInCorrectedFile,
+      barcodes: goodsInBarcodes,
+      // The PT approval journey's floor, where the scan-in puts the pieces, as the screens name it.
+      floor: `Floor: ${syntheticCode('JOURNEY-PTA-FLOOR')} · ${syntheticName('Journey shop floor')}`,
       floorName: `${syntheticCode('JOURNEY-PTA-FLOOR')} · ${syntheticName('Journey shop floor')}`,
     },
     openToBuy: {

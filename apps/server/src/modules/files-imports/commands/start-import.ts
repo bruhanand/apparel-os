@@ -128,6 +128,11 @@ interface Planned {
   /** The batch's scope facts: the person's, or those of the record the batch is about (13.1). */
   readonly facts: ImportPlace;
   readonly subject?: { readonly recordType: string; readonly recordId: string };
+  /**
+   * The duplicate control's refusal found before the transaction (7.2), which spares a repeated file the slow work of
+   * staging; it is answered in the command's transaction, under the request's key (see startImport).
+   */
+  readonly repeated?: CommandRefusal;
 }
 
 /**
@@ -286,7 +291,6 @@ async function plan(deps: ImportDependencies, input: StartImportInput): Promise<
       const cutover = await cutoverRefusal(context, handler, body.kind, authority.facts);
       if (cutover !== undefined) refuse(cutover);
       const repeated = await repeatRefusal(deps, context, input, handler, versions.layoutId);
-      if (repeated !== undefined) refuse(repeated);
       const layout = parsedOrDefect(layoutStructureSchema, versions.structure, 'layout version');
       // A target whose files have their header on given rows only refuses a layout that looks for it elsewhere (13.2
       // "As built with S2-F04-T02"; goods-in 5.2: a PT file's header is on row 1 or row 2).
@@ -320,6 +324,7 @@ async function plan(deps: ImportDependencies, input: StartImportInput): Promise<
         ...(authority.subject === undefined
           ? {}
           : { subject: { recordType: authority.subject.recordType, recordId: authority.subject.recordId } }),
+        ...(repeated === undefined ? {} : { repeated }),
       };
     },
   );
@@ -488,7 +493,15 @@ export async function startImport(
   input: StartImportInput,
 ): Promise<IdempotentAnswer<JsonValue>> {
   const planned = await plan(deps, input);
-  const file = await staged(deps, input, planned);
+  // A repeated file is not staged: the slow work is spared. Its refusal is answered in the command's transaction under
+  // the request's key, never before it, so the same request sent again under its key gets its first answer, not the
+  // refusal its own first batch now causes (code-house-rules 12.4 "Replay"; PRD-INT-002; S2-F07-T02).
+  const staging:
+    | { readonly kind: 'repeated'; readonly refusal: CommandRefusal }
+    | { readonly kind: 'staged'; readonly file: StagedFile } =
+    planned.repeated === undefined
+      ? { kind: 'staged', file: await staged(deps, input, planned) }
+      : { kind: 'repeated', refusal: planned.repeated };
   // A replay is answered while the same Authorise passes; a record no longer found stays not found (12.3, 12.4).
   const authoriseReplay: ReplayAuthorisation = async (context) => {
     const allowed = await authorised(deps, context, input);
@@ -524,10 +537,12 @@ export async function startImport(
           allowed.further,
         );
         if (held !== undefined) return { kind: 'refusal', refusal: held, causedBySecret: false };
+        // Decided on the read just before the transaction; a refusal writes nothing it would rest on (8.1).
+        if (staging.kind === 'repeated') return { kind: 'refusal', refusal: staging.refusal, causedBySecret: false };
         const rechecked = await underLocks(context, input, planned);
         if ('code' in rechecked) return { kind: 'refusal', refusal: rechecked, causedBySecret: false };
         const now = { ...planned, facts: allowed.authority.facts, classes: rechecked.classes };
-        return record(deps, context, input, now, file, allowed.roleAssignmentId);
+        return record(deps, context, input, now, staging.file, allowed.roleAssignmentId);
       },
     },
   );
