@@ -23,7 +23,8 @@ import { writeSyntheticStoredFile } from './tax-rules.js';
 // What a PT's approval needs beside the receiving world (goods-in 6.3, 10.5; books-and-posting 2.2, 3.1, 4.1, 6.1;
 // S2-F06-T01), shared by the integration tests' world (support/pt-approval.ts) and the server of the browser journeys
 // (test/browser/serve.ts): the book of the GRN's unit with a SYNTHETIC cost setting, chart, posting map of
-// `stock.cost-established` to a SYNTHETIC receipt account (DEC-140), period and journal series, each approved by a
+// `stock.cost-established` to a SYNTHETIC receipt account (DEC-140) and of its reversal (S2-F09-T01), period and
+// journal series, each approved by a
 // different person with SYNTHETIC CA evidence; and the PT approval gate open under the policies it needs, on the one
 // value of a TEST-ONLY check each where no module reports the policy's values (RR-561, RR-565, RR-605). Made through
 // the real commands where a person would make them (code-house-rules 11.2). Every account, amount, date and number is
@@ -36,8 +37,11 @@ export const PT_TEST_CHECKS: readonly ValidityCheck[] = [
   syntheticPolicyValues(3),
 ];
 
-/** The SYNTHETIC accounts of the book: stock value, goods in transit, and the receipt account set by Accounts and the CA (DEC-140). */
-export type SyntheticAccount = 'INV' | 'TRN' | 'RCPT';
+/**
+ * The SYNTHETIC accounts of the book: stock value, goods in transit, the receipt account set by Accounts and the CA
+ * (DEC-140), and the variance a reversal of an inflow made in error may leave (stock-ledger 7.5; books-and-posting 7.1).
+ */
+export type SyntheticAccount = 'INV' | 'TRN' | 'RCPT' | 'VAR';
 
 /** The book as a PT's approval posts into it. */
 export interface SyntheticPtBook {
@@ -52,9 +56,10 @@ function ok<A>(outcome: { kind: 'success'; answer: A } | { kind: 'refusal'; refu
 
 /**
  * The book configured for a PT's approval: a SYNTHETIC moving-average cost setting with one pool for the book, the
- * three SYNTHETIC accounts, the map of `stock.cost-established` (to the pool, and to a dispatch for goods in transit,
- * stock-ledger 7.6) against the receipt account, a period from five days before the setup's today to sixty after, and
- * a journal series with a SYNTHETIC format. The setup's books must declare the stock ledger's posting event kinds.
+ * four SYNTHETIC accounts, the map of `stock.cost-established` (to the pool, and to a dispatch for goods in transit,
+ * stock-ledger 7.6) against the receipt account, and the map of its reversal, a period from five days before the
+ * setup's today to sixty after, and a journal series with a SYNTHETIC format. The setup's books must declare the stock
+ * ledger's posting event kinds.
  */
 export async function syntheticPtBook(setup: StructureSetup, label: string, bookId: string): Promise<SyntheticPtBook> {
   const inForce = async (
@@ -89,11 +94,12 @@ export async function syntheticPtBook(setup: StructureSetup, label: string, book
     ),
   );
   await inForce(cost, BOOK_SETTING_TYPE);
-  const accounts = { INV: '', TRN: '', RCPT: '' } as Record<SyntheticAccount, string>;
+  const accounts = { INV: '', TRN: '', RCPT: '', VAR: '' } as Record<SyntheticAccount, string>;
   for (const [account, nature] of [
     ['INV', 'asset'],
     ['TRN', 'asset'],
     ['RCPT', 'liability'],
+    ['VAR', 'expense'],
   ] as const) {
     const change = ok(
       await setup.asPreparerDo((c, p) =>
@@ -146,6 +152,35 @@ export async function syntheticPtBook(setup: StructureSetup, label: string, book
     ),
   );
   await inForce(map, POSTING_MAP_TYPE);
+  // The reversal of a cost established, as a PT's reversal before the scan-in posts it (goods-in 6.7; stock-ledger
+  // 7.5, 13.21; S2-F09-T01): the lines of the cost established on the other sides, and the variance of a part that would
+  // take the pool below zero to the SYNTHETIC variance account, as golden P2's maps do (books-and-posting 16.1).
+  const line = (component: string, side: 'debit' | 'credit', accountId: string) => ({
+    component,
+    side,
+    accountId,
+    requiresStore: false,
+    requiresBrand: false,
+  });
+  const reversalMap = ok(
+    await setup.asPreparerDo((c, p) =>
+      setup.books.preparePostingMap(c, p, {
+        bookId,
+        eventKind: 'stock.cost-established-reversal',
+        origin: 'synthetic',
+        validFrom: setup.today(),
+        lines: [
+          line('to-pool', 'debit', accounts.RCPT),
+          line('to-pool', 'credit', accounts.INV),
+          line('to-dispatch', 'debit', accounts.RCPT),
+          line('to-dispatch', 'credit', accounts.TRN),
+          line('variance', 'debit', accounts.RCPT),
+          line('variance', 'credit', accounts.VAR),
+        ],
+      }),
+    ),
+  );
+  await inForce(reversalMap, POSTING_MAP_TYPE);
   const financialYear = syntheticCode(`${label}-FY`);
   const period = ok(
     await setup.asPreparerDo((c, p) =>

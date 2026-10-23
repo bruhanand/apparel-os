@@ -19,6 +19,17 @@ export const PT_TYPE = 'merchandise.pt';
  * cost, P RATE times QTY (goods-in 6.1; PRD-ACS-015, PRD-REC-017, POL-02.09).
  */
 export const PT_APPROVAL = 'merchandise.pt.approve';
+/**
+ * The action type of a PT's reversal before the scan-in (goods-in 6.4, 6.7; DEC-137, PRD-REC-019; S2-F09-T01): proposed
+ * with a reason by whoever may change the PT, approved by a different person within a limit on the cost it reverses,
+ * the PT's total proposed acquisition cost, P RATE times QTY (domain-model 5: a change to approved cost).
+ */
+export const PT_REVERSAL_APPROVAL = 'merchandise.pt.reversal';
+/**
+ * The longest reason a reversal is proposed with: a technical cap, the builders' choice and no business limit, as a
+ * damage report's text (goods-in 6.7, 8.5). **Design choice.**
+ */
+export const PT_REVERSAL_REASON_CAP = 500;
 /** The import target a PT file is uploaded to, a transaction batch for one GRN (goods-in 5; imports 4.1, 13.2). */
 export const PT_IMPORT_TARGET = 'merchandise.pt';
 
@@ -59,7 +70,8 @@ export const ptMarkSchema = z.discriminatedUnion('kind', [
 /**
  * A revision's state (design-language 7; goods-in 6.3, 6.6): Awaiting approval, Withdrawn or Rejected; once approved,
  * Official when its approval is posted, Queued while a large PT waits for its posting job, and Failed when that job was
- * refused, its decision kept unused (stock-ledger 10.6; access-and-approvals 9.8; S2-F06-T01).
+ * refused, its decision kept unused (stock-ledger 10.6; access-and-approvals 9.8; S2-F06-T01); Reversed once its
+ * reversal before the scan-in is approved (goods-in 6.4, 6.7; S2-F09-T01).
  */
 export const ptRevisionStateSchema = z.enum([
   'Awaiting approval',
@@ -68,8 +80,28 @@ export const ptRevisionStateSchema = z.enum([
   'Queued',
   'Failed',
   'Official',
+  'Reversed',
 ]);
 export type PtRevisionState = z.infer<typeof ptRevisionStateSchema>;
+
+/** A reversal's state (design-language 7; goods-in 6.7): Awaiting approval until decided, then Approved or Rejected. */
+export const ptReversalStateSchema = z.enum(['Awaiting approval', 'Approved', 'Rejected']);
+export type PtReversalState = z.infer<typeof ptReversalStateSchema>;
+
+/**
+ * A reversal of an Official PT revision (goods-in 6.4, 6.7; S2-F09-T01): why it was proposed, by whom and when, its
+ * state, its approval request, and who decided it and when once decided.
+ */
+export const ptReversalSummarySchema = z.strictObject({
+  reversalId: idSchema,
+  state: ptReversalStateSchema,
+  reason: z.string(),
+  proposedBy: idSchema,
+  proposedAt: asOf,
+  request: z.strictObject({ id: idSchema, state: approvalRequestStateSchema }).optional(),
+  decided: z.strictObject({ by: idSchema, at: asOf }).optional(),
+});
+export type PtReversalSummary = z.infer<typeof ptReversalSummarySchema>;
 
 /** One PT file submitted for the GRN, as its GRN's screen lists it (goods-in 5.7). */
 export const ptRevisionSummarySchema = z.strictObject({
@@ -87,6 +119,8 @@ export const ptRevisionSummarySchema = z.strictObject({
   withdrawn: z.strictObject({ by: idSchema, at: asOf }).optional(),
   /** The PT's number from its series, once its approval is posted (goods-in 6.3 step 3; S2-F06-T01). */
   number: z.string().optional(),
+  /** Its reversals before the scan-in, newest first (goods-in 6.4, 6.7; S2-F09-T01). */
+  reversals: z.array(ptReversalSummarySchema),
 });
 export type PtRevisionSummary = z.infer<typeof ptRevisionSummarySchema>;
 
@@ -205,6 +239,39 @@ export const ptPreviewSchema = z.strictObject({
     .nullable(),
 });
 export type PtPreview = z.infer<typeof ptPreviewSchema>;
+
+/**
+ * Propose the reversal of an Official PT revision before the scan-in (goods-in 6.4, 6.7; DEC-137, PRD-REC-019;
+ * S2-F09-T01): the PT's version token, as its GRN's screen read it (code-house-rules 12.7), and why, in the proposer's
+ * words, at least one character that is not a space and at most the cap.
+ */
+export const ptReversalDraftSchema = z.strictObject({
+  versionToken: idSchema,
+  reason: z.string().max(PT_REVERSAL_REASON_CAP).regex(/\S/, { message: 'Needs a character that is not a space' }),
+});
+export type PtReversalDraft = z.infer<typeof ptReversalDraftSchema>;
+export const ptReversalProposedSchema = z.strictObject({ ptReversalId: idSchema, requestId: idSchema });
+export type PtReversalProposed = z.infer<typeof ptReversalProposedSchema>;
+
+export const ptReversalParamsSchema = z.strictObject({ reversalId: idSchema });
+
+/**
+ * A reversal as its approver reads it in My work (goods-in 6.7, section 11; S2-F09-T01): the PT, the revision it
+ * reverses with the PT's number, the GRN, and the reversal itself. The revision's rows and cost are its review's
+ * (`readPtRevision`).
+ */
+export const ptReversalReadSchema = z.strictObject({
+  asOf,
+  ptId: idSchema,
+  revisionId: idSchema,
+  /** The PT's number the reversed revision was given at its approval (goods-in 6.3 step 3). */
+  number: z.string(),
+  grn: z.strictObject({ grnId: idSchema, number: z.string() }),
+  reversal: ptReversalSummarySchema,
+  /** The names of the people named, an unknown one left out (PRD-MOD-015). */
+  people: z.array(z.strictObject({ userId: idSchema, name: z.string() })),
+});
+export type PtReversalRead = z.infer<typeof ptReversalReadSchema>;
 
 /** Withdraw a draft PT revision (goods-in 5.7): the PT's version token, as its GRN's screen read it (12.7). */
 export const ptWithdrawalSchema = z.strictObject({ versionToken: idSchema });

@@ -9,7 +9,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { missingText } from '../components/UnavailableState';
 import { EvidenceList } from '../files/Evidence';
 import { formatDateTime } from '../history/format';
-import { t } from '../messages/catalogue';
+import { t, type MessageId } from '../messages/catalogue';
 import { formatDate, formatList } from '../setup/format';
 import { GrantedButton, ListRead, useGranted } from '../setup/parts';
 import { stateIdOf } from '../setup/states';
@@ -51,8 +51,11 @@ function ArrivalDocuments({ arrivalId }: { arrivalId: string }) {
   );
 }
 
-/** A PT revision as its approver reviews it (goods-in 6.2). Read with view on PTs, within the reader's scope. */
-export function PtReview({ revisionId }: { revisionId: string }) {
+/**
+ * A PT revision as its approver reviews it (goods-in 6.2). Read with view on PTs, within the reader's scope. Its content
+ * is titled as what approving it makes, or, for a reversal's panel, as the PT reversed (goods-in 6.7).
+ */
+export function PtReview({ revisionId, title = 'pt.review.title' }: { revisionId: string; title?: MessageId }) {
   const timeZone = useTimeZone();
   const [after, setAfter] = useState<number | undefined>(undefined);
   const query = useQuery({
@@ -100,7 +103,7 @@ export function PtReview({ revisionId }: { revisionId: string }) {
               </Banner>
             )}
             <ArrivalDocuments arrivalId={read.grn.arrivalId} />
-            <PtContent content={read} title="pt.review.title" onPage={setAfter} />
+            <PtContent content={read} title={title} onPage={setAfter} />
           </div>
         );
       }}

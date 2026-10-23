@@ -1298,7 +1298,18 @@ export const receivingCodes = declareCodes({
  * - `merchandise.pt-tracking-unknown`: a new product's category has no tracking profile in force at the GRN's Site, so
  *   how its goods are tracked is Unknown (structure-and-masters 4.6); `missing` names the row and the category.
  *
- * - `merchandise.pt-not-official`: a revision not Official is not downloaded (goods-in 6.5).
+ * - `merchandise.pt-not-official`: a revision not Official is not downloaded (goods-in 6.5), nor reversed (6.4).
+ *
+ * Its reversal before the scan-in (goods-in 6.4, 6.7; DEC-137, PRD-REC-019; S2-F09-T01) is refused, at its proposal and
+ * again under the locks at its approval, besides the gate, `access`'s and the ledger's own refusals, by:
+ *
+ * - `merchandise.pt-scanned-in`: a piece of the GRN is scanned in, so the PT is no longer reversed (DEC-137); `missing`
+ *   names the GRN.
+ * - `merchandise.pt-goods-held`: a piece the PT covers is held or damaged since its approval, as by a damage report,
+ *   so its corrected PT could not cover it (goods-in 6.7, 8.4); `missing` names each receipt origin.
+ * - `merchandise.pt-reversal-open`: a reversal of the revision waits for its approval already; `missing` names it.
+ * - `merchandise.pt-reversal-decided`: the reversal is decided already, or its revision is no longer the PT's newest
+ *   Official one.
  *
  * The problems of a file are the issues of its validation report, by row and column (goods-in 5.3, 5.4, 5.6): a value
  * off its list, a brand not the GRN's, a barcode not digits, an HSN not of six or eight digits, a quantity not whole
@@ -1320,6 +1331,10 @@ export const ptCodes = declareCodes({
   'merchandise.pt-colour-not-identity': 'refused',
   'merchandise.pt-tracking-unknown': 'refused',
   'merchandise.pt-not-official': 'refused',
+  'merchandise.pt-scanned-in': 'refused',
+  'merchandise.pt-goods-held': 'refused',
+  'merchandise.pt-reversal-open': 'refused',
+  'merchandise.pt-reversal-decided': 'refused',
 });
 
 /**

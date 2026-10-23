@@ -20,3 +20,13 @@ export const ptPostRequested = defineEvent({
   version: 1,
   payload: z.strictObject({ postRequestId: z.uuid(), revisionId: z.uuid(), bookId: z.uuid() }),
 });
+
+/**
+ * A PT revision's reversal before the scan-in approved: its coverage removed and its cost reversed, the GRN waiting for
+ * a corrected file (goods-in 6.4, 6.7, 10.4; S2-F09-T01).
+ */
+export const ptReversed = defineEvent({
+  type: 'merchandise.pt-reversed',
+  version: 1,
+  payload: z.strictObject({ ptId: z.uuid(), revisionId: z.uuid(), reversalId: z.uuid() }),
+});
