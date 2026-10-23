@@ -13,30 +13,34 @@ import {
   type AssignmentScope,
   type FieldClass,
   type GrnPtRead,
-  permissionRegistry,
   type PtRevisionRead,
 } from '@apparel-os/schemas';
 import { expect } from 'vitest';
+import { Test } from '@nestjs/testing';
 import {
-  CommandRunner,
-  IdempotencyHelper,
+  CLOCK,
+  LOGGER,
+  ORGANISATION_TIMEZONE_SOURCE,
   OrganisationRouter,
-  OUTBOX_AUTHORITY,
-  OUTBOX_PROCESSOR_IDENTITY,
-  restrictedValueCipherNotConfigured,
-  secretCheckNotImplemented,
-  Worker,
+  ROUTING_ENVIRONMENT,
+  WORKER,
+  WORKER_ENVIRONMENT,
+  WORKER_SETTINGS_VARIABLE,
   type RoutedOrganisation,
+  type Worker,
 } from '../../src/kernel/index.js';
-import { ACCESS, jobIdentities, type AccessInterface } from '../../src/modules/access/index.js';
+import { ACCESS, ACCESS_ENVIRONMENT, type AccessInterface } from '../../src/modules/access/index.js';
 import {
-  PT,
-  PT_POSTING_IDENTITY,
-  ptPostingConsumer,
-  ptPostRequested,
-  type PtInterface,
-  type PtPostingQueue,
-} from '../../src/modules/merchandise/pt/index.js';
+  CONFIGURATION,
+  CONFIGURATION_ENVIRONMENT,
+  type ConfigurationInterface,
+} from '../../src/modules/configuration/index.js';
+import { FILE_STORE_ENVIRONMENT, FILES_IMPORTS_ENVIRONMENT } from '../../src/modules/files-imports/index.js';
+import type { PtPostingQueue } from '../../src/modules/merchandise/pt/index.js';
+import { serviceIdentitiesOf } from '../../src/setup-organisation.js';
+import { jobRegistry, WorkerModule } from '../../src/worker.module.js';
+import { SYNTHETIC_INTAKE_CAPS_ENVIRONMENT } from '../fixtures/intake-caps.js';
+import { TEST_COMPOSITION } from './composition.js';
 import { NUMBERING, type NumberingInterface } from '../../src/modules/numbering/index.js';
 import { STOCK_POSTING_EVENT_KINDS } from '../../src/modules/stock/ledger/index.js';
 import { defineSyntheticDamageReportSeries } from '../fixtures/damage-report-series.js';
@@ -67,7 +71,7 @@ import { startTestFileStore, type TestFileStore } from './minio.js';
 import { STORE_FILE_PATH, syntheticPdfUpload } from './opening-app.js';
 import { decided, structureSetup, type StructureSetup } from './organisation.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './organisations.js';
-import { databaseUrl } from './postgres.js';
+import { connect, databaseUrl } from './postgres.js';
 import { ptWorld, type PtWorld } from './pt.js';
 import { ptGateOpen, PT_TEST_CHECKS, syntheticPtBook, type SyntheticAccount } from './pt-gate.js';
 import {
@@ -143,6 +147,8 @@ export const PT_APPROVER_AUTHORITY: readonly SyntheticAuthority[] = [
 export interface PtApprovalWorld {
   readonly world: SyntheticWorld;
   readonly database: string;
+  /** The world's SYNTHETIC Organisation keys, as `app` and `worker` read them (ACCESS_ENVIRONMENT). */
+  readonly keysEnvironment: Readonly<Record<string, string>>;
   readonly api: AccessTestApp;
   readonly organisation: RoutedOrganisation;
   readonly clock: SyntheticClock;
@@ -158,6 +164,8 @@ export interface PtApprovalWorld {
   readonly people: {
     readonly receiver: Person;
     readonly bookingApprover: Person;
+    /** Booking (P-BKG), who names the product of unidentified goods, so does not decide that version (goods-in 4.6). */
+    readonly booker: Person;
     readonly operations: Person;
     readonly ptMaker: Person;
     readonly ptApprover: Person;
@@ -186,6 +194,8 @@ export interface PtApprovalWorld {
       readonly invoice?: number;
       readonly extra?: 'received' | 'not-received';
       readonly damaged?: number;
+      /** Unidentified goods, described, not sized, with no invoice quantity (goods-in 4.4, 4.9). */
+      readonly unidentified?: string;
     }[],
     at?: {
       readonly brand?: 'fixture' | 'owned';
@@ -202,6 +212,15 @@ export interface PtApprovalWorld {
   arrival(arrivalId: string): Promise<Arrival>;
   revision(revisionId: string, person?: Person, query?: string): Promise<PtRevisionRead>;
   decide(person: Person, requestId: string, versionId: string, outcome?: 'approve' | 'reject'): Promise<Call>;
+  /** The exceptions raised on the records or versions given, oldest first, as their owner role reads them. */
+  exceptionsOn(recordIds: readonly string[]): Promise<readonly RaisedException[]>;
+  /** Locks the book's period, as Accounts (books-and-posting 4.2; PRD-LED-009). */
+  lockPeriod(): Promise<void>;
+  /**
+   * Reopens the book's locked period naming the PT revision as its one correction, requested by Accounts and approved
+   * by a different person, both SYNTHETIC (books-and-posting 4.3; PRD-LED-019, PRD-LED-020).
+   */
+  reopenFor(revisionId: string): Promise<void>;
   /** A person enrolled and signed in with the authorities given, as the world's own people are. */
   enrol(
     name: string,
@@ -209,6 +228,18 @@ export interface PtApprovalWorld {
     choices?: { scope?: AssignmentScope; fieldClasses?: readonly FieldClass[] },
   ): Promise<Person>;
   close(): Promise<void>;
+}
+
+/** An exception as the verifier reads it: its type, state, owner, what raised it and its comment. */
+export interface RaisedException {
+  readonly id: string;
+  readonly type: string;
+  readonly state: string;
+  readonly ownerUserId: string | null;
+  readonly raisingEvent: string;
+  readonly recordId: string;
+  readonly versionId: string | null;
+  readonly comment: string | null;
 }
 
 function ok<A>(outcome: { kind: 'success'; answer: A } | { kind: 'refusal'; refusal: { readonly code: string } }): A {
@@ -445,6 +476,11 @@ export async function ptApprovalWorld(
     { recordType: 'receiving.recount', action: 'create' },
   ]);
   const bookingApprover = await enrolled(`${label}-BOOKING-APPROVER`, BOOKING_APPROVER_AUTHORITY);
+  const booker = await enrolled(`${label}-BOOKER`, [
+    ...BOOKING_APPROVER_AUTHORITY,
+    { recordType: 'receiving.held_line', action: 'edit' },
+    { recordType: 'merchandise.vocabulary_value', action: 'view' },
+  ]);
   // Operations (P-OPS), who confirms or rejects damage reported by someone else (goods-in 8.3).
   const operations = await enrolled(`${label}-OPS`, [
     ...DECIDER_AUTHORITY,
@@ -514,22 +550,27 @@ export async function ptApprovalWorld(
   await limit(lowLimitApprover, PT_APPROVAL, { kind: 'amount', amount: 1_000 }, false);
   await limit(bookingApprover, HELD_LINE_DECISION, { kind: 'none' }, true);
   await limit(operations, DAMAGE_DECISION, { kind: 'none' }, true);
-  // Every follow-up routed by a SYNTHETIC rule at both worlds' Sites (goods-in 4.9, 4.10; V-03).
+  // Every follow-up routed by a SYNTHETIC rule at both worlds' Sites (goods-in 4.9, 4.10; V-03): to Booking, and the
+  // unfinished operation of a refused posting (books-and-posting 10 step 3; code review 7) to a PT approver, who reads
+  // the PT and the recount its resolution check reads.
+  const followUps: readonly (readonly [string, Person])[] = [
+    ['receiving.shortage', bookingApprover],
+    ['receiving.excess', bookingApprover],
+    ['receiving.wrong-goods', bookingApprover],
+    ['receiving.unidentified-goods', bookingApprover],
+    ['receiving.booking-review', bookingApprover],
+    ['stock.damage', bookingApprover],
+    ['merchandise.pt-posting-refused', ptApprover],
+    ['receiving.recount-posting-refused', ptApprover],
+  ];
   for (const siteId of [fixture.siteId, unmapped.siteId]) {
-    for (const type of [
-      'receiving.shortage',
-      'receiving.excess',
-      'receiving.wrong-goods',
-      'receiving.unidentified-goods',
-      'receiving.booking-review',
-      'stock.damage',
-    ]) {
+    for (const [type, owner] of followUps) {
       const prepared = await post(settingsAdmin, '/api/exceptions/routing', {
         typeCode: type,
         siteId,
-        owner: { kind: 'user', userId: bookingApprover.user.id },
+        owner: { kind: 'user', userId: owner.user.id },
         dueRule: { format: 'elapsed-minutes-v1', minutes: 60 },
-        escalation: { kind: 'user', userId: bookingApprover.user.id },
+        escalation: { kind: 'user', userId: owner.user.id },
         validFrom: setup.today(),
         origin: 'synthetic',
       });
@@ -602,13 +643,14 @@ export async function ptApprovalWorld(
     });
     expect(invoice.status, JSON.stringify(invoice.body)).toBe(200);
     for (const line of lines) {
+      const unidentified = line.unidentified !== undefined;
       const saved = await post(receiver, `/api/receiving/arrivals/${arrivalId}/count-lines`, {
-        goods: 'on-invoice',
-        styleCode: line.style,
-        colour: 'SYNTHETIC NAVY',
-        sizeValueId: fixture.sizes.values[line.sizeAt]?.id ?? null,
+        goods: unidentified ? 'unidentified' : 'on-invoice',
+        styleCode: unidentified ? null : line.style,
+        colour: unidentified ? null : 'SYNTHETIC NAVY',
+        sizeValueId: unidentified ? null : (fixture.sizes.values[line.sizeAt]?.id ?? null),
         skuId: null,
-        description: null,
+        description: line.unidentified ?? null,
         invoiceQuantity: line.invoice ?? line.counted,
         countedQuantity: line.counted,
         extra: line.extra ?? null,
@@ -678,6 +720,7 @@ export async function ptApprovalWorld(
   return {
     world,
     database,
+    keysEnvironment: keys,
     api,
     organisation,
     clock,
@@ -691,6 +734,7 @@ export async function ptApprovalWorld(
     people: {
       receiver,
       bookingApprover,
+      booker,
       operations,
       ptMaker,
       ptApprover,
@@ -714,6 +758,58 @@ export async function ptApprovalWorld(
     },
     revision,
     decide,
+    lockPeriod: async () => {
+      const locked = await setup.asPreparerDo((c, p) => setup.books.lockPeriod(c, p, periodId));
+      if (locked.kind !== 'success') throw new Error(`lock refused: ${locked.refusal.code}`);
+    },
+    reopenFor: async (revisionId) => {
+      const asked = ok(
+        await setup.asPreparerDo((c, p) =>
+          setup.books.requestReopening(c, p, periodId, {
+            reason: 'SYNTHETIC reopening for a PT refused in a locked period',
+            corrections: [{ module: 'merchandise', recordType: 'merchandise.pt_revision', recordId: revisionId }],
+          }),
+        ),
+      );
+      decided(await setup.decide(asked.requestId, asked.reopeningId));
+    },
+    exceptionsOn: async (recordIds) => {
+      const verify = await connect(database, 'migration');
+      try {
+        const result = await verify.query<{
+          id: string;
+          type: string;
+          state: string;
+          owner_user_id: string | null;
+          raising_event: string;
+          record_id: string;
+          version_id: string | null;
+          comment: string | null;
+        }>(
+          `select e.id, t.code as type, e.state, e.owner_user_id, e.raising_event, l.record_id, l.version_id,
+                  (select c.comment from exceptions.exception_event c
+                    where c.exception_id = e.id and c.kind = 'comment' order by c.occurred_at limit 1) as comment
+             from exceptions.exception e
+             join exceptions.exception_type t on t.id = e.exception_type_id
+             join exceptions.exception_link l on l.exception_id = e.id
+            where l.record_id = any($1::uuid[]) or l.version_id = any($1::uuid[])
+            order by e.raised_at, e.id`,
+          [recordIds],
+        );
+        return result.rows.map((row) => ({
+          id: row.id,
+          type: row.type,
+          state: row.state,
+          ownerUserId: row.owner_user_id,
+          raisingEvent: row.raising_event,
+          recordId: row.record_id,
+          versionId: row.version_id,
+          comment: row.comment,
+        }));
+      } finally {
+        await verify.end();
+      }
+    },
     enrol: enrolled,
     close: async () => {
       await setup.close();
@@ -725,58 +821,48 @@ export async function ptApprovalWorld(
   };
 }
 
-/** A running worker serving the world's Organisation with the PT's posting consumer. */
+/** A running worker serving the world's Organisation, as the application composes it. */
 export interface PtPostingWorker {
   stop(): Promise<void>;
 }
 
 /**
- * Starts a worker with the posting consumer of a large PT's approval (goods-in 6.6; stock-ledger 10.6;
- * code-house-rules 12.9), bound to the application's PT, as no production worker composes it yet (RR-602): its
- * deliveries go to the posting queue, one at a time per book, under a SYNTHETIC internal service identity holding what
- * the posting needs (the PT, the GRN it covers and the stock it writes, which row-level security scopes), on behalf of
- * the approver; with the outbox processor's own identity. At the SYNTHETIC test speed.
+ * Starts the worker as the application composes it (worker.module.ts; deployment.md section 2), its PT the
+ * application's own modules', with the PT's posting consumers (goods-in 6.6; stock-ledger 10.6; code-house-rules 12.9;
+ * code review 7): its service identities written with what the worker's registry gives each, as the setup step and
+ * `add-service-identities` do; the start variables the application's modules read, the world's; the SYNTHETIC worker
+ * settings at the test speed; the world's clock and timezone; and the test-only validity checks the world's
+ * application was given, labelled synthetic (PT_TEST_CHECKS; RR-561, RR-565).
  */
 export async function startPtPostingWorker(world: PtApprovalWorld): Promise<PtPostingWorker> {
-  await writeSyntheticServiceIdentity(world.database, OUTBOX_PROCESSOR_IDENTITY, [OUTBOX_AUTHORITY]);
-  await writeSyntheticServiceIdentity(world.database, PT_POSTING_IDENTITY, [
-    { recordType: 'merchandise.pt', action: 'view' },
-    { recordType: 'merchandise.pt', action: 'edit' },
-    { recordType: 'receiving.arrival', action: 'view' },
-    { recordType: 'receiving.grn', action: 'view' },
-    ...STOCK_VIEW,
-  ]);
-  const consumer = ptPostingConsumer(() => world.api.app.get<PtInterface>(PT));
-  const registry = { events: [ptPostRequested], consumers: [consumer], jobKinds: [] };
-  const log = capturingLogger().logger;
-  const router = new OrganisationRouter(
-    { directoryConnectionString: databaseUrl(world.world.directory, 'runtime'), poolMax: 8 },
-    log,
-  );
-  const runner = new CommandRunner({
-    clock: { now: () => world.clock.now() },
-    timezones: syntheticTimezone,
-    logger: log,
-  });
-  const worker = new Worker({
-    router,
-    runner,
-    helper: new IdempotencyHelper({
-      runner,
-      logger: log,
-      secretCheck: secretCheckNotImplemented,
-      cipher: restrictedValueCipherNotConfigured,
-    }),
-    identities: jobIdentities(permissionRegistry),
-    logger: log,
-    registry,
-    settings: syntheticWorkerSettings(registry, { fast: true }),
-  });
-  await worker.start();
-  return {
-    stop: async () => {
-      await worker.stop();
-      await router.close();
-    },
-  };
+  for (const identity of serviceIdentitiesOf(jobRegistry)) {
+    await writeSyntheticServiceIdentity(world.database, identity.code, identity.authorities);
+  }
+  const moduleRef = await Test.createTestingModule({ imports: [WorkerModule] })
+    .overrideProvider(LOGGER)
+    .useValue(capturingLogger().logger)
+    .overrideProvider(CLOCK)
+    .useValue(world.clock)
+    .overrideProvider(ROUTING_ENVIRONMENT)
+    .useValue({ AOS_RUNTIME_DATABASE_URL: databaseUrl(world.world.directory, 'runtime'), AOS_DATABASE_POOL_MAX: '8' })
+    .overrideProvider(WORKER_ENVIRONMENT)
+    .useValue({
+      [WORKER_SETTINGS_VARIABLE]: JSON.stringify(syntheticWorkerSettings(jobRegistry, { fast: true })),
+    })
+    .overrideProvider(ORGANISATION_TIMEZONE_SOURCE)
+    .useValue(syntheticTimezone)
+    .overrideProvider(ACCESS_ENVIRONMENT)
+    .useValue(world.keysEnvironment)
+    .overrideProvider(CONFIGURATION_ENVIRONMENT)
+    .useValue({ AOS_ENVIRONMENT: 'local' })
+    .overrideProvider(FILES_IMPORTS_ENVIRONMENT)
+    .useValue({ AOS_ENVIRONMENT: 'local', ...SYNTHETIC_INTAKE_CAPS_ENVIRONMENT })
+    .overrideProvider(FILE_STORE_ENVIRONMENT)
+    .useValue({})
+    .compile();
+  await moduleRef.init();
+  const configuration = moduleRef.get<ConfigurationInterface>(CONFIGURATION);
+  for (const check of PT_TEST_CHECKS) configuration.registerCheck(check, TEST_COMPOSITION);
+  await moduleRef.get<Worker>(WORKER).start();
+  return { stop: () => moduleRef.close() };
 }

@@ -1,4 +1,4 @@
-import type { PtField } from './rows.js';
+import type { PtField, PtIssue } from './rows.js';
 
 // Each PT row's product (goods-in 5.5; PRD-MER-007, PRD-MER-013, DEC-135, DEC-138; S2-F04-T02; code review 6 of
 // stage 2). "A row's product is found by its barcode's external code mapping, or by brand, style, colour and size"
@@ -9,10 +9,14 @@ import type { PtField } from './rows.js';
 // row's product is the brand's SKU of its style code, colour and size. Otherwise the row proposes a new product, of the
 // style when the brand has one of that code, else of a new style; rows of one style, colour and size propose one SKU. A
 // barcode is flagged as repeated, never refused, when it names another product than the row's, or when the file gives
-// it to rows of different products; the same barcode on several rows of one product is ordinary. A row whose product
-// holds another value than the row (style code, size, colour, Sub category, HSN, season, gender, type, item, fit) shows
-// it as a difference; the PT keeps the file's value and the product changes only through its own master change. Codes
-// compare exactly (structure-and-masters 2.1). Pure.
+// it to rows of different products; the same barcode on several rows of one product is ordinary. Two problems refuse
+// the file, each naming its rows (goods-in 5.6; code review 7 of stage 2): a barcode naming one product of another
+// style or size than the row's, since style and size are a product's identity (RR-608); and rows of one new style that
+// disagree on a value the style holds (Sub category, HSN, season, gender, type, item, fit), since the style would take
+// a value no one chose. A colour the product holds otherwise shows as a difference, since a PT may carry a grade tag
+// for its colour (DEC-138), as does a value an existing style holds otherwise (Sub category, HSN, season, gender, type,
+// item, fit); the PT keeps the file's value and the product changes only through its own master change. Codes compare
+// exactly (structure-and-masters 2.1). Pure.
 
 /** A value of a list the row names: its code as given and the approved value it is. */
 export interface ListValue {
@@ -99,10 +103,51 @@ export interface Proposal {
 const proposalKey = (row: ProductRow) => `${row.styleCode}|${row.colour.code}|${row.sizeCode}`;
 const productKey = (product: RowProduct) => (product.kind === 'existing' ? `sku:${product.skuId}` : product.key);
 
+/** The values a style holds, each a field of the row (structure-and-masters 4.1; goods-in 5.3). */
+const STYLE_FIELDS: readonly { readonly field: PtField; readonly of: (row: ProductRow) => string | undefined }[] = [
+  { field: 'subCategory', of: (row) => row.categoryId },
+  { field: 'hsn', of: (row) => row.hsn },
+  ...STYLE_LISTS.map((list) => ({ field: list, of: (row: ProductRow) => row.styleValues[list]?.valueId })),
+];
+
+/**
+ * The rows of each new style that disagree on a value the style holds, each row named on each such field, in the file's
+ * order (goods-in 5.3, 5.6; code review 7 of stage 2).
+ */
+function newStyleDisagreements(
+  rows: readonly ProductRow[],
+  products: ReadonlyMap<number, RowProduct>,
+  facts: ProductFacts,
+): PtIssue[] {
+  const ofNewStyle = rows.filter(
+    (row) => products.get(row.rowNumber)?.kind === 'proposed' && !facts.styles.has(row.styleCode),
+  );
+  const disagreeing = new Set<string>();
+  for (const { field, of } of STYLE_FIELDS) {
+    const values = new Map<string, Set<string | undefined>>();
+    for (const row of ofNewStyle) values.set(row.styleCode, (values.get(row.styleCode) ?? new Set()).add(of(row)));
+    for (const [styleCode, given] of values) if (given.size > 1) disagreeing.add(`${styleCode}|${field}`);
+  }
+  return ofNewStyle.flatMap((row) =>
+    STYLE_FIELDS.filter(({ field }) => disagreeing.has(`${row.styleCode}|${field}`)).map(({ field }) => ({
+      code: 'merchandise.pt-new-style-disagrees',
+      field,
+      rowNumber: row.rowNumber,
+    })),
+  );
+}
+
+/** Whether the product a row is found as is of another style or size than the row names: its identity (RR-608). */
+function ofOtherIdentity(row: ProductRow, product: RowProduct, skuById: ReadonlyMap<string, SkuFacts>): boolean {
+  if (product.kind !== 'existing') return false;
+  const sku = skuById.get(product.skuId);
+  return sku !== undefined && (sku.styleCode !== row.styleCode || (sku.size !== null && sku.size !== row.sizeCode));
+}
+
 export function productsOf(
   rows: readonly ProductRow[],
   facts: ProductFacts,
-): { readonly rows: RowFinding[]; readonly proposals: Proposal[] } {
+): { readonly rows: RowFinding[]; readonly proposals: Proposal[]; readonly issues: PtIssue[] } {
   const skuById = new Map(facts.skus.map((sku) => [sku.skuId, sku]));
   const found = rows.map((row) => {
     const named = facts.barcodes.get(row.barcode) ?? [];
@@ -137,7 +182,17 @@ export function productsOf(
     const repeated = namesAnother || (productsOfBarcode.get(row.barcode)?.size ?? 0) > 1;
     return { rowNumber: row.rowNumber, product, repeated, differences: differencesOf(row, product, facts) };
   });
-  return { rows: findings, proposals: [...proposals.values()] };
+  const issues: PtIssue[] = [
+    ...found
+      .filter(({ row, product }) => ofOtherIdentity(row, product, skuById))
+      .map(({ row }) => ({
+        code: 'merchandise.pt-barcode-of-other-product',
+        field: 'barcode' as const,
+        rowNumber: row.rowNumber,
+      })),
+    ...newStyleDisagreements(rows, new Map(found.map(({ row, product }) => [row.rowNumber, product])), facts),
+  ].sort((a, b) => (a.rowNumber ?? 0) - (b.rowNumber ?? 0));
+  return { rows: findings, proposals: [...proposals.values()], issues };
 }
 
 type SkuFacts = ProductFacts['skus'][number];
@@ -179,14 +234,8 @@ function differencesOf(row: ProductRow, product: RowProduct, facts: ProductFacts
   const style = sku === undefined ? undefined : facts.styles.get(sku.styleCode);
   const code = (valueId: string) => facts.codes.get(valueId) ?? null;
   const differences: Difference[] = [];
-  // The product the barcode names may be of another style or size than the row (5.5): shown as a difference, as any
-  // value the product holds otherwise is; the PT keeps the file's value.
-  if (sku !== undefined && sku.styleCode !== row.styleCode) {
-    differences.push({ field: 'design', file: row.styleCode, product: sku.styleCode });
-  }
-  if (sku !== undefined && sku.size !== row.sizeCode) {
-    differences.push({ field: 'size', file: row.sizeCode, product: sku.size });
-  }
+  // A product of another style or size is a problem of the row, not a difference (ofOtherIdentity; RR-608). A colour
+  // the product holds otherwise shows as one: the PT may carry a grade tag for its colour (DEC-138).
   if (sku?.colourValueId !== null && sku?.colourValueId !== undefined && sku.colourValueId !== row.colour.valueId) {
     differences.push({ field: 'colour', file: row.colour.code, product: code(sku.colourValueId) });
   }

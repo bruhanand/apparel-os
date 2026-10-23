@@ -76,9 +76,11 @@ import {
 import { PartiesModule, partiesApprovals, partiesSupplierRoles } from './modules/merchandise/parties/index.js';
 import {
   PT,
+  PT_POSTED_WITH_DECISION_ROWS,
   PT_POSTING_QUEUE,
   PtModule,
   ptApprovals,
+  ptExceptionTypes,
   ptStockCaller,
   type PtInterface,
   type PtPostingQueue,
@@ -247,9 +249,13 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
         ),
       inject: [AUDIT, LOCATION_IN_USE, CONFIGURATION, BOOK_HELD_STOCK, IMPORT_HANDLERS, ModuleRef, PT_POSTING_QUEUE],
     },
-    // How a PT's approval posts (goods-in 6.6): with its decision, since no worker composes the posting job of a large
-    // PT yet (RR-602); a test composition may queue it above a number of rows, with the job composed beside it.
-    { provide: PT_POSTING_QUEUE, useValue: { kind: 'with-decision' } satisfies PtPostingQueue },
+    // How a PT's approval posts (goods-in 6.6; stock-ledger 10.6; module-map 6.2 flow E): with its decision up to
+    // PT_POSTED_WITH_DECISION_ROWS rows, a technical cap, and above it through the queued job the worker composes
+    // (worker.module.ts; code review 7, RR-602).
+    {
+      provide: PT_POSTING_QUEUE,
+      useValue: { kind: 'queued-above', rows: PT_POSTED_WITH_DECISION_ROWS } satisfies PtPostingQueue,
+    },
     // The scope contract `access` defines: `organisation` answers legal entities and places (S1-F02-T03), and
     // `merchandise` · catalogue brands (S1-F03-T01).
     {
@@ -284,14 +290,16 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
     },
     // The exception types the raising modules register (access-and-approvals 12.1): the damage a report raises, to
     // Operations as its routing says (goods-in 8.2; S2-F08-T01), the shortage and held lines a GRN's count finds, to
-    // Booking (goods-in 4.5; S2-F02-T03), and the overdue balance of a booking, also to Booking (goods-in 3.8;
-    // S2-F01-T04).
+    // Booking (goods-in 4.5; S2-F02-T03), the overdue balance of a booking, also to Booking (goods-in 3.8;
+    // S2-F01-T04), and the unfinished operation of a refused posting of a PT or a recount, to whoever their routing
+    // names (books-and-posting 10 step 3; goods-in 4.11, 6.6; code review 7).
     {
       provide: EXCEPTION_TYPES,
       useValue: [
         damageExceptionType,
         ...receivingExceptionTypes,
         overdueExceptionType,
+        ...ptExceptionTypes,
       ] satisfies readonly ExceptionTypeRegistration[],
     },
     // The decision-evidence contract of `access`, which files-imports' Attach implements (9.5; S1-F08-T03).
@@ -320,16 +328,18 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
 })
 export class ModuleApprovalsModule {}
 
-// House rule: every constructor injection names its token with @Inject(...), so nothing depends on decorator metadata.
+/**
+ * The application's modules with the contracts between them (module-map section 2), which `app` serves and `worker`
+ * runs the jobs of: the same composition in both, so a job such as a large PT's posting works through the
+ * application's own modules, with every registration they make at start (deployment.md section 2; code review 7 of
+ * stage 2). It reads the variables those modules read at start; neither the HTTP layer nor live updates is in it.
+ */
 @Module({
   imports: [
-    KernelModule,
     OrganisationRoutingModule,
     // configuration supplies the Organisation's timezone to the command runner (RR-231, RR-250).
     ConfigurationTimezoneModule,
     CommandRunnerModule,
-    // Live updates and the operations view (code-house-rules 12.9, 12.12; S1-F08-T04).
-    LiveUpdatesModule,
     // The idempotency helper with the contracts access implements (RR-248), global for every module's commands.
     idempotencyModuleWith(AccessContractsModule),
     ModuleApprovalsModule,
@@ -363,6 +373,19 @@ export class ModuleApprovalsModule {}
     StockDocumentsModule,
     // PT files uploaded for a GRN, as drafts a different person approves (module-map section 5; goods-in 5; S2-F04-T02).
     PtModule,
+  ],
+  // The PT, whose posting consumers the worker binds to it (worker.module.ts).
+  exports: [PtModule],
+})
+export class ApplicationModulesModule {}
+
+// House rule: every constructor injection names its token with @Inject(...), so nothing depends on decorator metadata.
+@Module({
+  imports: [
+    KernelModule,
+    // Live updates and the operations view (code-house-rules 12.9, 12.12; S1-F08-T04).
+    LiveUpdatesModule,
+    ApplicationModulesModule,
   ],
 })
 export class AppModule {}

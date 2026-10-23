@@ -1,13 +1,17 @@
 import { uuidv7 } from '@apparel-os/domain';
-import { trialBalanceSchema, type PtRevisionRead } from '@apparel-os/schemas';
+import { arrivalReadSchema, trialBalanceSchema, type PtRevisionRead } from '@apparel-os/schemas';
 import ExcelJS from 'exceljs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { skuOn } from '../src/modules/merchandise/catalogue/index.js';
+import { LOCK_STEP } from '../src/kernel/index.js';
+import { SKU_CODE_KIND, SKU_CODE_SCOPE_KEY, skuOn } from '../src/modules/merchandise/catalogue/index.js';
+import { PT_KIND, PT_SCOPE_KEY } from '../src/modules/merchandise/pt/domain/kinds.js';
+import { NUMBERING, type NumberingInterface } from '../src/modules/numbering/index.js';
 import { availability, custody } from '../src/modules/stock/ledger/index.js';
 import { syntheticCode, syntheticName } from './fixtures/synthetic.js';
 import { asUserIn } from './support/damage.js';
 import { STORE_FILE_PATH, syntheticPdfUpload } from './support/opening-app.js';
 import { decided } from './support/organisation.js';
+import { connect } from './support/postgres.js';
 import { ptApprovalWorld, type PtApprovalWorld } from './support/pt-approval.js';
 
 // S2-F06-T01: a PT approved or rejected, through the whole application on real PostgreSQL (goods-in 6.1 to 6.6, 10.3,
@@ -99,6 +103,29 @@ async function stockOfStyle(styleCode: string) {
     }
     return { rows: found, covered };
   });
+}
+
+/** The first sheet of a downloaded PT file (goods-in 6.5). */
+async function sheetOf(download: { body: Record<string, unknown> }) {
+  const { contentBase64 } = download.body as { contentBase64: string };
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(Buffer.from(contentBase64, 'base64') as unknown as ArrayBuffer);
+  return workbook.worksheets[0];
+}
+
+/** The sensitive-access records of a person, as their owner role reads them (numbering-and-audit 5.1, 5.2). */
+async function accessRecordsOf(userId: string) {
+  const owner = await connect(w.database, 'migration');
+  try {
+    const result = await owner.query<{ field_class: string; exposure: string; record_type: string }>(
+      `select field_class, exposure, record_type from audit.access_record
+        where kind = 'sensitive-access' and user_id = $1 order by field_class`,
+      [userId],
+    );
+    return result.rows;
+  } finally {
+    await owner.end();
+  }
 }
 
 /** A GRN of the owned brand counted, and its PT file submitted with the rows given; answers both. */
@@ -225,7 +252,7 @@ describe('approving a PT (goods-in 6.3; 12 test 11)', () => {
     expect(read.mark).toMatchObject({ kind: 'set', ptRevisionId: revisionId });
   });
 
-  it("RR-585 refuses a new product whose size is not in its category's size set, naming the row", async () => {
+  it("PRD-MER-013 refuses a new product whose size is not in its category's size set, naming the row (RR-585)", async () => {
     // A third size on the size list, not in the casual category's size set (structure-and-masters 4.1).
     const { setup } = w;
     const sizeCode = syntheticCode('PTA-XL');
@@ -301,6 +328,65 @@ describe('approving a PT (goods-in 6.3; 12 test 11)', () => {
   });
 });
 
+describe('a GRN line naming a product (goods-in 4.3, 5.4; RR-586)', () => {
+  it('PRD-REC-016 a line naming a SKU, its size not recorded, takes the SKU size, so the GRN issues and the PT file matches it', async () => {
+    // The products of a first PT, approved (goods-in 6.3 step 2): a SKU of the style for each size.
+    const first = await ownedPt('PTA-SKU-SIZE', [{ sizeAt: 0, counted: 1 }], () => [{}]);
+    expect((await w.decide(w.people.ptApprover, first.requestId, first.revisionId)).status).toBe(200);
+    const [made] = (await stockOfStyle(first.style)).rows;
+    if (made?.skuId === null || made?.skuId === undefined) throw new Error('The PT made no SKU');
+    expect(made.size).toBe(w.code.size(0));
+    // A second Arrival of the brand counts a line naming that SKU with no size recorded (RR-608).
+    const arrival = await w.post(w.people.receiver, '/api/receiving/arrivals', {
+      businessUnitId: w.fixture.wholeStore,
+      receivingLocationId: w.fixture.storeLocation,
+      supplierPartyId: w.fixture.supplier.id,
+      brandId: w.owned.brandId,
+      transporter: syntheticName('Transporter'),
+      lorryReceipt: { number: 'SYN-LR-SKU', date: w.setup.today() },
+      cartons: 1,
+      arrivedAt: new Date(w.clock.now().getTime() - 3_600_000).toISOString(),
+    });
+    expect(arrival.status, JSON.stringify(arrival.body)).toBe(200);
+    const arrivalId = (arrival.body as { arrivalId: string }).arrivalId;
+    const stored = await w.post(w.people.receiver, STORE_FILE_PATH, syntheticPdfUpload('PT-APPROVAL', 'SKU-SIZE'));
+    const file = stored.body as { storedFileId: string; receiptId: string };
+    const invoice = await w.post(w.people.receiver, `/api/receiving/arrivals/${arrivalId}/invoices`, {
+      number: `SYN-INV-SKU-${uuidv7().slice(-6)}`,
+      date: w.setup.today(),
+      file: { storedFileId: file.storedFileId, fileReceiptId: file.receiptId },
+    });
+    expect(invoice.status, JSON.stringify(invoice.body)).toBe(200);
+    const saved = await w.post(w.people.receiver, `/api/receiving/arrivals/${arrivalId}/count-lines`, {
+      goods: 'on-invoice',
+      styleCode: first.style,
+      colour: 'SYNTHETIC NAVY',
+      sizeValueId: null,
+      skuId: made.skuId,
+      description: null,
+      invoiceQuantity: 2,
+      countedQuantity: 2,
+      extra: null,
+      damage: null,
+      batch: null,
+    });
+    expect(saved.status, JSON.stringify(saved.body)).toBe(200);
+    const before = await w.arrival(arrivalId);
+    // Not asked again for a size: the SKU has one.
+    expect(before.blocking).toEqual([]);
+    const issued = await w.post(w.people.receiver, `/api/receiving/arrivals/${arrivalId}/grn`, {
+      versionToken: before.versionToken,
+    });
+    expect(issued.status, JSON.stringify(issued.body)).toBe(200);
+    const grnId = (issued.body as { grnId: string }).grnId;
+    const read = arrivalReadSchema.parse((await w.get(w.people.receiver, `/api/receiving/arrivals/${arrivalId}`)).body);
+    expect(read.arrival.grn?.lines[0]).toMatchObject({ skuId: made.skuId, size: w.code.size(0) });
+    // The PT file is matched per style and size on the GRN's lines (goods-in 5.4): the SKU's size.
+    const second = await w.submittedPt(grnId, [w.ptRow(first.style, 0, { QTY: 2, NAG: 2 }, w.owned.code)]);
+    expect((await w.revision(second.revisionId)).totals.pieces).toBe(2);
+  });
+});
+
 describe('the goods Booking took in and the damage the count found (goods-in 4.6, 6.3 step 5, 8.4)', () => {
   it('PRD-REC-013 POL-17.02 ends the excess hold by the PT route and covers the extra pieces with the rest', async () => {
     const style = syntheticCode('PTA-EXCESS');
@@ -317,6 +403,60 @@ describe('the goods Booking took in and the damage the count found (goods-in 4.6
     const stock = await stockOfStyle(style);
     expect(stock.rows).toEqual([expect.objectContaining({ condition: 'good', quantity: 3, accepted: 0 })]);
     expect([...stock.covered.values()][0]).toMatchObject({ covered: 3, available: 0 });
+  });
+
+  it('POL-17.02 PRD-REC-013 ends the quarantine of unidentified goods taken in by the approved decision, and covers them', async () => {
+    // Unidentified goods, named by Booking and taken in by a different person (goods-in 4.6, 4.9), stay in quarantine
+    // until the PT approval ends it by its approved decision (`approved-decision`; stock-ledger 6.1, 13.16).
+    const style = syntheticCode('PTA-UNIDENTIFIED');
+    const { arrivalId, grnId } = await w.issuedGrn(
+      [{ style, sizeAt: 0, counted: 2, invoice: 0, extra: 'received', unidentified: 'SYNTHETIC blue shirts, no tag' }],
+      { brand: 'owned' },
+    );
+    const held = (await w.arrival(arrivalId)).grn?.lines[0]?.heldLine;
+    if (held?.requestId == null) throw new Error('no held line');
+    const named = await w.post(w.people.booker, `/api/receiving/held-lines/${held.id}/product`, {
+      versionToken: held.versionToken,
+      styleCode: style,
+      colour: 'SYNTHETIC NAVY',
+      sizeValueId: w.fixture.sizes.values[0]?.id ?? null,
+      skuId: null,
+    });
+    expect(named.status, JSON.stringify(named.body)).toBe(200);
+    const version = named.body as { versionToken: string; requestId: string };
+    const taken = await w.decide(w.people.bookingApprover, version.requestId, version.versionToken);
+    expect(taken.status, JSON.stringify(taken.body)).toBe(200);
+    const holdsOf = async () => {
+      const owner = await connect(w.database, 'migration');
+      try {
+        const result = await owner.query<{ kind: string; ended: boolean }>(
+          `select h.kind, exists (select 1 from stock.hold_release r where r.hold_id = h.id) as ended
+             from stock.hold h join receiving.held_line l on l.hold_id = h.id where l.id = $1`,
+          [held.id],
+        );
+        return result.rows;
+      } finally {
+        await owner.end();
+      }
+    };
+    expect(await holdsOf()).toEqual([{ kind: 'quarantine', ended: false }]);
+    const { revisionId, requestId } = await w.submittedPt(grnId, [w.ptRow(style, 0, { QTY: 2, NAG: 2 }, w.owned.code)]);
+    const approved = await w.decide(w.people.ptApprover, requestId, revisionId);
+    expect(approved.status, JSON.stringify(approved.body)).toBe(200);
+    expect(await holdsOf()).toEqual([{ kind: 'quarantine', ended: true }]);
+    const owner = await connect(w.database, 'migration');
+    try {
+      const releases = await owner.query<{ event: string }>(
+        `select r.event from merchandise.pt_hold_release r join receiving.held_line l on l.hold_id = r.hold_id
+          where l.id = $1`,
+        [held.id],
+      );
+      expect(releases.rows).toEqual([{ event: 'approved-decision' }]);
+    } finally {
+      await owner.end();
+    }
+    const stock = await stockOfStyle(style);
+    expect([...stock.covered.values()].reduce((sum, each) => sum + each.covered, 0)).toBe(2);
   });
 
   it('DEC-137 PRD-DMG-005 leaves the pieces confirmed damaged out of the PT, their product Unknown and uncovered', async () => {
@@ -416,24 +556,28 @@ describe('approvals at once (12 test 12)', () => {
     expect([...stock.covered.values()].reduce((sum, each) => sum + each.covered, 0)).toBe(2);
   });
 
-  it('PRD-ACP-002 a recount racing a PT approval: the approval succeeds and the recount is refused, the PT standing', async () => {
+  it("PRD-REC-019 a recount never races a PT approval: it is refused from the file's submit, before and after the approval", async () => {
+    // No race by construction (goods-in 6.6): the submit sets the GRN's "PT attached" mark and a recount is refused
+    // while it is set; a recount waiting refuses the upload (5.1). So both orders are proved, not a race.
     const { grnId, arrivalId, revisionId, requestId } = await ownedPt(
-      'PTA-RECOUNT-RACE',
+      'PTA-RECOUNT-MARK',
       [{ sizeAt: 0, counted: 2 }],
       () => [{ QTY: 2, NAG: 2 }],
     );
     const lineId = (await w.arrival(arrivalId)).grn?.lines[0]?.id ?? '';
-    const [approved, recount] = await Promise.all([
-      w.decide(w.people.ptApprover, requestId, revisionId),
+    const recount = () =>
       w.post(w.people.receiver, `/api/receiving/grns/${grnId}/recounts`, {
         versionToken: grnId,
         reason: 'SYNTHETIC recount',
         lines: [{ grnLineId: lineId, countedQuantity: 3 }],
-      }),
-    ]);
+      });
+    const before = await recount();
+    expect(before.status, JSON.stringify(before.body)).toBe(422);
+    expect(errorOf(before)?.code).toBe('receiving.pt-attached');
+    const approved = await w.decide(w.people.ptApprover, requestId, revisionId);
     expect(approved.status, JSON.stringify(approved.body)).toBe(200);
-    expect(recount.status, JSON.stringify(recount.body)).toBe(422);
-    expect(errorOf(recount)?.code).toBe('receiving.pt-attached');
+    const after = await recount();
+    expect(errorOf(after)?.code).toBe('receiving.pt-attached');
   });
 });
 
@@ -455,7 +599,7 @@ describe('the PT review and its download (goods-in 6.2, 6.5)', () => {
     expect(review).toMatchObject({ state: 'Awaiting approval', number: null });
     expect(review.rows).toHaveLength(2);
     expect(review.next).toBe(review.rows.at(-1)?.rowNumber);
-    const draftDownload = await w.get(w.people.ptApprover, `/api/merchandise/pt/revisions/${revisionId}/download`);
+    const draftDownload = await w.post(w.people.ptApprover, `/api/merchandise/pt/revisions/${revisionId}/download`, {});
     expect(draftDownload.status).toBe(422);
     expect(errorOf(draftDownload)?.code).toBe('merchandise.pt-not-official');
     const approved = await w.decide(w.people.ptApprover, requestId, revisionId);
@@ -482,26 +626,37 @@ describe('the PT review and its download (goods-in 6.2, 6.5)', () => {
     expect(review.newProducts.every((each) => each.skuCode !== undefined)).toBe(true);
   });
 
-  it('PRD-ACS-008 masks BASIC, P RATE and MARGIN for a reader not granted cost or margin, and refuses them the download', async () => {
+  it('PRD-ACS-008 masks BASIC, P RATE and MARGIN for a reader not granted cost or margin, and leaves them out of the download', async () => {
     const review = await w.revision(reviewed.revisionId, w.people.ptReader);
     expect(review.totals.costPaise).toEqual({ kind: 'masked', fieldClass: 'cost' });
     expect(review.rows[0]).toMatchObject({
       pRatePaise: { kind: 'masked', fieldClass: 'cost' },
       margin: { kind: 'masked', fieldClass: 'margin' },
     });
-    const refused = await w.get(w.people.ptReader, `/api/merchandise/pt/revisions/${reviewed.revisionId}/download`);
-    expect(refused.status).toBe(403);
-    expect(errorOf(refused)).toMatchObject({ code: 'access.not-authorised' });
+    // The export leaves out what the screen masks (access-and-approvals 6), and records no access to it (code review 7).
+    const download = await w.post(
+      w.people.ptReader,
+      `/api/merchandise/pt/revisions/${reviewed.revisionId}/download`,
+      {},
+    );
+    expect(download.status, JSON.stringify(download.body)).toBe(200);
+    const sheet = await sheetOf(download);
+    const third = (sheet?.getRow(4).values as unknown[]).slice(1);
+    expect(third[13]).toBe('1999.00');
+    expect([third[14], third[15], third[19]]).toEqual([undefined, undefined, undefined]);
+    expect(await accessRecordsOf(w.people.ptReader.user.id)).toEqual([]);
   });
 
-  it("PRD-PTW-008 PRD-PTW-009 downloads an Official PT as XLSX in the template's columns", async () => {
-    const download = await w.get(w.people.ptApprover, `/api/merchandise/pt/revisions/${reviewed.revisionId}/download`);
+  it("PRD-PTW-008 PRD-PTW-009 PRD-SEC-007 downloads an Official PT as XLSX in the template's columns, recording the export of cost and margin", async () => {
+    const download = await w.post(
+      w.people.ptApprover,
+      `/api/merchandise/pt/revisions/${reviewed.revisionId}/download`,
+      {},
+    );
     expect(download.status, JSON.stringify(download.body)).toBe(200);
-    const { fileName, contentBase64 } = download.body as { fileName: string; contentBase64: string };
+    const { fileName } = download.body as { fileName: string };
     expect(fileName).toMatch(/^SYN-PT-\d{5}\.xlsx$/);
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(Buffer.from(contentBase64, 'base64') as unknown as ArrayBuffer);
-    const [sheet] = workbook.worksheets;
+    const sheet = await sheetOf(download);
     const header = (sheet?.getRow(1).values as unknown[]).slice(1);
     expect(header.slice(0, 20)).toEqual([
       'SEASON',
@@ -529,20 +684,112 @@ describe('the PT review and its download (goods-in 6.2, 6.5)', () => {
     expect(third[1]).toBe(w.owned.code);
     expect(third[10]).toBe(reviewed.style);
     expect(third[12]).toBe(1);
-    expect(third[15]).toBe(900);
+    // PRD-MOD-014: each amount its exact text from the paise, MARGIN as calculated, never through a binary fraction.
+    expect([third[13], third[14], third[15], third[19]]).toEqual(['1999.00', '700.00', '900.00', '54.98']);
     expect(sheet?.rowCount).toBe(4);
+    // numbering-and-audit 5.1: an export that includes a restricted field records the access, one record a class.
+    expect(await accessRecordsOf(w.people.ptApprover.user.id)).toEqual([
+      { field_class: 'cost', exposure: 'exported', record_type: 'merchandise.pt' },
+      { field_class: 'margin', exposure: 'exported', record_type: 'merchandise.pt' },
+    ]);
   });
 });
 
-describe('the approval in a locked period (goods-in 6.3; books-and-posting 10)', () => {
-  it('PRD-LED-009 refuses the whole approval while the period it posts into is locked', async () => {
+describe('the series a PT approval draws from (goods-in 6.6, 10.4; numbering-and-audit 3.5)', () => {
+  const numbering = () => w.api.app.get<NumberingInterface>(NUMBERING);
+
+  /** Pauses, releases or closes the live series of the kind, under its lock (numbering-and-audit 3.2, 6.1). */
+  async function change(kind: string, scopeKey: string, how: 'pause' | 'release' | 'close') {
+    await asUserIn(w.api.app, w.organisation, w.setup.preparer.id, async (context) => {
+      const live = await numbering().liveSeries(context, { kind, scopeKey });
+      if (live === undefined) throw new Error(`no live ${kind} series`);
+      await context.lock(LOCK_STEP.numberSeries, [numbering().seriesLockTarget(live.seriesId)]);
+      const changed = await numbering()[how](context, live.seriesId);
+      if (changed.kind !== 'done') throw new Error(`${how} refused: ${changed.refusal.code}`);
+    });
+  }
+
+  /** A new SYNTHETIC series of the kind, its format unlike the closed one's (numbering-and-audit 3.5). */
+  async function defineAgain(kind: string, scopeKey: string, label: string, text: string, width: number) {
+    await asUserIn(w.api.app, w.organisation, w.setup.preparer.id, async (context) => {
+      const code = syntheticCode(`${label}-FORMAT`);
+      const format = await numbering().defineFormatVersion(context, code, [
+        { kind: 'text', text },
+        { kind: 'sequence', width },
+      ]);
+      if (format.kind !== 'done') throw new Error(`format refused: ${format.refusal.code}`);
+      const defined = await numbering().defineSeries(context, {
+        kind,
+        scopeKey,
+        displayScopeKey: scopeKey,
+        formatCode: code,
+      });
+      if (defined.kind !== 'done') throw new Error(`series refused: ${defined.refusal.code}`);
+    });
+  }
+
+  it('PRD-REC-018 RR-585 refuses the approval, naming the series, while the PT or SKU code series is paused or missing', async () => {
+    // A PT proposing a new product, so both series are drawn from (goods-in 6.3 steps 2 and 3).
+    const { revisionId, requestId } = await ownedPt('PTA-SERIES', [{ sizeAt: 0, counted: 1 }], () => [{}]);
+    const refusedWith = async (code: string, numberedKind: string) => {
+      const refused = await w.decide(w.people.ptApprover, requestId, revisionId);
+      expect(refused.status, JSON.stringify(refused.body)).toBe(403);
+      expect(errorOf(refused)).toMatchObject({ code, missing: [{ kind: 'number-series', numberedKind }] });
+      expect((await w.revision(revisionId)).state).toBe('Awaiting approval');
+    };
+    await change(PT_KIND.kind, PT_SCOPE_KEY, 'pause');
+    await refusedWith('merchandise.pt-series-paused', PT_KIND.kind);
+    await change(PT_KIND.kind, PT_SCOPE_KEY, 'close');
+    await refusedWith('merchandise.no-pt-series', PT_KIND.kind);
+    await defineAgain(PT_KIND.kind, PT_SCOPE_KEY, 'PT2', 'SYN-PT2-', 5);
+    await change(SKU_CODE_KIND.kind, SKU_CODE_SCOPE_KEY, 'pause');
+    await refusedWith('merchandise.sku-code-series-paused', SKU_CODE_KIND.kind);
+    await change(SKU_CODE_KIND.kind, SKU_CODE_SCOPE_KEY, 'close');
+    await refusedWith('merchandise.no-sku-code-series', SKU_CODE_KIND.kind);
+    await defineAgain(SKU_CODE_KIND.kind, SKU_CODE_SCOPE_KEY, 'SKU2', 'SYN-SKU2-', 6);
+    // Both Open again: the approval draws its numbers from the new series.
+    const approved = await w.decide(w.people.ptApprover, requestId, revisionId);
+    expect(approved.status, JSON.stringify(approved.body)).toBe(200);
+    const review = await w.revision(revisionId);
+    expect(review.number).toMatch(/^SYN-PT2-\d{5}$/);
+    expect(review.newProducts[0]?.skuCode).toMatch(/^SYN-SKU2-\d{6}$/);
+  });
+});
+
+describe('the approval in a locked period (goods-in 6.3, 6.6; books-and-posting 10)', () => {
+  it('POL-09.12 PRD-LED-009 PRD-EXC-001 refuses the whole approval in a locked period and raises the unfinished operation; approved again once the period is reopened for it, it posts', async () => {
+    // A missing posting map is refused at the policy gate, asked first (POL-09.12 test above); a locked period passes
+    // the gate and is refused by the ledger's posting under the locks (goods-in 6.6; books-and-posting 10 step 2).
     const { grnId, revisionId, requestId } = await ownedPt('PTA-LOCKED', [{ sizeAt: 0, counted: 1 }], () => [{}]);
-    const { setup } = w;
-    const locked = await setup.asPreparerDo((c, p) => setup.books.lockPeriod(c, p, w.periodId));
-    if (locked.kind !== 'success') throw new Error(`lock refused: ${locked.refusal.code}`);
+    await w.lockPeriod();
     const refused = await w.decide(w.people.ptApprover, requestId, revisionId);
     expect(refused.status, JSON.stringify(refused.body)).toBe(422);
+    expect(errorOf(refused)?.code).toBe('stock.posting-refused');
     expect(JSON.stringify(errorOf(refused))).toContain('period-locked');
     expect((await w.grnPt(grnId)).pt?.revisions[0]?.state).toBe('Awaiting approval');
+    // Step 3: the unfinished operation, raised in a command of its own after the refusal, to whoever its routing names
+    // (SYNTHETIC routing, V-03), keyed by the decision's command, linking the revision and saying why.
+    const [raised, ...more] = await w.exceptionsOn([revisionId]);
+    expect(more).toEqual([]);
+    expect(raised).toMatchObject({
+      type: 'merchandise.pt-posting-refused',
+      state: 'Unresolved',
+      ownerUserId: w.people.ptApprover.user.id,
+      versionId: revisionId,
+    });
+    expect(raised?.raisingEvent).toMatch(/^access\.decide-approval:/);
+    expect(raised?.comment).toContain('stock.posting-refused');
+    // Step 5: Accounts reopen the period for the PT, a different person approving; the request still waits, so the
+    // approver approves again, and it posts once.
+    await w.reopenFor(revisionId);
+    const before = await trialBalance();
+    const approved = await w.decide(w.people.ptApprover, requestId, revisionId);
+    expect(approved.status, JSON.stringify(approved.body)).toBe(200);
+    expect((await w.revision(revisionId)).state).toBe('Official');
+    expect(moved(before, await trialBalance(), w.accounts.INV, 'debitPaise')).toBe(94_500);
+    // Nothing more is raised, and the operation is finished: its owner closes the exception (12.3).
+    expect(await w.exceptionsOn([revisionId])).toHaveLength(1);
+    const closed = await w.post(w.people.ptApprover, `/api/exceptions/exceptions/${raised?.id ?? ''}/close`, {});
+    expect(closed.status, JSON.stringify(closed.body)).toBe(200);
   });
 });

@@ -1,6 +1,6 @@
 # S2-F02-T05 — Recount
 
-Status: in-progress
+Status: done
 Blocked by: S2-F02-T03, S2-F04-T02 (the GRN's "PT attached" mark is built there)
 Feature: [Stage 2 first version](../../spec.md)
 
@@ -27,3 +27,6 @@ A recount corrects custody with the original kept; the recounter cannot approve 
   - `merchandise` · PT: the upload waits for a recount of its GRN, named in `merchandise.pt-held-lines-open`; a recounted line, whose goods may be on several origins, is named once in the coverage's GRN lines.
   - `receiving`: Booking's later link takes a line's pieces as recounted, and the screen's booking standing too; a recount that makes a shortage larger raises its own shortage follow-up; `receivingApprovals` moved to `commands/approvals.ts` with the recount's effect beside the held line's.
   - `module-map` section 5: `receiving` holds the recount (`PRD-REC-019`) and reads which GRN lines deliver to a booking.
+  - The journeys' server and world (`apps/server/test/browser/serve.ts`, `apps/web/e2e/support/world.ts`): the recount journey's receiver, assigned to propose recounts, its Owner with a SYNTHETIC limit over Unknown value, and the world entries the journey reads.
+- **Review 7 changes** (code review 7 of stage 2, 23 Oct 2026; `Status:` unchanged): a recount that moves nothing is worth a known zero, never Unknown (`PRD-MOD-015`), so its approver needs a limit on known value (RR-621); a recount's posting refused under the locks raises `receiving.recount-posting-refused` through `access`'s follow-up of a refused decision, and is approved again once the cause is fixed (goods-in 4.11; books-and-posting 10), not reachable through the routes in the first version and tested by calling the follow-up; the ledger refuses a receipt count with no leg as a defect, never a blank origin; `receivingApprovals` moved to `receiving/approvals.ts` beside the exception types; one `GRN_LINE_TYPE`, the `refused()` helper for inline refusals; the journeys' server delivers its fixtures' events before the journeys start and answers its clock, so the recount journey's My work wait is back to 180 seconds and its Arrival time is the server's (`e2e/support/clock.ts`).
+- Done 23 Oct 2026: reviewed (code review 7) with its fixes in; every check and 47 browser journeys pass on the integration branch. Commits 30d2d81, 9414fb9, merged in 01e1f7e; review 7 fixes on `s2/review-7-fixes`, merged in 29e69bf8.

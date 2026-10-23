@@ -3,7 +3,7 @@ import type { TransactionContext } from '../../../kernel/index.js';
 import type { AuditInterface } from '../../audit/index.js';
 import type { PtMarkReason } from '../db/schema.js';
 import { currentPtMark } from '../queries/pt-mark.js';
-import { recordItem, recordNotFound, refusalOf, type Actor, type Outcome } from './common.js';
+import { recordItem, recordNotFound, refusalOf, refused, type Actor, type Outcome } from './common.js';
 import { lockedGrn, PT_REVISION_TYPE, writtenChange, type PtMarkChange } from './pt-mark.js';
 
 /** Why a mark is cleared: its draft withdrawn, or, with S2-F06-T01 and S2-F09-T01, the PT rejected or reversed. */
@@ -23,11 +23,10 @@ export async function clearPtMark(
   if (row === undefined) return refusalOf(recordNotFound(GRN_TYPE, change.grnId));
   const now = await currentPtMark(context, row.id);
   if (now?.change !== 'set' || now.ptRevisionId !== change.ptRevisionId) {
-    return refusalOf({
-      kind: 'refused',
-      code: 'receiving.pt-not-attached',
-      missing: [recordItem(GRN_TYPE, row.id), recordItem(PT_REVISION_TYPE, change.ptRevisionId)],
-    });
+    return refused('refused', 'receiving.pt-not-attached', [
+      recordItem(GRN_TYPE, row.id),
+      recordItem(PT_REVISION_TYPE, change.ptRevisionId),
+    ]);
   }
   return writtenChange(context, audit, actor, row, { ...change, kind: 'cleared', number: now.changeNumber + 1 });
 }

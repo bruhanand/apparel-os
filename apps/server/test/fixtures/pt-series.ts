@@ -1,6 +1,6 @@
 import type { TransactionContext } from '../../src/kernel/index.js';
 import { SKU_CODE_KIND, SKU_CODE_SCOPE_KEY } from '../../src/modules/merchandise/catalogue/index.js';
-import { PT_KIND, PT_SCOPE_KEY } from '../../src/modules/merchandise/pt/index.js';
+import { PT_KIND, PT_SCOPE_KEY } from '../../src/modules/merchandise/pt/domain/kinds.js';
 import type { NumberingInterface } from '../../src/modules/numbering/index.js';
 import { syntheticCode } from './synthetic.js';
 

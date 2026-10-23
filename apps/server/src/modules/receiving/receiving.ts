@@ -43,7 +43,14 @@ import { anyAccepted, scanInView } from './queries/scan-in.js';
 import { grnRow } from './queries/grns.js';
 import { grnForPt, ptMarkOf, type GrnForPt, type PtMark } from './queries/pt-mark.js';
 import { currentLines } from './domain/lines.js';
-import { arrivalFacts, arrivalView, inboxOf, peopleOf } from './queries/arrivals.js';
+import {
+  arrivalFacts,
+  arrivalView,
+  grnBookingLinksOf,
+  inboxOf,
+  peopleOf,
+  type GrnBookingLinks,
+} from './queries/arrivals.js';
 import { recountFacts, recountPanelOf } from './queries/recounts.js';
 import {
   grnLineViews,
@@ -282,6 +289,16 @@ export class Receiving {
    */
   ptBasis(context: TransactionContext, grnId: string): Promise<PtBasis | undefined> {
     return ptBasisOf(context, grnId, (lineIds) => this.dependencies.documents.damageOfGrnLines(context, lineIds));
+  }
+
+  /**
+   * The bookings the GRN's lines are linked to, as far as the reader may see them, each with its lines: what the PT
+   * review shows (goods-in 6.2; code review 7 of stage 2).
+   */
+  grnBookingLinks(context: TransactionContext, grnId: string): Promise<GrnBookingLinks[]> {
+    return grnBookingLinksOf(context, grnId, (lineIds) =>
+      this.dependencies.booking.receiptsOfGrnLines(context, lineIds),
+    );
   }
 
   /** The GRN as `merchandise` · PT names it, with its number and scope facts, or undefined (goods-in 5.7). */

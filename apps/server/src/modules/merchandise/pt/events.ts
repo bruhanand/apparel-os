@@ -22,6 +22,17 @@ export const ptPostRequested = defineEvent({
 });
 
 /**
+ * A queued posting of an approved PT revision refused under its locks: nothing posted, the decision unused, the PT
+ * Failed (access-and-approvals 9.8 step 4). Its consumer raises the unfinished-operation exception in a step of its own
+ * (books-and-posting 10 step 3; code review 7).
+ */
+export const ptPostingFailed = defineEvent({
+  type: 'merchandise.pt-posting-failed',
+  version: 1,
+  payload: z.strictObject({ failureId: z.uuid(), postRequestId: z.uuid(), revisionId: z.uuid() }),
+});
+
+/**
  * A PT revision's reversal before the scan-in approved: its coverage removed and its cost reversed, the GRN waiting for
  * a corrected file (goods-in 6.4, 6.7, 10.4; S2-F09-T01).
  */

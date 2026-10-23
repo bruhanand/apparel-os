@@ -5,7 +5,7 @@ import type { DocumentEffect, EffectDecider, EffectOutcome } from '../../access/
 import type { AuditInterface } from '../../audit/index.js';
 import type { ExceptionsInterface } from '../../exceptions/index.js';
 import { recountDecision, recountMovement } from '../db/schema.js';
-import { RECEIVING_MODULE, SHORTAGE_EXCEPTION_TYPE } from '../domain/kinds.js';
+import { RECEIVING_MODULE, RECOUNT_POSTING_REFUSED_TYPE, SHORTAGE_EXCEPTION_TYPE } from '../domain/kinds.js';
 import { receivingMissing, receivingUnavailable, type AvailabilityDependencies } from '../queries/availability.js';
 import { recountRow, recountsOfGrn, type RecountRecord } from '../queries/recounts.js';
 import { grnRow } from '../queries/grns.js';
@@ -43,8 +43,11 @@ import {
 
 /** What the decision effect uses, bound late, since `access` is built with it (access-and-approvals 9.8b). */
 export interface RecountEffectServices extends AvailabilityDependencies, CheckDependencies, PostingDependencies {
-  readonly exceptions: Pick<ExceptionsInterface, 'codeSeriesTarget' | 'raise'>;
+  readonly exceptions: Pick<ExceptionsInterface, 'codeSeriesTarget' | 'raise' | 'raiseInOwnCommand'>;
 }
+
+/** The ledger's refusal of a posting under the locks that the exception follows (books-and-posting 10). */
+const POSTING_REFUSED = 'stock.posting-refused';
 
 export interface RecountEffectDependencies {
   readonly audit: AuditInterface;
@@ -236,6 +239,26 @@ export function recountEffect(dependencies: RecountEffectDependencies): Document
         ...(decider.reason === undefined ? {} : { reason: decider.reason }),
       });
       return { kind: 'success', answer: { recountId: record.row.id, recountDecisionId } };
+    },
+    /**
+     * A reversal the ledger refused to post under the locks, such as into a locked period, rolled the approval back
+     * (books-and-posting 10 step 2): its unfinished-operation exception, in a command of its own once the refusal is
+     * kept, keyed by the decision's command, linking the recount (step 3; code review 7). The recount still waits, so
+     * it is approved again once the cause is fixed (step 5). Any other refusal leaves nothing unfinished.
+     */
+    async refused(context, recountId, decision) {
+      if (decision.refusal.code !== POSTING_REFUSED) return;
+      const row = await recountRow(context, recountId);
+      if (row === undefined) return;
+      await dependencies.services().exceptions.raiseInOwnCommand(context, {
+        raisingEvent: decision.raisingEvent,
+        typeCode: RECOUNT_POSTING_REFUSED_TYPE,
+        facts: exceptionFactsOf(row),
+        links: [{ module: RECEIVING_MODULE, recordType: RECOUNT_TYPE, recordId: recountId, versionId: recountId }],
+        exposure: { kind: 'unknown' },
+        raisedBy: decision.actor,
+        comment: JSON.stringify({ code: decision.refusal.code, missing: decision.refusal.missing }),
+      });
     },
     async reject(context, decider, recountId): Promise<EffectOutcome> {
       const open = await openRecount(context, recountId);

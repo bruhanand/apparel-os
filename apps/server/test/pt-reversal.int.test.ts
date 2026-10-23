@@ -10,7 +10,7 @@ import { availability, custody, rebuildAndCompare } from '../src/modules/stock/l
 import type { SyntheticPtRow } from './fixtures/pt.js';
 import { syntheticCode, syntheticName } from './fixtures/synthetic.js';
 import { asUserIn, RECEIVER_REPORTER_AUTHORITY } from './support/damage.js';
-import { approved } from './support/organisation.js';
+import { approved, decided } from './support/organisation.js';
 import { ptApprovalWorld, type Person, type PtApprovalWorld } from './support/pt-approval.js';
 import { placeScope } from './support/receiving.js';
 
@@ -444,5 +444,52 @@ describe('a reversal refused once a piece is scanned in (goods-in 6.4, 7.4; 12 t
     expect(read.mark).toMatchObject({ kind: 'set', ptRevisionId: revisionId });
     expect(moved(before, await trialBalance(), w.accounts.INV, 'creditPaise')).toBe(0);
     expect((await stockOfStyle(style)).covered).toBe(2);
+  });
+});
+
+// Last in the file: it locks the book's period, which every posting above needs open.
+describe('the reversal in a locked period (goods-in 6.7; books-and-posting 10; SL-23)', () => {
+  it('POL-09.12 PRD-LED-009 PRD-EXC-001 refuses the whole reversal in a locked period and raises the unfinished operation; approved again once the period is reopened for it, it posts', async () => {
+    const { style, grnId, revisionId } = await approvedPt('PTR-LOCKED', [{ sizeAt: 0, counted: 1 }], [{}]);
+    const { ptReversalId, requestId } = await proposed(grnId, revisionId);
+    await w.lockPeriod();
+    const refused = await w.decide(w.people.ptApprover, requestId, ptReversalId);
+    expect(refused.status, JSON.stringify(refused.body)).toBe(422);
+    expect(errorOf(refused)?.code).toBe('stock.posting-refused');
+    expect(JSON.stringify(errorOf(refused))).toContain('period-locked');
+    // Nothing is written: the PT stands and its reversal still waits (PRD-INT-004).
+    expect((await w.grnPt(grnId)).pt?.revisions[0]).toMatchObject({
+      state: 'Official',
+      reversals: [{ reversalId: ptReversalId, state: 'Awaiting approval' }],
+    });
+    // Step 3: the unfinished operation, raised in a command of its own after the refusal, linking the reversal.
+    const [raised, ...more] = await w.exceptionsOn([ptReversalId]);
+    expect(more).toEqual([]);
+    expect(raised).toMatchObject({
+      type: 'merchandise.pt-posting-refused',
+      state: 'Unresolved',
+      versionId: ptReversalId,
+    });
+    expect(raised?.comment).toContain('stock.posting-refused');
+    // The operation is not finished while the reversal waits (access-and-approvals 12.3).
+    const early = await w.post(w.people.ptApprover, `/api/exceptions/exceptions/${raised?.id ?? ''}/close`, {});
+    expect(early.status, JSON.stringify(early.body)).not.toBe(200);
+    // Step 5: Accounts reopen the period for the reversal, a different person approving (books-and-posting 4.3); the
+    // request still waits, so the approver approves again, and it posts once.
+    const asked = await w.setup.asPreparerDo((c, p) =>
+      w.setup.books.requestReopening(c, p, w.periodId, {
+        reason: 'SYNTHETIC reopening for a PT reversal refused in a locked period',
+        corrections: [{ module: 'merchandise', recordType: 'merchandise.pt_reversal', recordId: ptReversalId }],
+      }),
+    );
+    if (asked.kind !== 'success') throw new Error(`reopening refused: ${asked.refusal.code}`);
+    decided(await w.setup.decide(asked.answer.requestId, asked.answer.reopeningId));
+    const done = await w.decide(w.people.ptApprover, requestId, ptReversalId);
+    expect(done.status, JSON.stringify(done.body)).toBe(200);
+    expect((await w.grnPt(grnId)).pt?.revisions[0]?.state).toBe('Reversed');
+    expect((await stockOfStyle(style)).covered).toBe(0);
+    expect(await w.exceptionsOn([ptReversalId])).toHaveLength(1);
+    const closed = await w.post(w.people.ptApprover, `/api/exceptions/exceptions/${raised?.id ?? ''}/close`, {});
+    expect(closed.status, JSON.stringify(closed.body)).toBe(200);
   });
 });

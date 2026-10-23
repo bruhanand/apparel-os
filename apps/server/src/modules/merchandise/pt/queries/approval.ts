@@ -105,6 +105,24 @@ export async function revisionStanding(
   };
 }
 
+/** A request to post a revision through its queued job, as the reader may see it, or undefined (goods-in 6.6). */
+export async function postRequestOf(
+  context: TransactionContext,
+  postRequestId: string,
+): Promise<typeof ptPostRequest.$inferSelect | undefined> {
+  const [request] = await context.tx.select().from(ptPostRequest).where(eq(ptPostRequest.id, postRequestId));
+  return request;
+}
+
+/** A queued posting's failure, as the reader may see it, or undefined (goods-in 6.6; access-and-approvals 9.8). */
+export async function postingFailureOf(
+  context: TransactionContext,
+  failureId: string,
+): Promise<typeof ptPostingFailure.$inferSelect | undefined> {
+  const [failure] = await context.tx.select().from(ptPostingFailure).where(eq(ptPostingFailure.id, failureId));
+  return failure;
+}
+
 /** The revision's coverage, rows in the file's order and proposed products (goods-in 5.7). */
 export async function revisionContent(
   context: TransactionContext,

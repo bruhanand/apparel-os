@@ -1,6 +1,6 @@
 # S2-F11-T02 — The stage 2 reports
 
-Status: blocked
+Status: in-progress
 Blocked by: S2-F01-T04, S2-F02-T04, S2-F07-T01
 Feature: [Stage 2 first version](../../spec.md)
 

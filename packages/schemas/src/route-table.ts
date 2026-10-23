@@ -17,6 +17,7 @@ import {
   ptTemplateSchema,
   ptWithdrawalSchema,
   ptWithdrawnSchema,
+  ptPostedAgainSchema,
 } from './pt.js';
 import {
   BOOKING_DRAFT_BODY_LIMIT_BYTES,
@@ -1270,14 +1271,9 @@ const RECOUNT_LINE_CODES = [
 ] as const satisfies readonly ErrorCode[];
 
 /**
- * The codes of a recount's approval (goods-in 4.7, 4.11, 10.3; S2-F02-T05): the receiving gate at the unit, the recount
- * decided already, its lines checked again under the locks, the decision verified under the ledger's locks on the
- * goods' cost then (access-and-approvals 9.7), and the shortage follow-up a recount raises (goods-in 4.9).
- */
-/**
  * The codes of a PT revision's decision (goods-in 6.3, 6.6; S2-F06-T01): the policy gate; the GRN changed since the
  * upload, a held line, damage report or recount waiting again, or the revision no longer the one waiting; a series
- * missing or paused; a new product the catalogue refuses under the locks; the decision verified under the ledger's
+ * missing, paused or used up, as its allocation answers (code review 7); a new product the catalogue refuses under the locks; the decision verified under the ledger's
  * locks on the PT's cost (access-and-approvals 9.7); and the ledger's refusals of the identity step, the holds the PT
  * route ends, the coverage and the cost established: overlapping coverage, units held, reserved or taken by a claim the
  * approver cannot see, a count freeze, a missing cost setting or posting map, or a locked period (stock-ledger 13.8;
@@ -1291,8 +1287,10 @@ const PT_DECISION_CODES = [
   'merchandise.pt-grn-changed',
   'merchandise.no-pt-series',
   'merchandise.pt-series-paused',
+  'merchandise.pt-series-exhausted',
   'merchandise.no-sku-code-series',
   'merchandise.sku-code-series-paused',
+  'merchandise.sku-code-series-exhausted',
   'merchandise.pt-size-not-in-size-set',
   'merchandise.pt-colour-not-identity',
   'merchandise.pt-tracking-unknown',
@@ -1332,6 +1330,11 @@ const PT_REVERSAL_DECISION_CODES = [
   'receiving.pt-not-attached',
 ] as const satisfies readonly ErrorCode[];
 
+/**
+ * The codes of a recount's approval (goods-in 4.7, 4.11, 10.3; S2-F02-T05): the receiving gate at the unit, the recount
+ * decided already, its lines checked again under the locks, the decision verified under the ledger's locks on the
+ * goods' cost then (access-and-approvals 9.7), and the shortage follow-up a recount raises (goods-in 4.9).
+ */
 const RECOUNT_DECISION_CODES = [
   'configuration.operation-unavailable',
   'receiving.recount-decided',
@@ -5634,18 +5637,46 @@ export const routes = {
     response: ptRevisionReadSchema,
     codes: [...HISTORY_CODES, 'merchandise.record-not-found'],
   }),
+  // An Official PT downloaded, a command since an export of a restricted field writes its access record (goods-in
+  // 6.5, 6.6; numbering-and-audit 5.1; code review 7): its answer is never kept, so a replay is not repeatable.
   downloadPt: defineRoute({
-    method: 'GET',
+    method: 'POST',
     path: '/api/merchandise/pt/revisions/{revisionId}/download',
     params: ptRevisionParamsSchema,
     access: { kind: 'action', action: 'view', recordType: PT_TYPE, authorisedIn: 'command' },
-    command: false,
+    command: true,
+    body: z.strictObject({}),
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'restricted-value',
     response: ptDownloadSchema,
     codes: [
       ...HISTORY_CODES,
+      'kernel.cross-site-request',
       'merchandise.record-not-found',
       'merchandise.pt-not-official',
       'files-imports.layout-not-found',
+    ],
+  }),
+  // A failed PT posted again once its cause is fixed (goods-in 6.6; access-and-approvals 9.8 step 5; books-and-posting
+  // 10 step 5; code review 7): a further request to post naming the same decision, by whoever may approve PTs there.
+  postPtAgain: defineRoute({
+    method: 'POST',
+    path: '/api/merchandise/pt/revisions/{revisionId}/post-again',
+    params: ptRevisionParamsSchema,
+    access: { kind: 'action', action: 'approve', recordType: PT_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: z.strictObject({}),
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: ptPostedAgainSchema,
+    codes: [
+      ...HISTORY_CODES,
+      'kernel.cross-site-request',
+      'merchandise.record-not-found',
+      'merchandise.pt-not-failed',
+      'configuration.operation-unavailable',
     ],
   }),
   downloadPtTemplate: defineRoute({

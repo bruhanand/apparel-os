@@ -1,4 +1,4 @@
-import { uuidv7 } from '@apparel-os/domain';
+import { paise, uuidv7 } from '@apparel-os/domain';
 import { GRN_TYPE, HELD_LINE_TYPE, RECOUNT_TYPE, lineFindings, type LineFindings } from '@apparel-os/schemas';
 import {
   CommandDefect,
@@ -12,7 +12,7 @@ import type { AccessInterface } from '../../access/index.js';
 import type { BookingInterface } from '../../booking/index.js';
 import type { ItemValue, LedgerItem, StockLedgerInterface, Written } from '../../stock/ledger/index.js';
 import type { grn } from '../db/schema.js';
-import { RECEIVING_MODULE, RECOUNT_SOURCE_TYPE } from '../domain/kinds.js';
+import { GRN_LINE_TYPE, RECEIVING_MODULE, RECOUNT_SOURCE_TYPE } from '../domain/kinds.js';
 import { ownerOfGrn } from '../domain/owner.js';
 import { piecesToReverse, recountOfLine } from '../domain/recounts.js';
 import { linesOfGrn } from '../queries/held-lines.js';
@@ -24,6 +24,7 @@ import {
   recordItem,
   recordNotFound,
   refusalOf,
+  refused,
   type Actor,
   type ArrivalRow,
   type Outcome,
@@ -37,9 +38,6 @@ import {
 
 export type GrnRow = typeof grn.$inferSelect;
 type GrnLineRow = Awaited<ReturnType<typeof linesOfGrn>>[number];
-
-/** The record type a GRN line is named by in a refusal (PRD-UXP-003). */
-export const GRN_LINE_TYPE = 'receiving.grn_line';
 
 /** The PT revision, `merchandise` · PT's record, named by its identifier only (code-house-rules 3.2). */
 const PT_REVISION_TYPE = 'merchandise.pt_revision';
@@ -124,11 +122,10 @@ export async function checkedLines(
 ): Promise<Outcome<readonly PlannedLine[]>> {
   const mark = await currentPtMark(context, locked.id);
   if (mark?.change === 'set') {
-    return refusalOf({
-      kind: 'refused',
-      code: 'receiving.pt-attached',
-      missing: [recordItem(GRN_TYPE, locked.id), recordItem(PT_REVISION_TYPE, mark.ptRevisionId)],
-    });
+    return refused('refused', 'receiving.pt-attached', [
+      recordItem(GRN_TYPE, locked.id),
+      recordItem(PT_REVISION_TYPE, mark.ptRevisionId),
+    ]);
   }
   const lines = await linesOfGrn(context, locked.id);
   const ids = wanted.map((each) => each.grnLineId);
@@ -142,25 +139,21 @@ export async function checkedLines(
     const countedBefore = countsNow.get(line.id) ?? line.countedQuantity;
     const checked = recountOfLine({ ...line, countedNow: countedBefore, heldLineId }, each.countedQuantity);
     if (checked.kind === 'refused') {
-      return refusalOf({
-        kind: 'refused',
-        code: checked.code,
-        missing: [
-          recordItem(GRN_LINE_TYPE, line.id),
-          ...(heldLineId === null ? [] : [recordItem(HELD_LINE_TYPE, heldLineId)]),
-        ],
-      });
+      return refused('refused', checked.code, [
+        recordItem(GRN_LINE_TYPE, line.id),
+        ...(heldLineId === null ? [] : [recordItem(HELD_LINE_TYPE, heldLineId)]),
+      ]);
     }
     planned.push({ line, countedBefore, countedAfter: each.countedQuantity, ...checked });
   }
   const delivering = await dependencies.booking.grnLinesDelivering(context, ids);
   const linked = planned.filter((each) => delivering.has(each.line.id));
   if (linked.length > 0) {
-    return refusalOf({
-      kind: 'refused',
-      code: 'receiving.recount-linked',
-      missing: linked.map((each) => recordItem(GRN_LINE_TYPE, each.line.id)),
-    });
+    return refused(
+      'refused',
+      'receiving.recount-linked',
+      linked.map((each) => recordItem(GRN_LINE_TYPE, each.line.id)),
+    );
   }
   return { kind: 'success', answer: planned };
 }
@@ -288,7 +281,7 @@ export function requestValueOf(value: ItemValue) {
  * periods and the caller's number series at step 8 in one call; Recheck and value. With `write`, under an approval:
  * Verify under lock with the request's value, Record use, then Write. Without `write`, it answers the value only and
  * writes nothing, for the value a proposal's approval is requested on. A recount whose items are none locks its series
- * only.
+ * only, and the goods it moves are worth a known zero.
  */
 export async function postRecount(
   context: TransactionContext,
@@ -303,8 +296,9 @@ export async function postRecount(
   write: boolean,
 ): Promise<Outcome<{ readonly value: ItemValue; readonly written: Written | undefined }>> {
   if (request.items.length === 0) {
+    // It moves nothing, so the goods it moves cost nothing: a known zero, never Unknown (PRD-MOD-015; code review 7).
     if (request.series.length > 0) await context.lock(LOCK_STEP.numberSeries, [...request.series]);
-    return { kind: 'success', answer: { value: { kind: 'unknown' }, written: undefined } };
+    return { kind: 'success', answer: { value: { kind: 'known', amountPaise: paise(0) }, written: undefined } };
   }
   const useId = uuidv7();
   const planned = await dependencies.ledger.plan(context, {

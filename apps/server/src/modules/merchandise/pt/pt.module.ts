@@ -10,6 +10,7 @@ import {
   type ImportHandlers,
 } from '../../files-imports/index.js';
 import { CONFIGURATION, type ConfigurationInterface } from '../../configuration/index.js';
+import { EXCEPTIONS, ExceptionsModule, type ExceptionsInterface } from '../../exceptions/index.js';
 import { NUMBERING, NumberingModule, type NumberingInterface } from '../../numbering/index.js';
 import { RECEIVING, ReceivingModule, type ReceivingInterface } from '../../receiving/index.js';
 import { STOCK_LEDGER, StockLedgerModule, type StockLedgerInterface } from '../../stock/ledger/index.js';
@@ -38,6 +39,7 @@ import { PT } from './tokens.js';
     ReceivingModule,
     NumberingModule,
     StockLedgerModule,
+    ExceptionsModule,
   ],
   controllers: [PtController],
   providers: [
@@ -51,8 +53,9 @@ import { PT } from './tokens.js';
         configuration: ConfigurationInterface,
         ledger: StockLedgerInterface,
         numbering: NumberingInterface,
-      ) => new Pt({ audit, access, receiving, files, configuration, ledger, numbering }),
-      inject: [AUDIT, ACCESS, RECEIVING, FILES_IMPORTS, CONFIGURATION, STOCK_LEDGER, NUMBERING],
+        exceptions: ExceptionsInterface,
+      ) => new Pt({ audit, access, receiving, files, configuration, ledger, numbering, exceptions }),
+      inject: [AUDIT, ACCESS, RECEIVING, FILES_IMPORTS, CONFIGURATION, STOCK_LEDGER, NUMBERING, EXCEPTIONS],
     },
   ],
   exports: [PT],

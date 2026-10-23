@@ -164,7 +164,10 @@ export const ptPostRequest = merchandise.table('pt_post_request', {
   ptRevisionId: uuid('pt_revision_id').notNull(),
   ...facts(),
   approvalDecisionId: uuid('approval_decision_id').notNull(),
+  /** The decision's approver, on whose behalf the job posts (access-and-approvals 9.8 step 2). */
+  approvedByUserId: uuid('approved_by_user_id').notNull(),
   accountingBookId: uuid('accounting_book_id').notNull(),
+  /** The approver at the click, or whoever posts a failed PT again (9.8 step 5; books-and-posting 10 step 5). */
   requestedByUserId: uuid('requested_by_user_id').notNull(),
   roleAssignmentId: uuid('role_assignment_id').notNull(),
   requestedAt: at('requested_at').notNull(),

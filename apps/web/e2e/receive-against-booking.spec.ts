@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { Authenticator } from './support/authenticator';
 import { organisationToday, signIn } from './support/journey';
 import { readWorld, type EnrolledUser } from './support/world';
+import { anHourAgo } from './support/clock';
 
 // S2-F02-T04: the receive-against-booking journey (goods-in 3.7, 4.1, 4.10, section 11; PRD-REC-002, PRD-BKG-007,
 // PRD-BKG-008, POL-05.08; code-house-rules 10.1). Warehouse (P-WHS) chooses "Receive against booking", is refused once
@@ -17,14 +18,6 @@ const INVOICE_PDF = {
   mimeType: 'application/pdf',
   buffer: Buffer.from('%PDF-1.4\n% SYNTHETIC invoice\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n', 'latin1'),
 };
-
-/**
- * An hour ago, as a `datetime-local` field takes it: the Organisation's wall clock, Etc/UTC on the journeys' server
- * (apps/server/test/browser/serve.ts), whatever the browser's time zone (code-house-rules 9).
- */
-function anHourAgo(): string {
-  return new Date(Date.now() - 3_600_000).toISOString().slice(0, 16);
-}
 
 async function signedIn(page: Page, code: string, user: EnrolledUser): Promise<Authenticator> {
   const app = new Authenticator(Buffer.from(user.factorSecretHex, 'hex'));
@@ -69,7 +62,7 @@ test('PRD-REC-002 PRD-BKG-007 POL-05.08 Warehouse receives against a booking; ex
       await form.getByLabel(/^Lorry receipt number/).fill('SYN-LR-RAB');
       await form.getByLabel(/^Lorry receipt date/).fill(organisationToday());
       await form.getByLabel(/^Cartons/).fill('1');
-      await form.getByLabel(/^Arrived/).fill(anHourAgo());
+      await form.getByLabel(/^Arrived/).fill(await anHourAgo());
       await receiver.getByRole('dialog').getByRole('button', { name: 'Record the Arrival' }).click();
       await expect(form.getByText('Choose the booking the goods come against.')).toBeVisible();
       const option = form.locator('#receive-booking option', { hasText: world.bookingNumber });

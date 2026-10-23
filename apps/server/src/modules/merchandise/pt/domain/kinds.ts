@@ -1,4 +1,4 @@
-import { PT_APPROVAL, PT_REVERSAL_APPROVAL, PT_TYPE, type AttributeMark } from '@apparel-os/schemas';
+import { PT_APPROVAL, PT_REVERSAL_APPROVAL, PT_TYPE, type AttributeMark, type FieldClass } from '@apparel-os/schemas';
 import type { ApprovalRule } from '../../../access/index.js';
 import type { NumberedKind } from '../../../numbering/index.js';
 import type { CallerRegistration } from '../../../stock/ledger/index.js';
@@ -16,8 +16,18 @@ export const PT_MODULE = 'merchandise';
  */
 export const PT_HEADER_ROWS: readonly number[] = [1, 2];
 
+/**
+ * The restricted classes a PT carries: cost (BASIC, P RATE and their totals) and margin (MARGIN), masked on a screen
+ * and left out of an export for a reader not granted them (access-and-approvals 6; PRD-ACS-008).
+ */
+export const PT_FIELD_CLASSES: readonly FieldClass[] = ['cost', 'margin'];
+
 /** The draft revisions, withdrawals and proposed products a PT's history names. */
 export const PT_REVISION_TYPE = 'merchandise.pt_revision';
+/** A request to post an approved PT revision through its queued job (goods-in 6.6; stock-ledger 10.6). */
+export const PT_POST_REQUEST_TYPE = 'merchandise.pt_post_request';
+/** A queued posting's failure (access-and-approvals 9.8 step 4). */
+export const PT_POSTING_FAILURE_TYPE = 'merchandise.pt_posting_failure';
 export const PT_PROPOSED_SKU_TYPE = 'merchandise.pt_proposed_sku';
 
 /**
@@ -67,7 +77,11 @@ export const PT_KIND: NumberedKind = {
 /** The one scope key of the PT kind: the Organisation itself (one database per Organisation). */
 export const PT_SCOPE_KEY = 'organisation';
 
-/** The record type a PT approval's stock effects name as their source (stock-ledger 13.2; books-and-posting 5.1). */
+/**
+ * The record type a PT approval's stock effects name as their source (stock-ledger 13.2; books-and-posting 5.1); its
+ * postings name the source `merchandise.pt_revision`, which a reopening of a locked period names as the document it is
+ * for (books-and-posting 4.3, 10 step 5; code review 7 of stage 2).
+ */
 export const PT_STOCK_SOURCE_TYPE = 'pt_revision';
 /** The record type a PT reversal's stock effects name as their source (stock-ledger 13.2, 13.21; goods-in 6.7). */
 export const PT_REVERSAL_SOURCE_TYPE = 'pt_reversal';
@@ -101,6 +115,18 @@ export const ptStockCaller: CallerRegistration = {
  * builders' choice and no business limit: no source sets the size of a "large" document. **Design choice.**
  */
 export const PT_POSTED_WITH_DECISION_ROWS = 1_000;
+
+/**
+ * The unfinished-operation exception a PT's posting raises once refused (books-and-posting 10 step 3; access-and-approvals
+ * 9.8 step 4; PRD-EXC-001; code review 7): of an approval refused under the locks with the ledger's posting refusal,
+ * and of every queued posting that failed. Its owner is whoever the routing of the type at the Site names
+ * (POL-02.16), set by an Admin, never in code; books-and-posting 10 routes it as a money exception to Accounts, the real
+ * owner OPEN (V-03).
+ */
+export const PT_POSTING_REFUSED_TYPE = 'merchandise.pt-posting-refused';
+
+/** The ledger's refusal of a posting under the locks that the decision's exception follows (books-and-posting 10). */
+export const POSTING_REFUSED = 'stock.posting-refused';
 
 /** The marked attribute each list of the template is (structure-and-masters 4.2 "As built"; goods-in 5.2). */
 export const LIST_MARKS: Readonly<Record<PtList, AttributeMark>> = {

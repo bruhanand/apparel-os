@@ -1,5 +1,5 @@
 import { randomInt } from 'node:crypto';
-import { uuidv7 } from '@apparel-os/domain';
+import { paise, uuidv7 } from '@apparel-os/domain';
 import {
   DAMAGE_DECISION,
   RECOUNT_APPROVAL,
@@ -11,7 +11,7 @@ import {
 } from '@apparel-os/schemas';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { OrganisationRouter, type RoutedOrganisation } from '../src/kernel/index.js';
-import { ACCESS, type AccessInterface } from '../src/modules/access/index.js';
+import { ACCESS, MODULE_APPROVALS, type AccessInterface, type ModuleApprovals } from '../src/modules/access/index.js';
 import { NUMBERING, type NumberingInterface } from '../src/modules/numbering/index.js';
 import { custody } from '../src/modules/stock/ledger/index.js';
 import { defineSyntheticDamageReportSeries } from './fixtures/damage-report-series.js';
@@ -318,8 +318,12 @@ function decide(person: Person, requestId: string, versionId: string, outcome: '
   });
 }
 
-/** A SYNTHETIC limit covering Unknown value only, prepared and approved by two different people (9.2; V-02). */
-async function unknownOnlyLimit(person: Person, actionType: string): Promise<void> {
+/**
+ * A SYNTHETIC limit covering Unknown value, and up to `amount` paise of known value where given, prepared and approved
+ * by two different people (9.2; V-02). A recount that moves nothing is worth a known zero (PRD-MOD-015; code review 7),
+ * so whoever approves recounts holds an amount too.
+ */
+async function unknownOnlyLimit(person: Person, actionType: string, amount?: number): Promise<void> {
   const access = api.app.get<AccessInterface>(ACCESS);
   const prepared = await asUserIn(api.app, organisation, settingsAdmin.user.id, (context) =>
     access.prepareApprovalLimit(
@@ -328,7 +332,7 @@ async function unknownOnlyLimit(person: Person, actionType: string): Promise<voi
       {
         actionType,
         holder: { kind: 'individual', userId: person.user.id, roleAssignmentId: person.assignmentId },
-        limit: { kind: 'none' },
+        limit: amount === undefined ? { kind: 'none' } : { kind: 'amount', amount: paise(amount) },
         coversUnknown: true,
         origin: 'synthetic',
         validFrom: setup.today(),
@@ -443,7 +447,8 @@ beforeAll(async () => {
     { recordType: 'access.approval_request', action: 'view' },
   ]);
   // SYNTHETIC limits over Unknown cost (V-02): the approver, and the receiver, who holds approve too.
-  for (const person of [approver, receiver]) await unknownOnlyLimit(person, RECOUNT_APPROVAL);
+  // SYNTHETIC: 1,000.00 of known value (V-02).
+  for (const person of [approver, receiver]) await unknownOnlyLimit(person, RECOUNT_APPROVAL, 100_000);
   await unknownOnlyLimit(receiver, DAMAGE_DECISION);
   // The follow-ups' SYNTHETIC routings: the findings to the approver, damage too, and the review of a GRN received
   // without a booking (goods-in 4.10; RR-580) (POL-02.16; V-03).
@@ -664,5 +669,37 @@ describe('what a recount does not change (goods-in 4.11)', () => {
     const second = fewer.body as { recountId: string; requestId: string };
     expect((await decide(approver, second.requestId, second.recountId, 'approve')).status).toBe(200);
     expect(await custodyOfLine(over.id)).toEqual({ good: 2 });
+  });
+});
+
+describe('a recount whose posting is refused (goods-in 4.11; books-and-posting 10; code review 7)', () => {
+  it('PRD-EXC-001 POL-02.16 a recount refused by the ledger posting raises its unfinished operation once per decision; another refusal raises none', async () => {
+    // Not reachable through the routes in the first version: a recount is refused while the GRN's PT is attached, and
+    // only a PT establishes the cost a reversal posts (goods-in 4.11). So the follow-up `access` runs once a refused
+    // decision is kept (access-and-approvals 9.8b) is called here as it would be, with the ledger's refusal.
+    await route('receiving.recount-posting-refused', approver);
+    const { arrivalId } = await issued([onInvoice('SYN-RC-POSTING', 3, 2)]);
+    const counted = lineOf(await grnLines(arrivalId), 'SYN-RC-POSTING');
+    const proposed = await propose(arrivalId, [{ grnLineId: counted.id, countedQuantity: 3 }]);
+    expect(proposed.status, JSON.stringify(proposed.body)).toBe(200);
+    const { recountId } = proposed.body as { recountId: string };
+    const effect = api.app.get<ModuleApprovals>(MODULE_APPROVALS).effects.get(RECOUNT_APPROVAL);
+    const follow = (code: string, key: string) =>
+      asUserIn(api.app, organisation, approver.user.id, async (context) => {
+        await effect?.refused?.(context, recountId, {
+          actor: { kind: 'user', id: approver.user.id },
+          raisingEvent: `access.decide-approval:${key}:${approver.user.id}`,
+          refusal: { kind: 'refused', code, missing: [{ kind: 'posting', code: 'finance.period-locked' }] },
+        });
+      });
+    const key = uuidv7();
+    await follow('stock.posting-refused', key);
+    // A replay of the same decision raises none twice (PRD-INT-008).
+    await follow('stock.posting-refused', key);
+    // A refusal of anything but the posting leaves nothing unfinished: nothing was decided.
+    await follow('receiving.recount-decided', uuidv7());
+    expect(await exceptionsOn([recountId])).toEqual([
+      { type: 'receiving.recount-posting-refused', record_id: recountId },
+    ]);
   });
 });

@@ -963,10 +963,12 @@ export async function planRequest(
             enteredOrigins.add(leg.originId);
           }
           const [counted] = legs;
+          // A receipt count has its one leg into the origin it made (13.4): one without is a defect, never a blank origin.
+          if (counted === undefined) throw new CommandDefect(`Receipt count ${reversed.id} has no leg`);
           if (item.goods.skuId === null) {
             // Goods of a product not yet set up, named by the origin the count made (13.18; goods-in 4.11): no cost is
             // ever established on an origin of Unknown SKU (13.14), so nothing values or posts.
-            if (counted?.originId !== item.goods.receiptOriginId) {
+            if (counted.originId !== item.goods.receiptOriginId) {
               throw new StockRefused(
                 refusalOf('invalid-item', item.lineId, [
                   { kind: 'receipt-origin', receiptOriginId: item.goods.receiptOriginId },
@@ -979,7 +981,7 @@ export async function planRequest(
           const sku = await skuOf(item.lineId, item.goods.skuId, unit.siteId);
           await goodsAt(item.lineId, unit, {
             ...item.goods,
-            ...(sku.pieceTracked ? {} : { receiptOriginId: counted?.originId ?? '' }),
+            ...(sku.pieceTracked ? {} : { receiptOriginId: counted.originId }),
           });
           // The pool and Check postable only while the origin's cost is established: before it, the units take no value
           // and nothing posts (7.6; 13.18), as a hold names a pool only then (13.15). A cost established between Plan and
@@ -987,7 +989,7 @@ export async function planRequest(
           const [state] = await context.tx
             .select({ valueKnown: receiptOriginState.valueKnown })
             .from(receiptOriginState)
-            .where(eq(receiptOriginState.receiptOriginId, counted?.originId ?? ''));
+            .where(eq(receiptOriginState.receiptOriginId, counted.originId));
           if (state?.valueKnown === true) {
             await poolOf(item.lineId, unit, sku);
             probe(item.lineId, 'stock.cost-established-reversal', unit, sku);

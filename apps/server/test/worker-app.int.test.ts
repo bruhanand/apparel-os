@@ -11,12 +11,15 @@ import {
   WORKER_SETTINGS_VARIABLE,
   type Worker,
 } from '../src/kernel/index.js';
-import { ACCESS_JOBS_IDENTITY, accessJobKinds } from '../src/modules/access/index.js';
+import { ACCESS_ENVIRONMENT, ACCESS_JOBS_IDENTITY, accessJobKinds } from '../src/modules/access/index.js';
+import { CONFIGURATION_ENVIRONMENT } from '../src/modules/configuration/index.js';
+import { FILE_STORE_ENVIRONMENT, FILES_IMPORTS_ENVIRONMENT } from '../src/modules/files-imports/index.js';
 import { AUDIT_JOBS_IDENTITY, auditJobKinds } from '../src/modules/audit/index.js';
 import { INBOX_IDENTITY } from '../src/modules/inbox/index.js';
 import { jobRegistry, WorkerModule } from '../src/worker.module.js';
 import { syntheticWorkerSettings } from './fixtures/worker-settings.js';
-import { syntheticTimezone } from './support/access.js';
+import { SYNTHETIC_INTAKE_CAPS_ENVIRONMENT } from './fixtures/intake-caps.js';
+import { syntheticKeysEnvironment, syntheticTimezone } from './support/access.js';
 import { capturingLogger, eventually, writeSyntheticServiceIdentity } from './support/jobs.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { connect, databaseUrl } from './support/postgres.js';
@@ -62,6 +65,10 @@ afterAll(async () => {
   await (world as SyntheticWorld | undefined)?.reset();
 });
 
+/**
+ * The worker as its start command composes it, with the application's modules, whose start variables are the world's
+ * SYNTHETIC ones (deployment.md sections 2 and 9; code review 7 of stage 2).
+ */
 function compile(workerEnvironment: Record<string, string>) {
   return Test.createTestingModule({ imports: [WorkerModule] })
     .overrideProvider(LOGGER)
@@ -72,6 +79,14 @@ function compile(workerEnvironment: Record<string, string>) {
     .useValue(workerEnvironment)
     .overrideProvider(ORGANISATION_TIMEZONE_SOURCE)
     .useValue(syntheticTimezone)
+    .overrideProvider(ACCESS_ENVIRONMENT)
+    .useValue(syntheticKeysEnvironment(world))
+    .overrideProvider(CONFIGURATION_ENVIRONMENT)
+    .useValue({ AOS_ENVIRONMENT: 'local' })
+    .overrideProvider(FILES_IMPORTS_ENVIRONMENT)
+    .useValue({ AOS_ENVIRONMENT: 'local', ...SYNTHETIC_INTAKE_CAPS_ENVIRONMENT })
+    .overrideProvider(FILE_STORE_ENVIRONMENT)
+    .useValue({})
     .compile();
 }
 
