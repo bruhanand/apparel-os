@@ -268,15 +268,25 @@ export function peopleOf(arrival: Arrival): string[] {
 const INBOX_EXAMINED_CAP = 1_000;
 
 /**
+ * What the reader may see of the inbox, by the facts of each Arrival (access-and-approvals 7.1 step 3): whether they may
+ * view it, and whether their grants of view on the stock its scan-in reads cover its goods (goods-in 7.5).
+ */
+export interface InboxAuthority {
+  readonly covered: (facts: readonly RecordFacts[]) => Promise<readonly boolean[]>;
+  readonly stockShown: (facts: readonly RecordFacts[]) => Promise<readonly boolean[]>;
+}
+
+/**
  * The Receive Goods inbox of a Site (goods-in 4.1), newest recorded first, a page at a time (code-house-rules 12.1);
  * undefined when no Site has the identifier. Pending holds the deliveries that wait for something: Arrivals not yet
  * issued as a GRN, GRNs with held lines or damage reported at the count not yet decided, GRNs waiting for their PT file,
  * GRNs whose PT file is submitted and waits for approval, marked "PT attached" (goods-in 4.8; the product owner, 22 Oct
- * 2026, RR-584), and GRNs whose PT is approved while a piece it covers waits for its scan-in (goods-in 7.1, 7.3;
- * RR-606); History holds the GRNs whose scan-in is complete (S2-F07-T01). Each unit of the Site in force today comes
- * with whether receiving is available there, naming what is missing, and its locations in force; `covered` answers,
- * for the facts of each Arrival, whether the reader may view it; `damage` where the damage reports on GRN lines stand.
- * A page is filled from at most INBOX_EXAMINED_CAP deliveries a request.
+ * 2026, RR-584), GRNs whose PT is approved until every piece it covers is accepted or under a damage report (goods-in
+ * 7.1, 7.3; RR-606), and, to a reader who may not see their stock, GRNs whose PT file is submitted, as Unknown (7.5);
+ * History holds the GRNs whose scan-in is complete (S2-F07-T01). Each unit of the Site in force today comes with
+ * whether receiving is available there, naming what is missing, and its locations in force; `authority` answers what
+ * the reader may see of each Arrival; `damage` where the damage reports on GRN lines stand. A page is filled from at
+ * most INBOX_EXAMINED_CAP deliveries a request.
  */
 export async function inboxOf(
   context: TransactionContext,
@@ -284,7 +294,7 @@ export async function inboxOf(
   siteId: string,
   query: InboxQuery,
   today: string,
-  covered: (facts: readonly RecordFacts[]) => Promise<readonly boolean[]>,
+  authority: InboxAuthority,
   damage: (grnLineIds: readonly string[]) => Promise<readonly GrnLineDamage[]>,
 ): Promise<Omit<Inbox, 'asOf'> | undefined> {
   if (!(await siteExists(context, siteId))) return undefined;
@@ -316,7 +326,7 @@ export async function inboxOf(
       .where(and(eq(arrival.siteId, siteId), after === undefined ? undefined : lt(arrival.id, after)))
       .orderBy(desc(arrival.id))
       .limit(limit + 1);
-    const entries = await inboxEntriesOf(context, batch, covered, damage);
+    const entries = await inboxEntriesOf(context, batch, authority, damage);
     const inView = entries.filter(
       (entry): entry is InboxEntry => entry !== undefined && (entry.waitingFor === null) === (query.view === 'history'),
     );
@@ -341,15 +351,16 @@ export async function inboxOf(
 /**
  * Each delivery given as the inbox lists it, with what it waits for next (goods-in 4.1), or undefined where the reader
  * may not view it: its invoice, its count, its GRN, the decisions of its held lines and damage reported at the count,
- * its PT file, its PT's approval, its scan-in, or nothing once the scan-in is complete.
+ * its PT file, its PT's approval, its scan-in, or nothing once the scan-in is complete; Unknown past its PT file to a
+ * reader who may not see its stock (goods-in 7.5).
  */
 async function inboxEntriesOf(
   context: TransactionContext,
   rows: readonly ArrivalRow[],
-  covered: (facts: readonly RecordFacts[]) => Promise<readonly boolean[]>,
+  authority: InboxAuthority,
   damage: (grnLineIds: readonly string[]) => Promise<readonly GrnLineDamage[]>,
 ): Promise<(InboxEntry | undefined)[]> {
-  const allowed = await covered(rows.map((row) => factsOf(row)));
+  const allowed = await authority.covered(rows.map((row) => factsOf(row)));
   const shown = rows.filter((_row, index) => allowed[index] === true);
   const ids = shown.map((row) => row.id);
   const invoices =
@@ -377,12 +388,18 @@ async function inboxEntriesOf(
     context,
     grns.map((each) => each.id),
   );
+  // Past its PT file, where a delivery stands is read from its stock, as far as the reader may see it (goods-in 7.5).
+  const pastPt = grns.flatMap((each) => {
+    const row = shown.find((one) => one.id === each.arrivalId);
+    return row === undefined || !marked.has(each.id) ? [] : [{ grn: each, row }];
+  });
+  const stockVisible = await authority.stockShown(pastPt.map(({ row }) => factsOf(row)));
+  const unseen = new Set(pastPt.filter((_, at) => stockVisible[at] !== true).map(({ grn: each }) => each.id));
   const scanIns = await scanInsOf(
     context,
-    grns.flatMap((each) => {
-      const row = shown.find((one) => one.id === each.arrivalId);
-      return row === undefined ? [] : [{ grnId: each.id, receivingLocationId: row.receivingLocationId }];
-    }),
+    pastPt
+      .filter(({ grn: each }) => !unseen.has(each.id))
+      .map(({ grn: each, row }) => ({ grnId: each.id, receivingLocationId: row.receivingLocationId })),
   );
   return rows.map((row, index): InboxEntry | undefined => {
     if (allowed[index] !== true) return undefined;
@@ -393,6 +410,7 @@ async function inboxEntriesOf(
     if (issued === undefined) waitingFor = numbers.length === 0 ? 'invoice' : lines.length === 0 ? 'count' : 'grn';
     else if (waiting.has(issued.id)) waitingFor = 'held-lines';
     else if (!marked.has(issued.id)) waitingFor = 'pt';
+    else if (unseen.has(issued.id)) waitingFor = 'unknown';
     else {
       const scanIn = scanIns.get(issued.id);
       waitingFor = scanIn === undefined ? 'pt-approval' : scanIn === 'scanning' ? 'scan-in' : null;

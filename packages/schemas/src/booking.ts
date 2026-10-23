@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { approvalRequestStateSchema } from './approvals.js';
-import { businessDateSchema, idSchema, paiseSchema } from './common.js';
+import { businessDateSchema, idSchema, pageLimitSchema, paiseSchema } from './common.js';
 import { evidenceListSchema } from './files.js';
 import { agreementTermsSchema } from './parties.js';
 import { settingOriginSchema } from './settings.js';
@@ -131,11 +131,7 @@ export const OPEN_TO_BUY_PAGE_CAP = 100;
  */
 export const openToBuyBudgetPageQuerySchema = z.strictObject({
   after: idSchema.optional(),
-  limit: z
-    .string()
-    .regex(/^[1-9]\d*$/)
-    .refine((limit) => Number(limit) <= OPEN_TO_BUY_PAGE_CAP, { message: `At most ${String(OPEN_TO_BUY_PAGE_CAP)}` })
-    .optional(),
+  limit: pageLimitSchema(OPEN_TO_BUY_PAGE_CAP).optional(),
 });
 export type OpenToBuyBudgetPageQuery = z.infer<typeof openToBuyBudgetPageQuerySchema>;
 
@@ -687,11 +683,7 @@ export type BookingSummary = z.infer<typeof bookingSummarySchema>;
  */
 export const bookingPageQuerySchema = z.strictObject({
   after: idSchema.optional(),
-  limit: z
-    .string()
-    .regex(/^[1-9]\d*$/)
-    .refine((limit) => Number(limit) <= BOOKING_PAGE_CAP, { message: `At most ${String(BOOKING_PAGE_CAP)}` })
-    .optional(),
+  limit: pageLimitSchema(BOOKING_PAGE_CAP).optional(),
   state: bookingStateSchema.optional(),
   brandId: idSchema.optional(),
   seasonValueId: idSchema.optional(),

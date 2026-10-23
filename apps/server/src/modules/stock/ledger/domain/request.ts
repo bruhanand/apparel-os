@@ -1,10 +1,12 @@
 import type { Paise } from '@apparel-os/domain';
+import type { HoldKind, StockCondition } from '@apparel-os/schemas';
 import type { CommandRefusal, MissingItem } from '../../../../kernel/index.js';
 
 // The ledger request of stock-ledger 13.1 and 13.3 and the unvalued items of 13.4 and 13.5 (S1-F10-T02). Pure types:
 // no database, no clock (code-house-rules 2). The valued items of 13.4 (S1-F10-T03) follow them.
 
-export type Condition = 'good' | 'damaged' | 'wrong' | 'unidentified';
+/** A condition of stock (2.2, 14.1), one list with the shared schemas' (`stockConditionSchema`). */
+export type Condition = StockCondition;
 
 /**
  * The import kind a source carries (imports-and-opening-data 4.1; stock-ledger 13.2): none, one of the kinds that may
@@ -82,9 +84,11 @@ export type Owner =
   | { readonly kind: 'brand'; readonly brandId: string; readonly agreementVersionId: string }
   | { readonly kind: 'unknown' };
 
-/** The hold kinds a Place hold item may raise (6.1); a count freeze has items of its own (13.5). */
-export type PlacedHoldKind =
-  'damage' | 'quarantine' | 'excess' | 'source-conflict' | 'expiry' | 'ordinary' | 'inspection' | 'write-off';
+/**
+ * The hold kinds a Place hold item may raise (6.1), one list with the shared schemas' (`holdKindSchema`); a count freeze
+ * has items of its own (13.5).
+ */
+export type PlacedHoldKind = HoldKind;
 
 export type ReservationKind = 'transfer' | 'supplier-return' | 'held-goods' | 'offline-protected';
 

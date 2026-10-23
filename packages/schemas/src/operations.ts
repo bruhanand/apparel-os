@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { idSchema } from './common.js';
+import { idSchema, pageLimitSchema } from './common.js';
 
 // Live updates and the operations view (code-house-rules 12.9, 12.12; deployment.md section 5; module-map 4.1;
 // PRD-SEC-005, PRD-SEC-006, PRD-SEC-013, PRD-SEC-014; S1-F08-T04).
@@ -89,11 +89,7 @@ export const failedJobCursorSchema = z
  */
 export const failedJobPageQuerySchema = z.strictObject({
   before: failedJobCursorSchema.optional(),
-  limit: z
-    .string()
-    .regex(/^[1-9]\d*$/)
-    .refine((limit) => Number(limit) <= FAILED_JOB_PAGE_CAP, { message: `At most ${String(FAILED_JOB_PAGE_CAP)}` })
-    .optional(),
+  limit: pageLimitSchema(FAILED_JOB_PAGE_CAP).optional(),
 });
 export type FailedJobPageQuery = z.infer<typeof failedJobPageQuerySchema>;
 

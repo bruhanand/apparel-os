@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { idSchema, paiseSchema } from './common.js';
+import { idSchema, maybeKnownTextSchema, pageLimitSchema, paiseSchema } from './common.js';
 import { STOCK_BALANCE_TYPE } from './imports.js';
 
 // Stock search (goods-in 9.1, 9.2, section 11; module-map section 5 `reports`; PRD-STK-001, PRD-STK-006,
@@ -11,6 +11,12 @@ import { STOCK_BALANCE_TYPE } from './imports.js';
 
 /** The stock record type of a receipt origin, whose cost is the field class cost (stock-ledger 14.3). */
 export const STOCK_RECEIPT_ORIGIN_TYPE = 'stock.receipt_origin';
+/** The stock record types of holds and reservations, with their claims (stock-ledger 14.3). */
+export const STOCK_HOLD_TYPE = 'stock.hold';
+export const STOCK_RESERVATION_TYPE = 'stock.reservation';
+/** The stock record types of movements, with their legs, and of coverage records (stock-ledger 14.3). */
+export const STOCK_MOVEMENT_TYPE = 'stock.movement';
+export const STOCK_COVERAGE_TYPE = 'stock.coverage';
 /**
  * Every stock record type the search reads a result from, each under the reader's own grants (stock-ledger 14.3): its
  * balances, its origins with their coverage, and the holds and reservations claimed on them. A result is shown only to
@@ -20,8 +26,8 @@ export const STOCK_RECEIPT_ORIGIN_TYPE = 'stock.receipt_origin';
 export const STOCK_SEARCH_READS = [
   STOCK_BALANCE_TYPE,
   STOCK_RECEIPT_ORIGIN_TYPE,
-  'stock.hold',
-  'stock.reservation',
+  STOCK_HOLD_TYPE,
+  STOCK_RESERVATION_TYPE,
 ] as const;
 
 /** The most results one page holds, a technical cap (code-house-rules 12.1 "Reads"); Load more reads the next. */
@@ -36,11 +42,14 @@ export const STOCK_SEARCH_EXPORT_CAP = 10_000;
 /** The longest text a search names: a style code, a size or a barcode, as receiving's codes (goods-in 4.8). */
 export const STOCK_SEARCH_TEXT_CAP = 60;
 
-/** A condition of stock (stock-ledger 2.2, 14.1). */
+/** A condition of stock (stock-ledger 2.2, 14.1), the one list the ledger's `Condition` is. */
 export const stockConditionSchema = z.enum(['good', 'damaged', 'wrong', 'unidentified']);
 export type StockCondition = z.infer<typeof stockConditionSchema>;
 
-/** A kind of hold placed on goods (stock-ledger 6.1); a count freeze is shown apart, as `frozen`. */
+/**
+ * A kind of hold placed on goods (stock-ledger 6.1), the one list the ledger's `PlacedHoldKind` is; a count freeze is
+ * shown apart, as `frozen`.
+ */
 export const holdKindSchema = z.enum([
   'damage',
   'quarantine',
@@ -87,11 +96,7 @@ export type StockSearchFilters = z.infer<typeof stockSearchFiltersSchema>;
 export const stockSearchQuerySchema = z.strictObject({
   ...filterShape,
   after: stockSearchCursorSchema.optional(),
-  limit: z
-    .string()
-    .regex(/^[1-9]\d*$/)
-    .refine((limit) => Number(limit) <= STOCK_SEARCH_PAGE_CAP, { message: `At most ${String(STOCK_SEARCH_PAGE_CAP)}` })
-    .optional(),
+  limit: pageLimitSchema(STOCK_SEARCH_PAGE_CAP).optional(),
 });
 export type StockSearchQuery = z.infer<typeof stockSearchQuerySchema>;
 
@@ -104,26 +109,35 @@ export const identityValueSchema = z.discriminatedUnion('kind', [
 export type IdentityValueView = z.infer<typeof identityValueSchema>;
 
 /**
- * The goods of a result (goods-in 9.2): a product, by its SKU, named by its code, style code, size, the brand's article
- * number and its identity, each null while the catalogue does not answer it (Unknown; PRD-MOD-015); goods before PT
- * approval, by their style code, colour and size as counted, a colour or size the count did not state null (Unknown;
- * PRD-MER-005, DEC-138); or unidentified goods, which carry no identity.
+ * A product's facts as the catalogue answers them today (goods-in 9.2): its code, style code and size, Unknown while it
+ * is; the brand's article number of the style version in force, none while none is; and its identity. Unknown as a
+ * whole while the catalogue does not answer the product (PRD-MOD-015).
  */
-export const stockProductSchema = z.discriminatedUnion('kind', [
+export const stockProductFactsSchema = z.discriminatedUnion('kind', [
   z.strictObject({
-    kind: z.literal('product'),
-    skuId: idSchema,
-    code: z.string().nullable(),
-    styleCode: z.string().nullable(),
-    size: z.string().nullable(),
+    kind: z.literal('known'),
+    code: z.string(),
+    styleCode: z.string(),
+    size: maybeKnownTextSchema,
     articleNumber: z.string().nullable(),
     identity: z.array(identityValueSchema),
   }),
+  z.strictObject({ kind: z.literal('unknown') }),
+]);
+export type StockProductFacts = z.infer<typeof stockProductFactsSchema>;
+
+/**
+ * The goods of a result (goods-in 9.2): a product, by its SKU, with its facts; goods before PT approval, by their style
+ * code, colour and size as counted, a colour or size the count did not state Unknown (PRD-MER-005, DEC-138,
+ * PRD-MOD-015); or unidentified goods, which carry no identity.
+ */
+export const stockProductSchema = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('product'), skuId: idSchema, facts: stockProductFactsSchema }),
   z.strictObject({
     kind: z.literal('counted'),
     styleCode: z.string(),
-    colour: z.string().nullable(),
-    size: z.string().nullable(),
+    colour: maybeKnownTextSchema,
+    size: maybeKnownTextSchema,
   }),
   z.strictObject({ kind: z.literal('unidentified') }),
 ]);

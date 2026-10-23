@@ -53,7 +53,7 @@ export {
 } from './queries/reads.js';
 export type { CustodyQuery, CustodyRow, LineSource, SourceCoverageAndCost, SourceLineOrigin } from './queries/reads.js';
 export { availability } from './queries/availability.js';
-export { ptRevisionGoods } from './queries/pt-goods.js';
+export { PT_GOODS_READS, ptGoodsNotWaiting, ptRevisionGoods } from './queries/pt-goods.js';
 export type { PtRevisionGoods } from './queries/pt-goods.js';
 export type { AvailabilityRow } from './queries/availability.js';
 // The read models of stock search, served through the kernel's read-model gateway (stock-ledger 13.22; goods-in 9.4;
