@@ -24,7 +24,7 @@ export interface PostingRefusal {
    * The version the exception links under the PT: the revision whose approval was refused, or the reversal whose
    * posting was (goods-in 6.7; S2-F09-T01), which the resolution check reads apart (exception-types.ts).
    */
-  readonly revisionId: string;
+  readonly versionId: string;
   readonly raisingEvent: string;
   readonly refusal: CommandRefusal<string>;
   readonly raisedBy: AuditActor;
@@ -56,7 +56,7 @@ export async function raiseForFailure(
   }
   return raisePostingRefused(context, exceptions, {
     revision: standing.revision,
-    revisionId: request.ptRevisionId,
+    versionId: request.ptRevisionId,
     raisingEvent: `${ptPostingFailed.type}:${failureId}`,
     refusal: { kind: 'refused', code: failure.code, missing: failure.missing },
     raisedBy,
@@ -78,7 +78,7 @@ export function raisePostingRefused(
       businessUnitId: revision.businessUnitId,
       brandId: revision.brandId,
     },
-    links: [{ module: PT_MODULE, recordType: PT_TYPE, recordId: revision.ptId, versionId: input.revisionId }],
+    links: [{ module: PT_MODULE, recordType: PT_TYPE, recordId: revision.ptId, versionId: input.versionId }],
     exposure: { kind: 'unknown' },
     raisedBy: input.raisedBy,
     comment: JSON.stringify({ code: input.refusal.code, missing: input.refusal.missing }),

@@ -15,14 +15,13 @@ import { stateIdOf } from '../setup/states';
 import { useTimeZone } from '../shell/session';
 import { unknownText } from './names';
 import { PtReview } from './PtReview';
+import { PT_READS } from './pt-reads';
 
 // A PT reversed before the scan-in (goods-in 6.4, 6.7, section 11; DEC-137, PRD-REC-019; S2-F09-T01): on the GRN's PT
 // file, each reversal with its reason and state, and, for whoever may change the PT while its newest revision is
 // Official, the proposal of a reversal with a reason; in My work, the approval panel's facts of a reversal, then the
 // review of the PT it reverses. A different person approves it there. Every word comes from the message catalogue
 // (code-house-rules 12.13).
-
-const PT_READS = ['readGrnPt', 'readReceivingInbox', 'listMyWork'] as const;
 
 const reversalFormSchema = z.object({ reason: z.string().trim().min(1).max(PT_REVERSAL_REASON_CAP) });
 type ReversalForm = z.input<typeof reversalFormSchema>;
@@ -166,7 +165,7 @@ export function PtReversalFacts({ reversalId }: { reversalId: string }) {
               <dd className="m-0">{read.reversal.reason}</dd>
               <dt className="text-text-2">{t('pt.reversal.panel.proposed')}</dt>
               <dd className="m-0">
-                {t('pt.revision.uploaded-by', {
+                {t('pt.reversal.proposed-at', {
                   name: nameOf(read.reversal.proposedBy),
                   at: formatDateTime(read.reversal.proposedAt, timeZone),
                 })}

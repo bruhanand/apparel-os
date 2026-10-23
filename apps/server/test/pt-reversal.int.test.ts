@@ -1,4 +1,5 @@
 import {
+  PT_REVERSAL_APPROVAL,
   PT_REVERSAL_REASON_CAP,
   ptReversalProposedSchema,
   ptReversalReadSchema,
@@ -6,13 +7,21 @@ import {
 } from '@apparel-os/schemas';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { skuOn } from '../src/modules/merchandise/catalogue/index.js';
+import { ptExceptionTypes } from '../src/modules/merchandise/pt/index.js';
+import { PT_OPERATIONS } from '../src/modules/merchandise/pt/domain/gate.js';
 import { availability, custody, rebuildAndCompare } from '../src/modules/stock/ledger/index.js';
 import type { SyntheticPtRow } from './fixtures/pt.js';
 import { syntheticCode, syntheticName } from './fixtures/synthetic.js';
 import { asUserIn, RECEIVER_REPORTER_AUTHORITY } from './support/damage.js';
 import { approved, decided } from './support/organisation.js';
-import { ptApprovalWorld, type Person, type PtApprovalWorld } from './support/pt-approval.js';
-import { placeScope } from './support/receiving.js';
+import {
+  PT_APPROVER_AUTHORITY,
+  PT_MAKER_AUTHORITY,
+  ptApprovalWorld,
+  type Person,
+  type PtApprovalWorld,
+} from './support/pt-approval.js';
+import { capabilitySwitched, placeScope, STOCK_VIEW } from './support/receiving.js';
 
 // S2-F09-T01: a PT reversed before the scan-in, through the whole application on real PostgreSQL (goods-in 6.4, 6.7,
 // 10.3, 12 test 15; stock-ledger 7.5, 13.21; DEC-137, PRD-REC-019, PRD-ACS-006, PRD-ACS-015, PRD-INT-004). The PT file
@@ -118,6 +127,10 @@ async function approvedPt(
   expect(decision.status, JSON.stringify(decision.body)).toBe(200);
   return { style, grnId, arrivalId, revisionId, rows };
 }
+
+/** The authority given without any view on the stock (stock-ledger 14.3). */
+const withoutStock = (authority: Parameters<PtApprovalWorld['enrol']>[1]) =>
+  authority.filter((each) => !STOCK_VIEW.some((stock) => stock.recordType === each.recordType));
 
 /** Proposes the revision's reversal with a SYNTHETIC reason, at the PT's version its GRN's screen reads now. */
 async function propose(grnId: string, revisionId: string, person: Person = w.people.ptMaker) {
@@ -358,6 +371,52 @@ describe('reversing a PT before the scan-in (goods-in 6.4; 12 test 15)', () => {
     const held = await propose(grnId, revisionId);
     expect(held.status, JSON.stringify(held.body)).toBe(422);
     expect(errorOf(held)?.code).toBe('merchandise.pt-goods-held');
+    // Whoever may see the stock is told which receipt origin (code-house-rules 12.3).
+    expect(errorOf(held)?.missing?.map((each) => each.recordType)).toEqual(['stock.receipt_origin']);
+    // Whoever may change the PT but not see its stock is refused all the same, through the recheck that answers only
+    // that, naming the revision alone and nothing of the goods (code-house-rules 6.2; DEC-117).
+    const blind = await w.enrol('PTR-NO-STOCK', withoutStock(PT_MAKER_AUTHORITY));
+    const hidden = await propose(grnId, revisionId, blind);
+    expect(hidden.status, JSON.stringify(hidden.body)).toBe(422);
+    expect(errorOf(hidden)).toMatchObject({
+      code: 'merchandise.pt-goods-held',
+      missing: [{ kind: 'record', recordType: 'merchandise.pt_revision', recordId: revisionId }],
+    });
+    expect(JSON.stringify(hidden.body)).not.toContain(row.skuId);
+  });
+
+  it('DEC-117 PRD-SEC-005 an approver who may not see the goods is refused the reversal, naming a permission only', async () => {
+    const { grnId, revisionId } = await approvedPt('PTR-BLIND', [{ sizeAt: 0, counted: 1 }], [{}]);
+    const { ptReversalId, requestId } = await proposed(grnId, revisionId);
+    const blind = await w.enrol('PTR-BLIND-APPROVER', withoutStock(PT_APPROVER_AUTHORITY), {
+      fieldClasses: ['cost', 'margin'],
+    });
+    await w.limit(blind, PT_REVERSAL_APPROVAL, { kind: 'amount', amount: 1_000_000_000 }, false);
+    const refused = await w.decide(blind, requestId, ptReversalId);
+    expect(refused.status, JSON.stringify(refused.body)).toBe(403);
+    expect(errorOf(refused)).toMatchObject({ kind: 'not-authorised', code: 'access.not-authorised' });
+    expect(errorOf(refused)?.missing?.map((each) => each.kind)).toEqual(['permission']);
+    expect((await w.grnPt(grnId)).pt?.revisions[0]?.state).toBe('Official');
+  });
+
+  it('PRD-SEC-017 goods-in 10.5 a reversal is approved only while the PT approval activity is available', async () => {
+    const { grnId, revisionId } = await approvedPt('PTR-GATE', [{ sizeAt: 0, counted: 1 }], [{}]);
+    const { ptReversalId, requestId } = await proposed(grnId, revisionId);
+    const [operation] = PT_OPERATIONS;
+    if (operation === undefined) throw new Error('No PT operation declared');
+    await capabilitySwitched(w.setup, w.database, operation, false);
+    try {
+      const refused = await w.decide(w.people.ptApprover, requestId, ptReversalId);
+      expect(refused.status, JSON.stringify(refused.body)).toBe(403);
+      expect(errorOf(refused)?.code).toBe('configuration.operation-unavailable');
+      expect(errorOf(refused)?.missing).toContainEqual({ kind: 'capability', capability: operation.capability });
+      expect((await w.grnPt(grnId)).pt?.revisions[0]?.state).toBe('Official');
+    } finally {
+      await capabilitySwitched(w.setup, w.database, operation, true);
+    }
+    const approved = await w.decide(w.people.ptApprover, requestId, ptReversalId);
+    expect(approved.status, JSON.stringify(approved.body)).toBe(200);
+    expect((await w.grnPt(grnId)).pt?.revisions[0]?.state).toBe('Reversed');
   });
 
   it('PRD-ACS-006 shows the reversal to a reader of the PT, and to no one who may not see the GRN', async () => {
@@ -471,6 +530,28 @@ describe('the reversal in a locked period (goods-in 6.7; books-and-posting 10; S
       versionId: ptReversalId,
     });
     expect(raised?.comment).toContain('stock.posting-refused');
+    // A closer who may see neither the revision nor the reversal is told only that a version of the PT is not finished
+    // (access-and-approvals 12.3; code-house-rules 12.3).
+    const [registration] = ptExceptionTypes;
+    if (registration === undefined) throw new Error('No PT exception type registered');
+    const unseen = await asUserIn(w.api.app, w.organisation, w.people.accountsReader.user.id, (context) =>
+      registration.resolutionCheck(context, {
+        exceptionId: raised?.id ?? '',
+        typeCode: 'merchandise.pt-posting-refused',
+        links: [
+          {
+            module: 'merchandise',
+            recordType: 'merchandise.pt',
+            recordId: raised?.recordId ?? '',
+            versionId: ptReversalId,
+          },
+        ],
+      }),
+    );
+    expect(unseen).toEqual({
+      kind: 'not-verified',
+      missing: [{ kind: 'version', recordType: 'merchandise.pt', recordId: raised?.recordId, versionId: ptReversalId }],
+    });
     // The operation is not finished while the reversal waits (access-and-approvals 12.3).
     const early = await w.post(w.people.ptApprover, `/api/exceptions/exceptions/${raised?.id ?? ''}/close`, {});
     expect(early.status, JSON.stringify(early.body)).not.toBe(200);

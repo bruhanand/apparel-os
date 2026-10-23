@@ -14,7 +14,8 @@ import { reversalOf } from './queries/reversal.js';
 /**
  * The resolution check (12.3): the operation is finished once each revision it links no longer waits for its posting:
  * Official, or ended otherwise, rejected or withdrawn; and once each reversal it links, whose posting was refused, is
- * decided (goods-in 6.7; S2-F09-T01). A revision or reversal the closer may not see is named as missing.
+ * decided (goods-in 6.7; S2-F09-T01). A linked version the closer may see as neither is named as missing as what the
+ * link is, a version of the PT (code-house-rules 12.3).
  */
 async function postingFinished(context: TransactionContext, subject: ResolutionSubject): Promise<ResolutionAnswer> {
   const missing: MissingItem[] = [];
@@ -23,8 +24,10 @@ async function postingFinished(context: TransactionContext, subject: ResolutionS
     const standing = await revisionStanding(context, link.versionId);
     if (standing === undefined) {
       const reversal = await reversalOf(context, link.versionId);
-      if (reversal === undefined) missing.push(recordItem(PT_REVISION_TYPE, link.versionId));
-      else if (reversal.decision === undefined) missing.push(recordItem(PT_REVERSAL_TYPE, link.versionId));
+      // Neither a revision nor a reversal the closer may see: named as what the link is, a version of the PT.
+      if (reversal === undefined) {
+        missing.push({ kind: 'version', recordType: PT_TYPE, recordId: link.recordId, versionId: link.versionId });
+      } else if (reversal.decision === undefined) missing.push(recordItem(PT_REVERSAL_TYPE, link.versionId));
       continue;
     }
     const finished = standing.approval !== undefined || standing.rejected || standing.withdrawn;

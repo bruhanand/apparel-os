@@ -1,15 +1,13 @@
 import { uuidv7 } from '@apparel-os/domain';
 import { PT_APPROVAL, PT_TYPE } from '@apparel-os/schemas';
-import { eq } from 'drizzle-orm';
-import { CommandDefect, LOCK_STEP, type TransactionContext } from '../../../../kernel/index.js';
+import type { TransactionContext } from '../../../../kernel/index.js';
 import type { AccessInterface } from '../../../access/index.js';
 import type { AuditInterface } from '../../../audit/index.js';
 import type { ReceivingInterface } from '../../../receiving/index.js';
-import { pt, ptRevisionWithdrawal } from '../db/schema.js';
+import { ptRevisionWithdrawal } from '../db/schema.js';
 import { PT_MODULE, PT_REVISION_TYPE } from '../domain/kinds.js';
-import { BUSINESS_DATE_NOT_SET, recordItem, revisionNotFound, type Outcome } from '../domain/refusals.js';
-import { ptVersionToken, revisionFacts } from '../queries/pt-records.js';
-import { ptLock } from './pt-lock.js';
+import { BUSINESS_DATE_NOT_SET, recordItem, type Outcome } from '../domain/refusals.js';
+import { ptAtVersion } from './pt-at-version.js';
 import { scopeColumnsOf } from './scope-columns.js';
 
 // Withdraw a draft PT revision (goods-in 5.7, 5.8, section 11; S2-F04-T02): a draft is never edited; a wrong file is
@@ -30,6 +28,15 @@ export interface Actor {
   readonly roleAssignmentId: string;
 }
 
+/** The approval request's document: the PT at the revision, under the PT approval's action type (9.1a). */
+const documentOf = (ptId: string, revisionId: string) => ({
+  module: PT_MODULE,
+  recordType: PT_TYPE,
+  recordId: ptId,
+  versionId: revisionId,
+  actionType: PT_APPROVAL,
+});
+
 export async function withdrawPt(
   context: TransactionContext,
   dependencies: WithdrawDependencies,
@@ -37,35 +44,12 @@ export async function withdrawPt(
   revisionId: string,
   versionToken: string,
 ): Promise<Outcome<{ readonly ptId: string; readonly revisionId: string; readonly withdrawalId: string }>> {
-  const found = await revisionFacts(context, revisionId);
-  if (found === undefined) return { kind: 'refusal', refusal: revisionNotFound(revisionId) };
-  const [owner] = await context.tx.select().from(pt).where(eq(pt.id, found.ptId));
-  if (owner === undefined) return { kind: 'refusal', refusal: revisionNotFound(revisionId) };
-  const document = {
-    module: PT_MODULE,
-    recordType: PT_TYPE,
-    recordId: owner.id,
-    versionId: revisionId,
-    actionType: PT_APPROVAL,
-  };
-  await context.lock(LOCK_STEP.document, [
-    ptLock(owner.id),
-    dependencies.receiving.ptMarkLock(owner.grnId),
-    ...(await dependencies.access.requestLockTargets(context, document)),
-  ]);
-  // Rechecked under the locks (code-house-rules 8.1, 12.7). The PT holds the revision found, so it has a token.
-  const token = await ptVersionToken(context, owner.id);
-  if (token === undefined) throw new CommandDefect(`A PT with a revision has no version token: ${owner.id}`);
-  if (token !== versionToken) {
-    return {
-      kind: 'refusal',
-      refusal: {
-        kind: 'conflict',
-        code: 'kernel.stale-version',
-        missing: [{ kind: 'version', recordType: PT_TYPE, recordId: owner.id, versionId: token }],
-      },
-    };
-  }
+  const opened = await ptAtVersion(context, dependencies.receiving, revisionId, versionToken, (owner) =>
+    dependencies.access.requestLockTargets(context, documentOf(owner.id, revisionId)),
+  );
+  if (opened.kind === 'refusal') return opened;
+  const { owner, facts, token } = opened.answer;
+  const document = documentOf(owner.id, revisionId);
   const notADraft: Outcome<never> = {
     kind: 'refusal',
     refusal: {
@@ -99,7 +83,7 @@ export async function withdrawPt(
   await dependencies.audit.record(context, {
     actor: { kind: 'user', id: actor.userId },
     roleAssignmentId: actor.roleAssignmentId,
-    scope: found.facts,
+    scope: facts,
     record: { module: PT_MODULE, type: PT_TYPE, id: owner.id, versionId: revisionId },
     operation: 'withdraw-pt',
     changes: [

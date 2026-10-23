@@ -1,7 +1,8 @@
+import { paise } from '@apparel-os/domain';
 import { describe, expect, it } from 'vitest';
 import type { PtBasis } from '../../../receiving/index.js';
 import type { PtRevisionGoods } from '../../../stock/ledger/index.js';
-import { goodsAfterReversals, originsNotWaiting, type ReversedOrigin } from './reversed.js';
+import { costReversed, goodsAfterReversals, originsNotWaiting, type ReversedOrigin } from './reversed.js';
 
 // S2-F09-T01: what a PT's reversal leaves for the PT after it (goods-in 6.7; stock-ledger 13.19, 13.21). SYNTHETIC
 // identifiers, styles and quantities.
@@ -95,7 +96,8 @@ describe('originsNotWaiting (goods-in 6.7, 8.4)', () => {
     condition: 'good',
     quantity: 2,
     accepted: 0,
-    held: 0,
+    damageHeld: 0,
+    otherHeld: 0,
     ...values,
   });
 
@@ -104,8 +106,37 @@ describe('originsNotWaiting (goods-in 6.7, 8.4)', () => {
   });
 
   it('PRD-REC-019 PRD-DMG-010 names an origin with a piece accepted, held or damaged since', () => {
-    for (const changed of [{ accepted: 1 }, { held: 1 }, { condition: 'damaged' as const, quantity: 1 }]) {
+    for (const changed of [
+      { accepted: 1 },
+      { damageHeld: 1 },
+      { otherHeld: 1 },
+      { condition: 'damaged' as const, quantity: 1 },
+    ]) {
       expect(originsNotWaiting([row({}), row(changed)])).toEqual(['00000000-0000-7000-8000-000000000042']);
     }
+  });
+});
+
+describe('costReversed (goods-in 6.7; access-and-approvals 9.7)', () => {
+  const reversal = { kind: 'reversal' as const };
+  const removal = { kind: 'remove-coverage' as const };
+
+  it('PRD-ACS-015 PRD-MOD-014 sums the value each reversal item takes off, exactly, the coverage removed carrying none', () => {
+    expect(
+      costReversed(
+        [reversal, reversal, removal],
+        [
+          { kind: 'known', amountPaise: paise(94_500) },
+          { kind: 'known', amountPaise: paise(189_000) },
+          { kind: 'none' },
+        ],
+      ),
+    ).toEqual({ kind: 'known', amountPaise: 283_500 });
+  });
+
+  it('PRD-ACS-016 PRD-MOD-015 is Unknown when any reversal item’s value is, never zero', () => {
+    expect(
+      costReversed([reversal, reversal], [{ kind: 'known', amountPaise: paise(94_500) }, { kind: 'unknown' }]),
+    ).toEqual({ kind: 'unknown' });
   });
 });

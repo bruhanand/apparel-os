@@ -20,7 +20,7 @@ import { grnPtView } from './queries/grn-pt.js';
 import { revisionReview, type RevisionPage } from './queries/revision.js';
 import { ptPreviewOf, type PreviewPage } from './queries/preview.js';
 import { revisionFacts } from './queries/pt-records.js';
-import { reversalFacts, reversalView } from './queries/reversal.js';
+import { readPtReversal, reversalFacts } from './queries/reversal.js';
 import { templateListsOf } from './queries/template-lists.js';
 
 export interface PtDependencies {
@@ -34,6 +34,8 @@ export interface PtDependencies {
     | 'recordUse'
     | 'authorise'
     | 'approvalLockTargets'
+    | 'approvalRequestsOf'
+    | 'partyNames'
   >;
   readonly receiving: Pick<
     ReceivingInterface,
@@ -153,9 +155,12 @@ export class Pt implements PtPosting {
     return reversalFacts(context, reversalId);
   }
 
-  /** A reversal as its approver reads it in My work (goods-in 6.7, section 11), or undefined. */
-  reversal(context: TransactionContext, reversalId: string, request: LatestRequest | undefined) {
-    return reversalView(context, this.dependencies.receiving, reversalId, request);
+  /**
+   * A reversal as its approver reads it in My work (goods-in 6.7, section 11), read as the reader: not found for one
+   * they may not see; refused without view on the PT.
+   */
+  readReversal(context: TransactionContext, actorId: string, reversalId: string) {
+    return readPtReversal(context, this.dependencies, actorId, reversalId);
   }
 
   /** Withdraws a draft PT revision (goods-in 5.7). */

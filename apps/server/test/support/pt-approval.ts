@@ -197,6 +197,8 @@ export interface PtApprovalWorld {
       readonly damaged?: number;
       /** Unidentified goods, described, not sized, with no invoice quantity (goods-in 4.4, 4.9). */
       readonly unidentified?: string;
+      /** Wrong goods, naming the product they are, with no invoice quantity (goods-in 4.4, 4.9). */
+      readonly wrongSkuId?: string;
     }[],
     at?: {
       readonly brand?: 'fixture' | 'owned';
@@ -234,6 +236,13 @@ export interface PtApprovalWorld {
     authorities: readonly SyntheticAuthority[],
     choices?: { scope?: AssignmentScope; fieldClasses?: readonly FieldClass[] },
   ): Promise<Person>;
+  /** A SYNTHETIC individual approval limit of the person on the action type, prepared and approved by two others. */
+  limit(
+    person: Person,
+    actionType: string,
+    amount: { kind: 'amount'; amount: number } | { kind: 'none' },
+    coversUnknown: boolean,
+  ): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -653,12 +662,13 @@ export async function ptApprovalWorld(
     expect(invoice.status, JSON.stringify(invoice.body)).toBe(200);
     for (const line of lines) {
       const unidentified = line.unidentified !== undefined;
+      const wrong = line.wrongSkuId !== undefined;
       const saved = await post(by, `/api/receiving/arrivals/${arrivalId}/count-lines`, {
-        goods: unidentified ? 'unidentified' : 'on-invoice',
+        goods: unidentified ? 'unidentified' : wrong ? 'wrong' : 'on-invoice',
         styleCode: unidentified ? null : line.style,
         colour: unidentified ? null : 'SYNTHETIC NAVY',
         sizeValueId: unidentified ? null : (fixture.sizes.values[line.sizeAt]?.id ?? null),
-        skuId: null,
+        skuId: line.wrongSkuId ?? null,
         description: line.unidentified ?? null,
         invoiceQuantity: line.invoice ?? line.counted,
         countedQuantity: line.counted,
@@ -820,6 +830,7 @@ export async function ptApprovalWorld(
       }
     },
     enrol: enrolled,
+    limit,
     close: async () => {
       await setup.close();
       await router.close();

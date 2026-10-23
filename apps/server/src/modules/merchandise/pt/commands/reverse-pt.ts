@@ -1,9 +1,10 @@
-import { paise, uuidv7 } from '@apparel-os/domain';
-import { PT_REVERSAL_APPROVAL, PT_TYPE } from '@apparel-os/schemas';
+import { uuidv7 } from '@apparel-os/domain';
+import { PT_REVERSAL_APPROVAL, PT_TYPE, STOCK_COVERAGE_TYPE, STOCK_MOVEMENT_TYPE } from '@apparel-os/schemas';
 import { CommandDefect, LOCK_STEP, type CommandRefusal, type TransactionContext } from '../../../../kernel/index.js';
 import type { DocumentEffect, EffectDecider, EffectOutcome } from '../../../access/index.js';
 import {
   coverageAndCostOfSource,
+  PT_GOODS_READS,
   ptRevisionGoods,
   type CheckedRequest,
   type LedgerItem,
@@ -24,6 +25,7 @@ import {
   reversalNotFound,
   type Outcome,
 } from '../domain/refusals.js';
+import { costReversed } from '../domain/reversed.js';
 import { ptReversed } from '../events.js';
 import { revisionStanding, type RevisionStanding } from '../queries/approval.js';
 import { originsOfApproval, reversalOf, type ReversalRow } from '../queries/reversal.js';
@@ -71,12 +73,31 @@ const decided = (reversalId: string): CommandRefusal => ({
   missing: [recordItem(PT_REVERSAL_TYPE, reversalId)],
 });
 
-/** The approver may not see the ledger's rows of the PT's goods, which the reversal writes (stock-ledger 14.3). */
-const goodsHidden: CommandRefusal = {
-  kind: 'not-authorised',
-  code: 'access.not-authorised',
-  missing: [{ kind: 'permission', recordType: 'stock.receipt_origin', action: 'view' }],
-};
+/**
+ * The stock record types a reversal reads and writes (stock-ledger 13.21, 14.3): the goods the PT covers, the coverage
+ * its approval recorded and the movements that established their cost. The approver's grants of view on each must cover
+ * the PT's facts, so row-level security shows them every row the reversal undoes.
+ */
+const REVERSAL_STOCK = [...PT_GOODS_READS, STOCK_COVERAGE_TYPE, STOCK_MOVEMENT_TYPE] as const;
+
+/**
+ * Whether the approver may see the ledger's rows of the PT's goods, which the reversal reads and writes, asked of
+ * `access` with the PT's facts before they are read (access-and-approvals 7.1 step 3; stock-ledger 14.3): their refusal,
+ * or none. Then a row the reversal does not find is a defect, never what the approver may not see.
+ */
+async function stockRefusal(
+  context: TransactionContext,
+  services: PtDecisionServices,
+  userId: string,
+  revision: RevisionStanding['revision'],
+): Promise<CommandRefusal | undefined> {
+  const facts = auditScopeOf(revision);
+  for (const recordType of REVERSAL_STOCK) {
+    const checked = await services.access.authorise(context, { actorId: userId, action: 'view', recordType, facts });
+    if (checked.kind === 'refused') return checked.refusal;
+  }
+  return undefined;
+}
 
 type Decided = ReturnType<typeof deciding>;
 
@@ -144,15 +165,18 @@ async function reversalItems(context: TransactionContext, standing: RevisionStan
     recordType: PT_STOCK_SOURCE_TYPE,
     recordId: revision.id,
   });
-  // Every new origin of the approval had its coverage and its cost (goods-in 6.6): fewer is what the reader may not see.
+  // Every new origin of the approval had its coverage and its cost (goods-in 6.6), and the approver may see each
+  // (stockRefusal), its pieces all waiting where the approval left them (recheckUnderLocks): anything else is a defect.
   if (effects.costEstablished.length !== origins.size || effects.coverage.length !== origins.size) {
-    return refusalOutcome(goodsHidden);
+    throw new CommandDefect(`A PT's approval does not hold one coverage and one cost per new origin: ${revision.id}`);
   }
   const items: LedgerItem[] = [];
   for (const cost of effects.costEstablished) {
     const origin = origins.get(cost.lineId);
     const at = origin === undefined ? undefined : where.get(origin.receiptOriginId);
-    if (origin === undefined || at === undefined) return refusalOutcome(goodsHidden);
+    if (origin === undefined || at === undefined) {
+      throw new CommandDefect(`A PT's cost established names no new origin in custody: ${cost.movementId}`);
+    }
     items.push({
       kind: 'reversal',
       lineId: uuidv7(),
@@ -219,19 +243,12 @@ async function verifyAndUse(
   valued: CheckedRequest,
   useId: string,
 ): Promise<CommandRefusal | undefined> {
-  let cost = 0;
-  let unknown = false;
-  for (const [index, value] of valued.itemValues.entries()) {
-    if (items[index]?.kind !== 'reversal') continue;
-    if (value.kind === 'known') cost += value.amountPaise;
-    else unknown = true;
-  }
   const check = {
     decisionId: who.decisionId,
     actionType: PT_REVERSAL_APPROVAL,
     document: { module: PT_MODULE, recordType: PT_TYPE, recordId: open.ptId, versionId: open.reversal.id },
     preparers: [open.reversal.proposedByUserId],
-    value: unknown ? { kind: 'unknown' as const } : { kind: 'known' as const, amountPaise: paise(cost) },
+    value: costReversed(items, valued.itemValues),
   };
   const verified = await services.access.verifyUnderLock(context, check);
   if (verified !== undefined) return verified;
@@ -320,6 +337,8 @@ async function approve(
   const who = deciding(decider);
   const open = await recheckUnderLocks(context, services, reversalId);
   if (open.kind === 'refusal') return open;
+  const hidden = await stockRefusal(context, services, who.userId, open.answer.standing.revision);
+  if (hidden !== undefined) return refusalOutcome(hidden);
   const items = await reversalItems(context, open.answer.standing);
   if (items.kind === 'refusal') return items;
   const useId = uuidv7();
@@ -385,7 +404,7 @@ export function ptReversalEffect(dependencies: PtDecisionDependencies): Document
       if (found === undefined || standing === undefined) return;
       await raisePostingRefused(context, dependencies.services().exceptions, {
         revision: standing.revision,
-        revisionId: reversalId,
+        versionId: reversalId,
         raisingEvent: decision.raisingEvent,
         refusal: decision.refusal,
         raisedBy: decision.actor,

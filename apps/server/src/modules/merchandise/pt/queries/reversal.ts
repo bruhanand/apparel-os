@@ -1,9 +1,10 @@
-import type { PtReversalRead, PtReversalState, PtReversalSummary } from '@apparel-os/schemas';
+import { PT_TYPE, type PtReversalRead, type PtReversalState, type PtReversalSummary } from '@apparel-os/schemas';
 import { and, desc, eq, inArray } from 'drizzle-orm';
-import type { TransactionContext } from '../../../../kernel/index.js';
-import type { LatestRequest, RecordFacts } from '../../../access/index.js';
+import type { CommandRefusal, TransactionContext } from '../../../../kernel/index.js';
+import type { AccessInterface, LatestRequest, RecordFacts } from '../../../access/index.js';
 import type { ReceivingInterface } from '../../../receiving/index.js';
 import { pt, ptApproval, ptOrigin, ptReversal, ptReversalDecision, ptRevision } from '../db/schema.js';
+import { reversalNotFound } from '../domain/refusals.js';
 import type { ReversedOrigin } from '../domain/reversed.js';
 
 // What a PT's reversal before the scan-in reads of its own records (goods-in 6.4, 6.7; S2-F09-T01), under the reader's
@@ -121,7 +122,7 @@ export async function reversalFacts(context: TransactionContext, reversalId: str
  * A reversal as its approver reads it in My work (goods-in 6.7, section 11): the PT, the revision it reverses with the
  * PT's number, the GRN, and the reversal; undefined when the reader may not see it.
  */
-export async function reversalView(
+async function reversalView(
   context: TransactionContext,
   receiving: Pick<ReceivingInterface, 'grnForPt'>,
   reversalId: string,
@@ -148,6 +149,39 @@ export async function reversalView(
       ...(found.decision === undefined ? [] : [found.decision.decidedByUserId]),
     ],
   };
+}
+
+/** What the reversal's read asks of other units: `access` and `receiving`, as the reader (goods-in 6.7). */
+export interface ReversalReadDependencies {
+  readonly access: Pick<AccessInterface, 'authorise' | 'approvalRequestsOf' | 'partyNames'>;
+  readonly receiving: Pick<ReceivingInterface, 'grnForPt'>;
+}
+
+/**
+ * A reversal as its approver reads it in My work (goods-in 6.7, section 11), read as the reader: not found for one
+ * they may not see (code-house-rules 12.3), refused without view on the PT with its facts, and with its approval request
+ * and the names of the people it shows.
+ */
+export async function readPtReversal(
+  context: TransactionContext,
+  dependencies: ReversalReadDependencies,
+  actorId: string,
+  reversalId: string,
+): Promise<{ readonly refused: CommandRefusal } | { readonly read: Omit<PtReversalRead, 'asOf'> }> {
+  const facts = await reversalFacts(context, reversalId);
+  if (facts === undefined) return { refused: reversalNotFound(reversalId) };
+  const authorised = await dependencies.access.authorise(context, {
+    actorId,
+    action: 'view',
+    recordType: PT_TYPE,
+    facts,
+  });
+  if (authorised.kind === 'refused') return { refused: authorised.refusal };
+  const request = (await dependencies.access.approvalRequestsOf(context, [reversalId])).get(reversalId);
+  const read = await reversalView(context, dependencies.receiving, reversalId, request);
+  if (read === undefined) return { refused: reversalNotFound(reversalId) };
+  const names = (await dependencies.access.partyNames(context, read.people, [])).users;
+  return { read: { ...read.view, people: [...names].map(([userId, name]) => ({ userId, name })) } };
 }
 
 /** The new receipt origins a revision's approval made, by their identifier, the coverage and cost items' line. */

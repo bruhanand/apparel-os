@@ -1,18 +1,16 @@
 import { paise, uuidv7 } from '@apparel-os/domain';
 import { PT_REVERSAL_APPROVAL, PT_TYPE, type PtReversalDraft, type PtReversalProposed } from '@apparel-os/schemas';
-import { eq } from 'drizzle-orm';
-import { CommandDefect, LOCK_STEP, type TransactionContext } from '../../../../kernel/index.js';
+import type { TransactionContext } from '../../../../kernel/index.js';
 import type { AccessInterface } from '../../../access/index.js';
 import type { AuditInterface } from '../../../audit/index.js';
 import type { ReceivingInterface } from '../../../receiving/index.js';
-import { pt, ptReversal } from '../db/schema.js';
+import { ptReversal } from '../db/schema.js';
 import { PT_MODULE, PT_REVERSAL_TYPE } from '../domain/kinds.js';
-import { BUSINESS_DATE_NOT_SET, recordItem, revisionNotFound, type Outcome } from '../domain/refusals.js';
+import { BUSINESS_DATE_NOT_SET, recordItem, type Outcome } from '../domain/refusals.js';
 import { revisionStanding } from '../queries/approval.js';
-import { ptVersionToken, revisionFacts } from '../queries/pt-records.js';
 import { reversalsOf } from '../queries/reversal.js';
 import type { Actor } from './withdraw-pt.js';
-import { ptLock } from './pt-lock.js';
+import { ptAtVersion } from './pt-at-version.js';
 import { goodsRefusal, notOfficial, officialRefusal } from './reversal-checks.js';
 import { scopeColumnsOf } from './scope-columns.js';
 
@@ -39,24 +37,9 @@ export async function proposeReversal(
   revisionId: string,
   draft: PtReversalDraft,
 ): Promise<Outcome<PtReversalProposed>> {
-  const found = await revisionFacts(context, revisionId);
-  if (found === undefined) return { kind: 'refusal', refusal: revisionNotFound(revisionId) };
-  const [owner] = await context.tx.select().from(pt).where(eq(pt.id, found.ptId));
-  if (owner === undefined) return { kind: 'refusal', refusal: revisionNotFound(revisionId) };
-  await context.lock(LOCK_STEP.document, [ptLock(owner.id), dependencies.receiving.ptMarkLock(owner.grnId)]);
-  // Rechecked under the locks (code-house-rules 8.1, 12.7). The PT holds the revision found, so it has a token.
-  const token = await ptVersionToken(context, owner.id);
-  if (token === undefined) throw new CommandDefect(`A PT with a revision has no version token: ${owner.id}`);
-  if (token !== draft.versionToken) {
-    return {
-      kind: 'refusal',
-      refusal: {
-        kind: 'conflict',
-        code: 'kernel.stale-version',
-        missing: [{ kind: 'version', recordType: PT_TYPE, recordId: owner.id, versionId: token }],
-      },
-    };
-  }
+  const opened = await ptAtVersion(context, dependencies.receiving, revisionId, draft.versionToken);
+  if (opened.kind === 'refusal') return opened;
+  const { owner, facts } = opened.answer;
   const standing = await revisionStanding(context, revisionId);
   const official = await officialRefusal(context, standing, revisionId);
   if (official !== undefined || standing?.approval === undefined) {
@@ -101,12 +84,12 @@ export async function proposeReversal(
     value: { kind: 'known', amountPaise: paise(revision.costPaise) },
     preparers: [actor.userId],
     requestedBy: actor,
-    facts: found.facts,
+    facts,
   });
   await dependencies.audit.record(context, {
     actor: { kind: 'user', id: actor.userId },
     roleAssignmentId: actor.roleAssignmentId,
-    scope: found.facts,
+    scope: facts,
     record: { module: PT_MODULE, type: PT_TYPE, id: owner.id, versionId: revisionId },
     operation: 'propose-pt-reversal',
     changes: [
