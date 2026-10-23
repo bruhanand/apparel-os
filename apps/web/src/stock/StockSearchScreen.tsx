@@ -2,10 +2,10 @@ import {
   DAMAGE_REPORT_TYPE,
   STOCK_SEARCH_TEXT_CAP,
   stockConditionSchema,
-  type StockCost,
   type StockElsewhere,
   type StockPosition,
-  type StockProduct,
+  type StockRecordGrn,
+  type StockRecords as Records,
   type StockSearch,
   type StockSearchFilters,
   type StockSearchNames,
@@ -17,15 +17,19 @@ import { useSubmission } from '../api/command';
 import { ApiFailure, readQuery } from '../api/query';
 import { Banner } from '../components/Banner';
 import { Button } from '../components/Button';
+import { CostInCell, namedText, numberCell } from '../components/cells';
 import { EmptyState } from '../components/StandardStates';
 import { FormField } from '../forms/FormField';
 import { AsOf } from '../history/AsOf';
 import { t, type MessageId } from '../messages/catalogue';
-import { inForce, optionText, unknownText } from '../receiving/names';
-import { formatList, formatPaise, formatQuantity } from '../setup/format';
+import { ArrivalDrill } from '../reports/parts';
+import { inForce, optionText } from '../receiving/names';
+import { formatQuantity } from '../setup/format';
 import { inputClass, ListRead, SubmissionBanner, Th, Toolbar, useGranted } from '../setup/parts';
 import { useTimeZone } from '../shell/session';
 import { ReportDamage } from './DamageReport';
+import { elsewhereRows, productDetail, productText, resultRows } from './results';
+import { StockRecords } from './StockRecords';
 
 // Stock › Stock search (goods-in 9.1, 9.2, 9.4, section 11; ui-blueprint Stock "Stock explorer"; PRD-STK-001,
 // PRD-STK-006, PRD-DMG-004, PRD-ACS-008; S2-F11-T01): search stock by style code or product, brand, size, barcode,
@@ -45,57 +49,12 @@ async function readPage(filters: Filters, after: string | undefined): Promise<St
   throw new ApiFailure(result.status, result.error);
 }
 
-/** A record the answer names, as "CODE · Name", or Unknown. */
-function nameIn(list: readonly { readonly id: string; readonly code: string; readonly name: string }[], id: string) {
-  const found = list.find((each) => each.id === id);
-  return found === undefined ? unknownText() : t('receive.option', { code: found.code, name: found.name });
-}
-
-/** The goods of a result (goods-in 9.2): a product by its codes, goods as counted before their PT, or unidentified. */
-export function productText(product: StockProduct | undefined): string {
-  if (product === undefined) return unknownText();
-  if (product.kind === 'unidentified') return t('stock-search.goods.unidentified');
-  if (product.kind === 'counted') {
-    return t('stock-search.goods.counted', {
-      style: product.styleCode,
-      colour: product.colour ?? unknownText(),
-      size: product.size ?? unknownText(),
-    });
-  }
-  return t('scan.product', {
-    code: product.code ?? unknownText(),
-    style: product.styleCode ?? unknownText(),
-    size: product.size ?? unknownText(),
-  });
-}
-
-/** A product's identity, such as its colour, and its brand's article number, as one line, or nothing. */
-export function productDetail(product: StockProduct): string | null {
-  if (product.kind !== 'product') return null;
-  const identity = product.identity.map((value) => {
-    if (value.kind === 'value') return value.name ?? value.code;
-    if (value.kind === 'text') return value.text;
-    return unknownText();
-  });
-  const parts = [
-    ...(identity.length === 0 ? [] : [formatList(identity)]),
-    ...(product.articleNumber === null ? [] : [t('stock-search.article', { number: product.articleNumber })]),
-  ];
-  return parts.length === 0 ? null : formatList(parts);
-}
-
-function costText(cost: StockCost): string {
-  if (cost.kind === 'known') return formatPaise(cost.value);
-  if (cost.kind === 'unknown') return unknownText();
-  return t('stock-search.cost.masked');
-}
-
 /** The place of a result: its Site, business unit and location (goods-in 9.2). */
 function placeText(names: StockSearchNames, position: StockPosition): string {
   return t('stock-search.place', {
-    site: nameIn(names.sites, position.siteId),
-    unit: nameIn(names.businessUnits, position.businessUnitId),
-    location: nameIn(names.locations, position.locationId),
+    site: namedText(names.sites, position.siteId),
+    unit: namedText(names.businessUnits, position.businessUnitId),
+    location: namedText(names.locations, position.locationId),
   });
 }
 
@@ -103,7 +62,7 @@ function placeText(names: StockSearchNames, position: StockPosition): string {
 function Available({ row }: { row: StockPosition | StockElsewhere }) {
   return (
     <span className="flex flex-col">
-      <span className="tabular-nums">{formatQuantity(row.available)}</span>
+      <span className={numberCell}>{formatQuantity(row.available)}</span>
       <span className="text-caption text-text-2">{t(`stock-search.available.${row.availableAs}`)}</span>
     </span>
   );
@@ -112,7 +71,7 @@ function Available({ row }: { row: StockPosition | StockElsewhere }) {
 function Held({ position }: { position: StockPosition }) {
   return (
     <span className="flex flex-col">
-      <span className="tabular-nums">{formatQuantity(position.held)}</span>
+      <span className={numberCell}>{formatQuantity(position.held)}</span>
       {position.heldByKind.map((each) => (
         <span key={each.kind} className="text-caption text-text-2">
           {t('stock-search.held.kind', { kind: t(`hold-kind.${each.kind}`), count: formatQuantity(each.quantity) })}
@@ -124,12 +83,25 @@ function Held({ position }: { position: StockPosition }) {
 
 const cell = 'border-t border-border px-3 py-2 align-top';
 
-/** The results of the pages read, a product at a place each, and damage reported from one (goods-in 8.1, 9.2). */
-function Results({ pages }: { pages: readonly StockSearch[] }) {
+/** What a result's row opens below it: the damage report on its product, or the records behind its figures. */
+type Opened = { readonly kind: 'damage' | 'records'; readonly key: string } | null;
+
+/**
+ * The results of the pages read, a product at a place each, keyed by its whole key; damage reported from one (goods-in
+ * 8.1, 9.2); and the records behind one's figures, each GRN opening its Arrival (goods-in 9.1).
+ */
+function Results({
+  pages,
+  onGrn,
+}: {
+  pages: readonly StockSearch[];
+  onGrn: (grn: StockRecordGrn, places: Records['places']) => void;
+}) {
   const mayReport = useGranted(DAMAGE_REPORT_TYPE, 'create');
-  const [reporting, setReporting] = useState<string | null>(null);
-  const positions = pages.flatMap((page) => page.positions.map((position) => ({ position, names: page.names })));
-  const keyOf = (position: StockPosition) => `${position.productKey}|${position.locationId}`;
+  const [opened, setOpened] = useState<Opened>(null);
+  const toggle = (kind: 'damage' | 'records', key: string) => {
+    setOpened(opened?.kind === kind && opened.key === key ? null : { kind, key });
+  };
   return (
     <div className="overflow-x-auto rounded-card border border-border bg-surface">
       <table className="w-full border-collapse text-body" aria-label={t('stock-search.results')}>
@@ -147,10 +119,10 @@ function Results({ pages }: { pages: readonly StockSearch[] }) {
           </tr>
         </thead>
         <tbody>
-          {positions.map(({ position, names }) => {
-            const key = keyOf(position);
+          {resultRows(pages).map(({ key, position, names }) => {
             const detail = productDetail(position.product);
             const { product } = position;
+            const open = opened?.key === key ? opened.kind : null;
             return (
               <Fragment key={key}>
                 <tr>
@@ -161,30 +133,48 @@ function Results({ pages }: { pages: readonly StockSearch[] }) {
                       {position.frozen && <span className="text-caption text-text-2">{t('stock-search.frozen')}</span>}
                     </span>
                   </td>
-                  <td className={cell}>{nameIn(names.brands, position.brandId)}</td>
+                  <td className={cell}>{namedText(names.brands, position.brandId)}</td>
                   <td className={cell}>{placeText(names, position)}</td>
-                  <td className={`${cell} tabular-nums`}>{formatQuantity(position.physical)}</td>
+                  <td className={`${cell} ${numberCell}`}>{formatQuantity(position.physical)}</td>
                   <td className={cell}>
                     <Available row={position} />
                   </td>
-                  <td className={`${cell} tabular-nums`}>{formatQuantity(position.waiting)}</td>
+                  <td className={`${cell} ${numberCell}`}>{formatQuantity(position.waiting)}</td>
                   <td className={cell}>
                     <Held position={position} />
                   </td>
-                  <td className={`${cell} tabular-nums`}>{costText(position.cost)}</td>
+                  <td className={`${cell} ${numberCell}`}>
+                    <CostInCell cost={position.cost} />
+                  </td>
                   <td className={cell}>
-                    {product.kind === 'product' && mayReport && (
+                    <span className="flex flex-wrap gap-2">
                       <Button
                         size="small"
-                        label={reporting === key ? 'stock-search.damage.close' : 'stock-search.damage.report'}
+                        label={open === 'records' ? 'stock-search.records.close' : 'stock-search.records.open'}
                         onClick={() => {
-                          setReporting(reporting === key ? null : key);
+                          toggle('records', key);
                         }}
                       />
-                    )}
+                      {product.kind === 'product' && mayReport && (
+                        <Button
+                          size="small"
+                          label={open === 'damage' ? 'stock-search.damage.close' : 'stock-search.damage.report'}
+                          onClick={() => {
+                            toggle('damage', key);
+                          }}
+                        />
+                      )}
+                    </span>
                   </td>
                 </tr>
-                {reporting === key && product.kind === 'product' && (
+                {open === 'records' && (
+                  <tr>
+                    <td className={cell} colSpan={9}>
+                      <StockRecords of={{ of: 'search', key: position.resultKey }} onGrn={onGrn} />
+                    </td>
+                  </tr>
+                )}
+                {open === 'damage' && product.kind === 'product' && (
                   <tr>
                     <td className={cell} colSpan={9}>
                       <p className="m-0 mb-2 text-body-sm text-text-2">
@@ -209,9 +199,12 @@ function Results({ pages }: { pages: readonly StockSearch[] }) {
   );
 }
 
-/** The same products at the other Stores and warehouses the person may see (goods-in 9.2; PRD-STK-006). */
+/**
+ * The same products at the other Stores and warehouses the person may see (goods-in 9.2; PRD-STK-006), once each
+ * however many pages name them.
+ */
 function Elsewhere({ pages }: { pages: readonly StockSearch[] }) {
-  const rows = pages.flatMap((page) => page.elsewhere.map((each) => ({ each, page })));
+  const rows = elsewhereRows(pages);
   if (rows.length === 0) return null;
   const productOf = (key: string) =>
     pages.flatMap((page) => page.positions).find((position) => position.productKey === key)?.product;
@@ -231,21 +224,21 @@ function Elsewhere({ pages }: { pages: readonly StockSearch[] }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map(({ each, page }) => (
-              <tr key={`${each.productKey}|${each.businessUnitId}`}>
+            {rows.map(({ key, each, page }) => (
+              <tr key={key}>
                 <td className={cell}>{productText(productOf(each.productKey))}</td>
                 <td className={cell}>
                   {t('stock-search.unit', {
-                    site: nameIn(page.names.sites, each.siteId),
-                    unit: nameIn(page.names.businessUnits, each.businessUnitId),
+                    site: namedText(page.names.sites, each.siteId),
+                    unit: namedText(page.names.businessUnits, each.businessUnitId),
                   })}
                 </td>
-                <td className={`${cell} tabular-nums`}>{formatQuantity(each.physical)}</td>
+                <td className={`${cell} ${numberCell}`}>{formatQuantity(each.physical)}</td>
                 <td className={cell}>
                   <Available row={each} />
                 </td>
-                <td className={`${cell} tabular-nums`}>{formatQuantity(each.waiting)}</td>
-                <td className={`${cell} tabular-nums`}>{formatQuantity(each.held)}</td>
+                <td className={`${cell} ${numberCell}`}>{formatQuantity(each.waiting)}</td>
+                <td className={`${cell} ${numberCell}`}>{formatQuantity(each.held)}</td>
               </tr>
             ))}
           </tbody>
@@ -490,12 +483,25 @@ function ExportButton({ filters }: { filters: Filters }) {
 export function StockSearchScreen() {
   const timeZone = useTimeZone();
   const [filters, setFilters] = useState<Filters>({});
+  // A GRN opened from a result's records: its Arrival, with the names of its places (goods-in 9.1).
+  const [arrival, setArrival] = useState<{ grn: StockRecordGrn; places: Records['places'] } | null>(null);
   const query = useInfiniteQuery({
     queryKey: ['searchStock', 'pages', filters],
     queryFn: ({ pageParam }) => readPage(filters, pageParam),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last: StockSearch) => last.next ?? undefined,
   });
+  if (arrival !== null) {
+    return (
+      <ArrivalDrill
+        grn={arrival.grn}
+        places={arrival.places}
+        onBack={() => {
+          setArrival(null);
+        }}
+      />
+    );
+  }
   return (
     <div className="flex flex-col gap-4">
       <Toolbar>
@@ -521,7 +527,12 @@ export function StockSearchScreen() {
                 <Banner tone="warning" role="status" message="stock-search.capped" />
               )}
               {any ? (
-                <Results pages={pages} />
+                <Results
+                  pages={pages}
+                  onGrn={(grn, places) => {
+                    setArrival({ grn, places });
+                  }}
+                />
               ) : (
                 <EmptyState title="stock-search.empty.title" body="stock-search.empty.body" />
               )}

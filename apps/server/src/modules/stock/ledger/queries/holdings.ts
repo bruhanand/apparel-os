@@ -1,7 +1,7 @@
 import { sql, type SQL } from 'drizzle-orm';
 import { CommandDefect, declareReadModel, serveReadModel, type TransactionContext } from '../../../../kernel/index.js';
 import { totalOf, type PositionQuantities } from '../domain/positions.js';
-import type { Condition } from '../domain/request.js';
+import type { Condition, SourceRecord } from '../domain/request.js';
 import {
   brandOf,
   filtersOf,
@@ -22,12 +22,20 @@ import {
 // receipt count, the record its pieces were counted on (the drill-down). Takes no lock and runs in the reader's
 // transaction under the reader's actor, so row-level security keeps out what the reader may not see (14.3).
 
-/** Who owns goods, from the origin's state (14.2; DEC-141): Unknown until recorded (PRD-MOD-015). */
-export type HoldingOwner =
-  | { readonly kind: 'organisation'; readonly legalEntityId: string }
-  | { readonly kind: 'supplier'; readonly partyId: string }
-  | { readonly kind: 'brand'; readonly brandId: string }
-  | { readonly kind: 'unknown' };
+/**
+ * Who owns goods, from the origin's state (14.2; DEC-141): the Organisation by its legal entity, a supplier or a
+ * brand, by the party; Unknown until recorded (PRD-MOD-015).
+ */
+export type HoldingOwner = { readonly kind: OwnerKind; readonly partyId: string } | { readonly kind: 'unknown' };
+
+type OwnerKind = 'organisation' | 'supplier' | 'brand';
+
+/** The column of an origin's state that holds the party of each kind of owner (14.2): one map for the read. */
+const OWNER_COLUMNS = {
+  organisation: 'owner_legal_entity_id',
+  supplier: 'owner_party_id',
+  brand: 'owner_brand_id',
+} as const satisfies Record<OwnerKind, keyof DetailRow>;
 
 /** Where a row sits in the read's order. A page starts after one (code-house-rules 12.1 "Reads": a cursor). */
 export interface HoldingKey {
@@ -53,13 +61,6 @@ export interface HoldingBalance {
   readonly quantity: number;
 }
 
-/** A record a receipt origin's first receipt count names (stock-ledger 2.1, 13.2). */
-export interface HoldingSource {
-  readonly module: string;
-  readonly recordType: string;
-  readonly recordId: string;
-}
-
 /** One row: a product at a place, in a condition, of an owner, with its quantities apart (goods-in 9.3). */
 export interface Holding extends PositionQuantities {
   readonly key: HoldingKey;
@@ -70,46 +71,35 @@ export interface Holding extends PositionQuantities {
   readonly owner: HoldingOwner;
   readonly frozen: boolean;
   readonly balances: readonly HoldingBalance[];
-  readonly sources: readonly HoldingSource[];
+  readonly sources: readonly SourceRecord[];
 }
 
 /** The owner's key, opaque text that orders and compares in SQL, over an origin's state `s`: its kind and party. */
-const ownerKey = sql`jsonb_build_array(coalesce(s.owner_kind, 'unknown'), case s.owner_kind
-  when 'organisation' then s.owner_legal_entity_id when 'supplier' then s.owner_party_id
-  when 'brand' then s.owner_brand_id end)::text`;
+export const ownerKey = sql`jsonb_build_array(coalesce(s.owner_kind, 'unknown'), case s.owner_kind ${sql.join(
+  Object.entries(OWNER_COLUMNS).map(
+    ([kind, column]) => sql`when ${kind} then ${sql.identifier('s')}.${sql.identifier(column)}`,
+  ),
+  sql` `,
+)} end)::text`;
 
 /** The owner of a balance as the parts of its key: its kind and party, as `ownerKey` builds them. */
 function ownerPartsOf(row: DetailRow): readonly [string, string | null] {
-  switch (row.owner_kind) {
-    case 'organisation':
-      return ['organisation', row.owner_legal_entity_id];
-    case 'supplier':
-      return ['supplier', row.owner_party_id];
-    case 'brand':
-      return ['brand', row.owner_brand_id];
-    default:
-      return ['unknown', null];
-  }
+  return row.owner_kind === null ? ['unknown', null] : [row.owner_kind, row[OWNER_COLUMNS[row.owner_kind]]];
 }
 
 /** The owner a balance's origin records; a kind recorded without its party is a defect (14.2). */
 function ownerOf(row: DetailRow): HoldingOwner {
   if (row.owner_kind === null) return { kind: 'unknown' };
-  if (row.owner_kind === 'organisation' && row.owner_legal_entity_id !== null) {
-    return { kind: 'organisation', legalEntityId: row.owner_legal_entity_id };
-  }
-  if (row.owner_kind === 'supplier' && row.owner_party_id !== null) {
-    return { kind: 'supplier', partyId: row.owner_party_id };
-  }
-  if (row.owner_kind === 'brand' && row.owner_brand_id !== null) return { kind: 'brand', brandId: row.owner_brand_id };
-  throw new CommandDefect(`An origin's owner names no party: ${row.receipt_origin_id}`);
+  const partyId = row[OWNER_COLUMNS[row.owner_kind]];
+  if (partyId === null) throw new CommandDefect(`An origin's owner names no party: ${row.receipt_origin_id}`);
+  return { kind: row.owner_kind, partyId };
 }
 
 /** The source of each origin's first receipt count, following the origins it was split from (13.14, 13.19). */
 async function rootSources(
   context: TransactionContext,
   originIds: readonly string[],
-): Promise<Map<string, HoldingSource>> {
+): Promise<Map<string, SourceRecord>> {
   if (originIds.length === 0) return new Map();
   const result = await context.tx.execute<{
     start_id: string;
@@ -227,7 +217,7 @@ export async function stockHoldings(
     const first = members?.[0];
     if (members === undefined || first === undefined) throw new CommandDefect('A row of the page has no balance');
     const seen = new Set<string>();
-    const rowSources: HoldingSource[] = [];
+    const rowSources: SourceRecord[] = [];
     for (const each of members) {
       const source = sources.get(each.row.receipt_origin_id);
       if (source === undefined) continue;

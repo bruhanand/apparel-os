@@ -3,8 +3,10 @@ import {
   arrivalReadSchema,
   scanAnsweredSchema,
   scanInReadSchema,
+  stockRecordsSchema,
   stockSearchExportSchema,
   stockSearchSchema,
+  type StockRecords,
   type StockPosition,
   type StockSearch,
 } from '@apparel-os/schemas';
@@ -97,7 +99,7 @@ async function approvedPt(
   const read = await w.get(scanner, `/api/receiving/grns/${grnId}/scan-in`);
   expect(read.status, JSON.stringify(read.body)).toBe(200);
   const skuIds = scanInReadSchema.parse(read.body).products.map((each) => each.skuId);
-  return { style, grnId, arrivalId, skuIds, barcodes: ptRows.map((row) => String(row.BARCODE)) };
+  return { style, grnId, arrivalId, revisionId, skuIds, barcodes: ptRows.map((row) => String(row.BARCODE)) };
 }
 
 async function scannedIn(grnId: string, barcode: string, destination: string) {
@@ -112,20 +114,32 @@ async function scannedIn(grnId: string, barcode: string, destination: string) {
 /** The results at a location. */
 const at = (read: StockSearch, locationId: string) => read.positions.filter((each) => each.locationId === locationId);
 
-/** The custody and what is available of a SKU at the Store's unit, as the ledger answers them (stock-ledger 13.6). */
+/**
+ * The four quantities of a SKU at each location of the Store's unit, from the ledger's own reads (stock-ledger 13.6):
+ * physical from Custody; available, held and waiting from Availability, each balance's held units outside reservations
+ * counted once, and its good units free of holds and reservations that are not available waiting, since availability
+ * is exactly those covered and accepted (6.2, 6.3; goods-in 9.2).
+ */
 async function ledgerOf(skuId: string) {
   return asUserIn(w.api.app, w.organisation, searcher.user.id, async (context) => {
     const held = await custody(context, { siteId: w.fixture.siteId, businessUnitId: w.fixture.wholeStore, skuId });
     const free = await availability(context, { siteId: w.fixture.siteId, businessUnitId: w.fixture.wholeStore, skuId });
     const physical = new Map<string, number>();
     const available = new Map<string, number>();
-    for (const row of held.rows) {
-      if (row.locationId !== null) physical.set(row.locationId, (physical.get(row.locationId) ?? 0) + row.quantity);
-    }
+    const holding = new Map<string, number>();
+    const waiting = new Map<string, number>();
+    const add = (map: Map<string, number>, locationId: string, quantity: number) => {
+      map.set(locationId, (map.get(locationId) ?? 0) + quantity);
+    };
+    for (const row of held.rows) if (row.locationId !== null) add(physical, row.locationId, row.quantity);
     for (const row of free.rows) {
-      if (row.locationId !== null) available.set(row.locationId, (available.get(row.locationId) ?? 0) + row.available);
+      if (row.locationId === null) continue;
+      add(available, row.locationId, row.available);
+      add(holding, row.locationId, row.heldOutsideReservations);
+      const unclaimed = Math.max(0, row.quantity - row.reserved - row.heldOutsideReservations);
+      add(waiting, row.locationId, row.condition === 'good' ? unclaimed - row.available : 0);
     }
-    return { physical, available };
+    return { physical, available, held: holding, waiting };
   });
 }
 
@@ -153,7 +167,11 @@ describe('stock search (goods-in 9.2)', () => {
     const approvedRead = await search(searcher, { text: style });
     expect(approvedRead.positions).toHaveLength(1);
     expect(approvedRead.positions[0]).toMatchObject({
-      product: { kind: 'product', skuId, styleCode: style, size: w.code.size(0) },
+      product: {
+        kind: 'product',
+        skuId,
+        facts: { kind: 'known', styleCode: style, size: { kind: 'known', value: w.code.size(0) } },
+      },
       brandId: w.fixture.brand.id,
       siteId: w.fixture.siteId,
       storeId: w.fixture.storeId,
@@ -192,11 +210,14 @@ describe('stock search (goods-in 9.2)', () => {
       held: 0,
       heldByKind: [],
     });
-    // The ledger's own reads say the same, place by place (stock-ledger 13.6).
+    // The ledger's own reads say the same of all four, place by place (stock-ledger 13.6).
     const ledger = await ledgerOf(skuId);
+    expect(read.positions).toHaveLength(2);
     for (const position of read.positions) {
       expect(position.physical).toBe(ledger.physical.get(position.locationId));
-      expect(position.available).toBe(ledger.available.get(position.locationId) ?? 0);
+      expect(position.available).toBe(ledger.available.get(position.locationId));
+      expect(position.held).toBe(ledger.held.get(position.locationId));
+      expect(position.waiting).toBe(ledger.waiting.get(position.locationId));
     }
     expect(read.asOf).toBe(new Date(read.asOf).toISOString());
   });
@@ -207,7 +228,12 @@ describe('stock search (goods-in 9.2)', () => {
     const read = await search(searcher, { text: style.toLowerCase().slice(4) });
     expect(read.positions).toHaveLength(1);
     expect(read.positions[0]).toMatchObject({
-      product: { kind: 'counted', styleCode: style, colour: 'SYNTHETIC NAVY', size: w.code.size(1) },
+      product: {
+        kind: 'counted',
+        styleCode: style,
+        colour: { kind: 'known', value: 'SYNTHETIC NAVY' },
+        size: { kind: 'known', value: w.code.size(1) },
+      },
       brandId: w.fixture.brand.id,
       locationId: w.fixture.storeLocation,
       physical: 4,
@@ -261,6 +287,7 @@ describe('stock search (goods-in 9.2)', () => {
         siteId: w.fixture.siteId,
         storeId: null,
         businessUnitId: w.fixture.warehouse,
+        legalEntityId: w.fixture.legalEntityId,
         availableAs: 'move',
         physical: 5,
         available: 0,
@@ -295,6 +322,82 @@ describe('stock search (goods-in 9.2)', () => {
     expect(errorOf(bogus)?.code).toBe('kernel.invalid-request');
     const tooMany = await w.get(searcher, '/api/reports/stock-search?limit=101');
     expect(tooMany.status).toBe(400);
+  });
+});
+
+/** The records behind a result, a page of the size given (goods-in 9.1). */
+async function recordsOf(person: Person, position: StockPosition | undefined, more: Record<string, string> = {}) {
+  if (position === undefined) throw new Error('No result to drill into');
+  const query = new URLSearchParams({ of: 'search', key: position.resultKey, ...more });
+  return w.get(person, `/api/reports/stock-records?${query.toString()}`);
+}
+
+async function records(person: Person, position: StockPosition | undefined, more: Record<string, string> = {}) {
+  const read = await recordsOf(person, position, more);
+  expect(read.status, JSON.stringify(read.body)).toBe(200);
+  return stockRecordsSchema.parse(read.body);
+}
+
+/** A movement as the test compares it: its kind, direction, pieces, the record it came from and its GRN. */
+const movementOf = (each: StockRecords['movements'][number]) => [
+  each.kind,
+  each.direction,
+  each.quantity,
+  each.source,
+  each.grnId,
+];
+
+describe('the records behind a result (goods-in 9.1)', () => {
+  it('PRD-EXC-011 a result drills down to its GRN, its PT and its movements at the location, newest first, a page at a time', async () => {
+    const { style, grnId, revisionId, barcodes } = await approvedPt('SRC-DRILL', [{ sizeAt: 0, counted: 2 }], () => [
+      {},
+      {},
+    ]);
+    await scannedIn(grnId, barcodes[0] ?? '', floor);
+    // Whoever reads the stock and the receipts it came from.
+    const reader = await w.enrol('SRC-DRILL-READER', [
+      ...STOCK_VIEW,
+      { recordType: 'receiving.arrival', action: 'view' },
+      { recordType: 'receiving.grn', action: 'view' },
+    ]);
+    const read = await search(reader, { text: style });
+    // On the floor: the piece the scan moved there, from the GRN, covered by the PT.
+    const onFloor = await records(reader, at(read, floor)[0]);
+    expect(onFloor.grns.map((each) => each.grnId)).toEqual([grnId]);
+    expect(onFloor.pts).toEqual([{ ptRevisionId: revisionId, grnId }]);
+    expect(onFloor.movements.map(movementOf)).toEqual([['location-move', 'in', 1, 'scan', grnId]]);
+    expect(onFloor.asOf).toBe(new Date(onFloor.asOf).toISOString());
+    // At the receiving location: newest first, the scan's move out, the PT approval's identity step in and out of
+    // the GRN's origin, and the GRN's receipt count (stock-ledger 13.14, 13.19).
+    const received = at(read, w.fixture.storeLocation)[0];
+    const atReceiving = await records(reader, received);
+    expect(atReceiving.movements.map(movementOf)).toEqual([
+      ['location-move', 'out', 1, 'scan', grnId],
+      ...atReceiving.movements.slice(1, -1).map(movementOf),
+      ['receipt-count', 'in', 2, 'grn', grnId],
+    ]);
+    expect(atReceiving.movements.slice(1, -1).every((each) => each.kind === 'identity-resolved')).toBe(true);
+    expect(atReceiving.movements.slice(1, -1).every((each) => each.source === 'pt' && each.grnId === grnId)).toBe(true);
+    // A page at a time by its cursor (code-house-rules 12.1).
+    const first = await records(reader, received, { limit: '1' });
+    expect(first.movements.map((each) => each.id)).toEqual([atReceiving.movements[0]?.id]);
+    const second = await records(reader, received, { limit: '1', after: first.next ?? '' });
+    expect(second.movements.map((each) => each.id)).toEqual([atReceiving.movements[1]?.id]);
+    // A reader of the stock who may not see the receipts is shown the movements, but no GRN (goods-in 9.1).
+    const stockOnly = await records(searcher, at(read, floor)[0]);
+    expect(stockOnly.grns).toEqual([]);
+    expect(stockOnly.pts).toEqual([{ ptRevisionId: revisionId, grnId: null }]);
+    expect(stockOnly.movements.map(movementOf)).toEqual([['location-move', 'in', 1, 'scan', null]]);
+    // Not found to a reader who may not see the result, nor for a key no result has (code-house-rules 12.3).
+    const otherStore = await w.enrol('SRC-DRILL-OTHER', STOCK_VIEW, {
+      scope: placeScope([{ type: 'store', id: w.fixture.otherStoreId }]),
+    });
+    const hidden = await recordsOf(otherStore, at(read, floor)[0]);
+    expect(hidden.status, JSON.stringify(hidden.body)).toBe(404);
+    expect(errorOf(hidden)).toMatchObject({ code: 'reports.record-not-found', missing: [] });
+    // A key the search gave of no result now, and a key of the stock report's taken for the search's.
+    const none = await recordsOf(reader, at(read, floor)[0], { of: 'report' });
+    expect(none.status, JSON.stringify(none.body)).toBe(404);
   });
 });
 

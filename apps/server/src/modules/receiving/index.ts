@@ -19,4 +19,4 @@ export {
   RECEIVING_REPORT_LINES,
   receivingReadModels,
 } from './queries/report-reads.js';
-export type { GrnNamesAnswer, ReportGrnLine, SourceRecord } from './queries/report-reads.js';
+export type { ReportGrnLine } from './queries/report-reads.js';

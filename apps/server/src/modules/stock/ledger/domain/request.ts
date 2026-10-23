@@ -24,6 +24,12 @@ export interface LedgerSource {
 }
 
 /**
+ * A record a ledger source names, by module, record type and identifier (2.1, 13.2): what a read answers of where
+ * goods or a movement came from, for the source's own module to name. One shape for every read and caller.
+ */
+export type SourceRecord = Pick<LedgerSource, 'module' | 'recordType' | 'recordId'>;
+
+/**
  * The record type a source's journals carry (books-and-posting 5.1, 4.3): the record type as the permission registry
  * names it, `<module>.<record type>`, as a reopening names a correction and every other caller of Post passes it. A
  * movement keeps its module and record type apart (14.2). S1-F10-T06: found by P5, where a reopening could not name a

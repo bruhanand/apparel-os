@@ -1,6 +1,7 @@
 import { addPaise, isKnown, paise } from '@apparel-os/domain';
 import {
   STOCK_SEARCH_PRODUCT_CAP,
+  type MaybeKnownText,
   type StockCost,
   type StockElsewhere,
   type StockPosition,
@@ -9,7 +10,6 @@ import {
   type StockSearchFilters,
 } from '@apparel-os/schemas';
 import type { ReadModelGateway, TransactionContext } from '../../../kernel/index.js';
-import type { RecordFacts } from '../../access/index.js';
 import {
   CATALOGUE_PRODUCT_FACTS,
   CATALOGUE_PRODUCT_SEARCH,
@@ -26,6 +26,8 @@ import {
   type UnitPositionsQuery,
 } from '../../stock/ledger/index.js';
 import { cursorOf, ledgerFilters, namedPlace, namesProducts, type NamedPlace } from '../domain/search.js';
+import { factsOf, readerAuthority, type Shown } from './authority.js';
+import type { Reading } from './reading.js';
 
 // Stock search (goods-in 9.1, 9.2, 9.4; module-map section 5 `reports`; PRD-STK-001, PRD-STK-006, PRD-ACS-008,
 // PRD-EXC-010, PRD-MOD-003; S2-F11-T01), composed from declared read models read through the kernel's read-model
@@ -33,48 +35,15 @@ import { cursorOf, ledgerFilters, namedPlace, namesProducts, type NamedPlace } f
 // size or a barcode names; the ledger answers the stock of products at places with its quantities apart, the same
 // products at the other business units, and the cost of the balances the reader may see cost of; the catalogue and
 // `organisation` name the products, brands and places shown. Each result is shown through the reader's own grants
-// (`Authority`), its cost only with the cost field class; a result the reader may not see is left out after the page
+// (`readerAuthority`), its cost only with the cost field class; a result the reader may not see is left out after the page
 // is read, so a page may hold fewer, and its cursor still moves past them (code-house-rules 12.1, as the stage 1 master
 // lists and the open-to-buy budgets).
-
-/**
- * What the reader may see of each result, by its facts (access-and-approvals 7.1 step 3; 5.3): whether its grants of
- * view on every stock record type the search reads cover it; and the assignment whose view on the receipt origins grants
- * the cost field class too, or none (access-and-approvals 6). Answered by the caller, through `access`; a refusal of the
- * search as a whole is thrown by the caller.
- */
-export interface Authority {
-  visible(facts: readonly RecordFacts[]): Promise<readonly boolean[]>;
-  cost(facts: readonly RecordFacts[]): Promise<readonly (string | undefined)[]>;
-}
-
-/** A result whose cost is shown: its facts and the assignment that grants the cost field class there. */
-export interface CostShown {
-  readonly facts: RecordFacts;
-  readonly roleAssignmentId: string;
-}
 
 export interface SearchRequest {
   readonly filters: StockSearchFilters;
   readonly after?: PositionKey;
   readonly limit: number;
-  /** Today, under the Organisation's timezone (code-house-rules 9). */
-  readonly today: string;
 }
-
-const factsOf = (row: {
-  readonly siteId: string;
-  readonly storeId: string | null;
-  readonly businessUnitId: string;
-  readonly legalEntityId: string;
-  readonly brandId: string;
-}): RecordFacts => ({
-  siteId: row.siteId,
-  ...(row.storeId === null ? {} : { storeId: row.storeId }),
-  businessUnitId: row.businessUnitId,
-  legalEntityId: row.legalEntityId,
-  brandId: row.brandId,
-});
 
 /**
  * The product of a result as the reader sees it; a SKU the catalogue does not answer is Unknown (PRD-MOD-015). The
@@ -82,19 +51,34 @@ const factsOf = (row: {
  */
 export function productOf(position: Pick<Position, 'product'>, facts: ReadonlyMap<string, ProductFacts>): StockProduct {
   const { product } = position;
-  if (product.kind === 'counted') return { ...product };
+  if (product.kind === 'counted') {
+    return {
+      kind: 'counted',
+      styleCode: product.styleCode,
+      colour: maybeKnown(product.colour),
+      size: maybeKnown(product.size),
+    };
+  }
   if (product.kind === 'unidentified') return { kind: 'unidentified' };
   const found = facts.get(product.skuId);
+  if (found === undefined) return { kind: 'product', skuId: product.skuId, facts: { kind: 'unknown' } };
   return {
     kind: 'product',
     skuId: product.skuId,
-    code: found?.code ?? null,
-    styleCode: found?.styleCode ?? null,
-    size: found?.size ?? null,
-    articleNumber: found?.articleNumber ?? null,
-    identity: found === undefined ? [] : found.identity.map((value) => ({ ...value })),
+    facts: {
+      kind: 'known',
+      code: found.code,
+      styleCode: found.styleCode,
+      size: maybeKnown(found.size),
+      articleNumber: found.articleNumber,
+      identity: found.identity.map((value) => ({ ...value })),
+    },
   };
 }
+
+/** A text the read holds as null while Unknown, in the shape the API sends Unknown in (PRD-MOD-015). */
+const maybeKnown = (value: string | null): MaybeKnownText =>
+  value === null ? { kind: 'unknown' } : { kind: 'known', value };
 
 /**
  * The business units outside the place a search names, where the same products are looked for (goods-in 9.2): every
@@ -132,23 +116,20 @@ const quantities = (row: Position | UnitPosition) => ({
   held: row.held,
 });
 
-/** A page of stock search, and each result whose cost it shows, for an export's access record. */
+/** A page of stock search, and each result it shows with the grants that show it, for an export's step 0. */
 export interface SearchAnswer {
   readonly search: StockSearch;
-  readonly costShown: readonly CostShown[];
+  readonly shown: readonly Shown[];
 }
 
 /**
  * One page of stock search (goods-in 9.2): through the gateway, as the reader may see it, with the time it was read. A
  * search that names products reads at most STOCK_SEARCH_PRODUCT_CAP of them and says when more match.
  */
-export async function searchStock(
-  gateway: ReadModelGateway,
-  context: TransactionContext,
-  request: SearchRequest,
-  authority: Authority,
-): Promise<SearchAnswer> {
-  const { filters, today } = request;
+export async function searchStock(reading: Reading, request: SearchRequest): Promise<SearchAnswer> {
+  const { gateway, context, today } = reading;
+  const { filters } = request;
+  const authority = readerAuthority(reading.access, context, reading.actorId);
   const found = namesProducts(filters)
     ? (
         await gateway.read(context, CATALOGUE_PRODUCT_SEARCH, {
@@ -169,8 +150,13 @@ export async function searchStock(
   const page = read.answer.positions;
   const pageFacts = page.map((position) => factsOf({ ...position, ...position.key }));
   const visible = await authority.visible(pageFacts);
-  const shown = page.filter((_, at) => visible[at] === true);
-  const shownFacts = pageFacts.filter((_, at) => visible[at] === true);
+  const shownRows = page.flatMap((position, at) => {
+    const views = visible[at];
+    const facts = pageFacts[at];
+    return views === undefined || facts === undefined ? [] : [{ position, facts, views }];
+  });
+  const shown = shownRows.map((each) => each.position);
+  const shownFacts = shownRows.map((each) => each.facts);
 
   // Cost only where the reader's assignment grants the cost field class; otherwise masked (access-and-approvals 6).
   const costShown = await authority.cost(shownFacts);
@@ -210,7 +196,7 @@ export async function searchStock(
           })
         ).answer;
   const elsewhereVisible = await authority.visible(elsewhereRead.map(factsOf));
-  const elsewhere = elsewhereRead.filter((_, at) => elsewhereVisible[at] === true);
+  const elsewhere = elsewhereRead.filter((_, at) => elsewhereVisible[at] !== undefined);
 
   const skuIds = shown.flatMap((position) => (position.product.kind === 'sku' ? [position.product.skuId] : []));
   const facts = (
@@ -234,6 +220,7 @@ export async function searchStock(
   ).answer;
 
   const positions = shown.map((position, at): StockPosition => ({
+    resultKey: cursorOf(position.key),
     productKey: position.key.productKey,
     product: productOf(position, products),
     brandId: position.brandId,
@@ -241,6 +228,7 @@ export async function searchStock(
     storeId: position.storeId,
     businessUnitId: position.key.businessUnitId,
     locationId: position.key.locationId,
+    legalEntityId: position.key.legalEntityId,
     ...quantities(position),
     heldByKind: position.heldByKind.map((each) => ({ ...each })),
     frozen: position.frozen,
@@ -254,6 +242,7 @@ export async function searchStock(
       siteId: each.siteId,
       storeId: each.storeId,
       businessUnitId: each.businessUnitId,
+      legalEntityId: each.legalEntityId,
       ...quantities(each),
     })),
     productsCapped: found?.capped ?? false,
@@ -269,9 +258,6 @@ export async function searchStock(
   };
   return {
     search,
-    costShown: shownFacts.flatMap((facts, at) => {
-      const roleAssignmentId = costShown[at];
-      return roleAssignmentId === undefined ? [] : [{ facts, roleAssignmentId }];
-    }),
+    shown: shownRows.map(({ facts, views }, at) => ({ facts, views, costAssignmentId: costShown[at] })),
   };
 }

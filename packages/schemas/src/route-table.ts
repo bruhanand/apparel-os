@@ -99,6 +99,8 @@ import {
   stockSearchFiltersSchema,
   stockSearchQuerySchema,
   stockSearchSchema,
+  stockRecordsQuerySchema,
+  stockRecordsSchema,
 } from './stock-search.js';
 import {
   bookingStatusFiltersSchema,
@@ -5805,6 +5807,18 @@ export const routes = {
     response: stockSearchSchema,
     codes: [...HISTORY_CODES],
   }),
+  // The records behind a figure of stock search or the stock report (goods-in 9.1, 9.5; PRD-EXC-011; code reviews 8
+  // and 9 of stage 2): its GRNs, PTs and movements at the location, through the read-model gateway, shown only to a
+  // reader whose grants of view on the stock it is read from cover the figure; one they may not see is not found.
+  readStockRecords: defineRoute({
+    method: 'GET',
+    path: '/api/reports/stock-records',
+    query: stockRecordsQuerySchema,
+    access: { kind: 'action', action: 'view', recordType: STOCK_BALANCE_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: stockRecordsSchema,
+    codes: [...HISTORY_CODES, 'reports.record-not-found'],
+  }),
   exportStockSearch: defineRoute({
     method: 'POST',
     path: '/api/reports/stock-search/export',
@@ -5818,6 +5832,8 @@ export const routes = {
     codes: [
       ...HISTORY_CODES,
       'kernel.cross-site-request',
+      // Holding the exporter's authority at step 0 answers it when their role changed under the lock (8.2; DEC-118).
+      'kernel.stale-version',
       // More results than one export holds (STOCK_SEARCH_EXPORT_CAP): narrow the search (goods-in 9.4).
       'reports.export-too-large',
     ],
@@ -5872,7 +5888,7 @@ export const routes = {
     access: { kind: 'action', action: 'view', recordType: BOOKING_TYPE, authorisedIn: 'command' },
     command: false,
     response: supplierPerformanceReportSchema,
-    // More bookings or GRN lines than the report reads (SUPPLIER_REPORT_BOOKING_CAP, SUPPLIER_REPORT_LINE_CAP).
+    // More bookings or GRN lines than the report reads (REPORT_BOOKING_READ_CAP, REPORT_LINE_READ_CAP).
     codes: [...HISTORY_CODES, 'reports.report-too-large'],
   }),
   exportSupplierPerformanceReport: defineRoute({
@@ -5906,6 +5922,8 @@ export const routes = {
     codes: [
       ...HISTORY_CODES,
       'kernel.cross-site-request',
+      // Holding the exporter's authority at step 0 answers it when their role changed under the lock (8.2; DEC-118).
+      'kernel.stale-version',
       // More rows than one export holds (STOCK_REPORT_EXPORT_CAP): narrow the report (goods-in 9.5).
       'reports.export-too-large',
     ],

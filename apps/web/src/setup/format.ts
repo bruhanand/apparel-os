@@ -4,16 +4,29 @@ import { t, type MessageId } from '../messages/catalogue';
 
 const grouping = new Intl.NumberFormat('en-IN');
 
+/** An amount in integer paise as its parts: the sign, the rupees with Indian grouping and two decimal digits. */
+function amountParts(paise: number) {
+  const sign = paise < 0 ? '-' : '';
+  const whole = Math.abs(paise);
+  const rest = whole % 100;
+  const rupees = (whole - rest) / 100;
+  return { sign, rupees: grouping.format(rupees), paise: String(rest).padStart(2, '0') };
+}
+
 /**
  * An amount in integer paise as rupees with Indian grouping and two decimals, "₹1,23,456.78" (design-language 8;
  * PRD-MOD-014): split with integer arithmetic, never through a binary fraction.
  */
 export function formatPaise(paise: number): string {
-  const sign = paise < 0 ? '-' : '';
-  const whole = Math.abs(paise);
-  const rest = whole % 100;
-  const rupees = (whole - rest) / 100;
-  return t('money.inr', { sign, rupees: grouping.format(rupees), paise: String(rest).padStart(2, '0') });
+  return t('money.inr', amountParts(paise));
+}
+
+/**
+ * An amount in a table cell: as `formatPaise` with no ₹, "1,23,456.78", the column's header naming the currency, so
+ * the decimals line up (design-language 8 "Money · in tables").
+ */
+export function formatAmount(paise: number): string {
+  return t('money.amount', amountParts(paise));
 }
 
 /** A whole quantity with Indian grouping, "1,23,456" (design-language 8; code-house-rules 12.13). */

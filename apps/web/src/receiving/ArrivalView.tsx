@@ -69,6 +69,11 @@ const READING = 'receive.reading-again';
 
 type Unit = Inbox['units'][number];
 
+/** What an Arrival is named by of its unit: the unit's code and name, and its locations' (goods-in 4.2). */
+export type ArrivalUnit = Pick<Unit, 'businessUnitId' | 'code' | 'name'> & {
+  readonly locations: readonly Pick<Unit['locations'][number], 'id' | 'code' | 'name'>[];
+};
+
 /** A person's name from their sign-in, as the Arrival names them; Unknown when it does not (PRD-MOD-015). */
 function personOf(arrival: Arrival, userId: string): string {
   return arrival.people.find((each) => each.userId === userId)?.name ?? unknownText();
@@ -1175,7 +1180,7 @@ export function ArrivalView({
   onBack,
 }: {
   arrivalId: string;
-  units: readonly Unit[];
+  units: readonly ArrivalUnit[];
   onBack: () => void;
 }) {
   const timeZone = useTimeZone();

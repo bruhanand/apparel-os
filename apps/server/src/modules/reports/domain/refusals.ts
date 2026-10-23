@@ -13,7 +13,7 @@ export const BUSINESS_DATE_NOT_SET: CommandRefusal = {
 export const EXPORT_TOO_LARGE: CommandRefusal = { kind: 'refused', code: 'reports.export-too-large', missing: [] };
 
 /**
- * More bookings or GRN lines than the supplier report reads (SUPPLIER_REPORT_BOOKING_CAP, SUPPLIER_REPORT_LINE_CAP,
+ * More bookings or GRN lines than the supplier report reads (REPORT_BOOKING_READ_CAP, REPORT_LINE_READ_CAP,
  * technical caps), so it shows no figure from part of them (PRD-PRF-004): narrow it by supplier, brand or season.
  */
 export const REPORT_TOO_LARGE: CommandRefusal = { kind: 'refused', code: 'reports.report-too-large', missing: [] };
