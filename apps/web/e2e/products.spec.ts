@@ -1,7 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
-import { Authenticator } from './support/authenticator';
-import { signIn } from './support/journey';
-import { readWorld, type EnrolledUser } from './support/world';
+import { signedIn } from './support/journey';
+import { readWorld } from './support/world';
 
 // S1-F03-T02: the products journey (structure-and-masters 4.1, 4.2, 8; PRD-MER-005, PRD-MER-013; DM-5, DEC-105). A
 // Booking user proposes a style with two SKUs on Setup › Products, one of Unknown size and one of the category's
@@ -19,14 +18,6 @@ const FIT = `SYNTHETIC slim ${suffix}`;
 const FIT_LATER = `SYNTHETIC relaxed ${suffix}`;
 /** A SYNTHETIC brand barcode, a leading zero kept (PRD-MER-007). */
 const BARCODE = `0${suffix}9`;
-
-async function signedIn(page: Page, code: string, user: EnrolledUser): Promise<Authenticator> {
-  const app = new Authenticator(Buffer.from(user.factorSecretHex, 'hex'));
-  await page.goto('/');
-  await signIn(page, { code, login: user.login, password: user.password, totp: await app.nextCode() });
-  await expect(page.getByLabel('Profile')).toHaveText(user.displayName);
-  return app;
-}
 
 async function openProducts(page: Page, tab: string): Promise<void> {
   await page

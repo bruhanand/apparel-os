@@ -10,6 +10,7 @@ import {
 } from '@apparel-os/schemas';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { NUMBERING, type NumberingInterface } from '../src/modules/numbering/index.js';
+import { RECEIVING, type ReceivingInterface } from '../src/modules/receiving/index.js';
 import { defineSyntheticBookingSeries } from './fixtures/booking-series.js';
 import { syntheticCode, syntheticName } from './fixtures/synthetic.js';
 import { syntheticPtFileName, syntheticPtWorkbook } from './fixtures/pt.js';
@@ -19,7 +20,9 @@ import { asUserIn, RECEIVER_REPORTER_AUTHORITY } from './support/damage.js';
 import { STORE_FILE_PATH, syntheticPdfUpload } from './support/opening-app.js';
 import { approved } from './support/organisation.js';
 import { ptApprovalWorld, type Person, type PtApprovalWorld } from './support/pt-approval.js';
+import { connect } from './support/postgres.js';
 import { STOCK_VIEW } from './support/receiving.js';
+import { heldUntilSecondWaits, waitUntilAnyWaitingForLock } from './support/transactions.js';
 
 // S2-F07-T02: the first version's acceptance through the whole application on real PostgreSQL (goods-in 12 test 19;
 // roadmap 2.2 "duplicates"; PRD-INT-002; code-house-rules 12.4). The whole flow of goods-in, as people make it through
@@ -64,7 +67,7 @@ beforeAll(async () => {
   await asUserIn(w.api.app, w.organisation, setup.preparer.id, (context) =>
     defineSyntheticBookingSeries(context, w.api.app.get<NumberingInterface>(NUMBERING)),
   );
-  season = w.lists.season.values.SPRING?.id ?? '';
+  season = present(w.lists.season.values.SPRING?.id, 'the SYNTHETIC season SPRING');
   approveReason = await writeSyntheticReason(w.database, 'approve');
   booker = await w.enrol('ACC-BOOKER', [
     { recordType: BOOKING_TYPE, action: 'view' },
@@ -123,26 +126,42 @@ afterAll(async () => {
   await (w as PtApprovalWorld | undefined)?.close();
 });
 
+/** A value the test needs, or the test fails naming it: never a placeholder (PRD-MOD-015). */
+function present<T>(value: T | undefined, what: string): T {
+  if (value === undefined) throw new Error(`The test needs ${what}, and it is missing`);
+  return value;
+}
+
 /**
  * Sends a write twice under one idempotency key, as a client that lost the first answer sends it again: the second
- * answer is the first, status and body (PRD-INT-002; code-house-rules 12.4 "Replay"). Answers the first answer's body.
+ * answer is the first, status and body, marked `Idempotent-Replayed` (PRD-INT-002; code-house-rules 12.4 "Replay").
+ * Answers the first answer's body.
  */
 async function twice(person: Person, path: string, body: unknown): Promise<Record<string, unknown>> {
   const key = uuidv7();
   const first = await w.post(person, path, body, key);
   expect(first.status, `${path}: ${JSON.stringify(first.body)}`).toBe(200);
-  expect(await w.post(person, path, body, key), `${path} sent again under its key`).toEqual(first);
+  expect(first.replayed, `${path}: the first answer`).toBe(false);
+  expect(await w.post(person, path, body, key), `${path} sent again under its key`).toEqual({
+    ...first,
+    replayed: true,
+  });
   return first.body;
+}
+
+/** A fresh authenticator code of the person, on the world's clock. */
+function freshCode(person: Person): string {
+  w.clock.advance(30);
+  return codeFor(present(person.user.factorSecret, 'the authenticator secret'), 0, w.clock.now());
 }
 
 /** A decision approving the request at the version given, with the reason and a fresh code, sent twice. */
 function approvedTwice(person: Person, requestId: string, versionId: string): Promise<Record<string, unknown>> {
-  w.clock.advance(30);
   return twice(person, `/api/access/approval-requests/${requestId}/decision`, {
     versionId,
     outcome: 'approve',
     reason: { kind: 'listed', reasonId: approveReason },
-    totpCode: codeFor(person.user.factorSecret ?? Buffer.alloc(0), 0, w.clock.now()),
+    totpCode: freshCode(person),
   });
 }
 
@@ -179,7 +198,7 @@ describe('every write of the first version sent twice (goods-in 12 test 19; road
     const budgetId = budget.budgetId as string;
     await approvedTwice(accounts, budget.requestId as string, budget.versionId as string);
     const checked = await read(owner, `/api/booking/open-to-buy-budgets/${budgetId}`, openToBuyBudgetReadSchema);
-    const budgetApproval = checked.budget.versions[0]?.request?.id ?? '';
+    const budgetApproval = present(checked.budget.versions[0]?.request?.id, "the budget version's approval");
     await approvedTwice(owner, budgetApproval, budget.versionId as string);
 
     // The booking: two pieces of one style and size at ₹500.00, its document attached, submitted and approved by the
@@ -236,7 +255,7 @@ describe('every write of the first version sent twice (goods-in 12 test 19; road
       goods: 'on-invoice',
       styleCode: style,
       colour: 'SYNTHETIC NAVY',
-      sizeValueId: w.fixture.sizes.values[0]?.id ?? null,
+      sizeValueId: present(w.fixture.sizes.values[0]?.id, "the world's first size"),
       skuId: null,
       description: null,
       invoiceQuantity: 2,
@@ -353,4 +372,118 @@ describe('every write of the first version sent twice (goods-in 12 test 19; road
       },
     ]);
   }, 600_000);
+});
+
+/** The body of an answer that must succeed. */
+function ok(call: { readonly status: number; readonly body: Record<string, unknown> }): Record<string, unknown> {
+  expect(call.status, JSON.stringify(call.body)).toBe(200);
+  return call.body;
+}
+
+const errorOf = (call: { readonly body: Record<string, unknown> }) =>
+  (call.body as { error?: { code: string; missing?: Record<string, string>[] } }).error;
+
+describe('a Start sent again once its batch is published (code-house-rules 12.4 "Replay"; code review 10 of stage 2)', () => {
+  it('PRD-INT-002 a PT file’s Start sent again under its key, after its batch is published and the GRN holds its PT, answers its first answer', async () => {
+    const style = syntheticCode('ACC-RESEND');
+    const { grnId } = await w.issuedGrn([{ style, sizeAt: 0, counted: 1 }]);
+    const bytes = await syntheticPtWorkbook({ rows: [w.ptRow(style, 0)], marker: 'ACC-RESEND' });
+    const handed = ok(
+      await w.post(w.people.ptMaker, '/api/files-imports/import-files', {
+        sourceSystem: 'manual-upload',
+        originalName: syntheticPtFileName('acc-resend'),
+        contentBase64: bytes.toString('base64'),
+      }),
+    );
+    const body = {
+      storedFileId: handed.storedFileId,
+      fileReceiptId: handed.receiptId,
+      kind: 'transaction',
+      target: 'merchandise.pt',
+      layoutVersionId: w.lists.layoutVersionId,
+      mappingVersionId: w.lists.mappingVersionId,
+      subject: { recordId: grnId },
+    };
+    const key = uuidv7();
+    const started = await w.post(w.people.ptMaker, '/api/files-imports/batches', body, key);
+    const batchId = String(ok(started).batchId);
+    ok(await w.post(w.people.ptMaker, `/api/files-imports/batches/${batchId}/validate`, {}));
+    const preview = await read(w.people.ptMaker, `/api/merchandise/pt/uploads/${batchId}/preview`, ptPreviewSchema);
+    const versionId = preview.batchVersionId;
+    ok(await w.post(w.people.ptMaker, `/api/files-imports/batches/${batchId}/submit`, { versionId }));
+    ok(await w.post(w.people.ptMaker, `/api/files-imports/batches/${batchId}/publish`, { versionId }));
+    // The GRN holds its PT now, so a new Start for it is refused (goods-in 5.1, 5.8)...
+    const fresh = await w.post(w.people.ptMaker, '/api/files-imports/batches', body);
+    expect(errorOf(fresh)?.code).toBe('files-imports.subject-refused');
+    // ...but the first Start, sent again under its key once its answer was lost, gets that answer (12.4 "Replay").
+    expect(await w.post(w.people.ptMaker, '/api/files-imports/batches', body, key)).toEqual({
+      ...started,
+      replayed: true,
+    });
+  });
+});
+
+describe('a GRN issued twice at once (goods-in 4.5, 10.3, 12 test 19; code review 10 of stage 2)', () => {
+  const path = (arrivalId: string) => `/api/receiving/arrivals/${arrivalId}/grn`;
+
+  it('PRD-INT-003 PRD-REC-008 two issues of one GRN at once under two keys: the second waits for the first, then is refused; one GRN', async () => {
+    const { receiver: person } = w.people;
+    const { arrivalId, versionToken } = await w.countedArrival([
+      { style: syntheticCode('ACC-RACE-KEYS'), sizeAt: 0, counted: 1 },
+    ]);
+    const receiving = w.api.app.get<ReceivingInterface>(RECEIVING);
+    // The first held under its locks, its GRN written, until the second is seen waiting (code-house-rules 10.3).
+    const { first, second } = await heldUntilSecondWaits(
+      w.database,
+      (work) => asUserIn(w.api.app, w.organisation, person.user.id, work),
+      (context) =>
+        receiving.issueGrn(
+          context,
+          { userId: person.user.id, roleAssignmentId: person.assignmentId },
+          arrivalId,
+          { versionToken },
+          uuidv7(),
+        ),
+      () => w.post(person, path(arrivalId), { versionToken }),
+    );
+    if (first.kind !== 'success') throw new Error(`The first issue was refused: ${first.refusal.code}`);
+    expect(second.status, JSON.stringify(second.body)).toBe(422);
+    expect(errorOf(second)).toMatchObject({
+      code: 'receiving.grn-issued',
+      missing: [{ recordId: first.answer.grnId }],
+    });
+    const arrival = (await read(person, `/api/receiving/arrivals/${arrivalId}`, arrivalReadSchema)).arrival;
+    expect(arrival.grn?.id).toBe(first.answer.grnId);
+  });
+
+  it('PRD-INT-002 PRD-INT-003 two issues of one GRN at once under one key: the second waits on the key, then answers the first answer; one GRN', async () => {
+    const { receiver: person } = w.people;
+    const { arrivalId, versionToken } = await w.countedArrival([
+      { style: syntheticCode('ACC-RACE-KEY'), sizeAt: 0, counted: 1 },
+    ]);
+    const key = uuidv7();
+    // A SYNTHETIC blocker holds the Arrival's row, as another command changing it would, so the first issue waits at
+    // its step 1 lock with its key already taken; the second, under the same key, is then seen waiting on that key
+    // (code-house-rules 10.3, 12.4 "Two at once"). The blocker writes nothing.
+    const blocker = await connect(w.database, 'superuser');
+    try {
+      await blocker.query('begin');
+      await blocker.query('select id from receiving.arrival where id = $1 for no key update', [arrivalId]);
+      const blockerPid = (await blocker.query<{ pid: number }>('select pg_catalog.pg_backend_pid() as pid')).rows[0]
+        ?.pid;
+      if (blockerPid === undefined) throw new Error('No backend pid');
+      const first = w.post(person, path(arrivalId), { versionToken }, key);
+      const firstPid = await waitUntilAnyWaitingForLock(w.database, [blockerPid]);
+      const second = w.post(person, path(arrivalId), { versionToken }, key);
+      await waitUntilAnyWaitingForLock(w.database, [blockerPid, firstPid]);
+      await blocker.query('rollback');
+      const [issued, again] = await Promise.all([first, second]);
+      const grnId = ok(issued).grnId;
+      expect(again).toEqual({ ...issued, replayed: true });
+      const arrival = (await read(person, `/api/receiving/arrivals/${arrivalId}`, arrivalReadSchema)).arrival;
+      expect(arrival.grn?.id).toBe(grnId);
+    } finally {
+      await blocker.end();
+    }
+  });
 });

@@ -1,7 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 import { Authenticator } from './support/authenticator';
-import { signIn } from './support/journey';
-import { readWorld, type EnrolledUser } from './support/world';
+import { signedIn } from './support/journey';
+import { readWorld } from './support/world';
+import { organisationDate } from './support/clock';
 
 // S2-F01-T03: the booking journey (goods-in 3.1 to 3.4, section 11; PRD-BKG-001 to PRD-BKG-004; POL-02.07; DEC-130,
 // DEC-132, DEC-136). Booking enters a booking by hand on Booking › Bookings: its header, one style's lines through the
@@ -26,19 +27,6 @@ const BOOKING_PDF = {
  */
 const COST_TOTAL = '₹16,800.00';
 const MRP_TOTAL = '₹34,664.00';
-
-/** The Organisation's business date so many days from today (Etc/UTC on the journeys' server). */
-function daysFromToday(days: number): string {
-  return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
-}
-
-async function signedIn(page: Page, code: string, user: EnrolledUser): Promise<Authenticator> {
-  const app = new Authenticator(Buffer.from(user.factorSecretHex, 'hex'));
-  await page.goto('/');
-  await signIn(page, { code, login: user.login, password: user.password, totp: await app.nextCode() });
-  await expect(page.getByLabel('Profile')).toHaveText(user.displayName);
-  return app;
-}
 
 async function openBookings(page: Page): Promise<void> {
   await page
@@ -67,8 +55,8 @@ test('PRD-BKG-001 PRD-BKG-004 POL-02.07 Booking records a booking with the size-
       await form.locator('#booking-site').selectOption({ label: world.siteOption });
       await form.locator('#booking-supplier').selectOption({ label: world.supplierOption });
       await form.locator('#booking-season').selectOption({ label: world.seasonOption });
-      await form.locator('#booking-window-from').fill(daysFromToday(10));
-      await form.locator('#booking-window-to').fill(daysFromToday(40));
+      await form.locator('#booking-window-from').fill(await organisationDate(10));
+      await form.locator('#booking-window-to').fill(await organisationDate(40));
       // The grid: colours down, sizes across, one cost and MRP for the style (goods-in 3.1).
       await form.locator('#booking-grid-style').fill('SYN-JOURNEY-ST-1');
       await form.locator('#booking-grid-cost').fill('500');
@@ -159,10 +147,10 @@ test('PRD-BKG-001 PRD-BKG-004 POL-02.07 Booking records a booking with the size-
     // S2-F01-T04: the lifecycle of the approved booking (goods-in 3.4 to 3.6; POL-05.01, POL-05.04, POL-05.07;
     // PRD-BKG-005, PRD-BKG-013; DEC-099).
     await test.step('Booking records it Issued, refused once for a date later than today (DEC-099)', async () => {
-      await booking.locator('#booking-issued-on').fill(daysFromToday(1));
+      await booking.locator('#booking-issued-on').fill(await organisationDate(1));
       await booking.getByRole('button', { name: 'Record as issued' }).click();
       await expect(booking.getByText('This date is later than today.').first()).toBeVisible();
-      await booking.locator('#booking-issued-on').fill(daysFromToday(0));
+      await booking.locator('#booking-issued-on').fill(await organisationDate(0));
       await expect(booking.getByRole('button', { name: 'Record as issued' })).toBeEnabled();
       await booking.getByRole('button', { name: 'Record as issued' }).click();
       // Issued, the booking asks for the supplier's confirmation next (POL-05.01).

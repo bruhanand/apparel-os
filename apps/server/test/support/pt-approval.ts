@@ -29,7 +29,12 @@ import {
   type RoutedOrganisation,
   type Worker,
 } from '../../src/kernel/index.js';
-import { ACCESS, ACCESS_ENVIRONMENT, type AccessInterface } from '../../src/modules/access/index.js';
+import {
+  ACCESS,
+  ACCESS_ENVIRONMENT,
+  type AccessInterface,
+  type DecisionInput,
+} from '../../src/modules/access/index.js';
 import {
   CONFIGURATION,
   CONFIGURATION_ENVIRONMENT,
@@ -105,6 +110,17 @@ export interface Person {
 export interface Call {
   readonly status: number;
   readonly body: Record<string, unknown>;
+  /** Whether the answer is the one kept under the request's key, `Idempotent-Replayed` (code-house-rules 12.4). */
+  readonly replayed: boolean;
+}
+
+/** A call's answer as the world reads it: status, body and whether it was replayed. */
+async function answerOf(response: Response): Promise<Call> {
+  return {
+    status: response.status,
+    body: (await response.json()) as Record<string, unknown>,
+    replayed: response.headers.get('idempotent-replayed') === 'true',
+  };
 }
 
 /** What a Booking approver holds: reading the Arrival, deciding its held lines and the approval panel. */
@@ -144,6 +160,36 @@ export const PT_APPROVER_AUTHORITY: readonly SyntheticAuthority[] = [
   { recordType: 'access.approval_reason', action: 'view' },
   ...STOCK_VIEW,
 ];
+
+/** A line the world counts (goods-in 4.3, 4.4). */
+export interface CountedLine {
+  readonly style: string;
+  readonly sizeAt: 0 | 1;
+  readonly counted: number;
+  readonly invoice?: number;
+  readonly extra?: 'received' | 'not-received';
+  readonly damaged?: number;
+  /** Unidentified goods, described, not sized, with no invoice quantity (goods-in 4.4, 4.9). */
+  readonly unidentified?: string;
+  /** Wrong goods, naming the product they are, with no invoice quantity (goods-in 4.4, 4.9). */
+  readonly wrongSkuId?: string;
+}
+
+/** Where and how the world receives (goods-in 4.2). */
+export interface ReceivedAt {
+  readonly brand?: 'fixture' | 'owned';
+  /** Another brand linked to the fixture's supplier, which a test made, in place of `brand`. */
+  readonly brandId?: string;
+  readonly world?: ReceivingFixture;
+  /** The unit the goods arrive at: the first Store's, or the warehouse (goods-in 12 test 17). */
+  readonly unit?: 'store' | 'warehouse';
+  /** The booking the goods come against, received by `by`, who may see it (goods-in 4.10; S2-F11-T02). */
+  readonly bookingId?: string;
+  /** When the goods arrived; an hour before the world's clock unless given. */
+  readonly arrivedAt?: Date;
+  /** Who receives, counts and issues; the world's receiver unless given. */
+  readonly by?: Person;
+}
 
 export interface PtApprovalWorld {
   readonly world: SyntheticWorld;
@@ -187,33 +233,16 @@ export interface PtApprovalWorld {
   get(person: Person, path: string): Promise<Call>;
   barcode(): string;
   ptRow(design: string, sizeAt: 0 | 1, values?: SyntheticPtRow, brandCode?: string): SyntheticPtRow;
+  /** An Arrival recorded, its invoice recorded and its lines counted, its GRN not issued; with its version token. */
+  /** An Arrival recorded, its invoice recorded and its lines counted, its GRN not issued; with its version token. */
+  countedArrival(
+    lines: readonly CountedLine[],
+    at?: ReceivedAt,
+  ): Promise<{ readonly arrivalId: string; readonly versionToken: string }>;
+  /** An Arrival counted as countedArrival does, its GRN issued. */
   issuedGrn(
-    lines: readonly {
-      readonly style: string;
-      readonly sizeAt: 0 | 1;
-      readonly counted: number;
-      readonly invoice?: number;
-      readonly extra?: 'received' | 'not-received';
-      readonly damaged?: number;
-      /** Unidentified goods, described, not sized, with no invoice quantity (goods-in 4.4, 4.9). */
-      readonly unidentified?: string;
-      /** Wrong goods, naming the product they are, with no invoice quantity (goods-in 4.4, 4.9). */
-      readonly wrongSkuId?: string;
-    }[],
-    at?: {
-      readonly brand?: 'fixture' | 'owned';
-      /** Another brand linked to the fixture's supplier, which a test made, in place of `brand`. */
-      readonly brandId?: string;
-      readonly world?: ReceivingFixture;
-      /** The unit the goods arrive at: the first Store's, or the warehouse (goods-in 12 test 17). */
-      readonly unit?: 'store' | 'warehouse';
-      /** The booking the goods come against, received by `by`, who may see it (goods-in 4.10; S2-F11-T02). */
-      readonly bookingId?: string;
-      /** When the goods arrived; an hour before the world's clock unless given. */
-      readonly arrivedAt?: Date;
-      /** Who receives, counts and issues; the world's receiver unless given. */
-      readonly by?: Person;
-    },
+    lines: readonly CountedLine[],
+    at?: ReceivedAt,
   ): Promise<{ readonly arrivalId: string; readonly grnId: string }>;
   /** Hands a file of the rows in, starts its batch for the GRN, validates, submits and publishes it. */
   submittedPt(grnId: string, rows: readonly SyntheticPtRow[]): Promise<{ revisionId: string; requestId: string }>;
@@ -221,6 +250,11 @@ export interface PtApprovalWorld {
   arrival(arrivalId: string): Promise<Arrival>;
   revision(revisionId: string, person?: Person, query?: string): Promise<PtRevisionRead>;
   decide(person: Person, requestId: string, versionId: string, outcome?: 'approve' | 'reject'): Promise<Call>;
+  /**
+   * The decision `decide` sends, with the reason in force and a fresh code, for a test that decides through `access`
+   * in a transaction of its own, such as the first of a forced race (code-house-rules 10.3).
+   */
+  decision(person: Person, requestId: string, versionId: string, outcome?: 'approve' | 'reject'): DecisionInput;
   /** The exceptions raised on the records or versions given, oldest first, as their owner role reads them. */
   exceptionsOn(recordIds: readonly string[]): Promise<readonly RaisedException[]>;
   /** Locks the book's period, as Accounts (books-and-posting 4.2; PRD-LED-009). */
@@ -477,19 +511,26 @@ export async function ptApprovalWorld(
       },
       body: JSON.stringify(body),
     });
-    return { status: response.status, body: (await response.json()) as Record<string, unknown> };
+    return answerOf(response);
   };
-  const get = async (person: Person, path: string): Promise<Call> => {
-    const response = await fetch(`${api.baseUrl}${path}`, { headers: { cookie: cookies.get(person.user.id) ?? '' } });
-    return { status: response.status, body: (await response.json()) as Record<string, unknown> };
-  };
-  const decide = (person: Person, requestId: string, versionId: string, outcome: 'approve' | 'reject' = 'approve') =>
-    post(person, `/api/access/approval-requests/${requestId}/decision`, {
-      versionId,
-      outcome,
-      reason: { kind: 'listed', reasonId: outcome === 'approve' ? approveReason : rejectReason },
-      totpCode: freshCode(person.user),
+  const get = async (person: Person, path: string): Promise<Call> =>
+    answerOf(await fetch(`${api.baseUrl}${path}`, { headers: { cookie: cookies.get(person.user.id) ?? '' } }));
+  const decision: PtApprovalWorld['decision'] = (person, requestId, versionId, outcome = 'approve') => ({
+    requestId,
+    versionId,
+    outcome,
+    reason: { kind: 'listed', reasonId: outcome === 'approve' ? approveReason : rejectReason },
+    totpCode: freshCode(person.user),
+  });
+  const decide = (person: Person, requestId: string, versionId: string, outcome: 'approve' | 'reject' = 'approve') => {
+    const { versionId: version, outcome: decided, reason, totpCode } = decision(person, requestId, versionId, outcome);
+    return post(person, `/api/access/approval-requests/${requestId}/decision`, {
+      versionId: version,
+      outcome: decided,
+      reason,
+      totpCode,
     });
+  };
 
   const receiver = await enrolled(`${label}-RECEIVER`, [
     ...RECEIVER_REPORTER_AUTHORITY,
@@ -632,7 +673,7 @@ export async function ptApprovalWorld(
     ...values,
   });
   let fileCount = 0;
-  const issuedGrn: PtApprovalWorld['issuedGrn'] = async (lines, at = {}) => {
+  const countedArrival: PtApprovalWorld['countedArrival'] = async (lines, at = {}) => {
     const place = at.world ?? fixture;
     const brandId = at.brandId ?? (at.brand === 'owned' ? ownedId : place.brand.id);
     const warehouse = at.unit === 'warehouse';
@@ -682,8 +723,11 @@ export async function ptApprovalWorld(
       expect(saved.status, JSON.stringify(saved.body)).toBe(200);
     }
     const read = await get(by, `/api/receiving/arrivals/${arrivalId}`);
-    const { versionToken } = arrivalReadSchema.parse(read.body).arrival;
-    const issued = await post(by, `/api/receiving/arrivals/${arrivalId}/grn`, { versionToken });
+    return { arrivalId, versionToken: arrivalReadSchema.parse(read.body).arrival.versionToken };
+  };
+  const issuedGrn: PtApprovalWorld['issuedGrn'] = async (lines, at = {}) => {
+    const { arrivalId, versionToken } = await countedArrival(lines, at);
+    const issued = await post(at.by ?? receiver, `/api/receiving/arrivals/${arrivalId}/grn`, { versionToken });
     expect(issued.status, JSON.stringify(issued.body)).toBe(200);
     return { arrivalId, grnId: (issued.body as { grnId: string }).grnId };
   };
@@ -767,6 +811,7 @@ export async function ptApprovalWorld(
     get,
     barcode,
     ptRow,
+    countedArrival,
     issuedGrn,
     submittedPt,
     grnPt,
@@ -777,6 +822,7 @@ export async function ptApprovalWorld(
     },
     revision,
     decide,
+    decision,
     lockPeriod: async () => {
       const locked = await setup.asPreparerDo((c, p) => setup.books.lockPeriod(c, p, periodId));
       if (locked.kind !== 'success') throw new Error(`lock refused: ${locked.refusal.code}`);

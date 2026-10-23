@@ -22,7 +22,7 @@ import {
   type JobRegistry,
   type RoutedOrganisation,
 } from '../src/kernel/index.js';
-import { approvalDecided, approvalRequested } from '../src/modules/access/index.js';
+import { ACCESS, approvalDecided, approvalRequested, type AccessInterface } from '../src/modules/access/index.js';
 // The access module's JobIdentities, as AccessJobIdentitiesModule provides it to the worker (RR-273).
 import { jobIdentities } from '../src/modules/access/commands/job-identities.js';
 import { INBOX_IDENTITY, inboxConsumers } from '../src/modules/inbox/index.js';
@@ -44,6 +44,7 @@ import {
   type SyntheticUser,
 } from './support/access.js';
 import { BOOKING_POLICY_CHECKS, bookingGateOpen } from './support/booking.js';
+import { asUserIn } from './support/damage.js';
 import { grantSynthetic, type SyntheticAuthority } from './support/grants.js';
 import { capturingLogger, eventually, writeSyntheticServiceIdentity } from './support/jobs.js';
 import { writeSyntheticMarking } from './support/marked-attributes.js';
@@ -53,6 +54,7 @@ import { decided, structureSetup, type StructureSetup } from './support/organisa
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { databaseUrl } from './support/postgres.js';
 import { receivingFixture, type ReceivingFixture } from './support/receiving.js';
+import { heldUntilSecondWaits } from './support/transactions.js';
 
 // S2-F01-T03: recording and approving a booking through the whole application, on real PostgreSQL (goods-in 3.1 to
 // 3.4, 10.3, 10.5, 12 test 4; PRD-BKG-001 to PRD-BKG-004, PRD-BKG-014, PRD-MER-005, PRD-MER-021; POL-05.01, POL-05.02,
@@ -807,18 +809,33 @@ describe('submitting and approving a booking (goods-in 3.3, 3.4, 10.3, 10.5; 12 
     expect([shown.version.totals.cost, shown.openToBuy]).toMatchObject([15_000_000, { remaining: 9_500_000 }]);
   });
 
-  it('PRD-INT-003 goods-in 10.3 two approvals at once never reserve the same remaining open-to-buy', async () => {
+  it('PRD-INT-003 goods-in 10.3 two approvals at once never reserve the same remaining open-to-buy: the second waits for the first under its lock', async () => {
     // Each 100 pieces at 500.00, 50,000.00, fits the 95,000.00 left alone; together they do not.
     const one = await submitted([line('SYN-ST-10', 100)]);
     const other = await submitted([line('SYN-ST-11', 100)]);
-    const answers = await Promise.all([
-      decide(owner, one.requestId, one.versionId),
-      decide(secondApprover, other.requestId, other.versionId),
-    ]);
-    expect(answers.map((each) => each.status).sort()).toEqual([200, 422]);
-    expect(answers.map((each) => errorOf(each)?.code).filter((code) => code !== undefined)).toEqual([
-      'booking.open-to-buy-short',
-    ]);
+    const access = api.app.get<AccessInterface>(ACCESS);
+    // The Owner's approval held under its locks, the budget's reservation written, until the second approver's is seen
+    // waiting (code-house-rules 10.3; goods-in 3.3, 10.3).
+    const { first, second } = await heldUntilSecondWaits(
+      database,
+      (work) => asUserIn(api.app, organisation, owner.id, work),
+      (context) =>
+        access.decide(
+          context,
+          { kind: 'user', id: owner.id },
+          {
+            requestId: one.requestId,
+            versionId: one.versionId,
+            outcome: 'approve',
+            reason: { kind: 'listed', reasonId: approveReason },
+            totpCode: freshCode(owner),
+          },
+        ),
+      () => decide(secondApprover, other.requestId, other.versionId),
+    );
+    expect(first.kind).toBe('success');
+    expect(second.status, JSON.stringify(second.body)).toBe(422);
+    expect(errorOf(second)?.code).toBe('booking.open-to-buy-short');
     const states = [
       (await readBooking(booker, one.bookingId)).state,
       (await readBooking(booker, other.bookingId)).state,

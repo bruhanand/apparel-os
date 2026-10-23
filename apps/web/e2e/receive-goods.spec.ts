@@ -1,8 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
-import { Authenticator } from './support/authenticator';
-import { organisationToday, signIn } from './support/journey';
-import { readWorld, type EnrolledUser, type ReceivingOptions } from './support/world';
-import { anHourAgo } from './support/clock';
+import { inbox, signedIn } from './support/journey';
+import { readWorld, type ReceivingOptions } from './support/world';
+import { anHourAgo, organisationDate } from './support/clock';
 
 // S2-F02-T02: the journeys of Receive Goods, one per persona that receives (code-house-rules 10.1; goods-in 4.1 to
 // 4.5, section 11; PRD-REC-001 to PRD-REC-008; DEC-133), each in a SYNTHETIC world of its own. A Warehouse receiver
@@ -44,23 +43,9 @@ function shown(date: string): string {
   return `${day} ${MONTHS[Number(month) - 1] ?? ''} ${year}`;
 }
 
-/** The Organisation's business date so many days from today (Etc/UTC on the journeys' server). */
-function daysFromToday(days: number): string {
-  return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
-}
-
-async function signedIn(page: Page, code: string, user: EnrolledUser): Promise<void> {
-  const app = new Authenticator(Buffer.from(user.factorSecretHex, 'hex'));
-  await page.goto('/');
-  await signIn(page, { code, login: user.login, password: user.password, totp: await app.nextCode() });
-  await expect(page.getByLabel('Profile')).toHaveText(user.displayName);
-}
-
-/** Opens the inbox of the world's Site. */
+/** Opens the inbox of the world's Site, on its Pending view. */
 async function inboxOf(page: Page, options: ReceivingOptions): Promise<void> {
-  await page.getByRole('navigation', { name: 'Main menu' }).getByRole('link', { name: 'Inbox', exact: true }).click();
-  await expect(page.getByRole('heading', { level: 1, name: 'Inbox' })).toBeVisible();
-  await page.getByLabel('Site').selectOption({ label: options.site });
+  await inbox(page, options.site);
   await expect(page.getByRole('tab', { name: 'Pending' })).toHaveAttribute('aria-selected', 'true');
 }
 
@@ -74,7 +59,7 @@ async function recordArrival(page: Page, options: ReceivingOptions, lorryReceipt
   await form.locator('#receive-brand').selectOption({ label: options.brand });
   await form.getByLabel(/^Transporter/).fill('SYNTHETIC Transporter');
   await form.getByLabel(/^Lorry receipt number/).fill(lorryReceipt);
-  await form.getByLabel(/^Lorry receipt date/).fill(organisationToday());
+  await form.getByLabel(/^Lorry receipt date/).fill(await organisationDate());
   await form.getByLabel(/^Cartons/).fill('2');
   await form.getByLabel(/^Arrived/).fill(await anHourAgo());
   await page.getByRole('dialog').getByRole('button', { name: 'Record the Arrival' }).click();
@@ -85,11 +70,11 @@ async function recordArrival(page: Page, options: ReceivingOptions, lorryReceipt
 async function recordInvoice(page: Page, number: string): Promise<void> {
   const invoice = page.getByRole('form', { name: 'Add the invoice' });
   await invoice.getByLabel(/^Invoice number/).fill(number);
-  await invoice.getByLabel(/^Invoice date/).fill(organisationToday());
+  await invoice.getByLabel(/^Invoice date/).fill(await organisationDate());
   await invoice.getByLabel('Invoice file').setInputFiles(INVOICE_PDF);
   await invoice.getByRole('button', { name: 'Add the invoice' }).click();
   await expect(invoice.getByRole('status').filter({ hasText: 'Invoice recorded.' })).toBeVisible();
-  await expect(page.getByText(`Invoice ${number} of ${shown(organisationToday())}`)).toBeVisible();
+  await expect(page.getByText(`Invoice ${number} of ${shown(await organisationDate())}`)).toBeVisible();
 }
 
 test('PRD-REC-001 PRD-REC-008 DEC-133 a Warehouse receiver records an Arrival, its invoice first, is refused a GRN whose shortage has no owner at the Site, and issues it with no approval', async ({
@@ -165,7 +150,7 @@ test('PRD-REC-001 PRD-REC-008 DEC-133 a Warehouse receiver records an Arrival, i
     await expect(
       grn.getByRole('table', { name: 'GRN lines' }).getByRole('row').filter({ hasText: 'SYN-STYLE-JOURNEY' }),
     ).toContainText('5');
-    await expect(grn.getByText(`SYN-INV-JOURNEY of ${shown(organisationToday())}`)).toBeVisible();
+    await expect(grn.getByText(`SYN-INV-JOURNEY of ${shown(await organisationDate())}`)).toBeVisible();
     await expect(grn.getByText('Quantities only: the GRN holds no price, tax or value.')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Issue the GRN' })).toHaveCount(0);
     await readsAtSpeed();
@@ -185,7 +170,7 @@ test('PRD-REC-004 PRD-MER-011 a Store’s staff counts a batch-tracked product a
   test.setTimeout(180_000);
   const world = readWorld().receiving;
   const options = world.storeOptions;
-  const expiry = daysFromToday(90);
+  const expiry = await organisationDate(90);
   await signedIn(page, world.organisationCode, world.storeStaff);
 
   await test.step('the Store’s staff records the Arrival at their Store’s unit, its invoice first', async () => {

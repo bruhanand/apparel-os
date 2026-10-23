@@ -1,8 +1,7 @@
-import { expect, test, type Page } from '@playwright/test';
-import { Authenticator } from './support/authenticator';
-import { organisationToday, signIn } from './support/journey';
-import { readWorld, type EnrolledUser } from './support/world';
-import { anHourAgo } from './support/clock';
+import { expect, test } from '@playwright/test';
+import { inbox, signedIn } from './support/journey';
+import { readWorld } from './support/world';
+import { anHourAgo, organisationDate } from './support/clock';
 
 // S2-F02-T04: the receive-against-booking journey (goods-in 3.7, 4.1, 4.10, section 11; PRD-REC-002, PRD-BKG-007,
 // PRD-BKG-008, POL-05.08; code-house-rules 10.1). Warehouse (P-WHS) chooses "Receive against booking", is refused once
@@ -18,21 +17,6 @@ const INVOICE_PDF = {
   mimeType: 'application/pdf',
   buffer: Buffer.from('%PDF-1.4\n% SYNTHETIC invoice\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n', 'latin1'),
 };
-
-async function signedIn(page: Page, code: string, user: EnrolledUser): Promise<Authenticator> {
-  const app = new Authenticator(Buffer.from(user.factorSecretHex, 'hex'));
-  await page.goto('/');
-  await signIn(page, { code, login: user.login, password: user.password, totp: await app.nextCode() });
-  await expect(page.getByLabel('Profile')).toHaveText(user.displayName);
-  return app;
-}
-
-/** The world's Site's inbox, from the main menu (goods-in 4.1). */
-async function inbox(page: Page, site: string): Promise<void> {
-  await page.getByRole('navigation', { name: 'Main menu' }).getByRole('link', { name: 'Inbox', exact: true }).click();
-  await expect(page.getByRole('heading', { level: 1, name: 'Inbox' })).toBeVisible();
-  await page.getByLabel('Site').selectOption({ label: site });
-}
 
 test('PRD-REC-002 PRD-BKG-007 POL-05.08 Warehouse receives against a booking; excess goes to Booking, who proposes it, and the Owner approves it', async ({
   browser,
@@ -60,7 +44,7 @@ test('PRD-REC-002 PRD-BKG-007 POL-05.08 Warehouse receives against a booking; ex
       await form.locator('#receive-brand').selectOption({ label: options.brand });
       await form.getByLabel(/^Transporter/).fill('SYNTHETIC Transporter');
       await form.getByLabel(/^Lorry receipt number/).fill('SYN-LR-RAB');
-      await form.getByLabel(/^Lorry receipt date/).fill(organisationToday());
+      await form.getByLabel(/^Lorry receipt date/).fill(await organisationDate());
       await form.getByLabel(/^Cartons/).fill('1');
       await form.getByLabel(/^Arrived/).fill(await anHourAgo());
       await receiver.getByRole('dialog').getByRole('button', { name: 'Record the Arrival' }).click();
@@ -77,7 +61,7 @@ test('PRD-REC-002 PRD-BKG-007 POL-05.08 Warehouse receives against a booking; ex
     await test.step('Warehouse counts three pieces where two are booked and issues the GRN; the line goes to review', async () => {
       const invoice = receiver.getByRole('form', { name: 'Add the invoice' });
       await invoice.getByLabel(/^Invoice number/).fill('SYN-INV-RAB');
-      await invoice.getByLabel(/^Invoice date/).fill(organisationToday());
+      await invoice.getByLabel(/^Invoice date/).fill(await organisationDate());
       await invoice.getByLabel('Invoice file').setInputFiles(INVOICE_PDF);
       await invoice.getByRole('button', { name: 'Add the invoice' }).click();
       await expect(invoice.getByRole('status').filter({ hasText: 'Invoice recorded.' })).toBeVisible();

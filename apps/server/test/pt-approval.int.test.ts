@@ -3,6 +3,7 @@ import { arrivalReadSchema, trialBalanceSchema, type PtRevisionRead } from '@app
 import ExcelJS from 'exceljs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { LOCK_STEP } from '../src/kernel/index.js';
+import { ACCESS, type AccessInterface } from '../src/modules/access/index.js';
 import { SKU_CODE_KIND, SKU_CODE_SCOPE_KEY, skuOn } from '../src/modules/merchandise/catalogue/index.js';
 import { PT_KIND, PT_SCOPE_KEY } from '../src/modules/merchandise/pt/domain/kinds.js';
 import { NUMBERING, type NumberingInterface } from '../src/modules/numbering/index.js';
@@ -13,6 +14,7 @@ import { STORE_FILE_PATH, syntheticPdfUpload } from './support/opening-app.js';
 import { decided } from './support/organisation.js';
 import { connect } from './support/postgres.js';
 import { ptApprovalWorld, type PtApprovalWorld } from './support/pt-approval.js';
+import { heldUntilSecondWaits } from './support/transactions.js';
 
 // S2-F06-T01: a PT approved or rejected, through the whole application on real PostgreSQL (goods-in 6.1 to 6.6, 10.3,
 // 12 tests 11, 12 and the approval part of 13; PRD-REC-015, PRD-REC-017, PRD-REC-018, PRD-MER-013, PRD-PTW-010,
@@ -539,18 +541,25 @@ describe('rejecting a PT (goods-in 6.3 "Reject")', () => {
 });
 
 describe('approvals at once (12 test 12)', () => {
-  it('PRD-ACP-002 PRD-INT-005 two approvals of one PT at once: one succeeds, the other is refused, and the pieces are covered once', async () => {
+  it('PRD-ACP-002 PRD-INT-005 two approvals of one PT at once: the second waits for the first under its locks, then is refused, and the pieces are covered once', async () => {
     const { style, revisionId, requestId } = await ownedPt('PTA-RACE', [{ sizeAt: 0, counted: 2 }], () => [
       { QTY: 2, NAG: 2 },
     ]);
     const before = await trialBalance();
-    const answers = await Promise.all([
-      w.decide(w.people.ptApprover, requestId, revisionId),
-      w.decide(w.people.secondApprover, requestId, revisionId),
-    ]);
-    expect(answers.map((each) => each.status).sort()).toEqual([200, 422]);
-    const loser = answers.find((each) => each.status === 422);
-    expect(errorOf(loser ?? { body: {} })?.code).toBe('access.approval-not-open');
+    const approver = w.people.ptApprover;
+    const access = w.api.app.get<AccessInterface>(ACCESS);
+    // The first approval held under its locks, its posting written, until the second is seen waiting (code-house-rules
+    // 10.3): the request's row and the PT's at step 1 (access-and-approvals 9.5; goods-in 6.3).
+    const { first, second } = await heldUntilSecondWaits(
+      w.database,
+      (work) => asUserIn(w.api.app, w.organisation, approver.user.id, work),
+      (context) =>
+        access.decide(context, { kind: 'user', id: approver.user.id }, w.decision(approver, requestId, revisionId)),
+      () => w.decide(w.people.secondApprover, requestId, revisionId),
+    );
+    expect(first.kind).toBe('success');
+    expect(second.status, JSON.stringify(second.body)).toBe(422);
+    expect(errorOf(second)?.code).toBe('access.approval-not-open');
     expect(moved(before, await trialBalance(), w.accounts.INV, 'debitPaise')).toBe(189_000);
     const stock = await stockOfStyle(style);
     expect([...stock.covered.values()].reduce((sum, each) => sum + each.covered, 0)).toBe(2);

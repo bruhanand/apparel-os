@@ -1,20 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
-import { Authenticator } from './support/authenticator';
-import { signIn } from './support/journey';
-import { readWorld, type EnrolledUser } from './support/world';
+import { signedIn } from './support/journey';
+import { readWorld } from './support/world';
 
 // RR-556, for S2-F02-T02: the season and size attributes journey (structure-and-masters 4.2 "As built", 8; goods-in
 // GI-3; POL-02.07). An Admin (P-ADM) marks a SYNTHETIC list attribute as the Organisation's size list on Setup ›
 // Vocabularies, Attributes; their own approval is refused, with its reason on screen; the Owner (P-OWN) approves it
 // from My work, and the Attributes tab then shows it in force. Every value is SYNTHETIC.
-
-async function signedIn(page: Page, code: string, user: EnrolledUser): Promise<Authenticator> {
-  const app = new Authenticator(Buffer.from(user.factorSecretHex, 'hex'));
-  await page.goto('/');
-  await signIn(page, { code, login: user.login, password: user.password, totp: await app.nextCode() });
-  await expect(page.getByLabel('Profile')).toHaveText(user.displayName);
-  return app;
-}
 
 async function openAttributes(page: Page): Promise<void> {
   await page

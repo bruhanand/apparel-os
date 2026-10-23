@@ -1,10 +1,10 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 import { Authenticator, decodeBase32 } from './authenticator';
-import type { FirstSignInUser } from './world';
+import type { EnrolledUser, FirstSignInUser } from './world';
 
-// Steps the journeys share (S1-F01-T15, S1-F01-T20): signing in, the first sign-in with its enrolment and password
-// change (access-and-approvals 3.1, 3.2), the same done with the keyboard only (PRD-SEC-016, PRD-UXP-001), and the
-// date fields' value. Every value is SYNTHETIC.
+// Steps the journeys share (S1-F01-T15, S1-F01-T20): signing in, an enrolled user's sign-in, the first sign-in with its
+// enrolment and password change (access-and-approvals 3.1, 3.2), the same done with the keyboard only (PRD-SEC-016,
+// PRD-UXP-001), and the Site's inbox. Dates and times are in clock.ts. Every value is SYNTHETIC.
 
 export interface SignInFields {
   readonly code: string;
@@ -107,9 +107,26 @@ export async function firstSignIn(
 }
 
 /**
- * Today under the journeys' Organisation timezone, as a date field takes it. The server of the journeys gives every
- * Organisation the synthetic timezone Etc/UTC (apps/server/test/browser/serve.ts), so this is the UTC date.
+ * Signs an enrolled user in with a fresh code of their authenticator app, and waits for their name in the top bar;
+ * gives the app back, for the codes their decisions ask (access-and-approvals 3.1).
  */
-export function organisationToday(): string {
-  return new Date().toISOString().slice(0, 10);
+export async function signedIn(page: Page, code: string, user: EnrolledUser): Promise<Authenticator> {
+  const app = new Authenticator(Buffer.from(user.factorSecretHex, 'hex'));
+  await page.goto('/');
+  await signIn(page, { code, login: user.login, password: user.password, totp: await app.nextCode() });
+  await expect(page.getByLabel('Profile')).toHaveText(user.displayName);
+  return app;
+}
+
+/** The Site's inbox, from the main menu (goods-in 4.1). */
+export async function inbox(page: Page, site: string): Promise<void> {
+  await page.getByRole('navigation', { name: 'Main menu' }).getByRole('link', { name: 'Inbox', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Inbox' })).toBeVisible();
+  await page.getByLabel('Site').selectOption({ label: site });
+}
+
+/** A value the journey needs, or the journey fails naming it: never a placeholder in its place (PRD-MOD-015). */
+export function present<T>(value: T | null | undefined, what: string): T {
+  if (value === null || value === undefined) throw new Error(`The journey needs ${what}, and it is missing`);
+  return value;
 }

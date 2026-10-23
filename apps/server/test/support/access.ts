@@ -66,7 +66,7 @@ import { connect, databaseUrl } from './postgres.js';
 /** The SYNTHETIC own origin of the test application (AOS_PUBLIC_ORIGIN). */
 export const SYNTHETIC_ORIGIN = 'http://synthetic.localhost';
 /** A SYNTHETIC timezone for the test Organisations, standing in for configuration's setting (RR-231). */
-const SYNTHETIC_TIMEZONE = 'Etc/UTC';
+export const SYNTHETIC_TIMEZONE = 'Etc/UTC';
 const SYNTHETIC_TIMEZONE_VERSION = '01900000-0000-7000-8000-00000000c0de';
 
 /** The timezone source of the test application: one SYNTHETIC timezone for every Organisation. */

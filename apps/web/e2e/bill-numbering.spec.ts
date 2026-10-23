@@ -1,7 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
-import { Authenticator } from './support/authenticator';
-import { signIn } from './support/journey';
-import { readWorld, type EnrolledUser } from './support/world';
+import { signedIn } from './support/journey';
+import { readWorld } from './support/world';
 
 // S1-F12-T03: the financial year and the bill-number format on Setup › Devices, tills and bill series (offline-counter
 // 4.1, 4.3b; numbering-and-audit 3.3, 3.5; PRD-ACS-006, PRD-POS-020, PRD-UXP-003, POL-10.07; DEC-116, DEC-117). The
@@ -10,14 +9,6 @@ import { readWorld, type EnrolledUser } from './support/world';
 // both from My work, reading what each sets on the approval panel; the device then shows its Open series for the year.
 // Last, the Admin withdraws a year of their own still awaiting its decision (RR-489; product owner, 12 Oct 2026).
 // Every year, format and person is SYNTHETIC.
-
-async function signedIn(page: Page, code: string, user: EnrolledUser): Promise<Authenticator> {
-  const app = new Authenticator(Buffer.from(user.factorSecretHex, 'hex'));
-  await page.goto('/');
-  await signIn(page, { code, login: user.login, password: user.password, totp: await app.nextCode() });
-  await expect(page.getByLabel('Profile')).toHaveText(user.displayName);
-  return app;
-}
 
 async function toDevices(page: Page): Promise<void> {
   await page

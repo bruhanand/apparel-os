@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { Authenticator } from './support/authenticator';
-import { signIn } from './support/journey';
-import { readWorld, type EnrolledUser } from './support/world';
+import { signedIn } from './support/journey';
+import { readWorld } from './support/world';
 
 // S1-F02-T01: the organisation structure journey (structure-and-masters 2.3, 3.3, 3.7, 8; module-map 4.11, 6.2 flow A;
 // PRD-ORG-003, PRD-ORG-021, PRD-ACS-006). An Admin prepares a Site and a Store at it on Setup › Organisation
@@ -12,14 +12,6 @@ import { readWorld, type EnrolledUser } from './support/world';
 const suffix = String(Date.now()).slice(-6);
 const SITE = { code: `SYN-SITE-${suffix}`, name: 'SYNTHETIC Journey Site' };
 const STORE = { code: `SYN-STORE-${suffix}`, name: 'SYNTHETIC Journey Store' };
-
-async function signedIn(page: Page, code: string, user: EnrolledUser): Promise<Authenticator> {
-  const app = new Authenticator(Buffer.from(user.factorSecretHex, 'hex'));
-  await page.goto('/');
-  await signIn(page, { code, login: user.login, password: user.password, totp: await app.nextCode() });
-  await expect(page.getByLabel('Profile')).toHaveText(user.displayName);
-  return app;
-}
 
 async function openStructure(page: Page, tab: string): Promise<void> {
   await page

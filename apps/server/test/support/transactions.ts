@@ -66,6 +66,37 @@ export async function waitUntilAnyWaitingForLock(database: string, except: reado
   }
 }
 
+/**
+ * Forces a race (code-house-rules 10.3): runs `first` in the transaction `inTransaction` opens, and holds that
+ * transaction open once `first` has taken its locks and written, until `second`, started only then, is seen waiting for
+ * a lock; then lets the first commit and answers both. Where the lock both should take is missing, the second never
+ * waits and this fails, so a race test built on it fails when the lock is taken out.
+ */
+export async function heldUntilSecondWaits<First, Second>(
+  database: string,
+  inTransaction: <T>(work: (context: TransactionContext) => Promise<T>) => Promise<T>,
+  first: (context: TransactionContext) => Promise<First>,
+  second: () => Promise<Second>,
+): Promise<{ readonly first: First; readonly second: Second }> {
+  const held = gate();
+  const release = gate();
+  let pid: number | undefined;
+  const firstDone = inTransaction(async (context) => {
+    const answer = await first(context);
+    pid = await backendPid(context);
+    held.open();
+    await release.wait;
+    return answer;
+  });
+  // A first command that fails before it holds answers with its failure.
+  await Promise.race([held.wait, firstDone]);
+  if (pid === undefined) throw new Error('The first command ended without holding its transaction');
+  const secondDone = second();
+  const waited = waitUntilAnyWaitingForLock(database, [pid]).finally(release.open);
+  const [, firstAnswer, secondAnswer] = await Promise.all([waited, firstDone, secondDone]);
+  return { first: firstAnswer, second: secondAnswer };
+}
+
 /** Ends a backend from another session, as a lost connection would, and waits until PostgreSQL shows it gone. */
 export async function terminateBackend(database: string, pid: number): Promise<void> {
   const operator = await connect(database, 'superuser');
