@@ -51,7 +51,10 @@ test('PRD-BKG-005 PRD-EXC-011 Booking reads the booking status, exports it and o
   });
 
   await test.step('Booking opens the booking from the report', async () => {
-    await page.getByRole('table', { name: 'Booking status' }).getByRole('button', { name: world.bookingNumber }).click();
+    await page
+      .getByRole('table', { name: 'Booking status' })
+      .getByRole('button', { name: world.bookingNumber })
+      .click();
     await expect(page.getByRole('heading', { level: 2, name: `Booking ${world.bookingNumber}` })).toBeVisible();
     await page.getByRole('button', { name: 'Back to the bookings' }).click();
     await expect(page.getByRole('table', { name: 'Booking status' })).toBeVisible();
