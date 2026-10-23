@@ -211,7 +211,7 @@ function DamageWhileScanning({ read }: { read: ScanInRead }) {
   const waiting = read.products.filter((each) => each.waiting > 0);
   if (!mayReport || waiting.length === 0) return null;
   return (
-    <div className="flex flex-col gap-2">
+    <Card title="scan.damage">
       <label htmlFor="scan-damage-product" className="flex flex-col gap-1 text-body-sm font-semibold">
         {t('scan.damage.product')}
         <select
@@ -233,7 +233,7 @@ function DamageWhileScanning({ read }: { read: ScanInRead }) {
       {skuId !== '' && (
         <ReportDamage key={skuId} goods={{ kind: 'product', skuId }} locationId={read.receivingLocationId} />
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -304,20 +304,18 @@ export function ScanIn({ grnId, onBack }: { grnId: string; onBack: () => void })
               <UnavailableState missing={scanIn.blocking} />
             ) : (
               <>
-                <Card title="scan.scan">
-                  {scanIn.state === 'complete' ? (
-                    <Banner tone="success" role="status" message="scan.complete" />
-                  ) : (
+                {scanIn.state === 'scanning' && (
+                  <Card title="scan.scan">
                     <ScanForm read={scanIn} />
-                  )}
-                </Card>
+                  </Card>
+                )}
                 <Card title="scan.progress">
                   <Progress read={scanIn} />
-                  <p className="m-0 text-caption text-text-2">{t('scan.stop.intro')}</p>
+                  {scanIn.state === 'scanning' && (
+                    <p className="m-0 text-caption text-text-2">{t('scan.stop.intro')}</p>
+                  )}
                 </Card>
-                <Card title="scan.damage">
-                  <DamageWhileScanning read={scanIn} />
-                </Card>
+                <DamageWhileScanning read={scanIn} />
               </>
             )}
             <Card title="scan.scans">

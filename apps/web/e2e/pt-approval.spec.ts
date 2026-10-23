@@ -186,7 +186,7 @@ test('PRD-REC-017 PRD-REC-018 POL-02.07 PRD-REC-021 a PT submitted for approval 
           await expect(maker.getByText('1 piece left to scan in')).toBeVisible();
         }
       }
-      await expect(maker.getByText('Every piece is scanned in or under a damage report.').first()).toBeVisible();
+      await expect(maker.getByText('Every piece is scanned in or under a damage report.')).toBeVisible();
       const scans = maker.getByRole('list', { name: 'Scans' });
       await expect(scans.getByRole('listitem')).toHaveCount(3);
       await expect(scans.getByRole('listitem').last()).toContainText('refused: on no product of this PT');
