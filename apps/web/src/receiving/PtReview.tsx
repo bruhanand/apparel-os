@@ -10,7 +10,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { missingText } from '../components/UnavailableState';
 import { EvidenceList } from '../files/Evidence';
 import { formatDateTime } from '../history/format';
-import { t } from '../messages/catalogue';
+import { t, type MessageId } from '../messages/catalogue';
 import { formatDate, formatList, formatQuantity } from '../setup/format';
 import { GrantedButton, ListRead, SubmissionBanner, useGranted } from '../setup/parts';
 import { stateIdOf } from '../setup/states';
@@ -139,8 +139,11 @@ function PostAgain({ revisionId }: { revisionId: string }) {
   );
 }
 
-/** A PT revision as its approver reviews it (goods-in 6.2). Read with view on PTs, within the reader's scope. */
-export function PtReview({ revisionId }: { revisionId: string }) {
+/**
+ * A PT revision as its approver reviews it (goods-in 6.2). Read with view on PTs, within the reader's scope. Its content
+ * is titled as what approving it makes, or, for a reversal's panel, as the PT reversed (goods-in 6.7).
+ */
+export function PtReview({ revisionId, title = 'pt.review.title' }: { revisionId: string; title?: MessageId }) {
   const timeZone = useTimeZone();
   const [after, setAfter] = useState<number | undefined>(undefined);
   const query = useQuery({
@@ -180,7 +183,7 @@ export function PtReview({ revisionId }: { revisionId: string }) {
             {read.failure !== undefined && <PostingFailure failure={read.failure} />}
             <ArrivalDocuments arrivalId={read.grn.arrivalId} />
             <LinkedBookings bookings={read.bookings} />
-            <PtContent content={read} title="pt.review.title" onPage={setAfter} />
+            <PtContent content={read} title={title} onPage={setAfter} />
           </div>
         );
       }}

@@ -33,7 +33,13 @@ import {
   type SignedInUser,
 } from '../../../access/index.js';
 import { PT_FIELD_CLASSES } from '../domain/kinds.js';
-import { BUSINESS_DATE_NOT_SET, grnNotFound, recordItem, revisionNotFound } from '../domain/refusals.js';
+import {
+  BUSINESS_DATE_NOT_SET,
+  grnNotFound,
+  recordItem,
+  reversalNotFound,
+  revisionNotFound,
+} from '../domain/refusals.js';
 import type { PtInterface } from '../pt.js';
 import { PT } from '../tokens.js';
 
@@ -373,6 +379,104 @@ export class PtController {
       correlationId: user.correlationId,
       actor: { kind: 'actor' as const, actorId: user.userId },
     };
+  }
+
+  /**
+   * Proposes the reversal of an Official PT before the scan-in, with a reason (goods-in 6.4, 6.7; DEC-137, PRD-REC-019;
+   * S2-F09-T01): edit on the PT with its facts, as a withdrawal, held at step 0; a different person approves it in My
+   * work through `access`'s Decide.
+   */
+  @ApiRoute(routes.proposePtReversal)
+  async proposePtReversal(
+    @RouteInput() input: RouteInputOf<typeof routes.proposePtReversal>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    const route = routes.proposePtReversal;
+    const { revisionId } = input.params;
+    const authoriseIn = async (context: TransactionContext) => {
+      const found = await this.pt.revisionFacts(context, revisionId);
+      if (found === undefined) return { kind: 'refused' as const, refusal: revisionNotFound(revisionId) };
+      const authorised = await this.access.authorise(context, {
+        actorId: user.userId,
+        action: 'edit',
+        recordType: PT_TYPE,
+        facts: found.facts,
+      });
+      if (authorised.kind === 'refused') return authorised;
+      return { kind: 'allowed' as const, roleAssignmentId: authorised.roleAssignmentId, facts: found.facts };
+    };
+    // A replay answers as any request failing the same checks would: a record not found stays not found (12.3, 12.4).
+    const authoriseReplay: ReplayAuthorisation = async (context) => {
+      const authorised = await authoriseIn(context);
+      if (authorised.kind === 'allowed') return { kind: 'allowed' };
+      return { kind: 'refused', refusal: replayRefusal(authorised.refusal) };
+    };
+    const answer = await this.helper.run(
+      {
+        commandName: 'merchandise.propose-pt-reversal',
+        organisation: user.organisation,
+        correlationId: user.correlationId,
+        actor: { kind: 'actor', actorId: user.userId },
+      },
+      {
+        key: input.idempotencyKey,
+        content: requestContentOf(route, input),
+        authoriseReplay,
+        work: async (context): Promise<CommandOutcome<JsonValue>> => {
+          const authorised = await authoriseIn(context);
+          if (authorised.kind === 'refused') {
+            return { kind: 'refusal', refusal: authorised.refusal, causedBySecret: false };
+          }
+          // Step 0: the actor and the assignment relied on, rechecked under the locks with the same facts (8.2).
+          const held = await this.access.holdAuthority(
+            context,
+            { kind: 'user', id: user.userId },
+            authorised.roleAssignmentId,
+            { action: 'edit', recordType: PT_TYPE, facts: authorised.facts },
+          );
+          if (held !== undefined) return { kind: 'refusal', refusal: held, causedBySecret: false };
+          const outcome = await this.pt.proposeReversal(
+            context,
+            { userId: user.userId, roleAssignmentId: authorised.roleAssignmentId },
+            revisionId,
+            input.body,
+          );
+          if (outcome.kind === 'success') return { kind: 'success', answer: { ...outcome.answer }, shows: 'nothing' };
+          return { kind: 'refusal', refusal: outcome.refusal, causedBySecret: false };
+        },
+      },
+    );
+    return commandAnswer(answer);
+  }
+
+  /** A PT's reversal as its approver reads it in My work (goods-in 6.7, section 11; S2-F09-T01). */
+  @ApiRoute(routes.readPtReversal)
+  async readPtReversal(
+    @RouteInput() input: RouteInputOf<typeof routes.readPtReversal>,
+    @SignedIn() user: SignedInUser,
+  ) {
+    const { reversalId } = input.params;
+    const notFound = reversalNotFound(reversalId);
+    return this.read(user, 'merchandise.read-pt-reversal', async (context) => {
+      const facts = await this.pt.reversalFacts(context, reversalId);
+      if (facts === undefined) refuse(notFound);
+      const authorised = await this.access.authorise(context, {
+        actorId: user.userId,
+        action: 'view',
+        recordType: PT_TYPE,
+        facts,
+      });
+      if (authorised.kind === 'refused') refuse(authorised.refusal);
+      const request = (await this.access.approvalRequestsOf(context, [reversalId])).get(reversalId);
+      const read = await this.pt.reversal(context, reversalId, request);
+      if (read === undefined) refuse(notFound);
+      const names = (await this.access.partyNames(context, read.people, [])).users;
+      return {
+        asOf: context.startedAt.toISOString(),
+        ...read.view,
+        people: [...names].map(([userId, name]) => ({ userId, name })),
+      };
+    });
   }
 
   /** The classes of a PT the reader's assignment does not grant, masked in what they read (access-and-approvals 6). */

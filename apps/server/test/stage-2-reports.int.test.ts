@@ -795,8 +795,8 @@ describe('the exports (goods-in 9.1)', () => {
     const header = rows[2] ?? [];
     expect(header).toContain('Cost (₹)');
     const floorRow = rows.slice(3).find((each) => each[header.indexOf('Available')] === '1');
-    expect(floorRow?.[header.indexOf('MRP value (₹)')]).toBe('1999');
-    expect(floorRow?.[header.indexOf('Cost (₹)')]).toBe('945');
+    expect(floorRow?.[header.indexOf('MRP value (₹)')]).toBe('1999.00');
+    expect(floorRow?.[header.indexOf('Cost (₹)')]).toBe('945.00');
     expect(floorRow?.[header.indexOf('Counted on GRN')]).toBe(G4.arrival.grn?.number);
     const history = accessHistoryPageSchema.parse(
       ok(await w.get(auditor, '/api/access/history/sensitive-access-records')),

@@ -186,7 +186,8 @@ export abstract class Corrections extends SaleItems {
    * it moved and was not reversed (`exceeds-source`). Built for the two the golden scenarios need: a receipt count made
    * in error (G13), whose units leave custody and whose value comes off at the value its cost added; and a count loss
    * (G3, 8.4), whose units come back at the cost the loss took; and a condition change made in error, such as a
-   * mistaken damage confirmation, whose units return to the condition they left (13.15; PRD-STK-017; S2-F08-T01). A
+   * mistaken damage confirmation, whose units return to the condition they left (13.15; PRD-STK-017; S2-F08-T01); and a
+   * cost established made in error, value only, as a PT's reversal before the scan-in sends it (13.21; S2-F09-T01). A
    * reversal of any other kind is not built yet (`invalid-item`, naming the kind).
    */
   protected reversal(item: ItemOf<'reversal'>): ItemValue {
@@ -203,6 +204,7 @@ export abstract class Corrections extends SaleItems {
       refuse('invalid-item', item.lineId, [{ kind: 'receipt-origin', receiptOriginId: goods.receiptOriginId }]);
     }
     const ofSku = { ...item, goods };
+    if (reversed.kind === 'cost-established') return this.reverseCostEstablished(ofSku, reversed);
     if (reversed.kind === 'receipt-count') return this.reverseInflow(ofSku, reversed);
     if (reversed.kind === 'count-difference' && reversed.direction === 'out') return this.reverseLoss(ofSku, reversed);
     refuse('invalid-item', item.lineId, [{ kind: 'reversal-of', movementKind: reversed.kind }]);
@@ -419,6 +421,109 @@ export abstract class Corrections extends SaleItems {
     origin.lastStateMovementId = movement.id;
     origin.stateChanged = true;
     return { kind: 'known', amountPaise: added };
+  }
+
+  /**
+   * A cost established made in error (7.5, 13.4, 13.21; PRD-LED-018, PRD-REC-019; goods-in 6.7; S2-F09-T01), as a PT's
+   * reversal before the scan-in sends it: value only, so its units stay where they are. The item names the origin and
+   * every unit of it, all in custody at the place named (`invalid-item` otherwise: not built for units elsewhere); the
+   * cost must be the origin's latest change of value, which no reversal or later cost adjustment followed
+   * (`exceeds-source`). Owned units leave their pool at the value the cost added, not the formula cost: under moving
+   * average from the pool, only a part that would take it below zero a separate `variance`; under FIFO from the origin's
+   * own layer and those that came from it in the pool, any rest being OPEN (SL-27, `rule-not-set`). Units the
+   * Organisation does not own recorded their cost only, so nothing leaves a pool and nothing posts (7.2). Either way the
+   * origin's cost is Unknown again (7.6), so a corrected PT establishes it anew. Posts
+   * `stock.cost-established-reversal` (books-and-posting 7.2); valued for its approval at the cost it takes off.
+   */
+  private reverseCostEstablished(item: SkuReversal, reversed: SaleState): ItemValue {
+    const originId = item.goods.receiptOriginId;
+    if (originId === undefined || item.goods.pieceCodes !== undefined) {
+      refuse('invalid-item', item.lineId, [{ kind: 'receipt-origin' }]);
+    }
+    const origin = this.origin(item.lineId, originId);
+    if (origin.skuId !== item.goods.skuId) {
+      refuse('invalid-item', item.lineId, [{ kind: 'receipt-origin', receiptOriginId: origin.id }]);
+    }
+    if (!origin.valueKnown || origin.lastStateMovementId !== reversed.id) {
+      refuse('exceeds-source', item.lineId, [{ kind: 'movement', movementId: reversed.id }]);
+    }
+    const rows = this.originBalances(origin);
+    const units = rows.reduce((sum, row) => sum + row.quantity, 0);
+    const elsewhere = rows.some(
+      (row) =>
+        row.heldAs !== 'custody' ||
+        row.siteId !== item.at.siteId ||
+        row.businessUnitId !== item.at.businessUnitId ||
+        row.locationId !== item.at.locationId,
+    );
+    if (elsewhere) refuse('invalid-item', item.lineId, [{ kind: 'not-built', item: 'cost-reversal-elsewhere' }]);
+    if (item.goods.quantity !== units) refuse('invalid-item', item.lineId, [{ kind: 'quantity' }]);
+    const movement = this.newMovement('reversal', item.lineId, item.at.siteId, item.at.businessUnitId, [
+      item.goods.skuId,
+    ]);
+    movement.reversesMovementId = reversed.id;
+    const { pRate, established } = this.knownCost(origin);
+    const unknownAgain = () => {
+      origin.valueKnown = false;
+      origin.pRatePaise = null;
+      origin.establishedValuePaise = null;
+      origin.lastStateMovementId = movement.id;
+      origin.stateChanged = true;
+    };
+    if (!this.valued(origin)) {
+      // Recorded only, for goods the Organisation does not own (7.2): the approval is on that cost (13.11).
+      unknownAgain();
+      return { kind: 'known', amountPaise: paise(pRate * units) };
+    }
+    const entered = this.valuing.entered.get(origin.id) ?? 0;
+    if (entered !== units) throw new Error('A reversal of a cost established whose units are not all in the pool');
+    const unit = this.unit(item.at.siteId, item.at.businessUnitId);
+    const pool = this.poolOf(item.lineId, unit, item.goods.skuId);
+    if (units > pool.quantity) throw new Error('A pool holds fewer valued units than its goods');
+    const kind = 'stock.cost-established-reversal';
+    const before = { quantity: pool.quantity, value: pool.value };
+    let off = established;
+    const layers: ValuationLayerEntry[] = [];
+    if (pool.formula === 'fifo') {
+      // The inflow's own layer and those that came from it in this pool, oldest first (7.4, 7.5).
+      const ordered = oldestFirst(pool);
+      const own = new Set(pool.layers.filter((layer) => layer.receiptOriginId === origin.id).map((layer) => layer.id));
+      for (const layer of ordered) if (layer.fromLayerId !== null && own.has(layer.fromLayerId)) own.add(layer.id);
+      const walked = takeInOrder(
+        ordered.filter((layer) => own.has(layer.id)),
+        units,
+        (layer) => ({ quantity: layer.quantityLeft, value: layer.valueLeft }),
+      );
+      if (walked === 'not-whole') refuse('rule-not-set', item.lineId, SL('SL-2'));
+      // What is still to come off other layers is OPEN (SL-27).
+      if (walked === 'short' || sumPaise(walked.map((part) => part.value)) !== established) {
+        refuse('rule-not-set', item.lineId, SL('SL-27'));
+      }
+      for (const part of walked) {
+        part.from.quantityLeft -= part.quantity;
+        part.from.valueLeft = paise(part.from.valueLeft - part.value);
+        part.from.changed = true;
+        layers.push({ layerId: part.from.id, pieceId: null, quantity: part.quantity, value: negate(part.value) });
+      }
+    } else {
+      // Only the part that would take the pool below zero is a separate variance (PRD-LED-018).
+      off = paise(Math.min(established, pool.value));
+    }
+    pool.quantity -= units;
+    pool.value = paise(pool.value - off);
+    pool.changed = true;
+    this.poolValuation(
+      movement,
+      origin,
+      pool,
+      { quantity: -units, value: negate(off), before },
+      { eventKind: kind, component: 'to-pool' },
+      layers,
+    );
+    this.postShare(movement, unit.businessUnitId, kind, 'to-pool', off);
+    this.postShare(movement, unit.businessUnitId, kind, 'variance', established - off);
+    unknownAgain();
+    return { kind: 'known', amountPaise: established };
   }
 
   /**

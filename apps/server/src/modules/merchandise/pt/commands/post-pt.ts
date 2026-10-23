@@ -48,6 +48,8 @@ import {
   type RevisionStanding,
 } from '../queries/approval.js';
 import { heldLinesOpen } from '../queries/plan.js';
+import { reversedOriginsOf } from '../queries/reversal.js';
+import { goodsAfterReversals } from '../domain/reversed.js';
 import { auditScopeOf, scopeColumnsOf } from './scope-columns.js';
 
 // Posting a PT revision's approval (goods-in 6.3, 6.6, 10.3; module-map 6.2 flow C; stock-ledger 10.2 to 10.4, 13.1,
@@ -303,8 +305,14 @@ async function recheckUnderLocks(
   const place = { siteId: grn.facts.siteId, businessUnitId: grn.facts.businessUnitId };
   const gate = await ptGateRefusal(context, services.configuration, place);
   if (gate !== undefined) return refusalOutcome(gate);
-  const basis = await services.receiving.ptBasis(context, standing.grnId);
-  if (basis === undefined) return refusalOutcome(grnNotFound(standing.grnId));
+  const grnBasis = await services.receiving.ptBasis(context, standing.grnId);
+  if (grnBasis === undefined) return refusalOutcome(grnNotFound(standing.grnId));
+  // After a reversal the pieces are on the reversed PT's origins, which the identity step takes (goods-in 6.7).
+  const after = goodsAfterReversals(grnBasis, await reversedOriginsOf(context, revision.ptId));
+  if (after.kind === 'changed') {
+    return refused('refused', 'merchandise.pt-grn-changed', [styleSize(after.styleCode, after.size)]);
+  }
+  const basis = after.basis;
   const open = heldLinesOpen(basis);
   if (open !== undefined) return refusalOutcome(open);
   const content = await revisionContent(context, revisionId);

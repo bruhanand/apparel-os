@@ -94,7 +94,15 @@ export async function exportStockSearch(
           throw error;
         }
         if (read.search.next !== null) return { kind: 'refusal', refusal: EXPORT_TOO_LARGE, causedBySecret: false };
-        await recordCostExport(deps.audit, context, exporter, EXPORT_RECORD, read.costFacts);
+        const refused = await recordCostExport(
+          deps.access,
+          deps.audit,
+          context,
+          exporter,
+          EXPORT_RECORD,
+          read.costShown,
+        );
+        if (refused !== undefined) return { kind: 'refusal', refusal: refused, causedBySecret: false };
         const bytes = await workbookOf(stockSearchSheets(read.search, date.timezone));
         const answer: StockSearchExport = {
           fileName: `stock-search-${date.date}.xlsx`,

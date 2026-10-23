@@ -3,7 +3,7 @@ import type { MissingItem } from '@apparel-os/schemas';
 import type { PtRowDetail } from '../domain/detail.js';
 
 // Drizzle definitions of `merchandise` · PT's tables (code-house-rules 3.4). They mirror the reviewed migration
-// (migrations/organisation/0106, 0109) and never create or change a table; an integration test compares each with the
+// (migrations/organisation/0106, 0109, 0113) and never create or change a table; an integration test compares each with the
 // migrated database. Never exported from the unit's index.ts, so no other unit can name these tables
 // (code-house-rules 2). The part shares the schema `merchandise` with the catalogue; each table belongs to one part.
 
@@ -235,5 +235,40 @@ export const ptHoldRelease = merchandise.table('pt_hold_release', {
   grnLineId: uuid('grn_line_id').notNull(),
   holdId: uuid('hold_id').notNull(),
   event: text('event').$type<'pt-route' | 'approved-decision'>().notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/**
+ * A reversal of an Official revision before the scan-in, proposed with a reason (goods-in 6.4, 6.7; DEC-137,
+ * PRD-REC-019; S2-F09-T01): its approval request names it as the version decided.
+ */
+export const ptReversal = merchandise.table('pt_reversal', {
+  id: uuid('id').primaryKey(),
+  ptRevisionId: uuid('pt_revision_id').notNull(),
+  ptApprovalId: uuid('pt_approval_id').notNull(),
+  ...facts(),
+  reason: text('reason').notNull(),
+  proposedByUserId: uuid('proposed_by_user_id').notNull(),
+  roleAssignmentId: uuid('role_assignment_id').notNull(),
+  proposedAt: at('proposed_at').notNull(),
+  businessDate: day('business_date').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/**
+ * A reversal's decision (goods-in 6.7): approved, with the use of the decision its stock and money effects carry, or
+ * rejected, with nothing changed.
+ */
+export const ptReversalDecision = merchandise.table('pt_reversal_decision', {
+  id: uuid('id').primaryKey(),
+  ptReversalId: uuid('pt_reversal_id').notNull(),
+  ...facts(),
+  outcome: text('outcome').$type<'Approved' | 'Rejected'>().notNull(),
+  approvalDecisionId: uuid('approval_decision_id').notNull(),
+  approvalUseId: uuid('approval_use_id'),
+  decidedByUserId: uuid('decided_by_user_id').notNull(),
+  roleAssignmentId: uuid('role_assignment_id').notNull(),
+  decidedAt: at('decided_at').notNull(),
+  businessDate: day('business_date').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });

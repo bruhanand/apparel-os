@@ -39,13 +39,19 @@ import { cursorOf, ledgerFilters, namedPlace, namesProducts, type NamedPlace } f
 
 /**
  * What the reader may see of each result, by its facts (access-and-approvals 7.1 step 3; 5.3): whether its grants of
- * view on every stock record type the search reads cover it, and whether the one on the receipt origins grants the cost
- * field class too (access-and-approvals 6). Answered by the caller, through `access`; a refusal of the search as a whole
- * is thrown by the caller.
+ * view on every stock record type the search reads cover it; and the assignment whose view on the receipt origins grants
+ * the cost field class too, or none (access-and-approvals 6). Answered by the caller, through `access`; a refusal of the
+ * search as a whole is thrown by the caller.
  */
 export interface Authority {
   visible(facts: readonly RecordFacts[]): Promise<readonly boolean[]>;
-  cost(facts: readonly RecordFacts[]): Promise<readonly boolean[]>;
+  cost(facts: readonly RecordFacts[]): Promise<readonly (string | undefined)[]>;
+}
+
+/** A result whose cost is shown: its facts and the assignment that grants the cost field class there. */
+export interface CostShown {
+  readonly facts: RecordFacts;
+  readonly roleAssignmentId: string;
 }
 
 export interface SearchRequest {
@@ -126,10 +132,10 @@ const quantities = (row: Position | UnitPosition) => ({
   held: row.held,
 });
 
-/** A page of stock search, and the facts of each result whose cost it shows, for an export's access record. */
+/** A page of stock search, and each result whose cost it shows, for an export's access record. */
 export interface SearchAnswer {
   readonly search: StockSearch;
-  readonly costFacts: readonly RecordFacts[];
+  readonly costShown: readonly CostShown[];
 }
 
 /**
@@ -168,7 +174,7 @@ export async function searchStock(
 
   // Cost only where the reader's assignment grants the cost field class; otherwise masked (access-and-approvals 6).
   const costShown = await authority.cost(shownFacts);
-  const costed = shown.filter((_, at) => costShown[at] === true);
+  const costed = shown.filter((_, at) => costShown[at] !== undefined);
   const costs = new Map(
     (
       await gateway.read(
@@ -179,7 +185,7 @@ export async function searchStock(
     ).answer.map((each) => [each.balanceId, each.cost]),
   );
   const costOf = (position: Position, at: number): StockCost => {
-    if (costShown[at] !== true) return { kind: 'masked' };
+    if (costShown[at] === undefined) return { kind: 'masked' };
     let total = paise(0);
     for (const balanceId of position.balanceIds) {
       const cost = costs.get(balanceId);
@@ -261,5 +267,11 @@ export async function searchStock(
     },
     next: read.answer.next === null ? null : cursorOf(read.answer.next),
   };
-  return { search, costFacts: shownFacts.filter((_, at) => costShown[at] === true) };
+  return {
+    search,
+    costShown: shownFacts.flatMap((facts, at) => {
+      const roleAssignmentId = costShown[at];
+      return roleAssignmentId === undefined ? [] : [{ facts, roleAssignmentId }];
+    }),
+  };
 }

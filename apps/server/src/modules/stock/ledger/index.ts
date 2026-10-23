@@ -43,13 +43,20 @@ export type { ExpectedQuantity } from './domain/working.js';
 export type { LedgerBooks, LedgerPlaces, LedgerSkus, SkuFacts, UnitFacts } from './ports.js';
 export { booksNotComposed, catalogueSkus, organisationPlaces } from './ports.js';
 export type { CallerRegistration, RegisteredRecordType } from './registry.js';
-export { custody, originOfSourceLine, pieceByCode, receiptCountOfLine, sourceOfLine } from './queries/reads.js';
-export type { CustodyQuery, CustodyRow, LineSource, SourceLineOrigin } from './queries/reads.js';
+export {
+  coverageAndCostOfSource,
+  custody,
+  originOfSourceLine,
+  pieceByCode,
+  receiptCountOfLine,
+  sourceOfLine,
+} from './queries/reads.js';
+export type { CustodyQuery, CustodyRow, LineSource, SourceCoverageAndCost, SourceLineOrigin } from './queries/reads.js';
 export { availability } from './queries/availability.js';
 export { ptRevisionGoods } from './queries/pt-goods.js';
 export type { PtRevisionGoods } from './queries/pt-goods.js';
 export type { AvailabilityRow } from './queries/availability.js';
-// The read models of stock search, served through the kernel's read-model gateway (stock-ledger 13.21; goods-in 9.4;
+// The read models of stock search, served through the kernel's read-model gateway (stock-ledger 13.22; goods-in 9.4;
 // S2-F11-T01): their declarations, which a reader names, and the served list the composition root hands the gateway.
 export {
   STOCK_BALANCE_COSTS,
@@ -58,7 +65,7 @@ export {
   stockLedgerReadModels,
 } from './queries/positions.js';
 export type { Position, PositionFilters, PositionKey, UnitPosition, UnitPositionsQuery } from './queries/positions.js';
-// The read model of the stage 2 stock report (stock-ledger 13.22; goods-in 9.5; S2-F11-T02).
+// The read model of the stage 2 stock report (stock-ledger 13.23; goods-in 9.5; S2-F11-T02).
 export { STOCK_HOLDINGS, stockReportReadModels } from './queries/holdings.js';
 export type { Holding, HoldingKey, HoldingOwner } from './queries/holdings.js';
 export { rebuildAndCompare } from './queries/rebuild.js';

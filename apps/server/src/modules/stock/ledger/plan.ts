@@ -900,12 +900,13 @@ export async function planRequest(
             refusalOf('invalid-item', item.lineId, [{ kind: 'movement', movementId: item.movementId }]),
           );
         }
-        // Built for a receipt count made in error and a count loss (13.4 "Reversal"; S1-F10-T06), and a condition
-        // change made in error (13.15; S2-F08-T01).
+        // Built for a receipt count made in error and a count loss (13.4 "Reversal"; S1-F10-T06), a condition change
+        // made in error (13.15; S2-F08-T01), and a cost established made in error (13.21; S2-F09-T01).
         if (
           reversed.kind !== 'receipt-count' &&
           reversed.kind !== 'count-difference' &&
-          reversed.kind !== 'condition-change'
+          reversed.kind !== 'condition-change' &&
+          reversed.kind !== 'cost-established'
         ) {
           throw new StockRefused(
             refusalOf('invalid-item', item.lineId, [{ kind: 'reversal-of', movementKind: reversed.kind }]),
@@ -917,6 +918,25 @@ export async function planRequest(
           .select({ originId: movementLeg.receiptOriginId })
           .from(movementLeg)
           .where(eq(movementLeg.movementId, reversed.id));
+        if (reversed.kind === 'cost-established') {
+          // Value only (7.5; 13.21): the origin the item names, of a SKU, is locked exclusively with every balance it
+          // has and the pools its units are in, as a cost item's; its units entering pools are counted (7.7). It posts
+          // the reversal kind at the place named, where every unit of the origin is, while its cost is known.
+          if (item.goods.skuId === null || item.goods.receiptOriginId === undefined) {
+            throw new StockRefused(refusalOf('invalid-item', item.lineId, [{ kind: 'receipt-origin' }]));
+          }
+          const origin = await costOrigin(item.lineId, item.goods.receiptOriginId, false);
+          enteredOrigins.add(item.goods.receiptOriginId);
+          const [state] = await context.tx
+            .select({ valueKnown: receiptOriginState.valueKnown })
+            .from(receiptOriginState)
+            .where(eq(receiptOriginState.receiptOriginId, item.goods.receiptOriginId));
+          if (state?.valueKnown === true) {
+            await poolOf(item.lineId, unit, origin.sku);
+            probe(item.lineId, 'stock.cost-established-reversal', unit, origin.sku);
+          }
+          return;
+        }
         if (reversed.kind === 'condition-change') {
           // Damaged goods never become good but by this linked reversal, under the approval the request carries,
           // whose decision `access` verifies under the lock (PRD-DMG-010, PRD-STK-017; 13.15). Its origins are only

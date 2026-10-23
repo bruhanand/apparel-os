@@ -1,4 +1,4 @@
-import { PT_APPROVAL, PT_TYPE, type AttributeMark, type FieldClass } from '@apparel-os/schemas';
+import { PT_APPROVAL, PT_REVERSAL_APPROVAL, PT_TYPE, type AttributeMark, type FieldClass } from '@apparel-os/schemas';
 import type { ApprovalRule } from '../../../access/index.js';
 import type { NumberedKind } from '../../../numbering/index.js';
 import type { CallerRegistration } from '../../../stock/ledger/index.js';
@@ -47,6 +47,19 @@ export const ptApprovalRules: readonly ApprovalRule[] = [
     decisionEvidenceClasses: [],
     synthetic: false,
   },
+  // A PT's reversal before the scan-in (goods-in 6.4, 6.7; DEC-137, PRD-REC-019; S2-F09-T01): independent, so none of
+  // its preparers, its proposer, approves it, within a limit on the cost it reverses, the PT's total proposed acquisition
+  // cost (domain-model 5: a change to approved cost). Its effect is commands/reverse-pt.ts.
+  {
+    actionType: PT_REVERSAL_APPROVAL,
+    module: PT_MODULE,
+    recordType: PT_TYPE,
+    independent: true,
+    value: 'cost',
+    freeTextReason: false,
+    decisionEvidenceClasses: [],
+    synthetic: false,
+  },
 ];
 
 /**
@@ -70,11 +83,16 @@ export const PT_SCOPE_KEY = 'organisation';
  * for (books-and-posting 4.3, 10 step 5; code review 7 of stage 2).
  */
 export const PT_STOCK_SOURCE_TYPE = 'pt_revision';
+/** The record type a PT reversal's stock effects name as their source (stock-ledger 13.2, 13.21; goods-in 6.7). */
+export const PT_REVERSAL_SOURCE_TYPE = 'pt_reversal';
+/** A PT revision's reversal, as its records and history name it (goods-in 6.7). */
+export const PT_REVERSAL_TYPE = 'merchandise.pt_reversal';
 
 /**
  * `merchandise` · PT as a stock caller (stock-ledger 13.2, 13.14): a revision's approval ends the holds the PT route
  * ends for goods Booking took in, gives the GRN's pieces their SKUs by the identity step, and records the coverage and
- * establishes the cost of the pieces it covers (goods-in 6.3 steps 4 and 5; S2-F06-T01); no import kind.
+ * establishes the cost of the pieces it covers (goods-in 6.3 steps 4 and 5; S2-F06-T01); its reversal removes them
+ * (goods-in 6.7; S2-F09-T01); no import kind.
  */
 export const ptStockCaller: CallerRegistration = {
   module: PT_MODULE,
@@ -85,6 +103,9 @@ export const ptStockCaller: CallerRegistration = {
       itemKinds: ['release-hold', 'identity-resolved', 'record-coverage', 'cost-established'],
       importKinds: ['none'],
     },
+    // A reversal before the scan-in removes the coverage the approval recorded and reverses the cost it established
+    // (goods-in 6.7; stock-ledger 13.21; S2-F09-T01).
+    { recordType: PT_REVERSAL_SOURCE_TYPE, itemKinds: ['remove-coverage', 'reversal'], importKinds: ['none'] },
   ],
 };
 

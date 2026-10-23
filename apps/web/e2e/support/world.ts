@@ -332,6 +332,8 @@ export interface SyntheticWorld {
     readonly options: ReceivingOptions;
     readonly styleCode: string;
     readonly file: string;
+    /** The corrected file uploaded once the PT is reversed, at another P RATE (S2-F09-T01). */
+    readonly correctedFile: string;
     /** The barcodes of the file's two pieces, and the Store's floor they are scanned in to (S2-F07-T01). */
     readonly barcodes: readonly string[];
     readonly floor: string;

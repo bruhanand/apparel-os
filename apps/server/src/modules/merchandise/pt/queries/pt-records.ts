@@ -2,7 +2,7 @@ import { desc, eq } from 'drizzle-orm';
 import type { TransactionContext } from '../../../../kernel/index.js';
 import type { RecordFacts } from '../../../access/index.js';
 import type { AuditScope } from '../../../audit/index.js';
-import { pt, ptRevision, ptRevisionWithdrawal } from '../db/schema.js';
+import { pt, ptReversal, ptReversalDecision, ptRevision, ptRevisionWithdrawal } from '../db/schema.js';
 
 // The rows of a PT that its commands and reads find it by (goods-in 5.7; S2-F04-T02), as the reader may see them under
 // row-level security (code-house-rules 6.2): the PT of a GRN, a revision with its PT's facts, and the PT's version
@@ -30,8 +30,9 @@ export async function revisionFacts(
 
 /**
  * The PT's version token (code-house-rules 12.7): the newest row its state is built from, its newest revision, or that
- * revision's withdrawal once withdrawn. A new revision comes only once the one before it is withdrawn or ended, so no
- * other row is newer.
+ * revision's withdrawal once withdrawn, or its latest reversal, or that reversal's decision once decided (goods-in 6.7;
+ * S2-F09-T01). A new revision comes only once the one before it is withdrawn or ended, and a new reversal only once
+ * the one before it is decided, so no other row is newer.
  */
 export async function ptVersionToken(context: TransactionContext, ptId: string): Promise<string | undefined> {
   const [newest] = await context.tx
@@ -45,5 +46,14 @@ export async function ptVersionToken(context: TransactionContext, ptId: string):
     .select({ id: ptRevisionWithdrawal.id })
     .from(ptRevisionWithdrawal)
     .where(eq(ptRevisionWithdrawal.ptRevisionId, newest.id));
-  return withdrawn?.id ?? newest.id;
+  if (withdrawn !== undefined) return withdrawn.id;
+  const [reversal] = await context.tx
+    .select({ id: ptReversal.id, decisionId: ptReversalDecision.id })
+    .from(ptReversal)
+    .leftJoin(ptReversalDecision, eq(ptReversalDecision.ptReversalId, ptReversal.id))
+    .where(eq(ptReversal.ptRevisionId, newest.id))
+    .orderBy(desc(ptReversal.proposedAt), desc(ptReversal.id))
+    .limit(1);
+  if (reversal !== undefined) return reversal.decisionId ?? reversal.id;
+  return newest.id;
 }

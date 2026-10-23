@@ -14,9 +14,9 @@ import {
   type PositionProduct,
 } from './positions.js';
 
-// The ledger's read model of the stage 2 stock report (goods-in 9.3, 9.5; stock-ledger 13.6, 13.21, 13.22;
+// The ledger's read model of the stage 2 stock report (goods-in 9.3, 9.5; stock-ledger 13.6, 13.22, 13.23;
 // module-map section 3 rule 5; PRD-PRO-001, PRD-ORG-014, PRD-ORG-015; S2-F11-T02), served through the kernel's
-// read-model gateway: the stock in custody of products at locations, as stock search reads it (13.21), split further
+// read-model gateway: the stock in custody of products at locations, as stock search reads it (13.22), split further
 // by condition and by owner, with the quantities of stock search apart (one arithmetic, `quantitiesOf`), each
 // balance's pieces and receipt origin for the MRP and the cost its caller reads, and the source of each origin's first
 // receipt count, the record its pieces were counted on (the drill-down). Takes no lock and runs in the reader's

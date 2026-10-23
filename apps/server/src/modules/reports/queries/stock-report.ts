@@ -7,7 +7,7 @@ import { PT_ORIGIN_MRP } from '../../merchandise/pt/index.js';
 import { STOCK_BALANCE_COSTS, STOCK_HOLDINGS, type Holding, type HoldingKey } from '../../stock/ledger/index.js';
 import { holdingCursorOf, mrpValueOf } from '../domain/stock-report.js';
 import { namesOf } from './names.js';
-import { productOf, type Authority } from './stock-search.js';
+import { productOf, type Authority, type CostShown } from './stock-search.js';
 
 // The stock report (goods-in 9.2, 9.3, 9.5; PRD-PRO-001, PRD-ORG-014, PRD-ORG-015, PRD-ACS-008, PRD-MOD-015;
 // S2-F11-T02): stock by product, size, location, condition and owner, with the quantities of stock search apart, the
@@ -24,10 +24,10 @@ export interface StockReportRequest {
   readonly today: string;
 }
 
-/** A page of the stock report, and the facts of each row whose cost it shows, for an export's access record. */
+/** A page of the stock report, and each row whose cost it shows, for an export's access record. */
 export interface StockReportAnswer {
   readonly report: StockReport;
-  readonly costFacts: readonly RecordFacts[];
+  readonly costShown: readonly CostShown[];
 }
 
 const factsOf = (holding: Holding): RecordFacts => ({
@@ -58,17 +58,18 @@ export async function stockReport(
 
   // Cost only where the reader's assignment grants the cost field class; otherwise masked (access-and-approvals 6).
   const costShown = await authority.cost(shownFacts);
+  const costed = (at: number) => costShown[at] !== undefined;
   const costs = new Map(
     (
       await gateway.read(
         context,
         STOCK_BALANCE_COSTS,
-        shown.filter((_, at) => costShown[at] === true).flatMap((each) => each.balances.map((b) => b.balanceId)),
+        shown.filter((_, at) => costed(at)).flatMap((each) => each.balances.map((b) => b.balanceId)),
       )
     ).answer.map((each) => [each.balanceId, each.cost]),
   );
   const costOf = (holding: Holding, at: number): StockCost => {
-    if (costShown[at] !== true) return { kind: 'masked' };
+    if (!costed(at)) return { kind: 'masked' };
     let total = paise(0);
     for (const balance of holding.balances) {
       const cost = costs.get(balance.balanceId);
@@ -157,6 +158,9 @@ export async function stockReport(
       names,
       next: read.answer.next === null ? null : holdingCursorOf(read.answer.next),
     },
-    costFacts: shownFacts.filter((_, at) => costShown[at] === true),
+    costShown: shownFacts.flatMap((facts, at) => {
+      const roleAssignmentId = costShown[at];
+      return roleAssignmentId === undefined ? [] : [{ facts, roleAssignmentId }];
+    }),
   };
 }

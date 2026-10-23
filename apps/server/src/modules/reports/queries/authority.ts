@@ -63,8 +63,8 @@ export function readerAuthority(access: AccessInterface, context: TransactionCon
         },
         facts,
       );
-      if (checked.kind === 'refused') return facts.map(() => false);
-      return checked.each.map((each) => each.kind === 'allowed');
+      if (checked.kind === 'refused') return facts.map(() => undefined);
+      return checked.each.map((each) => (each.kind === 'allowed' ? each.roleAssignmentId : undefined));
     },
   };
 }

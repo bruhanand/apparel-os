@@ -1,5 +1,5 @@
 import { uuidv7 } from '@apparel-os/domain';
-import { PT_APPROVAL, PT_TYPE } from '@apparel-os/schemas';
+import { PT_APPROVAL, PT_REVERSAL_APPROVAL, PT_TYPE } from '@apparel-os/schemas';
 import { CommandDefect, type LockTarget, type TransactionContext } from '../../../../kernel/index.js';
 import type { DocumentEffect, EffectDecider, EffectOutcome, ModuleApprovals } from '../../../access/index.js';
 import type { ExceptionsInterface } from '../../../exceptions/index.js';
@@ -13,6 +13,7 @@ import { draftRefusal, postApproval, type PostingServices } from './post-pt.js';
 import { ptLock } from './pt-lock.js';
 import { raisePostingRefused } from './raise-posting-refused.js';
 import { requestPosting } from './request-posting.js';
+import { ptReversalEffect } from './reverse-pt.js';
 import { auditScopeOf, scopeColumnsOf } from './scope-columns.js';
 
 // A PT revision's decision (goods-in 6.1 to 6.3, 6.6, 10.3; access-and-approvals 9.5, 9.8, 9.8b; module-map 6.2 flows C
@@ -41,7 +42,7 @@ export type PtPostingQueue =
 
 /** What the decision's effect acts through, bound late, since `access` is built with it (access-and-approvals 9.8b). */
 export interface PtDecisionServices extends PostingServices {
-  readonly receiving: Pick<ReceivingInterface, 'ptBasis' | 'grnForPt' | 'ptMarkLock' | 'clearPtMark'>;
+  readonly receiving: Pick<ReceivingInterface, 'ptBasis' | 'grnForPt' | 'ptMarkLock' | 'clearPtMark' | 'anyAccepted'>;
   /** Where a refused posting's unfinished-operation exception is raised (books-and-posting 10 step 3). */
   readonly exceptions: Pick<ExceptionsInterface, 'raiseInOwnCommand'>;
 }
@@ -52,7 +53,7 @@ export interface PtDecisionDependencies {
 }
 
 /** Who decides: the person and the assignment relied on, with the decision, which every effect has (9.5). */
-function deciding(decider: EffectDecider): {
+export function deciding(decider: EffectDecider): {
   readonly userId: string;
   readonly roleAssignmentId: string;
   readonly decisionId: string;
@@ -192,5 +193,12 @@ export function ptDecisionEffect(dependencies: PtDecisionDependencies): Document
  * through, bound late, and how a large PT posts.
  */
 export function ptApprovals(dependencies: PtDecisionDependencies): ModuleApprovals {
-  return { rules: ptApprovalRules, effects: new Map([[PT_APPROVAL, ptDecisionEffect(dependencies)]]) };
+  return {
+    rules: ptApprovalRules,
+    effects: new Map([
+      [PT_APPROVAL, ptDecisionEffect(dependencies)],
+      // A PT's reversal before the scan-in (goods-in 6.7; S2-F09-T01).
+      [PT_REVERSAL_APPROVAL, ptReversalEffect(dependencies)],
+    ]),
+  };
 }

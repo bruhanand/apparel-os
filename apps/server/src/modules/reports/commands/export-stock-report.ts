@@ -23,10 +23,10 @@ import type { ExportDependencies, Exporter } from './export-stock-search.js';
 // Export the stock report as XLSX, as it is shown (goods-in 9.1, 9.5; code-house-rules 12.1 "Reads"; numbering-and-
 // audit 5.1; PRD-SEC-007, PRD-ACS-008; S2-F11-T02). A command, as stock search's export is, since a file with cost is
 // an export of a restricted field: it reads the report through the read-model gateway in its own transaction under the
-// reader's own actor and grants, at most STOCK_REPORT_EXPORT_CAP rows and refused past them, and writes the
-// sensitive-access record of each place and brand whose cost the file carries (`reports.stock_report_export`) before
-// the bytes are given. Its answer is never kept under the key: a replay is not repeatable (code-house-rules 12.4;
-// DEC-114).
+// reader's own actor and grants, at most STOCK_REPORT_EXPORT_CAP rows and refused past them; holds the authority to
+// export cost at each place and brand whose cost the file carries at step 0, and writes the sensitive-access record of
+// each (`reports.stock_report_export`) before the bytes are given. Its answer is never kept under the key: a replay is
+// not repeatable (code-house-rules 12.4; DEC-114).
 
 /** The record an export's access records name: the export itself, which keeps no row (numbering-and-audit 5.2). */
 const EXPORT_RECORD = { module: 'reports', type: 'stock_report_export' } as const;
@@ -77,7 +77,15 @@ export async function exportStockReport(
           throw error;
         }
         if (read.report.next !== null) return { kind: 'refusal', refusal: EXPORT_TOO_LARGE, causedBySecret: false };
-        await recordCostExport(deps.audit, context, exporter, EXPORT_RECORD, read.costFacts);
+        const refused = await recordCostExport(
+          deps.access,
+          deps.audit,
+          context,
+          exporter,
+          EXPORT_RECORD,
+          read.costShown,
+        );
+        if (refused !== undefined) return { kind: 'refusal', refusal: refused, causedBySecret: false };
         const bytes = await workbookOf(stockReportSheets(read.report, date.timezone));
         const answer: ReportExport = {
           fileName: `stock-report-${date.date}.xlsx`,
