@@ -163,6 +163,8 @@ export interface PtApprovalWorld {
   readonly people: {
     readonly receiver: Person;
     readonly bookingApprover: Person;
+    /** Booking (P-BKG), who names the product of unidentified goods, so does not decide that version (goods-in 4.6). */
+    readonly booker: Person;
     readonly operations: Person;
     readonly ptMaker: Person;
     readonly ptApprover: Person;
@@ -191,6 +193,8 @@ export interface PtApprovalWorld {
       readonly invoice?: number;
       readonly extra?: 'received' | 'not-received';
       readonly damaged?: number;
+      /** Unidentified goods, described, not sized, with no invoice quantity (goods-in 4.4, 4.9). */
+      readonly unidentified?: string;
     }[],
     at?: { readonly brand?: 'fixture' | 'owned'; readonly world?: ReceivingFixture },
   ): Promise<{ readonly arrivalId: string; readonly grnId: string }>;
@@ -457,6 +461,11 @@ export async function ptApprovalWorld(
     { recordType: 'receiving.recount', action: 'create' },
   ]);
   const bookingApprover = await enrolled(`${label}-BOOKING-APPROVER`, BOOKING_APPROVER_AUTHORITY);
+  const booker = await enrolled(`${label}-BOOKER`, [
+    ...BOOKING_APPROVER_AUTHORITY,
+    { recordType: 'receiving.held_line', action: 'edit' },
+    { recordType: 'merchandise.vocabulary_value', action: 'view' },
+  ]);
   // Operations (P-OPS), who confirms or rejects damage reported by someone else (goods-in 8.3).
   const operations = await enrolled(`${label}-OPS`, [
     ...DECIDER_AUTHORITY,
@@ -616,13 +625,14 @@ export async function ptApprovalWorld(
     });
     expect(invoice.status, JSON.stringify(invoice.body)).toBe(200);
     for (const line of lines) {
+      const unidentified = line.unidentified !== undefined;
       const saved = await post(receiver, `/api/receiving/arrivals/${arrivalId}/count-lines`, {
-        goods: 'on-invoice',
-        styleCode: line.style,
-        colour: 'SYNTHETIC NAVY',
-        sizeValueId: fixture.sizes.values[line.sizeAt]?.id ?? null,
+        goods: unidentified ? 'unidentified' : 'on-invoice',
+        styleCode: unidentified ? null : line.style,
+        colour: unidentified ? null : 'SYNTHETIC NAVY',
+        sizeValueId: unidentified ? null : (fixture.sizes.values[line.sizeAt]?.id ?? null),
         skuId: null,
-        description: null,
+        description: line.unidentified ?? null,
         invoiceQuantity: line.invoice ?? line.counted,
         countedQuantity: line.counted,
         extra: line.extra ?? null,
@@ -706,6 +716,7 @@ export async function ptApprovalWorld(
     people: {
       receiver,
       bookingApprover,
+      booker,
       operations,
       ptMaker,
       ptApprover,
