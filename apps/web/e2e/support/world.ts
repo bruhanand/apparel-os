@@ -293,6 +293,19 @@ export interface SyntheticWorld {
     readonly styleCode: string;
   };
   /**
+   * The reports journey (S2-F11-T02), in the receiving Organisation, in the receive-against-booking world: Booking
+   * (P-BKG), who reads the booking status and the receipt problems and may not read stock; how the screens name the
+   * world's records; and the number and style of the approved booking it reads, four pieces of the first size, which
+   * the server recorded through the API and no other journey changes.
+   */
+  readonly reports: {
+    readonly organisationCode: string;
+    readonly reader: EnrolledUser;
+    readonly options: ReceivingOptions;
+    readonly bookingNumber: string;
+    readonly styleCode: string;
+  };
+  /**
    * The PT file journey (S2-F04-T02), in the receiving Organisation, in a world of its own: Warehouse (P-WHS), also
    * assigned to make PTs, who counts, issues the GRN and uploads its PT file; the GRN's style code; and two SYNTHETIC
    * PT files of that style and the world's first size: one the check refuses, one it passes.
