@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
-import { Authenticator } from './support/authenticator';
-import { organisationToday, signIn } from './support/journey';
-import { readWorld, type EnrolledUser } from './support/world';
+import { signedIn } from './support/journey';
+import { readWorld } from './support/world';
+import { organisationDate } from './support/clock';
 
 // S1-F05-T01: approval limits and routing (access-and-approvals 9.2 to 9.5, 14; design-language 10.14; POL-02.07,
 // POL-02.09, POL-02.15, PRD-ACS-006, PRD-ACS-015, PRD-ACS-016; DEC-116). An Admin prepares a SYNTHETIC limit for the
@@ -9,14 +9,6 @@ import { readWorld, type EnrolledUser } from './support/world';
 // the booking approver then opens a SYNTHETIC booking within it and sees its value, basis and limit, and one above
 // every limit, which says "No approver set up", with Approve disabled and no action to send it on. Every value is
 // SYNTHETIC: the real limits and their holders are KDPS's (V-02).
-
-async function signedIn(page: Page, code: string, user: EnrolledUser): Promise<Authenticator> {
-  const app = new Authenticator(Buffer.from(user.factorSecretHex, 'hex'));
-  await page.goto('/');
-  await signIn(page, { code, login: user.login, password: user.password, totp: await app.nextCode() });
-  await expect(page.getByLabel('Profile')).toHaveText(user.displayName);
-  return app;
-}
 
 async function openScreen(page: Page, name: string): Promise<void> {
   await page.getByRole('navigation', { name: 'Main menu' }).getByRole('link', { name, exact: true }).click();
@@ -53,7 +45,7 @@ test('POL-02.09 PRD-ACS-015 a limit approved by another person lets its holder a
       await drawer.getByLabel(/^Role/).selectOption({ label: world.roleOption });
       await drawer.getByLabel(/^Limit in rupees/).fill('2000');
       await drawer.getByLabel(/^Where the values come from/).selectOption('synthetic');
-      await drawer.getByLabel(/^Starts on/).fill(organisationToday());
+      await drawer.getByLabel(/^Starts on/).fill(await organisationDate());
       await drawer.getByTestId('drawer-footer').getByRole('button', { name: 'Request approval' }).click();
       await expect(drawer.getByRole('status').filter({ hasText: 'Sent for approval' })).toBeVisible();
       await admin.keyboard.press('Escape');

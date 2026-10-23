@@ -1,8 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 import { Authenticator } from './support/authenticator';
-import { organisationToday, signIn } from './support/journey';
-import { readWorld, type EnrolledUser, type ReceivingOptions } from './support/world';
-import { anHourAgo, serverNow } from './support/clock';
+import { signedIn } from './support/journey';
+import { readWorld, type ReceivingOptions } from './support/world';
+import { anHourAgo, organisationDate, serverNow } from './support/clock';
 
 // S2-F06-T01: the PT approval journey (goods-in 6.1 to 6.5, section 11; PRD-REC-017, PRD-REC-018, PRD-ACS-006,
 // POL-02.07; DEC-135, DEC-140; code-house-rules 10.1). Warehouse (P-WHS), also assigned to make PTs, counts two pieces
@@ -26,14 +26,6 @@ const INVOICE_PDF = {
   buffer: Buffer.from('%PDF-1.4\n% SYNTHETIC invoice\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n', 'latin1'),
 };
 
-async function signedIn(page: Page, code: string, user: EnrolledUser): Promise<Authenticator> {
-  const app = new Authenticator(Buffer.from(user.factorSecretHex, 'hex'));
-  await page.goto('/');
-  await signIn(page, { code, login: user.login, password: user.password, totp: await app.nextCode() });
-  await expect(page.getByLabel('Profile')).toHaveText(user.displayName);
-  return app;
-}
-
 /** Records an Arrival at the Store's unit of the world from its Site's inbox, and its invoice (goods-in 4.2). */
 async function arrivalWithInvoice(page: Page, options: ReceivingOptions): Promise<void> {
   await page.getByRole('navigation', { name: 'Main menu' }).getByRole('link', { name: 'Inbox', exact: true }).click();
@@ -47,14 +39,14 @@ async function arrivalWithInvoice(page: Page, options: ReceivingOptions): Promis
   await form.locator('#receive-brand').selectOption({ label: options.brand });
   await form.getByLabel(/^Transporter/).fill('SYNTHETIC Transporter');
   await form.getByLabel(/^Lorry receipt number/).fill('SYN-LR-APR');
-  await form.getByLabel(/^Lorry receipt date/).fill(organisationToday());
+  await form.getByLabel(/^Lorry receipt date/).fill(await organisationDate());
   await form.getByLabel(/^Cartons/).fill('1');
   await form.getByLabel(/^Arrived/).fill(await anHourAgo());
   await page.getByRole('dialog').getByRole('button', { name: 'Record the Arrival' }).click();
   await expect(page.getByRole('heading', { level: 2, name: `Arrival from ${options.supplier}` })).toBeVisible();
   const invoice = page.getByRole('form', { name: 'Add the invoice' });
   await invoice.getByLabel(/^Invoice number/).fill('SYN-INV-APR');
-  await invoice.getByLabel(/^Invoice date/).fill(organisationToday());
+  await invoice.getByLabel(/^Invoice date/).fill(await organisationDate());
   await invoice.getByLabel('Invoice file').setInputFiles(INVOICE_PDF);
   await invoice.getByRole('button', { name: 'Add the invoice' }).click();
   await expect(invoice.getByRole('status').filter({ hasText: 'Invoice recorded.' })).toBeVisible();

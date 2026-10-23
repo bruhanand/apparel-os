@@ -1,20 +1,12 @@
-import { expect, test, type Page } from '@playwright/test';
-import { Authenticator } from './support/authenticator';
-import { signIn } from './support/journey';
-import { readWorld, type EnrolledUser } from './support/world';
+import { expect, test } from '@playwright/test';
+import { signedIn } from './support/journey';
+import { readWorld } from './support/world';
 
 // S1-F13-T03: Publish on an opening batch shows unavailable with what is missing (imports-and-opening-data 4.2, 10.1,
 // 16, 17 test 22; PRD-SEC-017, PRD-UXP-003; stage 1 exit check 5). A preparer of opening batches opens a SYNTHETIC
 // opening batch from the Outcomes tab, in an Organisation where policy 14 is not signed, of a unit with no approved
 // switch: Publish stays visible and disabled, and the banner names the policy, its validation, the capability and the
 // switch, with a link to Policy readiness. Every value is SYNTHETIC.
-
-async function signedIn(page: Page, code: string, user: EnrolledUser): Promise<void> {
-  const app = new Authenticator(Buffer.from(user.factorSecretHex, 'hex'));
-  await page.goto('/');
-  await signIn(page, { code, login: user.login, password: user.password, totp: await app.nextCode() });
-  await expect(page.getByLabel('Profile')).toHaveText(user.displayName);
-}
 
 test('PRD-SEC-017 PRD-UXP-003 Publish of an opening batch shows unavailable, naming what is missing', async ({
   page,

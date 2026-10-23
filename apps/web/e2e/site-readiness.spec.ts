@@ -1,7 +1,7 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { Authenticator } from './support/authenticator';
-import { signIn } from './support/journey';
-import { readWorld, type EnrolledUser } from './support/world';
+import { signedIn } from './support/journey';
+import { readWorld } from './support/world';
 
 // S1-F04-T02: stage 1 exit check 6 on screen (module-map 4.16; domain-model 3.6; ui-blueprint Setup › Site opening and
 // closure › Readiness; PRD-LIF-001 to PRD-LIF-003, PRD-UXP-003; MM-8, DEC-105; DEC-116; product owner, 10 Oct 2026).
@@ -10,14 +10,6 @@ import { readWorld, type EnrolledUser } from './support/world';
 // work; the Operations user declares that the unit holds no stock and runs the unit's checks again; every check passes
 // and they ask for approval; the approver sees the zero declaration on the panel and approves receiving from My work;
 // the unit's receiving is then granted and the unit and its Site show Active. Every value is SYNTHETIC.
-
-async function signedIn(page: Page, code: string, user: EnrolledUser): Promise<Authenticator> {
-  const app = new Authenticator(Buffer.from(user.factorSecretHex, 'hex'));
-  await page.goto('/');
-  await signIn(page, { code, login: user.login, password: user.password, totp: await app.nextCode() });
-  await expect(page.getByLabel('Profile')).toHaveText(user.displayName);
-  return app;
-}
 
 test('PRD-LIF-001 receiving stays unavailable until the checks pass and a different person approves it from My work', async ({
   browser,

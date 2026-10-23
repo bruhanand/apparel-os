@@ -17,6 +17,7 @@ import { ptApprovalWorld, type Person, type PtApprovalWorld } from './support/pt
 import { allowVerifier, connect } from './support/postgres.js';
 import { RECEIVE_GOODS } from '../src/modules/receiving/domain/gate.js';
 import { agreementTerms, capabilitySwitched, placeScope, STOCK_VIEW } from './support/receiving.js';
+import { heldUntilSecondWaits } from './support/transactions.js';
 
 // S2-F07-T01: the scan-in at the Site, through the whole application on real PostgreSQL (goods-in 7, 7.5, 10.3, 12
 // tests 13, 14 and 17; PRD-REC-021, PRD-REC-022, PRD-STK-003, PRD-ACP-003, PRD-MER-007; DEC-135, DEC-141). The GRN, its
@@ -375,17 +376,34 @@ describe('the scan-in at a Store (goods-in 7; 12 tests 13 and 14)', () => {
     expect((await stockOf(skuId)).available).toBe(3);
   });
 
-  it('PRD-ACP-002 PRD-INT-003 the last piece scanned twice at once is accepted once', async () => {
+  it('PRD-ACP-002 PRD-INT-003 the last piece scanned twice at once is accepted once: the second scan waits for the first under its lock', async () => {
     const { grnId, barcodes } = await approvedPt('SCN-RACE', [{ sizeAt: 0, counted: 1 }], () => [{}]);
-    const barcode = barcodes[0] ?? '';
-    const calls = await Promise.all([scan(scanner, grnId, barcode, floor), scan(secondScanner, grnId, barcode, floor)]);
-    for (const call of calls) expect(call.status, JSON.stringify(call.body)).toBe(200);
-    const answers = calls.map((call) => scanAnsweredSchema.parse(call.body));
-    expect(answers.map((each) => each.outcome).sort()).toEqual(['accepted', 'refused']);
-    expect(answers.find((each) => each.outcome === 'refused')).toMatchObject({ reason: 'nothing-left' });
-    const read = await scanIn(grnId);
-    expect(read.products[0]).toMatchObject({ covered: 1, accepted: 1, waiting: 0 });
-    expect((await stockOf(read.products[0]?.skuId ?? '')).at).toEqual([
+    const [barcode] = barcodes;
+    if (barcode === undefined) throw new Error('The PT has no barcode');
+    const receiving = w.api.app.get<ReceivingInterface>(RECEIVING);
+    // The first scan held under its lock of the GRN's row, its piece accepted, until the second is seen waiting
+    // (code-house-rules 10.3; goods-in 7.2).
+    const { first, second } = await heldUntilSecondWaits(
+      w.database,
+      (work) => asUserIn(w.api.app, w.organisation, scanner.user.id, work),
+      (context) =>
+        receiving.scanPiece(
+          context,
+          { userId: scanner.user.id, roleAssignmentId: scanner.assignmentId },
+          grnId,
+          { barcode, destinationLocationId: floor },
+          uuidv7(),
+        ),
+      () => scan(secondScanner, grnId, barcode, floor),
+    );
+    if (first.kind !== 'success') throw new Error(`The first scan was refused: ${first.refusal.code}`);
+    expect(first.answer).toMatchObject({ outcome: 'accepted', reason: null });
+    expect(second.status, JSON.stringify(second.body)).toBe(200);
+    expect(scanAnsweredSchema.parse(second.body)).toMatchObject({ outcome: 'refused', reason: 'nothing-left' });
+    const [product] = (await scanIn(grnId)).products;
+    expect(product).toMatchObject({ covered: 1, accepted: 1, waiting: 0, skuId: first.answer.skuId });
+    if (product === undefined) throw new Error('The scan-in names no product');
+    expect((await stockOf(product.skuId)).at).toEqual([
       { locationId: floor, condition: 'good', quantity: 1, accepted: 1 },
     ]);
   });

@@ -13,6 +13,7 @@ import {
   fieldClassSchema,
   permissionRegistry,
   setupRequestSchema,
+  type ApprovalLimitDraft,
   type PersonaId,
   type RecordTypeDeclaration,
 } from '@apparel-os/schemas';
@@ -37,6 +38,7 @@ import {
   ORGANISATION_KEYS_VARIABLE,
   runSetupStep,
   type ApprovalRule,
+  type ModuleApprovals,
 } from '../../src/modules/access/index.js';
 import { TEST_COMPOSITION } from '../support/composition.js';
 import { JOURNAL_KIND, type PostingEventKind } from '../../src/modules/finance/books/index.js';
@@ -102,6 +104,7 @@ import {
   codeFor,
   startAccessApp,
   syntheticKeysEnvironment,
+  SYNTHETIC_TIMEZONE,
   syntheticTimezone,
   writeSyntheticReason,
   writeSyntheticSetting,
@@ -311,7 +314,7 @@ const journeyRequest = setupRequestSchema.parse({
   },
   settings: {
     origin: 'synthetic',
-    timezone: 'Etc/UTC',
+    timezone: SYNTHETIC_TIMEZONE,
     passwordRules: SYNTHETIC_PASSWORD_RULES,
     signInThrottling: SYNTHETIC_THROTTLING,
     officeSessionLimits: SYNTHETIC_SESSION_LIMITS,
@@ -1294,8 +1297,9 @@ const periodApprover = await postingUser('BROWSER-PERIOD-APPROVER', [
 // written and the worker has delivered every event the fixtures recorded, which Playwright waits for: the API answers
 // before the seeding done through it ends, so its health alone would let the journeys read a world file that is
 // missing or left by an earlier run, and a journey would wait in My work behind other fixtures' approvals (code-house-
-// rules 10.1; code review 7 of stage 2). And `GET /now`, the server's clock, the one the application runs on, which
-// the journeys' times are taken from (e2e/support/clock.ts).
+// rules 10.1; code review 7 of stage 2). And `GET /now`, the server's clock, the one the application runs on, and
+// `GET /timezone`, the Organisation timezone the application reads for every Organisation, which the journeys' dates
+// and times are taken from (e2e/support/clock.ts; code-house-rules 9; code review 10 of stage 2).
 const harnessPort = port + 11;
 let worldWritten = false;
 const harness = createServer((request, response) => {
@@ -1305,6 +1309,10 @@ const harness = createServer((request, response) => {
   }
   if (request.method === 'GET' && request.url === '/now') {
     response.writeHead(200, { 'content-type': 'text/plain' }).end(new Date().toISOString());
+    return;
+  }
+  if (request.method === 'GET' && request.url === '/timezone') {
+    response.writeHead(200, { 'content-type': 'text/plain' }).end(SYNTHETIC_TIMEZONE);
     return;
   }
   if (request.method !== 'POST' || request.url !== '/post-period-correction') {
@@ -2559,37 +2567,42 @@ const damageDecider = await grantSynthetic(
   { kind: 'user', id: damageOperations.id },
   DECIDER_AUTHORITY,
 );
-{
-  const limitAccess = receivingStructure.accessWith({ rules: stockDocumentsApprovalRules, effects: new Map() });
+/**
+ * An individual SYNTHETIC approval limit in the receiving Organisation, prepared by the setup's preparer and approved by
+ * its approver through `access` composed with the module's approval rules (access-and-approvals 9.2; code-house-rules
+ * 11.2); the setup stops, naming the refusal, when either is refused. The limits and who holds them are the product
+ * owner's: SYNTHETIC here.
+ */
+async function receivingLimitApproved(
+  what: string,
+  rules: ModuleApprovals['rules'],
+  draft: Omit<ApprovalLimitDraft, 'origin' | 'validFrom'>,
+): Promise<void> {
+  const limitAccess = receivingStructure.accessWith({ rules, effects: new Map() });
   const preparer = receivingStructure.preparer;
   const preparing = await grantSynthetic(receivingDatabase, { kind: 'user', id: preparer.id }, LIMIT_ADMIN_AUTHORITY);
-  await grantSynthetic(
-    receivingDatabase,
-    { kind: 'user', id: receivingStructure.approver.id },
-    LIMIT_APPROVER_AUTHORITY,
-  );
   const prepared = await receivingStructure.run(preparer.id, (context) =>
     limitAccess.prepareApprovalLimit(
       context,
       { userId: preparer.id, roleAssignmentId: preparing.assignmentId },
-      {
-        actionType: DAMAGE_DECISION,
-        holder: { kind: 'individual', userId: damageOperations.id, roleAssignmentId: damageDecider.assignmentId },
-        limit: { kind: 'none' },
-        coversUnknown: true,
-        origin: 'synthetic',
-        validFrom: receivingStructure.today(),
-      },
+      { ...draft, origin: 'synthetic', validFrom: receivingStructure.today() },
     ),
   );
-  if (prepared.kind !== 'success') throw new Error(`The damage limit was refused: ${prepared.refusal.code}`);
+  if (prepared.kind !== 'success') throw new Error(`The ${what} limit was refused: ${prepared.refusal.code}`);
   const decided = await receivingStructure.decideThrough(
     limitAccess,
     prepared.answer.requestId,
     prepared.answer.limitId,
   );
-  if (decided.kind !== 'success') throw new Error(`The damage limit was not approved: ${decided.refusal.code}`);
+  if (decided.kind !== 'success') throw new Error(`The ${what} limit was not approved: ${decided.refusal.code}`);
 }
+await grantSynthetic(receivingDatabase, { kind: 'user', id: receivingStructure.approver.id }, LIMIT_APPROVER_AUTHORITY);
+await receivingLimitApproved('damage', stockDocumentsApprovalRules, {
+  actionType: DAMAGE_DECISION,
+  holder: { kind: 'individual', userId: damageOperations.id, roleAssignmentId: damageDecider.assignmentId },
+  limit: { kind: 'none' },
+  coversUnknown: true,
+});
 // The held-line journey (held-lines.spec.ts; goods-in 4.4 to 4.6, section 11; S2-F02-T03): Warehouse (P-WHS), who
 // counts excess on the world's Site, records it received and held and issues the GRN; and a Booking approver (P-BKG)
 // named for the Site and brand by role (POL-17.11), who takes the excess in from My work within an individual SYNTHETIC
@@ -2613,32 +2626,12 @@ const heldDecider = await grantSynthetic(receivingDatabase, { kind: 'user', id: 
   { recordType: 'access.approval_request', action: 'view' },
   { recordType: 'access.approval_reason', action: 'view' },
 ]);
-{
-  const limitAccess = receivingStructure.accessWith({ rules: receivingApprovalRules, effects: new Map() });
-  const preparer = receivingStructure.preparer;
-  const preparing = await grantSynthetic(receivingDatabase, { kind: 'user', id: preparer.id }, LIMIT_ADMIN_AUTHORITY);
-  const prepared = await receivingStructure.run(preparer.id, (context) =>
-    limitAccess.prepareApprovalLimit(
-      context,
-      { userId: preparer.id, roleAssignmentId: preparing.assignmentId },
-      {
-        actionType: HELD_LINE_DECISION,
-        holder: { kind: 'individual', userId: heldApprover.id, roleAssignmentId: heldDecider.assignmentId },
-        limit: { kind: 'none' },
-        coversUnknown: true,
-        origin: 'synthetic',
-        validFrom: receivingStructure.today(),
-      },
-    ),
-  );
-  if (prepared.kind !== 'success') throw new Error(`The held-line limit was refused: ${prepared.refusal.code}`);
-  const decided = await receivingStructure.decideThrough(
-    limitAccess,
-    prepared.answer.requestId,
-    prepared.answer.limitId,
-  );
-  if (decided.kind !== 'success') throw new Error(`The held-line limit was not approved: ${decided.refusal.code}`);
-}
+await receivingLimitApproved('held-line', receivingApprovalRules, {
+  actionType: HELD_LINE_DECISION,
+  holder: { kind: 'individual', userId: heldApprover.id, roleAssignmentId: heldDecider.assignmentId },
+  limit: { kind: 'none' },
+  coversUnknown: true,
+});
 // The recount journey (recount.spec.ts; goods-in 4.7, 4.11, section 11; S2-F02-T05), on the held-line world's Site:
 // Warehouse (P-WHS), who counts, issues the GRN and proposes its recount; and the Owner (P-OWN), who approves recounts
 // from My work within an individual SYNTHETIC limit covering an Unknown cost, prepared and approved through `access`'s
@@ -2665,32 +2658,12 @@ const recountDecider = await grantSynthetic(receivingDatabase, { kind: 'user', i
   { recordType: 'access.approval_reason', action: 'view' },
   ...STOCK_VIEW,
 ]);
-{
-  const limitAccess = receivingStructure.accessWith({ rules: receivingApprovalRules, effects: new Map() });
-  const preparer = receivingStructure.preparer;
-  const preparing = await grantSynthetic(receivingDatabase, { kind: 'user', id: preparer.id }, LIMIT_ADMIN_AUTHORITY);
-  const prepared = await receivingStructure.run(preparer.id, (context) =>
-    limitAccess.prepareApprovalLimit(
-      context,
-      { userId: preparer.id, roleAssignmentId: preparing.assignmentId },
-      {
-        actionType: RECOUNT_APPROVAL,
-        holder: { kind: 'individual', userId: recountApprover.id, roleAssignmentId: recountDecider.assignmentId },
-        limit: { kind: 'none' },
-        coversUnknown: true,
-        origin: 'synthetic',
-        validFrom: receivingStructure.today(),
-      },
-    ),
-  );
-  if (prepared.kind !== 'success') throw new Error(`The recount limit was refused: ${prepared.refusal.code}`);
-  const decided = await receivingStructure.decideThrough(
-    limitAccess,
-    prepared.answer.requestId,
-    prepared.answer.limitId,
-  );
-  if (decided.kind !== 'success') throw new Error(`The recount limit was not approved: ${decided.refusal.code}`);
-}
+await receivingLimitApproved('recount', receivingApprovalRules, {
+  actionType: RECOUNT_APPROVAL,
+  holder: { kind: 'individual', userId: recountApprover.id, roleAssignmentId: recountDecider.assignmentId },
+  limit: { kind: 'none' },
+  coversUnknown: true,
+});
 const receivingRouter = new OrganisationRouter(
   { directoryConnectionString: databaseUrl(world.directory, 'runtime'), poolMax: 2 },
   fixtureLog.logger,
@@ -3163,7 +3136,11 @@ await fixtureRunner.run(
 );
 const ptStyle = syntheticCode(`JOURNEY-PTF-STYLE-${randomBytes(3).toString('hex').toUpperCase()}`);
 const ptSize = ptReceivingWorld.sizes.values[0]?.code ?? '';
-/** A row of the GRN's brand, style and size, one piece at MRP 1,999.00 and P RATE 945.00: MARGIN 52.73, by hand. */
+/** MARGIN at MRP 1,999.00 and P RATE 945.00, worked by hand: (1,999.00 − 945.00) ÷ 1,999.00 = 52.73. */
+const MARGIN_AT_945 = 52.73;
+/** MARGIN at MRP 1,999.00 and P RATE 900.00, worked by hand: (1,999.00 − 900.00) ÷ 1,999.00 = 54.98. */
+const MARGIN_AT_900 = 54.98;
+/** A row of the GRN's brand, style and size, one piece at MRP 1,999.00 and P RATE 945.00 (MARGIN_AT_945). */
 const ptRowOf = (barcode: string, values: SyntheticPtRow = {}): SyntheticPtRow => ({
   SEASON: ptLists.season.values.SPRING?.code,
   BRAND: ptReceivingWorld.brand.code,
@@ -3184,7 +3161,7 @@ const ptRowOf = (barcode: string, values: SyntheticPtRow = {}): SyntheticPtRow =
   'INPUT TAX': ptLists.gstRate.values['GST-5']?.code,
   'OUTPUT TAX': ptLists.gstRate.values['GST-18']?.code,
   NAG: 1,
-  MARGIN: 52.73,
+  MARGIN: MARGIN_AT_945,
   ...values,
 });
 const ptRefusedFile = join(dirname(worldFile), syntheticPtFileName('journey-pt-refused'));
@@ -3312,39 +3289,16 @@ const ptApprovalDecider = await grantSynthetic(
     ],
   },
 );
-{
-  const limitAccess = receivingStructure.accessWith({ rules: ptApprovalRules, effects: new Map() });
-  const preparer = receivingStructure.preparer;
-  const preparing = await grantSynthetic(receivingDatabase, { kind: 'user', id: preparer.id }, LIMIT_ADMIN_AUTHORITY);
-  // A PT's approval, and its reversal before the scan-in, on the cost it reverses (goods-in 6.7; S2-F09-T01).
-  for (const actionType of [PT_APPROVAL, PT_REVERSAL_APPROVAL]) {
-    const prepared = await receivingStructure.run(preparer.id, (context) =>
-      limitAccess.prepareApprovalLimit(
-        context,
-        { userId: preparer.id, roleAssignmentId: preparing.assignmentId },
-        {
-          actionType,
-          holder: {
-            kind: 'individual',
-            userId: ptApprovalApprover.id,
-            roleAssignmentId: ptApprovalDecider.assignmentId,
-          },
-          // A SYNTHETIC ₹10,00,000.00 on the PT's total proposed acquisition cost.
-          limit: { kind: 'amount', amount: paise(100_000_000) },
-          coversUnknown: false,
-          origin: 'synthetic',
-          validFrom: receivingStructure.today(),
-        },
-      ),
-    );
-    if (prepared.kind !== 'success') throw new Error(`The PT limit was refused: ${prepared.refusal.code}`);
-    const decided = await receivingStructure.decideThrough(
-      limitAccess,
-      prepared.answer.requestId,
-      prepared.answer.limitId,
-    );
-    if (decided.kind !== 'success') throw new Error(`The PT limit was not approved: ${decided.refusal.code}`);
-  }
+/** A SYNTHETIC ₹10,00,000.00 on a PT's total proposed acquisition cost, the PT approval journeys' limit. */
+const SYNTHETIC_PT_LIMIT = { kind: 'amount', amount: paise(100_000_000) } as const;
+// A PT's approval, and its reversal before the scan-in, on the cost it reverses (goods-in 6.7; S2-F09-T01).
+for (const actionType of [PT_APPROVAL, PT_REVERSAL_APPROVAL]) {
+  await receivingLimitApproved('PT', ptApprovalRules, {
+    actionType,
+    holder: { kind: 'individual', userId: ptApprovalApprover.id, roleAssignmentId: ptApprovalDecider.assignmentId },
+    limit: SYNTHETIC_PT_LIMIT,
+    coversUnknown: false,
+  });
 }
 const ptApprovalStyle = syntheticCode(`JOURNEY-PTA-STYLE-${randomBytes(3).toString('hex').toUpperCase()}`);
 const ptApprovalFile = join(dirname(worldFile), syntheticPtFileName('journey-pt-approval'));
@@ -3361,26 +3315,29 @@ writeFileSync(
   }),
 );
 // The corrected file once the PT is reversed (goods-in 6.4; S2-F09-T01): the same two pieces at P RATE 900.00, so
-// MARGIN (1,999.00 − 900.00) ÷ 1,999.00 = 54.98.
+// MARGIN_AT_900.
 const ptApprovalCorrectedFile = join(dirname(worldFile), syntheticPtFileName('journey-pt-corrected'));
 writeFileSync(
   ptApprovalCorrectedFile,
   await syntheticPtWorkbook({
     rows: [
-      ptRowOf('8900000000035', { DESIGN: ptApprovalStyle, 'P RATE': 900, MARGIN: 54.98 }),
-      ptRowOf('8900000000042', { DESIGN: ptApprovalStyle, 'P RATE': 900, MARGIN: 54.98 }),
+      ptRowOf('8900000000035', { DESIGN: ptApprovalStyle, 'P RATE': 900, MARGIN: MARGIN_AT_900 }),
+      ptRowOf('8900000000042', { DESIGN: ptApprovalStyle, 'P RATE': 900, MARGIN: MARGIN_AT_900 }),
     ],
     marker: 'JOURNEY-PT-CORRECTED',
   }),
 );
 // The scan-in's destination at the Store (goods-in 7.2; S2-F07-T01): a floor of the PT world's Store unit, SYNTHETIC,
 // apart from the receiving zone the goods are received into.
+const PT_APPROVAL_FLOOR = { code: syntheticCode('JOURNEY-PTA-FLOOR'), name: syntheticName('Journey shop floor') };
+/** How the screens name the floor: its code and name (Stock search, S2-F11-T01; the scan-in's choice with its kind). */
+const ptApprovalFloorName = `${PT_APPROVAL_FLOOR.code} · ${PT_APPROVAL_FLOOR.name}`;
 const ptApprovalFloor = await approved(receivingStructure, (c, p) =>
   receivingStructure.organisation.prepareLocation(c, p, {
-    code: syntheticCode('JOURNEY-PTA-FLOOR'),
+    code: PT_APPROVAL_FLOOR.code,
     siteId: ptReceivingWorld.siteId,
     businessUnitId: ptReceivingWorld.wholeStore,
-    name: syntheticName('Journey shop floor'),
+    name: PT_APPROVAL_FLOOR.name,
     kind: 'floor',
     validFrom: receivingStructure.today(),
   }),
@@ -3521,36 +3478,13 @@ const goodsInDecider = await grantSynthetic(
     ],
   },
 );
-{
-  const limitAccess = receivingStructure.accessWith({ rules: ptApprovalRules, effects: new Map() });
-  const preparer = receivingStructure.preparer;
-  const preparing = await grantSynthetic(receivingDatabase, { kind: 'user', id: preparer.id }, LIMIT_ADMIN_AUTHORITY);
-  const prepared = await receivingStructure.run(preparer.id, (context) =>
-    limitAccess.prepareApprovalLimit(
-      context,
-      { userId: preparer.id, roleAssignmentId: preparing.assignmentId },
-      {
-        actionType: PT_APPROVAL,
-        holder: { kind: 'individual', userId: goodsInOperations.id, roleAssignmentId: goodsInDecider.assignmentId },
-        // A SYNTHETIC ₹10,00,000.00 on the PT's total proposed acquisition cost, as the PT approval journey's approver.
-        limit: { kind: 'amount', amount: paise(100_000_000) },
-        coversUnknown: false,
-        origin: 'synthetic',
-        validFrom: receivingStructure.today(),
-      },
-    ),
-  );
-  if (prepared.kind !== 'success')
-    throw new Error(`The joined journey's PT limit was refused: ${prepared.refusal.code}`);
-  const decided = await receivingStructure.decideThrough(
-    limitAccess,
-    prepared.answer.requestId,
-    prepared.answer.limitId,
-  );
-  if (decided.kind !== 'success') {
-    throw new Error(`The joined journey's PT limit was not approved: ${decided.refusal.code}`);
-  }
-}
+// The PT approval journey's approver's limit, so each of them is offered both journeys' PTs.
+await receivingLimitApproved("the joined journey's PT", ptApprovalRules, {
+  actionType: PT_APPROVAL,
+  holder: { kind: 'individual', userId: goodsInOperations.id, roleAssignmentId: goodsInDecider.assignmentId },
+  limit: SYNTHETIC_PT_LIMIT,
+  coversUnknown: false,
+});
 const goodsInStoreStaff = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
   label: 'BROWSER-GI-STORE',
   enrolled: true,
@@ -3568,7 +3502,12 @@ const goodsInStyle = syntheticCode(`JOURNEY-GI-STYLE-${randomBytes(3).toString('
 const goodsInBarcodes = ['8900000000059', '8900000000066'] as const;
 /** The journey's style on a row of the PT world's, at the P RATE given: MARGIN (MRP − P RATE) ÷ MRP, by hand. */
 const goodsInRow = (barcode: string, pRate: 900 | 945, values: SyntheticPtRow = {}): SyntheticPtRow =>
-  ptRowOf(barcode, { DESIGN: goodsInStyle, 'P RATE': pRate, MARGIN: pRate === 900 ? 54.98 : 52.73, ...values });
+  ptRowOf(barcode, {
+    DESIGN: goodsInStyle,
+    'P RATE': pRate,
+    MARGIN: pRate === 900 ? MARGIN_AT_900 : MARGIN_AT_945,
+    ...values,
+  });
 const goodsInRefusedFile = join(dirname(worldFile), syntheticPtFileName('journey-gi-refused'));
 writeFileSync(
   goodsInRefusedFile,
@@ -4235,9 +4174,9 @@ writeFileSync(
       correctedFile: ptApprovalCorrectedFile,
       // The file's two barcodes, one a piece, and the floor the scan-in puts them on, as the screen names it.
       barcodes: ['8900000000035', '8900000000042'],
-      floor: `Floor: ${syntheticCode('JOURNEY-PTA-FLOOR')} · ${syntheticName('Journey shop floor')}`,
+      floor: `Floor: ${ptApprovalFloorName}`,
       floorId: ptApprovalFloor.recordId,
-      floorName: `${syntheticCode('JOURNEY-PTA-FLOOR')} · ${syntheticName('Journey shop floor')}`,
+      floorName: ptApprovalFloorName,
     },
     goodsIn: {
       organisationCode: receivingCode,
@@ -4258,8 +4197,8 @@ writeFileSync(
       correctedFile: goodsInCorrectedFile,
       barcodes: goodsInBarcodes,
       // The PT approval journey's floor, where the scan-in puts the pieces, as the screens name it.
-      floor: `Floor: ${syntheticCode('JOURNEY-PTA-FLOOR')} · ${syntheticName('Journey shop floor')}`,
-      floorName: `${syntheticCode('JOURNEY-PTA-FLOOR')} · ${syntheticName('Journey shop floor')}`,
+      floor: `Floor: ${ptApprovalFloorName}`,
+      floorName: ptApprovalFloorName,
     },
     openToBuy: {
       organisationCode: settingsCode,

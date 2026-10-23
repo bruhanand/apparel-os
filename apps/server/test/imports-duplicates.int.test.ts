@@ -42,6 +42,7 @@ import { startTestFileStore, type TestFileStore } from './support/minio.js';
 import { structureSetup, writeSyntheticSites, type StructureSetup } from './support/organisation.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { connect } from './support/postgres.js';
+import { waitUntilAnyWaitingForLock } from './support/transactions.js';
 
 // S1-F06-T04: duplicates, conflicts and governed revisions, publishing one document per transaction, concurrent
 // publishes on separate connections, counts that close, Withdraw, and the import outcomes report, through the whole
@@ -728,12 +729,16 @@ describe('two publishes at once (imports-and-opening-data 7.2, 15.1; stage 1 REA
     }
   });
 
-  it('PRD-INT-002 code-house-rules 12.4: a Start sent again under its key gets its first answer; under a new key the file is refused, and that refusal replays too', async () => {
+  it('PRD-INT-002 code-house-rules 12.4: a Start sent again under its key, once its batch is published, gets its first answer; under a new key the file is refused, and that refusal replays too', async () => {
     const stored = await upload(preparer, [product(next('STYLE'), next('SKU'))]);
     const key = uuidv7();
     const first = await call(preparer, 'POST', '/api/files-imports/batches', startBody(stored), key);
     expect(first.status, JSON.stringify(first.body)).toBe(200);
-    // Not refused by the open batch its own first sending made (S2-F07-T02; goods-in 12 test 19).
+    const batchId = String(first.body.batchId);
+    await ready(batchId);
+    ok(await publish(batchId));
+    // Not refused by the batch its own first sending made, published since (S2-F07-T02; goods-in 12 test 19; code
+    // review 10 of stage 2).
     const again = await call(preparer, 'POST', '/api/files-imports/batches', startBody(stored), key);
     expect(again).toEqual({ ...first, replayed: true });
     const otherKey = uuidv7();
@@ -750,6 +755,45 @@ describe('two publishes at once (imports-and-opening-data 7.2, 15.1; stage 1 REA
     expect(
       await rows(`select id from files_imports.import_batch where stored_file_id = $1`, [stored.storedFileId]),
     ).toHaveLength(1);
+  });
+
+  it('code-house-rules 8.1 PRD-IMP-011 7.2: the duplicate refusal is decided under the stored file’s lock, so an earlier batch withdrawn after the Start’s read lets it start', async () => {
+    const stored = await upload(preparer, [product(next('STYLE'), next('SKU'))]);
+    const earlier = await start(stored);
+    const key = uuidv7();
+    // A SYNTHETIC blocker holds the Start's key, as a request still running under it would (12.4 "Two at once"), so
+    // the Start waits after its read, which finds the earlier batch open, and before its transaction decides anything.
+    // It is rolled back, never committed.
+    const blocker = await connect(database, 'superuser');
+    try {
+      await blocker.query('begin');
+      await blocker.query(
+        `insert into kernel.idempotency_key
+           (id, actor_id, operation, idempotency_key, request_hash, form_version, secret_fields, correlation_id)
+         values ($1, $2, 'files-imports.start-import', $3, $4, 1, '{}', $5)`,
+        [uuidv7(), preparer.id, key, '0'.repeat(64), uuidv7()],
+      );
+      const blockerPid = (await blocker.query<{ pid: number }>('select pg_catalog.pg_backend_pid() as pid')).rows[0]
+        ?.pid;
+      if (blockerPid === undefined) throw new Error('No backend pid');
+      const starting = call(preparer, 'POST', '/api/files-imports/batches', startBody(stored), key);
+      await waitUntilAnyWaitingForLock(database, [blockerPid]);
+      // Meanwhile the earlier batch is withdrawn: Failed, so the file may start a new batch (3.2, 7.2).
+      ok(await step(earlier, 'withdraw', { versionId: (await read(earlier)).batch.versionId }));
+      await blocker.query('rollback');
+      const started = await starting;
+      expect(started.status, JSON.stringify(started.body)).toBe(200);
+      expect(started.body).toMatchObject({ state: 'Staged', documentCount: 1 });
+      const again = await call(preparer, 'POST', '/api/files-imports/batches', startBody(stored), key);
+      expect(again).toEqual({ ...started, replayed: true });
+      expect(
+        await rows(`select state from files_imports.import_batch where stored_file_id = $1 order by code`, [
+          stored.storedFileId,
+        ]),
+      ).toEqual([{ state: 'Failed' }, { state: 'Staged' }]);
+    } finally {
+      await blocker.end();
+    }
   });
 
   it('PRD-INT-002: one batch published twice at once under different keys publishes each document once', async () => {

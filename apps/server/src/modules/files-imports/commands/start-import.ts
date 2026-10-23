@@ -52,20 +52,23 @@ import {
 import { cutoverRefusal } from './opening-gate.js';
 import { rulesInForce } from './proposals.js';
 
-// Start an import, with Map and stage (imports-and-opening-data 3.1 steps 3 to 5, 13.1, 15.1; PRD-IMP-003,
+// Start an import, with Map and stage (imports-and-opening-data 3.1 steps 3 to 5, 7.2, 13.1, 15.1; PRD-IMP-003,
 // PRD-IMP-006, PRD-IMP-010; GC9-9; S1-F06-T01).
 //
-// In this order, so the person is authorised before any slow work (code-house-rules 8.1; module-map 6.1) and no outside
-// call runs inside a transaction (code-house-rules 8.3): Authorise, create on the batch with its scope facts; a read
-// of the stored file, its receipt, the layout and mapping versions, the target's handler and the duplicate checks; the
-// object fetched, decrypted and checked against its hash; the workbook read into the grid and staged in memory, with
-// the Confirmed mapping rules in force today in the batch's scopes (6.3); then one transaction that holds the authority
-// at step 0, locks the stored file and the layout and mapping versions at step 1 and checks again under those locks
-// that the file is in no open batch for the target and layout and that neither version is Rejected (RR-503), takes the
-// batch code series at step 8, allocates the code, writes the batch, its documents and staged rows with its scope
-// facts, links the file to the batch, and records the audit record. A Proposed layout or mapping version may stage and
-// preview a batch; a Rejected one never (6.4). The work runs in the request; a large file staged as a job on the worker
-// (3.3) comes later.
+// In this order, so the person is authorised before any slow work (code-house-rules 8.1; module-map 6.1), no outside
+// call runs inside a transaction (code-house-rules 8.3) and every refusal but an access refusal is answered under the
+// request's key, after its replay (12.4 "Replay"; code review 10 of stage 2): Authorise, create on the batch with its
+// scope facts, refusing access before anything else; a read of the stored file, its receipt, the layout and mapping
+// versions, the target's handler and the duplicate checks; the object fetched, decrypted and checked against its hash;
+// the workbook read into the grid and staged in memory, with the Confirmed mapping rules in force today in the batch's
+// scopes (6.3); then one transaction under the key that authorises again and holds the authority at step 0, answers
+// what the read refused, locks the stored file and the layout and mapping versions at step 1 and decides under those
+// locks that neither version is Rejected (RR-503) and the duplicate control (7.2), then takes the batch code series at
+// step 8, allocates the code, writes the batch, its documents and staged rows with its scope facts, links the file to
+// the batch, and records the audit record. A read that finds the handler refusing a file for the record, or the file
+// repeated, spares the staging; when the transaction finds that refusal no longer stands, the start is read and staged
+// again and its transaction run again, once. A Proposed layout or mapping version may stage and preview a batch; a
+// Rejected one never (6.4). The work runs in the request; a large file staged as a job on the worker (3.3) comes later.
 
 export interface StartImportInput {
   readonly actor: ImportActor;
@@ -84,16 +87,40 @@ function refuse(refusal: CommandRefusal<string>): never {
   });
 }
 
-/**
- * The file must be an XLSX file this person handed in, under the receipt named (13.1). Starting an import on a file
- * someone else handed in would let its content be staged and shown outside the receipt's own hand-in.
- */
-export async function handedInFile(
+/** An access refusal: the only refusal answered before the request's key, as it stops a replay too (12.4 "Replay"). */
+function isAccessRefusal(refusal: CommandRefusal): boolean {
+  return refusal.kind === 'not-authorised' || refusal.kind === 'not-found';
+}
+
+function refusalOf(refusal: CommandRefusal): CommandOutcome<JsonValue> {
+  return { kind: 'refusal', refusal, causedBySecret: false };
+}
+
+const IMPORT_FILE_NOT_FOUND: CommandRefusal = {
+  kind: 'not-found',
+  code: 'files-imports.import-file-not-found',
+  missing: [],
+};
+const LAYOUT_NOT_FOUND: CommandRefusal = { kind: 'not-found', code: 'files-imports.layout-not-found', missing: [] };
+const LAYOUT_VERSION_REJECTED: CommandRefusal = {
+  kind: 'refused',
+  code: 'files-imports.layout-version-rejected',
+  missing: [],
+};
+
+interface HandedInFile {
+  readonly objectKey: string;
+  readonly contentHash: string;
+  readonly scheme: string;
+}
+
+/** The XLSX file this person handed in, under the receipt named, or undefined (13.1). */
+async function fileHandedIn(
   context: TransactionContext,
   userId: string,
   storedFileId: string,
   fileReceiptId: string,
-): Promise<{ readonly objectKey: string; readonly contentHash: string; readonly scheme: string }> {
+): Promise<HandedInFile | undefined> {
   const [file] = await context.tx
     .select({
       objectKey: storedFile.objectKey,
@@ -111,14 +138,26 @@ export async function handedInFile(
         eq(fileReceipt.receivedById, userId),
       ),
     );
-  if (file?.format !== 'xlsx') refuse({ kind: 'not-found', code: 'files-imports.import-file-not-found', missing: [] });
+  if (file?.format !== 'xlsx') return undefined;
   return { objectKey: file.objectKey, contentHash: file.contentHash, scheme: file.scheme };
 }
 
-interface Planned {
-  readonly objectKey: string;
-  readonly contentHash: string;
-  readonly scheme: string;
+/**
+ * The file must be an XLSX file this person handed in, under the receipt named (13.1). Starting an import on a file
+ * someone else handed in would let its content be staged and shown outside the receipt's own hand-in.
+ */
+export async function handedInFile(
+  context: TransactionContext,
+  userId: string,
+  storedFileId: string,
+  fileReceiptId: string,
+): Promise<HandedInFile> {
+  const file = await fileHandedIn(context, userId, storedFileId, fileReceiptId);
+  if (file === undefined) refuse(IMPORT_FILE_NOT_FOUND);
+  return file;
+}
+
+interface Planned extends HandedInFile {
   readonly layoutState: string;
   readonly classes: readonly FieldClass[];
   readonly layout: ReturnType<typeof layoutStructureSchema.parse>;
@@ -128,12 +167,36 @@ interface Planned {
   /** The batch's scope facts: the person's, or those of the record the batch is about (13.1). */
   readonly facts: ImportPlace;
   readonly subject?: { readonly recordType: string; readonly recordId: string };
-  /**
-   * The duplicate control's refusal found before the transaction (7.2), which spares a repeated file the slow work of
-   * staging; it is answered in the command's transaction, under the request's key (see startImport).
-   */
-  readonly repeated?: CommandRefusal;
 }
+
+interface StagedFile {
+  readonly documents: readonly StagedDocumentDraft[];
+  readonly others: readonly StagedRowDraft[];
+  readonly sheets: readonly SheetSummary[];
+  readonly notes: readonly GridNote[];
+}
+
+/**
+ * What the read before the transaction found (code-house-rules 8.1, 8.3; imports-and-opening-data 7.2 "As built"). Its
+ * refusals are answered in the transaction, under the request's key, in the order of 7.2; what can change in between,
+ * the handler's refusal of a file for the record and the duplicate control, the transaction decides again.
+ */
+type Plan =
+  /** Refused by what does not change for the request: its shape, the file, the versions, the handler, the cutover. */
+  | { readonly kind: 'refused'; readonly refusal: CommandRefusal }
+  /**
+   * Not read further nor staged, sparing the slow work, since the handler refused a file for the record (the layout not
+   * read then) or the file was repeated (7.2); the transaction decides either again.
+   */
+  | { readonly kind: 'spared'; readonly layoutId?: string }
+  /** Refused at reading the file, which comes after the duplicate control: the header rows, the business date. */
+  | { readonly kind: 'refused-reading'; readonly layoutId: string; readonly refusal: CommandRefusal }
+  | { readonly kind: 'read'; readonly planned: Planned };
+
+/** The plan with its file read and staged, or the reader's or staging's refusal, which comes after the duplicates. */
+type Prepared =
+  | Exclude<Plan, { readonly kind: 'read' }>
+  | { readonly kind: 'staged'; readonly planned: Planned; readonly file: StagedFile };
 
 /**
  * The authority Start an import needs (13.1; access-and-approvals 7.1 step 3): create on the batch with its scope
@@ -196,7 +259,7 @@ async function authorityOf(
 /**
  * Authorises the authority Start an import needs, first the batch's and then the handler's own permission on the
  * record; answers the assignments that grant them, or the refusal: not authorised, then the handler's refusal of a file
- * for the record, named as `files-imports.subject-refused` (S2-F04-T02).
+ * for the record, named as `files-imports.subject-refused` (S2-F04-T02), which alone keeps the authority beside it.
  */
 async function authorised(
   deps: ImportDependencies,
@@ -209,7 +272,7 @@ async function authorised(
       readonly roleAssignmentId: string;
       readonly further: { readonly roleAssignmentId: string; readonly need: ImportNeed }[];
     }
-  | { readonly kind: 'refused'; readonly refusal: CommandRefusal }
+  | { readonly kind: 'refused'; readonly refusal: CommandRefusal; readonly authority?: Authority }
 > {
   const authority = await authorityOf(deps, context, input.body);
   if ('code' in authority) return { kind: 'refused', refusal: authority };
@@ -230,14 +293,20 @@ async function authorised(
           code: 'files-imports.subject-refused',
           missing: [{ kind: 'import-subject', reason: refusal.code }, ...refusal.missing],
         },
+        authority,
       };
     }
   }
   return { kind: 'allowed', authority, roleAssignmentId: batch.roleAssignmentId, further };
 }
 
-/** The read before any outside call: what the request names, as this person may use it. */
-async function plan(deps: ImportDependencies, input: StartImportInput): Promise<Planned> {
+/**
+ * The read before any outside call: what the request names, as this person may use it, stopping at its first refusal
+ * in the order of 7.2. With `spare`, it stops at the handler's refusal and at the duplicate control, which the
+ * transaction decides again, sparing the reads and the staging after them; read again once the transaction found such a
+ * refusal no longer stands, it spares nothing.
+ */
+async function plan(deps: ImportDependencies, input: StartImportInput, spare: boolean): Promise<Plan> {
   const { body } = input;
   return deps.runner.read(
     {
@@ -246,14 +315,25 @@ async function plan(deps: ImportDependencies, input: StartImportInput): Promise<
       correlationId: input.actor.correlationId,
       actor: { kind: 'actor', actorId: input.actor.userId },
     },
-    async (context) => {
+    async (context): Promise<Plan> => {
       // Authorise first, before any other read or slow work (code-house-rules 8.1; module-map 6.1): a person who may
       // not start a batch at this place learns nothing of the file, its layout or what is published. A batch about one
       // record reads the record first, as the person may see it, since it gives the batch its place (S2-F04-T02).
       const allowed = await authorised(deps, context, input);
-      if (allowed.kind === 'refused') refuse(allowed.refusal);
-      const { authority } = allowed;
-      const file = await handedInFile(context, input.actor.userId, body.storedFileId, body.fileReceiptId);
+      let authority: Authority;
+      if (allowed.kind === 'refused') {
+        // An access refusal stops the request before its key, as it stops a replay (12.4 "Replay").
+        if (isAccessRefusal(allowed.refusal)) refuse(allowed.refusal);
+        // A request whose shape the handler refuses; or the handler's refusal of a file for the record, which the
+        // transaction decides again.
+        if (allowed.authority === undefined) return { kind: 'refused', refusal: allowed.refusal };
+        if (spare) return { kind: 'spared' };
+        authority = allowed.authority;
+      } else {
+        authority = allowed.authority;
+      }
+      const file = await fileHandedIn(context, input.actor.userId, body.storedFileId, body.fileReceiptId);
+      if (file === undefined) return { kind: 'refused', refusal: IMPORT_FILE_NOT_FOUND };
       const [versions] = await context.tx
         .select({
           layoutId: layoutTable.id,
@@ -273,58 +353,74 @@ async function plan(deps: ImportDependencies, input: StartImportInput): Promise<
             eq(mapping.target, body.target),
           ),
         );
-      if (versions === undefined) refuse({ kind: 'not-found', code: 'files-imports.layout-not-found', missing: [] });
+      if (versions === undefined) return { kind: 'refused', refusal: LAYOUT_NOT_FOUND };
       // A Rejected version never stages a batch (6.4).
       if (versions.layoutState === 'Rejected' || versions.mappingState === 'Rejected') {
-        refuse({ kind: 'refused', code: 'files-imports.layout-version-rejected', missing: [] });
+        return { kind: 'refused', refusal: LAYOUT_VERSION_REJECTED };
       }
       const handler = deps.handlers.for(body.target, body.kind);
       if (handler === undefined) {
-        refuse({
+        return {
           kind: 'refused',
-          code: 'files-imports.no-import-handler',
-          missing: [{ kind: 'import-handler', target: body.target, importKind: body.kind }],
-        });
+          refusal: {
+            kind: 'refused',
+            code: 'files-imports.no-import-handler',
+            missing: [{ kind: 'import-handler', target: body.target, importKind: body.kind }],
+          },
+        };
       }
       // A new opening batch for a unit whose cutover is complete is refused: a later correction is a live correction
       // in the owning module (10.1, 10.5; PRD-LIF-011; S1-F13-T03).
       const cutover = await cutoverRefusal(context, handler, body.kind, authority.facts);
-      if (cutover !== undefined) refuse(cutover);
-      const repeated = await repeatRefusal(deps, context, input, handler, versions.layoutId);
+      if (cutover !== undefined) return { kind: 'refused', refusal: cutover };
+      const { layoutId } = versions;
+      // A file read as repeated is neither read further nor staged: the duplicate control comes before the reading's
+      // refusals, and the transaction decides it again under the stored file's lock (7.2).
+      if (spare && (await repeatRefusal(deps, context, input, handler, layoutId)) !== undefined) {
+        return { kind: 'spared', layoutId };
+      }
       const layout = parsedOrDefect(layoutStructureSchema, versions.structure, 'layout version');
       // A target whose files have their header on given rows only refuses a layout that looks for it elsewhere (13.2
       // "As built with S2-F04-T02"; goods-in 5.2: a PT file's header is on row 1 or row 2).
       const onRows = handler.headerRows;
       if (onRows !== undefined && (layout.headerRows ?? [layout.headerRow]).some((row) => !onRows.includes(row))) {
-        refuse({
-          kind: 'refused',
-          code: 'files-imports.header-rows-not-allowed',
-          missing: onRows.map((row) => ({ kind: 'header-row', row: String(row) })),
-        });
+        return {
+          kind: 'refused-reading',
+          layoutId,
+          refusal: {
+            kind: 'refused',
+            code: 'files-imports.header-rows-not-allowed',
+            missing: onRows.map((row) => ({ kind: 'header-row', row: String(row) })),
+          },
+        };
       }
       const date = await context.businessDate();
       if (date.kind !== 'set') {
-        refuse({
-          kind: 'unavailable',
-          code: 'access.business-date-not-set',
-          missing: [{ kind: 'setting', setting: 'configuration.timezone' }],
-        });
+        return {
+          kind: 'refused-reading',
+          layoutId,
+          refusal: {
+            kind: 'unavailable',
+            code: 'access.business-date-not-set',
+            missing: [{ kind: 'setting', setting: 'configuration.timezone' }],
+          },
+        };
       }
       return {
-        layoutId: versions.layoutId,
-        rules: await rulesInForce(context, date.date),
-        objectKey: file.objectKey,
-        contentHash: file.contentHash,
-        scheme: file.scheme,
-        layoutState: versions.layoutState,
-        classes: classesHeld(versions.layoutState, layout),
-        layout,
-        mapping: parsedOrDefect(mappingFieldsSchema, versions.fields, 'mapping version'),
-        facts: authority.facts,
-        ...(authority.subject === undefined
-          ? {}
-          : { subject: { recordType: authority.subject.recordType, recordId: authority.subject.recordId } }),
-        ...(repeated === undefined ? {} : { repeated }),
+        kind: 'read',
+        planned: {
+          ...file,
+          layoutId,
+          rules: await rulesInForce(context, date.date),
+          layoutState: versions.layoutState,
+          classes: classesHeld(versions.layoutState, layout),
+          layout,
+          mapping: parsedOrDefect(mappingFieldsSchema, versions.fields, 'mapping version'),
+          facts: authority.facts,
+          ...(authority.subject === undefined
+            ? {}
+            : { subject: { recordType: authority.subject.recordType, recordId: authority.subject.recordId } }),
+        },
       };
     },
   );
@@ -377,7 +473,8 @@ async function openBatchRefusal(
  * view its batch, since the published document is found whatever their scope sees (section 11; PRD-SEC-005). Both are
  * checked whatever the person's scope sees, since a source identity is one across the Organisation; validation checks
  * each document the file holds, and publishing checks again under the lock, behind which the unique index is the last
- * guard. The open-batch check runs again under the stored file's lock in the start transaction (RR-503).
+ * guard. Decided in the start's transaction under the stored file's lock (RR-503; code review 10 of stage 2); the read
+ * before it only spares a repeated file the staging.
  */
 async function repeatRefusal(
   deps: ImportDependencies,
@@ -443,34 +540,54 @@ async function mayViewDocument(
   return authorised.kind === 'allowed';
 }
 
-interface StagedFile {
-  readonly documents: readonly StagedDocumentDraft[];
-  readonly others: readonly StagedRowDraft[];
-  readonly sheets: readonly SheetSummary[];
-  readonly notes: readonly GridNote[];
-}
-
 /**
  * The stored workbook, fetched, decrypted, checked against its hash and read into the grid under the caps at intake
- * in force (9.1, 9.3; 8.3): a file stored under looser caps is refused here as at intake, naming the cap.
+ * in force (9.1, 9.3; 8.3), or the refusal: no file store, or a file stored under looser caps, refused here as at
+ * intake, naming the cap.
  */
-export async function storedGrid(
+async function gridOf(
   deps: ImportDependencies,
   organisationCode: string,
-  file: { readonly objectKey: string; readonly contentHash: string; readonly scheme: string },
-): Promise<Grid> {
-  if (deps.fileStore.kind === 'not-configured') throw fileStoreNotConfigured();
+  file: HandedInFile,
+): Promise<Grid | CommandRefusal> {
+  if (deps.fileStore.kind === 'not-configured') {
+    const { code, missing = [] } = fileStoreNotConfigured().body;
+    return { kind: 'unavailable', code, missing: [...missing] };
+  }
   const sealed = await deps.fileStore.store.get(file.objectKey);
   const bytes = openFile(deps.keys, organisationCode, file.contentHash, file.scheme, sealed);
   if (contentHashOf(bytes) !== file.contentHash) throw new CommandDefect('A stored file does not match its hash');
   const read = await readWorkbook(bytes, deps.caps);
-  if (read.kind === 'refused') refuse({ kind: 'refused', code: read.code, missing: [...read.missing] });
+  if (read.kind === 'refused') return { kind: 'refused', code: read.code, missing: [...read.missing] };
   return read.grid;
 }
 
-/** Fetches, decrypts, checks, reads and stages the file, outside any transaction (code-house-rules 8.3). */
-async function staged(deps: ImportDependencies, input: StartImportInput, planned: Planned): Promise<StagedFile> {
-  const grid = await storedGrid(deps, input.actor.organisation.organisationCode, planned);
+/** The stored workbook read into the grid, as gridOf, its refusal answered at once (Detect a layout; 6.5). */
+export async function storedGrid(
+  deps: ImportDependencies,
+  organisationCode: string,
+  file: HandedInFile,
+): Promise<Grid> {
+  const read = await gridOf(deps, organisationCode, file);
+  if ('code' in read) refuse(read);
+  return read;
+}
+
+/**
+ * The plan, with the file fetched, decrypted, checked, read and staged outside any transaction (code-house-rules 8.3);
+ * the reader's and staging's refusals are answered in the transaction, after the duplicate control (7.2).
+ */
+async function prepared(deps: ImportDependencies, input: StartImportInput, spare: boolean): Promise<Prepared> {
+  const read = await plan(deps, input, spare);
+  if (read.kind !== 'read') return read;
+  const { planned } = read;
+  const refused = (refusal: CommandRefusal): Prepared => ({
+    kind: 'refused-reading',
+    layoutId: planned.layoutId,
+    refusal,
+  });
+  const grid = await gridOf(deps, input.actor.organisation.organisationCode, planned);
+  if ('code' in grid) return refused(grid);
   const source = input.body.source ?? {};
   const result = stage(
     grid,
@@ -484,33 +601,50 @@ async function staged(deps: ImportDependencies, input: StartImportInput, planned
     // A batch about one record stages every data row into one document (S2-F04-T02).
     { oneDocument: planned.subject !== undefined },
   );
-  if (result.kind === 'refused') refuse({ kind: 'refused', code: result.code, missing: [...result.missing] });
-  return { documents: result.documents, others: result.others, sheets: result.sheets, notes: grid.notes };
+  if (result.kind === 'refused') return refused({ kind: 'refused', code: result.code, missing: [...result.missing] });
+  return {
+    kind: 'staged',
+    planned,
+    file: { documents: result.documents, others: result.others, sheets: result.sheets, notes: grid.notes },
+  };
+}
+
+/**
+ * Thrown in the start's transaction when a refusal the read stopped at no longer stands, so nothing was staged: the
+ * transaction rolls back, its key unused, and the start is read, staged and run again (8.1).
+ */
+class PlanAgain extends Error {
+  constructor() {
+    super('A refusal the start read before its transaction no longer stands; it is read and staged again');
+  }
 }
 
 export async function startImport(
   deps: ImportDependencies,
   input: StartImportInput,
 ): Promise<IdempotentAnswer<JsonValue>> {
-  const planned = await plan(deps, input);
-  // A repeated file is not staged: the slow work is spared. Its refusal is answered in the command's transaction under
-  // the request's key, never before it, so the same request sent again under its key gets its first answer, not the
-  // refusal its own first batch now causes (code-house-rules 12.4 "Replay"; PRD-INT-002; S2-F07-T02).
-  const staging:
-    | { readonly kind: 'repeated'; readonly refusal: CommandRefusal }
-    | { readonly kind: 'staged'; readonly file: StagedFile } =
-    planned.repeated === undefined
-      ? { kind: 'staged', file: await staged(deps, input, planned) }
-      : { kind: 'repeated', refusal: planned.repeated };
+  // A request the read finds refused is not staged: the slow work is spared. Every refusal but access is answered in
+  // the command's transaction under the request's key, never before it, so the same request sent again under its key
+  // gets its first answer, whatever its first batch did since (code-house-rules 12.4 "Replay"; PRD-INT-002).
+  try {
+    return await run(deps, input, await prepared(deps, input, true));
+  } catch (error) {
+    if (!(error instanceof PlanAgain)) throw error;
+  }
+  // Read again, staging whatever it reads, so the transaction runs a second time at most.
+  return run(deps, input, await prepared(deps, input, false));
+}
+
+/** The start's transaction under the request's key (12.4), answering its refusals in the order of 7.2. */
+function run(deps: ImportDependencies, input: StartImportInput, ready: Prepared): Promise<IdempotentAnswer<JsonValue>> {
   // A replay is answered while the same Authorise passes; a record no longer found stays not found (12.3, 12.4).
   const authoriseReplay: ReplayAuthorisation = async (context) => {
     const allowed = await authorised(deps, context, input);
     if (allowed.kind === 'allowed') return { kind: 'allowed' };
     // Only an access refusal stops a replay: the handler's refusal of a file for the record now is a rule of the
     // operation, which the first answer met as it stood (12.4; `access`'s replayRefusal keeps the kind).
-    const { refusal } = allowed;
-    if (refusal.kind !== 'not-authorised' && refusal.kind !== 'not-found') return { kind: 'allowed' };
-    return { kind: 'refused', refusal: replayRefusal(refusal) };
+    if (!isAccessRefusal(allowed.refusal)) return { kind: 'allowed' };
+    return { kind: 'refused', refusal: replayRefusal(allowed.refusal) };
   };
   return deps.helper.run(
     {
@@ -525,9 +659,10 @@ export async function startImport(
       authoriseReplay,
       work: async (context): Promise<CommandOutcome<JsonValue>> => {
         // Authorise with the batch's scope facts, and the handler's own permission on the record a batch is about,
-        // then hold them at step 0 (access-and-approvals 7.1 steps 3 and 4).
+        // with its refusal of a file for the record now, then hold them at step 0 (access-and-approvals 7.1 steps 3
+        // and 4).
         const allowed = await authorised(deps, context, input);
-        if (allowed.kind === 'refused') return { kind: 'refusal', refusal: allowed.refusal, causedBySecret: false };
+        if (allowed.kind === 'refused') return refusalOf(allowed.refusal);
         const held = await deps.access.holdAuthority(
           context,
           { kind: 'user', id: input.actor.userId },
@@ -536,13 +671,24 @@ export async function startImport(
           [],
           allowed.further,
         );
-        if (held !== undefined) return { kind: 'refusal', refusal: held, causedBySecret: false };
-        // Decided on the read just before the transaction; a refusal writes nothing it would rest on (8.1).
-        if (staging.kind === 'repeated') return { kind: 'refusal', refusal: staging.refusal, causedBySecret: false };
-        const rechecked = await underLocks(context, input, planned);
-        if ('code' in rechecked) return { kind: 'refusal', refusal: rechecked, causedBySecret: false };
-        const now = { ...planned, facts: allowed.authority.facts, classes: rechecked.classes };
-        return record(deps, context, input, now, staging.file, allowed.roleAssignmentId);
+        if (held !== undefined) return refusalOf(held);
+        // What the read refused, which does not change for the request; a refusal writes nothing it would rest on.
+        if (ready.kind === 'refused') return refusalOf(ready.refusal);
+        // Spared for the handler's refusal of a file for the record, which no longer stands.
+        if (ready.kind === 'spared' && ready.layoutId === undefined) throw new PlanAgain();
+        const layoutId = ready.kind === 'staged' ? ready.planned.layoutId : ready.layoutId;
+        if (layoutId === undefined) throw new CommandDefect('An import start read its layout and kept none');
+        const rechecked = await underLocks(deps, context, input, layoutId);
+        if ('code' in rechecked) return refusalOf(rechecked);
+        // Spared for the duplicate control, which no longer stands.
+        if (ready.kind === 'spared') throw new PlanAgain();
+        if (ready.kind === 'refused-reading') return refusalOf(ready.refusal);
+        const now = {
+          ...ready.planned,
+          facts: allowed.authority.facts,
+          classes: classesHeld(rechecked.layoutState, ready.planned.layout),
+        };
+        return record(deps, context, input, now, ready.file, allowed.roleAssignmentId);
       },
     },
   );
@@ -555,23 +701,22 @@ const MAPPING_VERSION_LOCK = lockTable('files_imports', 'mapping_version');
 /**
  * The rechecks under the locks (code-house-rules 8.1, 8.2; RR-503): the stored file exclusively, so two Starts of the
  * same file queue and the second sees the first's batch; the layout and mapping versions shared, so a decision on
- * either waits or is seen. Then, read after the locks are held: the file is in no open batch for the target and layout
- * (7.2), neither version is Rejected (6.4), and the classes the file is held to carry follow the layout version's
- * state now (section 11).
+ * either waits or is seen. Then, read after the locks are held: neither version is Rejected (6.4); the duplicate
+ * control, the file in no open batch for the target and layout and its claimed reference not published (7.2); and the
+ * layout version's state now, which the classes the file is held to carry follow (section 11).
  */
 async function underLocks(
+  deps: ImportDependencies,
   context: TransactionContext,
   input: StartImportInput,
-  planned: Planned,
-): Promise<CommandRefusal | { readonly classes: readonly FieldClass[] }> {
+  layoutId: string,
+): Promise<CommandRefusal | { readonly layoutState: string }> {
   const { body } = input;
   await context.lock(LOCK_STEP.document, [
     { table: STORED_FILE_LOCK, id: body.storedFileId, mode: 'exclusive' },
     { table: LAYOUT_VERSION_LOCK, id: body.layoutVersionId, mode: 'shared' },
     { table: MAPPING_VERSION_LOCK, id: body.mappingVersionId, mode: 'shared' },
   ]);
-  const open = await openBatchRefusal(context, body, planned.layoutId);
-  if (open !== undefined) return open;
   const [layoutNow] = await context.tx
     .select({ state: layoutVersion.state })
     .from(layoutVersion)
@@ -583,10 +728,12 @@ async function underLocks(
   if (layoutNow === undefined || mappingNow === undefined) {
     throw new CommandDefect('A layout or mapping version read before the locks is not there');
   }
-  if (layoutNow.state === 'Rejected' || mappingNow.state === 'Rejected') {
-    return { kind: 'refused', code: 'files-imports.layout-version-rejected', missing: [] };
-  }
-  return { classes: classesHeld(layoutNow.state, planned.layout) };
+  if (layoutNow.state === 'Rejected' || mappingNow.state === 'Rejected') return LAYOUT_VERSION_REJECTED;
+  const handler = deps.handlers.for(body.target, body.kind);
+  if (handler === undefined) throw new CommandDefect(`No import handler is registered for ${body.target}`);
+  const repeated = await repeatRefusal(deps, context, input, handler, layoutId);
+  if (repeated !== undefined) return repeated;
+  return { layoutState: layoutNow.state };
 }
 
 /** Takes the batch code series at step 8, or the refusal while none is Open: unavailable, naming it (GC9-9). */

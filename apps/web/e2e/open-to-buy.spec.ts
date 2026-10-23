@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { Authenticator } from './support/authenticator';
-import { signIn } from './support/journey';
-import { readWorld, type EnrolledUser } from './support/world';
+import { signedIn } from './support/journey';
+import { readWorld } from './support/world';
 
 // S2-F01-T02: the open-to-buy journey (goods-in 3.3, section 11; PRD-BKG-004; POL-05.09, POL-02.07). A Booking user
 // prepares a budget for a SYNTHETIC brand and season on Booking › Open-to-buy; their own check is refused, with its
@@ -11,14 +11,6 @@ import { readWorld, type EnrolledUser } from './support/world';
 /** A SYNTHETIC amount in rupees, as the form takes it, and as the screen shows it. */
 const AMOUNT = '12,50,000';
 const AMOUNT_SHOWN = '₹12,50,000.00';
-
-async function signedIn(page: Page, code: string, user: EnrolledUser): Promise<Authenticator> {
-  const app = new Authenticator(Buffer.from(user.factorSecretHex, 'hex'));
-  await page.goto('/');
-  await signIn(page, { code, login: user.login, password: user.password, totp: await app.nextCode() });
-  await expect(page.getByLabel('Profile')).toHaveText(user.displayName);
-  return app;
-}
 
 async function openOpenToBuy(page: Page): Promise<void> {
   await page

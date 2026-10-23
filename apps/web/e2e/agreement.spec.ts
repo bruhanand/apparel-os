@@ -1,7 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
-import { Authenticator } from './support/authenticator';
-import { signIn } from './support/journey';
-import { readWorld, type EnrolledUser } from './support/world';
+import { signedIn } from './support/journey';
+import { readWorld } from './support/world';
 
 // S2-F01-T01: the agreement journey without the default model for new bookings (structure-and-masters 5.2, 8;
 // DEC-129, POL-01.02; RR-545). Booking prepares a SYNTHETIC supplier's agreement on Setup › Agreement: the form asks its
@@ -9,14 +8,6 @@ import { readWorld, type EnrolledUser } from './support/world';
 // terms in force show the commercial model and no default model. Every value is SYNTHETIC.
 
 const agreementCode = `SYN-AGR-${String(Date.now()).slice(-6)}`;
-
-async function signedIn(page: Page, code: string, user: EnrolledUser): Promise<Authenticator> {
-  const app = new Authenticator(Buffer.from(user.factorSecretHex, 'hex'));
-  await page.goto('/');
-  await signIn(page, { code, login: user.login, password: user.password, totp: await app.nextCode() });
-  await expect(page.getByLabel('Profile')).toHaveText(user.displayName);
-  return app;
-}
 
 async function openAgreements(page: Page) {
   await page

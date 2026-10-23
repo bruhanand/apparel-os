@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import type { Authenticator } from './support/authenticator';
-import { firstSignIn, organisationToday, tabTo, typeInto } from './support/journey';
+import { organisationDate } from './support/clock';
+import { firstSignIn, tabTo, typeInto } from './support/journey';
 import { readWorld } from './support/world';
 
 // S1-F01-T20: the approval journey of the spec (sections 1, 5 and 10; S1-F01-AT18; PRD-SEC-016, PRD-UXP-001,
@@ -12,7 +13,6 @@ import { readWorld } from './support/world';
 // signs in, reads the history of the assignment, and finds the role editor refused with the missing permission named.
 // Every value is SYNTHETIC.
 
-const today = organisationToday();
 const suffix = String(Date.now()).slice(-6);
 const ADMIN_PASSWORD = 'SYNTHETIC-admin-own-password-1';
 const APPROVER_PASSWORD = 'SYNTHETIC-approver-own-password-1';
@@ -91,6 +91,7 @@ test('PRD-UXP-001 PRD-UXP-003 the Admin prepares, the approver approves from My 
   test.setTimeout(600_000);
   const world = readWorld().journey;
   const code = world.organisationCode;
+  const today = await organisationDate();
   const adminContext = await browser.newContext();
   const approverContext = await browser.newContext();
   // Tall enough that the evidence screenshot holds the whole history of the assignment (spec section 15).
