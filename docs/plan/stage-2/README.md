@@ -14,7 +14,7 @@ The whole first version in one document: [spec.md](spec.md). The design is [good
 
 ## 2. Where we are
 
-Updated 23 Oct 2026, **stopped after wave F** at the product owner's request. On the integration branch `s2/goods-in-first-version` (not pushed, tip after ff2f3827): seventeen of the 18 tickets done, each reviewed with its fixes in; every check and 48 browser journeys pass. Not started: `S2-F07-T02`, the first-version acceptance (wave G).
+Updated 23 Oct 2026. On the integration branch `s2/goods-in-first-version` (not pushed, tip after 79bb0ee7): all 18 tickets built and reviewed with their fixes in; every check passes locally and 49 browser journeys pass. Seventeen are done; the acceptance (`S2-F07-T02`) waits on the CI run after a push and the product owner's review of [its evidence file](s2-f07-scan-in/evidence.md).
 
 ## 3. Scope
 
@@ -63,7 +63,7 @@ Policies 1, 3, 5, 17 and the stage 2 parts of 10 Signed and validated, their val
 | [F09-T01 Reverse a PT before the scan-in](s2-f09-pt-reversal/tickets/T01-reverse-a-pt-before-the-scan-in.md) | done | F07-T01 (done) |
 | [F11-T01 Stock search](s2-f11-stock-search-and-reports/tickets/T01-stock-search.md) | done | F07-T01 (done) |
 | [F11-T02 The stage 2 reports](s2-f11-stock-search-and-reports/tickets/T02-stage-2-reports.md) | done | F01-T04, F02-T04 (done), F07-T01 (done) |
-| [F07-T02 First-version acceptance](s2-f07-scan-in/tickets/T02-first-version-acceptance.md) | blocked | F01-T04, F02-T04, F02-T05, F06-T01, F07-T01, F09-T01, F11-T01, F11-T02 |
+| [F07-T02 First-version acceptance](s2-f07-scan-in/tickets/T02-first-version-acceptance.md) | in-progress | all built (done) |
 
 ## 7. Exit checks the first version reaches
 
