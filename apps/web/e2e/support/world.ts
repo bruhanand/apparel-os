@@ -325,6 +325,8 @@ export interface SyntheticWorld {
     readonly barcodes: readonly string[];
     readonly floor: string;
     readonly floorId: string;
+    /** How Stock search names the floor in a result's place: its code and name (S2-F11-T01). */
+    readonly floorName: string;
   };
   readonly openToBuy: {
     readonly organisationCode: string;

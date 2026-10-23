@@ -56,6 +56,15 @@ export { availability } from './queries/availability.js';
 export { ptRevisionGoods } from './queries/pt-goods.js';
 export type { PtRevisionGoods } from './queries/pt-goods.js';
 export type { AvailabilityRow } from './queries/availability.js';
+// The read models of stock search, served through the kernel's read-model gateway (stock-ledger 13.22; goods-in 9.4;
+// S2-F11-T01): their declarations, which a reader names, and the served list the composition root hands the gateway.
+export {
+  STOCK_BALANCE_COSTS,
+  STOCK_POSITIONS,
+  STOCK_UNIT_POSITIONS,
+  stockLedgerReadModels,
+} from './queries/positions.js';
+export type { Position, PositionFilters, PositionKey, UnitPosition, UnitPositionsQuery } from './queries/positions.js';
 export { rebuildAndCompare } from './queries/rebuild.js';
 export { inventoryReconciliation, value } from './queries/value.js';
 export type { PoolValue, ReconciledMovement, TransitHeld, ValueLayer } from './queries/value.js';

@@ -566,3 +566,6 @@ export * from './damage.js';
 
 // `merchandise` · PT: a PT file uploaded for a GRN (goods-in 5; S2-F04-T02).
 export * from './pt.js';
+
+// `reports`' stock search (goods-in 9.1, 9.2; S2-F11-T01).
+export * from './stock-search.js';

@@ -95,6 +95,12 @@ import {
   damageReversalProposedSchema,
 } from './damage.js';
 import {
+  stockSearchExportSchema,
+  stockSearchFiltersSchema,
+  stockSearchQuerySchema,
+  stockSearchSchema,
+} from './stock-search.js';
+import {
   demoSignInListSchema,
   demoSignInRequestSchema,
   enrolmentConfirmRequestSchema,
@@ -214,6 +220,7 @@ import {
 } from './exceptions.js';
 import { attachedFileSchema, storedFileSchema, storeFileRequestSchema, STORE_FILE_BODY_LIMIT_BYTES } from './files.js';
 import {
+  STOCK_BALANCE_TYPE,
   COMPARISON_RUN_TYPE,
   comparisonRunListQuerySchema,
   comparisonRunListSchema,
@@ -5768,6 +5775,38 @@ export const routes = {
     shows: 'nothing',
     response: damageReversalProposedSchema,
     codes: [...DAMAGE_CHANGE_CODES, 'stock.report-not-confirmed', 'stock.reversal-open'],
+  }),
+  // Stock search (goods-in 9.1, 9.2, 9.4, section 11; PRD-STK-001, PRD-STK-006, PRD-ACS-008; S2-F11-T01): read through
+  // the read-model gateway, each result shown to a reader whose grants of view on every stock record type it reads
+  // cover its place and brand, its cost only with the cost field class. The export of a search is a command, since a
+  // file with cost is an export of a restricted field, which writes the access record (code-house-rules 12.1 "Reads";
+  // numbering-and-audit 5.1); its answer is never kept, so a replay is not repeatable (12.4; DEC-114), as a file's
+  // download.
+  searchStock: defineRoute({
+    method: 'GET',
+    path: '/api/reports/stock-search',
+    query: stockSearchQuerySchema,
+    access: { kind: 'action', action: 'view', recordType: STOCK_BALANCE_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: stockSearchSchema,
+    codes: [...HISTORY_CODES],
+  }),
+  exportStockSearch: defineRoute({
+    method: 'POST',
+    path: '/api/reports/stock-search/export',
+    access: { kind: 'action', action: 'view', recordType: STOCK_BALANCE_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: stockSearchFiltersSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'restricted-value',
+    response: stockSearchExportSchema,
+    codes: [
+      ...HISTORY_CODES,
+      'kernel.cross-site-request',
+      // More results than one export holds (STOCK_SEARCH_EXPORT_CAP): narrow the search (goods-in 9.4).
+      'reports.export-too-large',
+    ],
   }),
 } as const satisfies Readonly<Record<string, Route>>;
 
