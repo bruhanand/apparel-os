@@ -1,6 +1,6 @@
 # S2-F07-T01 — Scan-in at the Site
 
-Status: in-progress
+Status: done
 Blocked by: S2-F06-T01, S2-F08-T01
 Feature: [Stage 2 first version](../../spec.md)
 
@@ -30,3 +30,4 @@ Design tests 13, 14 and 17 pass, including the last piece scanned twice at once 
 - Open, for the product owner: RR-610, RR-611, RR-612.
 - Built and merged 23 Oct 2026 (commits 9055c838, ca57cfca, 11a1d451, merged in 2a3dfbab); every check and 47 browser journeys pass. Awaiting code review with wave F; `Status:` stays in-progress until then.
 - Review 8 changes (23 Oct 2026, branch `s2/review-8-fixes`; `Status:` unchanged): the goods a PT covers read under the reader's own actor, migration 0111 now `stock.ledger__pt_goods_not_waiting`, with no read past the reader's grants; the scan-in's read refused, and the inbox Unknown, to a reader without view on the stock it reads, and a scan holding that view at step 0 (goods-in 7.5; code-house-rules 6.2, `DEC-117`); the scan-in complete when every piece is accepted or under a damage report (goods-in 7.3), a product's pieces under a damage report counted apart from those held otherwise; a gate refusal tested; a product's name sent in the shape of Unknown; one constant for the barcode's cap, tested against the migration's check; the location kinds a type; `resolveCode` moved to the catalogue's queries; the scan-in's authority and names read in `receiving`'s own query; a Store's staff (P-STM) journey, scanning in at their own Store. RR-612 narrowed; RR-660 and RR-661 added.
+- Done 23 Oct 2026: reviewed (code review 8) with its fixes in; every check and 48 browser journeys pass on the integration branch. Commits 9055c838, ca57cfca, 11a1d451, merged in 2a3dfbab; review 8 fixes e82788fb, 34a08575, a619700c, merged in ff2f3827.

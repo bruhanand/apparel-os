@@ -14,7 +14,7 @@ The whole first version in one document: [spec.md](spec.md). The design is [good
 
 ## 2. Where we are
 
-Updated 23 Oct 2026. On the integration branch `s2/goods-in-first-version` (not pushed): thirteen tickets done (`S2-F01-T01` to `T04`, `S2-F02-T01` to `T05`, `S2-F04-T01`, `S2-F04-T02`, `S2-F06-T01`, `S2-F08-T01`), each reviewed with its fixes in; every check and 47 browser journeys pass. `S2-F07-T01` (scan-in) is built and merged, reviewed with wave F. Being built (wave F): `S2-F09-T01`, `S2-F11-T01`, `S2-F11-T02`; then `S2-F07-T02`, the acceptance.
+Updated 23 Oct 2026, **stopped after wave F** at the product owner's request. On the integration branch `s2/goods-in-first-version` (not pushed, tip after ff2f3827): seventeen of the 18 tickets done, each reviewed with its fixes in; every check and 48 browser journeys pass. Not started: `S2-F07-T02`, the first-version acceptance (wave G).
 
 ## 3. Scope
 
@@ -59,10 +59,10 @@ Policies 1, 3, 5, 17 and the stage 2 parts of 10 Signed and validated, their val
 | [F04-T01 A brand barcode on several products](s2-f04-pt-upload/tickets/T01-repeated-brand-barcodes.md) | done | — |
 | [F04-T02 Upload a PT file for a GRN](s2-f04-pt-upload/tickets/T02-upload-a-pt-file-for-a-grn.md) | done | F02-T03, F04-T01 (done) |
 | [F06-T01 Approve or reject a PT](s2-f06-pt-approval/tickets/T01-approve-or-reject-a-pt.md) | done | F04-T02 (done) |
-| [F07-T01 Scan-in at the Site](s2-f07-scan-in/tickets/T01-scan-in-at-the-site.md) | in-progress | F06-T01, F08-T01 (done) |
-| [F09-T01 Reverse a PT before the scan-in](s2-f09-pt-reversal/tickets/T01-reverse-a-pt-before-the-scan-in.md) | in-progress | F07-T01 (built) |
-| [F11-T01 Stock search](s2-f11-stock-search-and-reports/tickets/T01-stock-search.md) | in-progress | F07-T01 (built) |
-| [F11-T02 The stage 2 reports](s2-f11-stock-search-and-reports/tickets/T02-stage-2-reports.md) | in-progress | F01-T04, F02-T04 (done), F07-T01 (built) |
+| [F07-T01 Scan-in at the Site](s2-f07-scan-in/tickets/T01-scan-in-at-the-site.md) | done | F06-T01, F08-T01 (done) |
+| [F09-T01 Reverse a PT before the scan-in](s2-f09-pt-reversal/tickets/T01-reverse-a-pt-before-the-scan-in.md) | done | F07-T01 (done) |
+| [F11-T01 Stock search](s2-f11-stock-search-and-reports/tickets/T01-stock-search.md) | done | F07-T01 (done) |
+| [F11-T02 The stage 2 reports](s2-f11-stock-search-and-reports/tickets/T02-stage-2-reports.md) | done | F01-T04, F02-T04 (done), F07-T01 (done) |
 | [F07-T02 First-version acceptance](s2-f07-scan-in/tickets/T02-first-version-acceptance.md) | blocked | F01-T04, F02-T04, F02-T05, F06-T01, F07-T01, F09-T01, F11-T01, F11-T02 |
 
 ## 7. Exit checks the first version reaches

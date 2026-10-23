@@ -1,6 +1,6 @@
 # S2-F11-T01 — Stock search
 
-Status: in-progress
+Status: done
 Blocked by: S2-F07-T01
 Feature: [Stage 2 first version](../../spec.md)
 
@@ -25,3 +25,4 @@ Design test 20 passes; on the synthetic journey's data the four quantities equal
 - Beyond the ticket: the read-model gateway itself, which no earlier ticket built, and the read models of the catalogue and `organisation` the search reads names through; a "Stock" sidebar section, with Stock search in the menu of every persona whose ui-blueprint menu has Stock; `reports`' own text catalogue for the export's words (code-house-rules 12.13); `containsPattern`, the kernel's helper for a text searched as a part; the browser journeys' world's maker granted create on damage reports, for the damage path from a result.
 - Open, for the product owner: RR-640 (no product name to search), RR-641 (which cost the search shows), RR-642 (the as-built choices).
 - Review 8 changes (23 Oct 2026, branch `s2/review-8-fixes`; `Status:` unchanged): all four quantities compared with the ledger's own reads; the records behind a result, its GRNs, PTs and movements at the location, through the ledger's `stock.records` (route `GET /api/reports/stock-records`, 100 a page); the export listing `kernel.stale-version` and holding every view grant at step 0 with the cost's, through one export step shared with the stock report; cost cells with no ₹ under "Cost (₹)", Unknown a blank cell read as unknown; one constant for the text cap; Unknown sent as `{ kind: 'unknown' }`; one source for the conditions and hold kinds, the page limit and the business-date and refusal handling; the search's own messages; the gateway in a module of its own; each result keyed by its whole key, its legal entity included, and the same products elsewhere once; a Store's staff (P-STM) journey searching at their Store. RR-660 and RR-661 added.
+- Done 23 Oct 2026: reviewed (code review 8) with its fixes in; every check and 48 browser journeys pass on the integration branch. Commits a4b5a2b5, bc23af91, 14f460a6, d450e8d1, merged in 0ce22f77; review 8 fixes b818bb2c, a619700c, merged in ff2f3827.
