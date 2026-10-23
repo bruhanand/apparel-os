@@ -14,6 +14,7 @@ import { AuditLogScreen } from './history/AuditLogScreen';
 import { BookingsScreen } from './booking/BookingsScreen';
 import { OpenToBuyScreen } from './booking/OpenToBuyScreen';
 import { ReceiveGoodsScreen } from './receiving/ReceiveGoodsScreen';
+import { StockSearchScreen } from './stock/StockSearchScreen';
 import { LedgerScreen } from './finance/LedgerScreen';
 import { PeriodCloseScreen } from './finance/PeriodCloseScreen';
 import { PostingMapsScreen } from './finance/PostingMapsScreen';
@@ -108,6 +109,8 @@ function ScreenPage({ id }: { id: ScreenId }) {
       return <OpenToBuyScreen />;
     case 'receiving.inbox':
       return <ReceiveGoodsScreen />;
+    case 'stock.search':
+      return <StockSearchScreen />;
     case 'setup.users':
       return <UsersScreen />;
     case 'setup.roles':

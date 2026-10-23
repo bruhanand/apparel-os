@@ -32,3 +32,5 @@ export { taxRegistrationCodes } from './queries/tax-registrations.js';
 export { organisationRestoreParticipant } from './restore-participant.js';
 // The verified mappings as policy 10's values, for the policy gate (module-map 4.4; goods-in 10.5; RR-558).
 export { VERIFIED_MAPPINGS_CHECK, verifiedMappingsCheck } from './queries/validity.js';
+// The places a report names, served through the kernel's read-model gateway (goods-in 9.4; S2-F11-T01).
+export { ORGANISATION_PLACES, organisationReadModels } from './queries/places.js';

@@ -43,3 +43,7 @@ export { skuCodesOf } from './queries/sku.js';
 // Resolve a code (4.7; PRD-MER-006, PRD-MER-007; RR-554), for `receiving`'s scan-in, which resolves a scanned barcode
 // under the PT's brand (goods-in 7.2; S2-F07-T01).
 export { resolveCode } from './commands/codes.js';
+// The read models of stock search, served through the kernel's read-model gateway (goods-in 9.4; S2-F11-T01): the
+// products a search names and the facts of products and brands a result shows.
+export { CATALOGUE_PRODUCT_FACTS, CATALOGUE_PRODUCT_SEARCH, catalogueReadModels } from './queries/product-search.js';
+export type { ProductFacts } from './queries/product-search.js';

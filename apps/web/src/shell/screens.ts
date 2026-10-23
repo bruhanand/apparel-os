@@ -18,7 +18,7 @@ export interface Grant {
  */
 export type ScreenNeed = { readonly kind: 'none' } | { readonly kind: 'grant'; readonly grant: Grant };
 
-export const sections = ['home', 'booking', 'receive-goods', 'money', 'setup'] as const;
+export const sections = ['home', 'booking', 'receive-goods', 'stock', 'money', 'setup'] as const;
 export type Section = (typeof sections)[number];
 
 export interface Screen {
@@ -46,6 +46,9 @@ export const screens = {
   // Receive Goods › Inbox: the deliveries of a Site, the Arrival, the count and the GRN (goods-in 4.1 to 4.5, section
   // 11; ui-blueprint Receive Goods; S2-F02-T02).
   'receiving.inbox': { section: 'receive-goods', path: '/receive-goods/inbox', need: view('receiving.arrival') },
+  // Stock › Stock search: each product at each place with its quantities apart, and the same product elsewhere
+  // (goods-in 9.2, section 11; ui-blueprint Stock "Stock explorer"; S2-F11-T01).
+  'stock.search': { section: 'stock', path: '/stock/search', need: view('stock.balance') },
   'setup.users': { section: 'setup', path: '/setup/users', need: view('access.user') },
   'setup.roles': { section: 'setup', path: '/setup/roles', need: view('access.role') },
   'setup.role-assignments': {
@@ -141,7 +144,7 @@ export const personaMenus: Readonly<Record<PersonaId, { home: ScreenId | null; m
   // Booking (open-to-buy, approve) arrives with S2-F01-T02 (ui-blueprint "Menus by persona").
   'P-OWN': {
     home: 'my-work',
-    menu: ['my-work', 'booking.open-to-buy', 'setup.policy-readiness', 'setup.approval-limits'],
+    menu: ['my-work', 'booking.open-to-buy', 'stock.search', 'setup.policy-readiness', 'setup.approval-limits'],
   },
   'P-ADM': {
     home: 'setup.policy-readiness',
@@ -169,23 +172,31 @@ export const personaMenus: Readonly<Record<PersonaId, { home: ScreenId | null; m
   // with S1-F09-T03 (ui-blueprint).
   'P-ACC': {
     home: null,
-    menu: ['money.internal-ledger', 'money.period-close', 'setup.organisation-structure', 'setup.posting-maps'],
+    menu: [
+      'stock.search',
+      'money.internal-ledger',
+      'money.period-close',
+      'setup.organisation-structure',
+      'setup.posting-maps',
+    ],
   },
   'P-CHA': { home: null, menu: [] },
+  // Stock › Stock search arrives with S2-F11-T01 for every persona whose menu has Stock (ui-blueprint "Menus by
+  // persona": Lookup, Own Store, Own Site, View, All Sites, Assigned brands, Value); what each sees is its grants'.
   // Booking's Setup is "Products · Suppliers and agreements" (ui-blueprint); Products arrives with S1-F03-T02.
   // Booking › Open-to-buy arrives with S2-F01-T02, Booking › Bookings with S2-F01-T03 (ui-blueprint; goods-in
   // section 11).
-  'P-BKG': { home: null, menu: ['booking.bookings', 'booking.open-to-buy', 'setup.products'] },
+  'P-BKG': { home: null, menu: ['booking.bookings', 'booking.open-to-buy', 'stock.search', 'setup.products'] },
   // Operations' Setup is "Site opening and closure" (ui-blueprint; S1-F04-T02).
-  'P-OPS': { home: 'my-work', menu: ['my-work', 'setup.site-opening'] },
+  'P-OPS': { home: 'my-work', menu: ['my-work', 'stock.search', 'setup.site-opening'] },
   // Warehouse lands on Receive Goods › Inbox (Pending), from S2-F02-T02 (ui-blueprint "Menus by persona").
-  'P-WHS': { home: 'receiving.inbox', menu: ['my-work', 'receiving.inbox'] },
-  'P-BRM': { home: null, menu: [] },
+  'P-WHS': { home: 'receiving.inbox', menu: ['my-work', 'receiving.inbox', 'stock.search'] },
+  'P-BRM': { home: null, menu: ['stock.search'] },
   // A Store's staff receive goods at their Store, from S2-F02-T02 (ui-blueprint "Menus by persona").
-  'P-STM': { home: null, menu: ['my-work', 'receiving.inbox'] },
-  'P-CSH': { home: null, menu: [] },
-  'P-SLS': { home: null, menu: [] },
-  'P-EBO': { home: null, menu: [] },
+  'P-STM': { home: null, menu: ['my-work', 'receiving.inbox', 'stock.search'] },
+  'P-CSH': { home: null, menu: ['stock.search'] },
+  'P-SLS': { home: null, menu: ['stock.search'] },
+  'P-EBO': { home: null, menu: ['stock.search'] },
   'P-HRS': { home: null, menu: [] },
   'P-AUD': {
     home: 'setup.audit-log',

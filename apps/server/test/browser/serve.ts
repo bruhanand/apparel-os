@@ -3197,6 +3197,8 @@ await grantSynthetic(
     ...RECEIVING_LISTS,
     // And scans the pieces in once the PT is approved (goods-in 7.1; S2-F07-T01).
     { recordType: 'receiving.scan', action: 'create' },
+    // And reports damage on a product at its location from Stock search (goods-in 8.1, 9.2; S2-F11-T01).
+    { recordType: 'stock.damage_report', action: 'create' },
     { recordType: 'files_imports.import_batch', action: 'view' },
     { recordType: 'files_imports.import_batch', action: 'create' },
     { recordType: 'files_imports.import_batch', action: 'edit' },
@@ -3853,6 +3855,7 @@ writeFileSync(
       barcodes: ['8900000000035', '8900000000042'],
       floor: `Floor: ${syntheticCode('JOURNEY-PTA-FLOOR')} · ${syntheticName('Journey shop floor')}`,
       floorId: ptApprovalFloor.recordId,
+      floorName: `${syntheticCode('JOURNEY-PTA-FLOOR')} · ${syntheticName('Journey shop floor')}`,
     },
     openToBuy: {
       organisationCode: settingsCode,

@@ -6,6 +6,8 @@ import {
   KernelModule,
   LiveUpdatesModule,
   OrganisationRoutingModule,
+  READ_MODEL_GATEWAY,
+  ReadModelGateway,
 } from './kernel/index.js';
 import {
   ACCESS,
@@ -67,6 +69,7 @@ import { EboImportsModule } from './modules/ebo-imports/index.js';
 import {
   CatalogueModule,
   catalogueApprovals,
+  catalogueReadModels,
   catalogueScopeMembers,
   STOCK_PRESENCE,
   SUPPLIER_ROLES,
@@ -87,10 +90,12 @@ import {
   LOCATION_IN_USE,
   OrganisationModule,
   organisationApprovals,
+  organisationReadModels,
   organisationScopeMembers,
   type LocationInUse,
 } from './modules/organisation/index.js';
 import { TaxRulesModule, taxRulesApprovals } from './modules/finance/tax-rules/index.js';
+import { ReportsModule } from './modules/reports/index.js';
 import {
   BookStockHistory,
   LedgerCountSet,
@@ -100,6 +105,7 @@ import {
   STOCK_LEDGER,
   STOCK_POSTING_EVENT_KINDS,
   StockLedgerModule,
+  stockLedgerReadModels,
   type CallerRegistration,
   type StockLedgerInterface,
 } from './modules/stock/ledger/index.js';
@@ -294,6 +300,14 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
         overdueExceptionType,
       ] satisfies readonly ExceptionTypeRegistration[],
     },
+    // The read-model gateway, with the read models each module serves (module-map 4.1, section 3 rule 5; goods-in 9.4;
+    // S2-F11-T01): the stock of products at places from `stock` · ledger, the products and brands from `merchandise` ·
+    // catalogue, the places from `organisation`; fixed once the application has started.
+    {
+      provide: READ_MODEL_GATEWAY,
+      useFactory: () =>
+        new ReadModelGateway([...stockLedgerReadModels, ...catalogueReadModels, ...organisationReadModels]),
+    },
     // The decision-evidence contract of `access`, which files-imports' Attach implements (9.5; S1-F08-T03).
     { provide: DECISION_EVIDENCE, useFactory: (audit: AuditInterface) => decisionEvidence(audit), inject: [AUDIT] },
     // The policy-evidence contract of `configuration`, which files-imports' Attach implements (module-map 4.4;
@@ -316,6 +330,7 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
     DECISION_EVIDENCE,
     POLICY_EVIDENCE,
     PT_POSTING_QUEUE,
+    READ_MODEL_GATEWAY,
   ],
 })
 export class ModuleApprovalsModule {}
@@ -363,6 +378,8 @@ export class ModuleApprovalsModule {}
     StockDocumentsModule,
     // PT files uploaded for a GRN, as drafts a different person approves (module-map section 5; goods-in 5; S2-F04-T02).
     PtModule,
+    // Stock search, through the read-model gateway (module-map section 5 `reports`; goods-in 9.2; S2-F11-T01).
+    ReportsModule,
   ],
 })
 export class AppModule {}
