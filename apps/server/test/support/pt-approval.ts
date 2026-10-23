@@ -186,7 +186,14 @@ export interface PtApprovalWorld {
       readonly extra?: 'received' | 'not-received';
       readonly damaged?: number;
     }[],
-    at?: { readonly brand?: 'fixture' | 'owned'; readonly world?: ReceivingFixture },
+    at?: {
+      readonly brand?: 'fixture' | 'owned';
+      /** Another brand linked to the fixture's supplier, which a test made, in place of `brand`. */
+      readonly brandId?: string;
+      readonly world?: ReceivingFixture;
+      /** The unit the goods arrive at: the first Store's, or the warehouse (goods-in 12 test 17). */
+      readonly unit?: 'store' | 'warehouse';
+    },
   ): Promise<{ readonly arrivalId: string; readonly grnId: string }>;
   /** Hands a file of the rows in, starts its batch for the GRN, validates, submits and publishes it. */
   submittedPt(grnId: string, rows: readonly SyntheticPtRow[]): Promise<{ revisionId: string; requestId: string }>;
@@ -194,6 +201,12 @@ export interface PtApprovalWorld {
   arrival(arrivalId: string): Promise<Arrival>;
   revision(revisionId: string, person?: Person, query?: string): Promise<PtRevisionRead>;
   decide(person: Person, requestId: string, versionId: string, outcome?: 'approve' | 'reject'): Promise<Call>;
+  /** A person enrolled and signed in with the authorities given, as the world's own people are. */
+  enrol(
+    name: string,
+    authorities: readonly SyntheticAuthority[],
+    choices?: { scope?: AssignmentScope; fieldClasses?: readonly FieldClass[] },
+  ): Promise<Person>;
   close(): Promise<void>;
 }
 
@@ -355,7 +368,8 @@ export async function ptApprovalWorld(
 
   // The gates (goods-in 10.5): receiving at both worlds' units, damage, and PT approval under policies 1, 3, 9 and 10.
   await receivingGateOpen(setup, database, PT_TEST_CHECKS);
-  await receivingGranted(setup, database, fixture.siteId, [fixture.wholeStore], PT_TEST_CHECKS);
+  // The warehouse too, for goods received at a warehouse (goods-in 12 test 17; S2-F07-T01).
+  await receivingGranted(setup, database, fixture.siteId, [fixture.wholeStore, fixture.warehouse], PT_TEST_CHECKS);
   await receivingGranted(setup, database, unmapped.siteId, [unmapped.wholeStore], PT_TEST_CHECKS);
   await damageGateOpen(setup, database);
   await ptGateOpen(setup, database);
@@ -556,11 +570,12 @@ export async function ptApprovalWorld(
   let fileCount = 0;
   const issuedGrn: PtApprovalWorld['issuedGrn'] = async (lines, at = {}) => {
     const place = at.world ?? fixture;
-    const brandId = at.brand === 'owned' ? ownedId : place.brand.id;
+    const brandId = at.brandId ?? (at.brand === 'owned' ? ownedId : place.brand.id);
+    const warehouse = at.unit === 'warehouse';
     const made = await post(receiver, '/api/receiving/arrivals', {
-      businessUnitId: place.wholeStore,
-      receivingLocationId: place.storeLocation,
-      supplierPartyId: at.brand === 'owned' ? fixture.supplier.id : place.supplier.id,
+      businessUnitId: warehouse ? place.warehouse : place.wholeStore,
+      receivingLocationId: warehouse ? place.warehouseLocation : place.storeLocation,
+      supplierPartyId: at.brand === 'owned' || at.brandId !== undefined ? fixture.supplier.id : place.supplier.id,
       brandId,
       transporter: syntheticName('Transporter'),
       lorryReceipt: { number: 'SYN-LR-PTA', date: setup.today() },
@@ -696,6 +711,7 @@ export async function ptApprovalWorld(
     },
     revision,
     decide,
+    enrol: enrolled,
     close: async () => {
       await setup.close();
       await router.close();

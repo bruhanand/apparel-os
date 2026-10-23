@@ -3,6 +3,7 @@ import {
   DAMAGE_CAPS,
   DAMAGE_REPORT_TYPE,
   DAMAGE_REVERSAL_TYPE,
+  type DamagedGoods,
   type DamageReport,
   type DamageRound,
 } from '@apparel-os/schemas';
@@ -45,10 +46,10 @@ type ReportFormInput = z.input<typeof reportFormSchema>;
 type ReportFormOutput = z.output<typeof reportFormSchema>;
 
 /**
- * Report damage on the goods of a GRN line where they are (goods-in 8.1, 8.2): the pieces, what is wrong and a photo.
- * Once reported, the report is shown.
+ * Report damage on goods where they are (goods-in 8.1, 8.2): a GRN line's, or a product's at the location, as while
+ * scanning in (goods-in 7.2; S2-F07-T01); the pieces, what is wrong and a photo. Once reported, the report is shown.
  */
-export function ReportDamage({ grnLineId, locationId }: { grnLineId: string; locationId: string }) {
+export function ReportDamage({ goods, locationId }: { goods: DamagedGoods; locationId: string }) {
   const [reportId, setReportId] = useState<string | null>(null);
   const form = useForm<ReportFormInput, unknown, ReportFormOutput>({
     resolver: zodResolver(reportFormSchema),
@@ -66,7 +67,7 @@ export function ReportDamage({ grnLineId, locationId }: { grnLineId: string; loc
     const reported = await submission.submit({
       body: {
         locationId,
-        goods: { kind: 'grn-line', grnLineId },
+        goods,
         quantity: entered.quantity,
         description: entered.description,
         ...(photo === undefined ? {} : { photos: [photo] }),
@@ -74,7 +75,7 @@ export function ReportDamage({ grnLineId, locationId }: { grnLineId: string; loc
     });
     if (reported !== undefined) setReportId(reported.damageReportId);
   };
-  const id = (field: string) => `damage-${grnLineId}-${field}`;
+  const id = (field: string) => `damage-${goods.kind === 'grn-line' ? goods.grnLineId : goods.skuId}-${field}`;
   return (
     <form
       aria-label={t('damage.report')}

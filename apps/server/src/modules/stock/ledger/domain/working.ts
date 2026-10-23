@@ -1826,7 +1826,7 @@ export class Working {
   /**
    * Record acceptance (13.5; PRD-REC-021, PRD-REC-022, PRD-STK-003): barcode verified and physically accepted at the
    * Site, of units in custody there and not yet accepted: a piece elsewhere is `piece-not-at-place`; more units than
-   * are unaccepted there is `exceeds-source`.
+   * are unaccepted there, in the condition named where one is (13.20), is `exceeds-source`.
    */
   protected recordAcceptance(item: ItemOf<'record-acceptance'>): ItemValue {
     this.checkGoodsShape(item.lineId, item.goods);
@@ -1838,7 +1838,8 @@ export class Working {
           !piece.inCustody ||
           piece.siteId !== item.at.siteId ||
           piece.businessUnitId !== item.at.businessUnitId ||
-          piece.locationId !== item.at.locationId
+          piece.locationId !== item.at.locationId ||
+          (item.condition !== undefined && piece.condition !== item.condition)
         ) {
           refuse('piece-not-at-place', item.lineId, [{ kind: 'piece', code }]);
         }
@@ -1866,6 +1867,7 @@ export class Working {
           row.businessUnitId === item.at.businessUnitId &&
           row.locationId === item.at.locationId &&
           row.skuId === item.goods.skuId &&
+          (item.condition === undefined || row.condition === item.condition) &&
           (item.goods.receiptOriginId === undefined || row.receiptOriginId === item.goods.receiptOriginId),
       )
       .sort((a, b) => compareCodeUnits(a.countDate, b.countDate) || compareCodeUnits(a.id, b.id));

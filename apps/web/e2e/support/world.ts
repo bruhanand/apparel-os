@@ -314,6 +314,10 @@ export interface SyntheticWorld {
     readonly options: ReceivingOptions;
     readonly styleCode: string;
     readonly file: string;
+    /** The barcodes of the file's two pieces, and the Store's floor they are scanned in to (S2-F07-T01). */
+    readonly barcodes: readonly string[];
+    readonly floor: string;
+    readonly floorId: string;
   };
   readonly openToBuy: {
     readonly organisationCode: string;

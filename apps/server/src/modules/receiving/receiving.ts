@@ -13,6 +13,9 @@ import type {
   PhotosDraft,
   RecountDraft,
   RecountRead,
+  ScanDraft,
+  ScanInQuery,
+  ScanInRead,
 } from '@apparel-os/schemas';
 import type { LockTarget, TransactionContext } from '../../kernel/index.js';
 import type { AccessInterface, RecordFacts } from '../access/index.js';
@@ -35,6 +38,8 @@ import { clearPtMark, type PtMarkClearReason } from './commands/clear-pt-mark.js
 import { proposeRecount } from './commands/propose-recount.js';
 import { ptMarkLock, type PtMarkChange } from './commands/pt-mark.js';
 import { setPtMark } from './commands/set-pt-mark.js';
+import { scanPiece } from './commands/scan.js';
+import { anyAccepted, scanInView } from './queries/scan-in.js';
 import { grnRow } from './queries/grns.js';
 import { grnForPt, ptMarkOf, type GrnForPt, type PtMark } from './queries/pt-mark.js';
 import { currentLines } from './domain/lines.js';
@@ -315,6 +320,39 @@ export class Receiving {
     change: PtMarkChange & { readonly reason: PtMarkClearReason },
   ) {
     return clearPtMark(context, this.dependencies.audit, actor, change);
+  }
+
+  /**
+   * Scans one piece of the GRN in at its Site (goods-in 7.2; PRD-REC-021, PRD-REC-022; S2-F07-T01): accepted where it
+   * goes, or refused and kept in the scan-in's record with no stock change; a barcode the PT's products repeat asks
+   * which product it is (PRD-MER-007).
+   */
+  scanPiece(context: TransactionContext, actor: Actor, grnId: string, draft: ScanDraft, idempotencyKey: string) {
+    return scanPiece(context, this.dependencies, actor, grnId, draft, idempotencyKey);
+  }
+
+  /** The GRN's scan-in as its screen shows it (goods-in 7, section 11), or undefined when the reader may not see it. */
+  async readScanIn(
+    context: TransactionContext,
+    grnId: string,
+    query: ScanInQuery,
+    today: string,
+    named: (userIds: readonly string[]) => Promise<ReadonlyMap<string, string>>,
+  ): Promise<Omit<ScanInRead, 'asOf'> | undefined> {
+    const issued = await grnRow(context, grnId);
+    const row = issued === undefined ? undefined : await arrivalRow(context, issued.arrivalId);
+    if (issued === undefined || row === undefined) return undefined;
+    const view = await scanInView(context, this.dependencies, issued, row, query, today);
+    const names = await named([...new Set(view.scans.map((each) => each.scannedBy))]);
+    return { ...view, people: [...names].map(([userId, name]) => ({ userId, name })) };
+  }
+
+  /**
+   * Whether any piece of the GRN is scanned in (goods-in 6.4, 7.4; DEC-137): what `merchandise` · PT reads before a
+   * PT's reversal (S2-F09-T01), holding the GRN's row lock (`ptMarkLock`), as every scan does.
+   */
+  anyAccepted(context: TransactionContext, grnId: string): Promise<boolean> {
+    return anyAccepted(context, grnId);
   }
 
   /** The receipt problems read model of the stage 2 report (goods-in 9.3), as the reader may see it. */

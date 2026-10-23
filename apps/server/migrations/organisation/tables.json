@@ -2238,6 +2238,13 @@
       "design": "goods-in 4.11; stock-ledger 13.18; code-house-rules 6.2, 7.1"
     },
     {
+      "table": "receiving.scan",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 7.2, 7.5; stock-ledger 13.20; code-house-rules 6.2, 7.1"
+    },
+    {
       "table": "receiving.grn_line",
       "class": "scoped",
       "marks": ["append-only"],

@@ -8,7 +8,8 @@ import { readWorld, type EnrolledUser, type ReceivingOptions } from './support/w
 // of a style not set up yet, issues the GRN and submits its PT file for approval; Operations (P-OPS), assigned to
 // approve PTs, finds it in My work and reviews it there, the GRN's invoice, the totals with BASIC beside P RATE and the
 // new product it sets up, and approves it; the PT is then Official with its number from the PT series, and its maker
-// downloads it in the template's columns. Every value is SYNTHETIC.
+// downloads it in the template's columns; then, at phone width, scans its two pieces in to the Store's floor, a barcode
+// not on the PT refused and kept (goods-in 7, section 11; S2-F07-T01). Every value is SYNTHETIC.
 
 /** A SYNTHETIC invoice PDF, as the supplier sent it. */
 const INVOICE_PDF = {
@@ -59,7 +60,7 @@ async function arrivalWithInvoice(page: Page, options: ReceivingOptions): Promis
   await expect(invoice.getByRole('status').filter({ hasText: 'Invoice recorded.' })).toBeVisible();
 }
 
-test('PRD-REC-017 PRD-REC-018 POL-02.07 a PT submitted for approval is reviewed and approved from My work, then Official and downloaded', async ({
+test('PRD-REC-017 PRD-REC-018 POL-02.07 PRD-REC-021 a PT submitted for approval is reviewed and approved from My work, then Official, downloaded and scanned in', async ({
   browser,
 }) => {
   test.setTimeout(600_000);
@@ -153,6 +154,42 @@ test('PRD-REC-017 PRD-REC-018 POL-02.07 a PT submitted for approval is reviewed 
       await maker.getByRole('button', { name: 'Download the PT' }).click();
       const download = await downloading;
       expect(download.suggestedFilename()).toBe(`${number}.xlsx`);
+    });
+
+    await test.step('Warehouse scans the two pieces in to the floor at phone width, a barcode not on the PT refused', async () => {
+      // The inbox now says the delivery waits for its scan-in (goods-in 7.1; RR-606).
+      await maker.getByRole('button', { name: 'Back to the inbox' }).click();
+      const row = maker.getByRole('row').filter({ hasText: grnNumber });
+      await expect(row).toContainText('Waiting for its scan-in', { timeout: 30_000 });
+      // A phone, as a Store's staff scan with one (goods-in section 11; PRD-PRO-009).
+      await maker.setViewportSize({ width: 375, height: 812 });
+      await row.getByRole('button').first().click();
+      const summary = maker.getByRole('region', { name: 'Scan-in' });
+      await expect(summary.getByText('2 pieces left to scan in')).toBeVisible({ timeout: 30_000 });
+      await summary.getByRole('button', { name: 'Scan the pieces in' }).click();
+      await expect(maker.getByRole('heading', { level: 2, name: `Scan-in of GRN ${grnNumber}` })).toBeVisible();
+      const form = maker.getByRole('form', { name: 'Scan a piece' });
+      await form.getByLabel('Where the pieces go').selectOption({ label: world.floor });
+      const barcode = form.getByLabel('Barcode');
+      // Refused once with the reason shown, and kept in the record (code-house-rules 10.1; goods-in 7.2).
+      await barcode.fill('8900000099999');
+      await barcode.press('Enter');
+      await expect(form.getByRole('alert').filter({ hasText: 'Not on this PT' })).toBeVisible();
+      for (const [index, code] of world.barcodes.entries()) {
+        await barcode.fill(code);
+        // The scanner's Enter sends it.
+        await barcode.press('Enter');
+        if (index === 0) {
+          await expect(form.getByRole('status').filter({ hasText: 'Accepted' })).toBeVisible();
+          await expect(maker.getByText('1 piece left to scan in')).toBeVisible();
+        }
+      }
+      await expect(maker.getByText('Every piece is scanned in or under a damage report.').first()).toBeVisible();
+      const scans = maker.getByRole('list', { name: 'Scans' });
+      await expect(scans.getByRole('listitem')).toHaveCount(3);
+      await expect(scans.getByRole('listitem').last()).toContainText('refused: on no product of this PT');
+      // One column at phone width: nothing scrolls sideways (design-language; PRD-PRO-009).
+      expect(await maker.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     });
   } finally {
     await makerContext.close();

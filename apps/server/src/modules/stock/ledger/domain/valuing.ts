@@ -46,6 +46,8 @@ export class Valuing extends Corrections {
         return this.reversal(item);
       case 'piece-correction':
         return this.pieceCorrection(item);
+      case 'ownership-change':
+        return this.ownershipChange(item);
       default:
         throw new Error(`Not a valued item: ${item.kind}`);
     }

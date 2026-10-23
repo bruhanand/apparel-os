@@ -46,6 +46,8 @@ export type { CallerRegistration, RegisteredRecordType } from './registry.js';
 export { custody, originOfSourceLine, pieceByCode, receiptCountOfLine, sourceOfLine } from './queries/reads.js';
 export type { CustodyQuery, CustodyRow, LineSource, SourceLineOrigin } from './queries/reads.js';
 export { availability } from './queries/availability.js';
+export { ptRevisionGoods } from './queries/pt-goods.js';
+export type { PtRevisionGoods } from './queries/pt-goods.js';
 export type { AvailabilityRow } from './queries/availability.js';
 export { rebuildAndCompare } from './queries/rebuild.js';
 export { inventoryReconciliation, value } from './queries/value.js';

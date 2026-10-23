@@ -278,6 +278,51 @@ export class ReceivingController {
     return answer;
   }
 
+  @ApiRoute(routes.scanPiece)
+  scanPiece(@RouteInput() input: RouteInputOf<typeof routes.scanPiece>, @SignedIn() user: SignedInUser) {
+    const { grnId } = input.params;
+    // A scan carries its GRN's facts, so it authorises with them; a GRN the scanner may not see is not found (goods-in
+    // 7.2; code-house-rules 12.3).
+    return this.command(
+      routes.scanPiece,
+      'receiving.scan-piece',
+      user,
+      input,
+      (context) => this.receiving.grnFacts(context, grnId),
+      recordNotFound(GRN_TYPE, grnId),
+      (context, actor) => this.receiving.scanPiece(context, actor, grnId, input.body, input.idempotencyKey),
+    );
+  }
+
+  @ApiRoute(routes.readScanIn)
+  async readScanIn(@RouteInput() input: RouteInputOf<typeof routes.readScanIn>, @SignedIn() user: SignedInUser) {
+    const { grnId } = input.params;
+    const answer = await this.read(user, 'receiving.read-scan-in', async (context, today) => {
+      // A GRN the reader's scope does not cover is hidden by row-level security, so it carries no fact: it is not
+      // found, never refused as not authorised, which would say it exists (code-house-rules 12.3; PRD-SEC-005).
+      const facts = await this.receiving.grnFacts(context, grnId);
+      if (facts === undefined) return { refused: recordNotFound(GRN_TYPE, grnId) };
+      const authorised = await this.access.authorise(context, {
+        actorId: user.userId,
+        action: 'view',
+        recordType: ARRIVAL_TYPE,
+        facts,
+      });
+      if (authorised.kind === 'refused') return { refused: authorised.refusal };
+      const scanIn = await this.receiving.readScanIn(
+        context,
+        grnId,
+        input.query,
+        today,
+        async (userIds) => (await this.access.partyNames(context, userIds, [])).users,
+      );
+      if (scanIn === undefined) return { refused: recordNotFound(GRN_TYPE, grnId) };
+      return { asOf: context.startedAt.toISOString(), ...scanIn };
+    });
+    if ('refused' in answer) throw new ApiRefusal({ ...answer.refused, missing: [...answer.refused.missing] });
+    return answer;
+  }
+
   /** View on the booking an Arrival is received against, with its facts; not found when the reader may not see it. */
   private async bookingNeed(
     context: TransactionContext,

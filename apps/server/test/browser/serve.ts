@@ -3195,6 +3195,8 @@ await grantSynthetic(
   [
     ...RECEIVER_AUTHORITY,
     ...RECEIVING_LISTS,
+    // And scans the pieces in once the PT is approved (goods-in 7.1; S2-F07-T01).
+    { recordType: 'receiving.scan', action: 'create' },
     { recordType: 'files_imports.import_batch', action: 'view' },
     { recordType: 'files_imports.import_batch', action: 'create' },
     { recordType: 'files_imports.import_batch', action: 'edit' },
@@ -3279,6 +3281,18 @@ writeFileSync(
       ptRowOf('8900000000042', { DESIGN: ptApprovalStyle }),
     ],
     marker: 'JOURNEY-PT-APPROVAL',
+  }),
+);
+// The scan-in's destination at the Store (goods-in 7.2; S2-F07-T01): a floor of the PT world's Store unit, SYNTHETIC,
+// apart from the receiving zone the goods are received into.
+const ptApprovalFloor = await approved(receivingStructure, (c, p) =>
+  receivingStructure.organisation.prepareLocation(c, p, {
+    code: syntheticCode('JOURNEY-PTA-FLOOR'),
+    siteId: ptReceivingWorld.siteId,
+    businessUnitId: ptReceivingWorld.wholeStore,
+    name: syntheticName('Journey shop floor'),
+    kind: 'floor',
+    validFrom: receivingStructure.today(),
   }),
 );
 // The setup's people approved the exception rules above, so its connections end only now.
@@ -3835,6 +3849,10 @@ writeFileSync(
       options: ptReceivingWorld.options,
       styleCode: ptApprovalStyle,
       file: ptApprovalFile,
+      // The file's two barcodes, one a piece, and the floor the scan-in puts them on, as the screen names it.
+      barcodes: ['8900000000035', '8900000000042'],
+      floor: `Floor: ${syntheticCode('JOURNEY-PTA-FLOOR')} · ${syntheticName('Journey shop floor')}`,
+      floorId: ptApprovalFloor.recordId,
     },
     openToBuy: {
       organisationCode: settingsCode,
