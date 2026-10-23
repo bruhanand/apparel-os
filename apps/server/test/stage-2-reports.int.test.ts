@@ -3,6 +3,7 @@ import {
   arrivalReadSchema,
   bookingReadSchema,
   bookingStatusReportSchema,
+  ptReversalProposedSchema,
   receiptProblemsReportSchema,
   reportExportSchema,
   stockReportSchema,
@@ -806,5 +807,39 @@ describe('the exports (goods-in 9.1)', () => {
     );
     expect(records).toHaveLength(1);
     expect(records[0]).toMatchObject({ kind: 'sensitive-access', fieldClass: 'cost', exposure: 'exported' });
+  });
+});
+
+describe('the stock report after a PT reversal (goods-in 6.4, 9.5)', () => {
+  it('PRD-MOD-015 DEC-137 the MRP and cost of goods whose PT was reversed are Unknown again, never the reversed PT’s', async () => {
+    // Run last: a GRN of brand O of its own, one piece, its PT approved, then reversed before the scan-in.
+    const P6 = syntheticCode('RPT-P6');
+    const { grnId } = await w.issuedGrn([{ style: P6, sizeAt: 0, counted: 1 }], { brand: 'owned', by: receiver });
+    const { revisionId, requestId } = await w.submittedPt(grnId, [w.ptRow(P6, 0, {}, w.owned.code)]);
+    ok(await w.decide(w.people.ptApprover, requestId, revisionId));
+    const rowOf = async () =>
+      (await stockOf(reader, { brandId: w.owned.brandId, locationId: w.fixture.storeLocation })).rows.find(
+        (each) => each.product.kind === 'product' && each.product.styleCode === P6,
+      );
+    expect(figures(await rowOf())).toMatchObject({
+      physical: 1,
+      mrpValue: { kind: 'known', value: 199_900 },
+      cost: { kind: 'known', value: 94_500 },
+    });
+    const read = await w.grnPt(grnId);
+    const proposed = ptReversalProposedSchema.parse(
+      ok(
+        await w.post(w.people.ptMaker, `/api/merchandise/pt/revisions/${revisionId}/reversals`, {
+          versionToken: read.pt?.versionToken,
+          reason: 'SYNTHETIC: MRP keyed wrongly',
+        }),
+      ),
+    );
+    ok(await w.decide(w.people.ptApprover, proposed.requestId, proposed.ptReversalId));
+    expect(figures(await rowOf())).toMatchObject({
+      physical: 1,
+      mrpValue: { kind: 'unknown' },
+      cost: { kind: 'unknown' },
+    });
   });
 });

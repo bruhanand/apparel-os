@@ -1,6 +1,7 @@
 import type { DamageReportState } from '@apparel-os/schemas';
 import { and, asc, eq, gt, inArray, type SQL } from 'drizzle-orm';
 import {
+  CommandDefect,
   declareReadModel,
   serveReadModel,
   type ServedReadModel,
@@ -83,6 +84,10 @@ export async function reportGrnLines(
   const lines = read.map(({ line, grn: issued, arrivalDate, supplierPartyId }): ReportGrnLine => {
     const report =
       line.damageReportId === null ? undefined : damage.find((each) => each.damageReportId === line.damageReportId);
+    // The narrowly authorised read answers every report on the line, so the count's report not found is a defect.
+    if (line.damageReportId !== null && report === undefined) {
+      throw new CommandDefect(`The count's damage report of GRN line ${line.id} was not found`);
+    }
     return {
       grnLineId: line.id,
       grnId: issued.id,
