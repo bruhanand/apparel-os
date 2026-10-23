@@ -8,6 +8,7 @@ import { ptProposedSku, ptRevision, ptRevisionWithdrawal, ptRow } from '../db/sc
 import { revisionStateOf } from '../domain/state.js';
 import { decidedOf } from './approval.js';
 import { uploadBlock } from './plan.js';
+import { reversalsOf, reversalSummary, reversedBy } from './reversal.js';
 import { ptOfGrn, ptVersionToken } from './pt-records.js';
 
 // The PT of a GRN as its screen reads it (goods-in 5.1, 5.7, 5.8, section 11; S2-F04-T02): the GRN, its "PT attached"
@@ -58,7 +59,9 @@ export async function grnPtView(
     const proposals = await countsBy(context, ids, 'proposals');
     const repeated = await countsBy(context, ids, 'repeated');
     const differing = await countsBy(context, ids, 'differences');
-    const latest = await requests(ids);
+    const reversals = await reversalsOf(context, ids);
+    const reversalIds = [...reversals.values()].flatMap((each) => each.map(({ reversal }) => reversal.id));
+    const latest = await requests([...ids, ...reversalIds]);
     const decided = await decidedOf(context, ids);
     pt = {
       ptId: owner.id,
@@ -67,8 +70,13 @@ export async function grnPtView(
         const withdrawal = withdrawals.find((each) => each.ptRevisionId === revision.id);
         const request = latest.get(revision.id);
         const decision = decided.get(revision.id);
+        const reversed = reversals.get(revision.id) ?? [];
         people.add(revision.uploadedByUserId);
         if (withdrawal !== undefined) people.add(withdrawal.withdrawnByUserId);
+        for (const each of reversed) {
+          people.add(each.reversal.proposedByUserId);
+          if (each.decision !== undefined) people.add(each.decision.decidedByUserId);
+        }
         return {
           revisionId: revision.id,
           revisionNumber: revision.revisionNumber,
@@ -79,6 +87,7 @@ export async function grnPtView(
             rejected: decision?.rejected ?? false,
             postRequested: decision?.postRequested ?? false,
             failed: decision?.failed ?? false,
+            reversed: reversedBy(reversed),
           }),
           batchId: revision.importBatchId,
           uploadedBy: revision.uploadedByUserId,
@@ -98,6 +107,8 @@ export async function grnPtView(
             ? {}
             : { withdrawn: { by: withdrawal.withdrawnByUserId, at: withdrawal.occurredAt.toISOString() } }),
           ...(decision?.number === undefined ? {} : { number: decision.number }),
+          // Its reversals before the scan-in, newest first, each with its latest approval request (goods-in 6.7).
+          reversals: reversed.map((each) => reversalSummary(each, latest.get(each.reversal.id))),
         };
       }),
     };

@@ -6,6 +6,7 @@ import {
   grnPtReadSchema,
   HELD_LINE_DECISION,
   PT_APPROVAL,
+  PT_REVERSAL_APPROVAL,
   ptPreviewSchema,
   ptRevisionReadSchema,
   type Arrival,
@@ -514,8 +515,8 @@ export async function ptApprovalWorld(
     { recordType: 'access.approval_request', action: 'view' },
     { recordType: 'access.approval_reason', action: 'view' },
   ]);
-  // SYNTHETIC limits (access-and-approvals 9.2; V-02): on a PT's cost, a high one and one of 10.00; on Unknown value
-  // for the held lines and the damage decisions.
+  // SYNTHETIC limits (access-and-approvals 9.2; V-02): on a PT's cost and its reversal's, a high one, and on a PT's one
+  // of 10.00; on Unknown value for the held lines and the damage decisions.
   const limit = async (
     person: Person,
     actionType: string,
@@ -543,6 +544,8 @@ export async function ptApprovalWorld(
   };
   for (const person of [ptMaker, ptApprover, secondApprover]) {
     await limit(person, PT_APPROVAL, { kind: 'amount', amount: 1_000_000_000 }, false);
+    // And a PT's reversal, on the cost it reverses (goods-in 6.7; S2-F09-T01).
+    await limit(person, PT_REVERSAL_APPROVAL, { kind: 'amount', amount: 1_000_000_000 }, false);
   }
   await limit(lowLimitApprover, PT_APPROVAL, { kind: 'amount', amount: 1_000 }, false);
   await limit(bookingApprover, HELD_LINE_DECISION, { kind: 'none' }, true);

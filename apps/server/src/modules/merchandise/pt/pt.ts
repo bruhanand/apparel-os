@@ -1,4 +1,4 @@
-import { PT_IMPORT_TARGET, type FieldClass } from '@apparel-os/schemas';
+import { PT_IMPORT_TARGET, type FieldClass, type PtReversalDraft } from '@apparel-os/schemas';
 import type { CommandRefusal, TransactionContext } from '../../../kernel/index.js';
 import type { AccessInterface, LatestRequest, RecordFacts } from '../../access/index.js';
 import type { AuditActor, AuditInterface } from '../../audit/index.js';
@@ -12,6 +12,7 @@ import { downloadPt, type DownloadReader } from './commands/download-pt.js';
 import { ptImportHandler } from './commands/import-pt.js';
 import { withdrawPt, type Actor } from './commands/withdraw-pt.js';
 import { postAgain } from './commands/post-again.js';
+import { proposeReversal } from './commands/propose-reversal.js';
 import { postRequested, type PtPostingPublisher, type PtPostingServices } from './commands/post-requested.js';
 import { raiseForFailure } from './commands/raise-posting-refused.js';
 import type { PtPosting } from './jobs/posting.js';
@@ -19,6 +20,7 @@ import { grnPtView } from './queries/grn-pt.js';
 import { revisionReview, type RevisionPage } from './queries/revision.js';
 import { ptPreviewOf, type PreviewPage } from './queries/preview.js';
 import { revisionFacts } from './queries/pt-records.js';
+import { reversalFacts, reversalView } from './queries/reversal.js';
 import { templateListsOf } from './queries/template-lists.js';
 
 export interface PtDependencies {
@@ -35,7 +37,7 @@ export interface PtDependencies {
   >;
   readonly receiving: Pick<
     ReceivingInterface,
-    'ptBasis' | 'grnForPt' | 'ptMark' | 'ptMarkLock' | 'setPtMark' | 'clearPtMark' | 'grnBookingLinks'
+    'ptBasis' | 'grnForPt' | 'ptMark' | 'ptMarkLock' | 'setPtMark' | 'clearPtMark' | 'grnBookingLinks' | 'anyAccepted'
   >;
   readonly files: Pick<FilesImportsInterface, 'handlerBatch' | 'blankTemplate' | 'filledTemplate'>;
   /** What a PT's approval posts through (goods-in 6.3; S2-F06-T01): the gate, the ledger and the number series. */
@@ -139,6 +141,21 @@ export class Pt implements PtPosting {
    */
   download(context: TransactionContext, reader: DownloadReader, revisionId: string, masked: ReadonlySet<FieldClass>) {
     return downloadPt(context, this.dependencies, reader, revisionId, masked);
+  }
+
+  /** Proposes the reversal of an Official PT revision before the scan-in, with a reason (goods-in 6.4, 6.7). */
+  proposeReversal(context: TransactionContext, actor: Actor, revisionId: string, draft: PtReversalDraft) {
+    return proposeReversal(context, this.dependencies, actor, revisionId, draft);
+  }
+
+  /** A reversal's scope facts, as the reader may see it, which its routes authorise with; else undefined. */
+  reversalFacts(context: TransactionContext, reversalId: string) {
+    return reversalFacts(context, reversalId);
+  }
+
+  /** A reversal as its approver reads it in My work (goods-in 6.7, section 11), or undefined. */
+  reversal(context: TransactionContext, reversalId: string, request: LatestRequest | undefined) {
+    return reversalView(context, this.dependencies.receiving, reversalId, request);
   }
 
   /** Withdraws a draft PT revision (goods-in 5.7). */

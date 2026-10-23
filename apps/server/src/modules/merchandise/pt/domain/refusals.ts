@@ -1,6 +1,6 @@
 import { GRN_TYPE, type MissingItem } from '@apparel-os/schemas';
 import type { CommandRefusal } from '../../../../kernel/index.js';
-import { PT_POST_REQUEST_TYPE, PT_REVISION_TYPE } from './kinds.js';
+import { PT_POST_REQUEST_TYPE, PT_REVERSAL_TYPE, PT_REVISION_TYPE } from './kinds.js';
 
 // What every command, read and route of `merchandise` · PT shares to answer with (code-house-rules 12.3; goods-in 5.8;
 // S2-F04-T02): a command's outcome, the records a refusal names, and the refusals the part answers in more than one
@@ -64,4 +64,11 @@ export const notADraft = (revisionId: string): CommandRefusal => ({
   kind: 'refused',
   code: 'merchandise.pt-not-a-draft',
   missing: [recordItem(PT_REVISION_TYPE, revisionId)],
+});
+
+/** No reversal of a PT, or none the reader may see, has the identifier (code-house-rules 6.2, 12.3; goods-in 6.7). */
+export const reversalNotFound = (reversalId: string): CommandRefusal => ({
+  kind: 'not-found',
+  code: 'merchandise.record-not-found',
+  missing: [recordItem(PT_REVERSAL_TYPE, reversalId)],
 });

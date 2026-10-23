@@ -27,13 +27,15 @@ import { useTimeZone } from '../shell/session';
 import { unknownText } from './names';
 import { amountText, PtContent } from './PtContent';
 import { PtDownload, PtFailure } from './PtReview';
+import { PtReversals } from './PtReversal';
 
 // Receive Goods › a GRN › Upload PT file (goods-in 5, 6.5, section 11; DEC-134, DEC-135, DEC-137, DEC-138, DEC-140;
 // S2-F04-T02): whoever is assigned to make PTs downloads the blank template with its lists, uploads the filled file,
 // reads every problem by row and column or the preview of what submitting it makes, submits it for a different person
-// to approve, and withdraws a wrong draft. The file travels through the import routes, as a transaction batch about the
-// GRN; the GRN's PT shows its "PT attached" mark and its revisions. An amount of cost or margin the reader may not see
-// is masked. Every word comes from the message catalogue (code-house-rules 12.13).
+// to approve, withdraws a wrong draft, and proposes the reversal of a wrong Official PT before the scan-in (goods-in
+// 6.4, 6.7; S2-F09-T01). The file travels through the import routes, as a transaction batch about the GRN; the GRN's
+// PT shows its "PT attached" mark, its revisions and their reversals. An amount of cost or margin the reader may not
+// see is masked. Every word comes from the message catalogue (code-house-rules 12.13).
 
 const XLSX_ACCEPT = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const PT_READS = ['readGrnPt', 'readReceivingInbox', 'listMyWork'] as const;
@@ -448,6 +450,7 @@ export function PtFile({ grnId }: { grnId: string }) {
               <p className="m-0 text-body-sm text-text-2">{t('pt.intro')}</p>
               <p className="m-0 text-body-sm">{read.mark.kind === 'set' ? t('pt.mark.set') : t('pt.mark.not-set')}</p>
               <Revisions read={read} reading={query.isFetching} />
+              <PtReversals read={read} reading={query.isFetching} />
               {read.upload.kind === 'blocked' ? (
                 <Banner tone="warning" role="status" message="pt.upload.blocked">
                   <span>{codeText(read.upload.code)}</span>

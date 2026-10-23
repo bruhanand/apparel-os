@@ -17,7 +17,7 @@ import {
 } from '../domain/positions.js';
 import type { Condition, PlacedHoldKind } from '../domain/request.js';
 
-// The ledger's read models of stock search (goods-in 9.2, 9.4; stock-ledger 13.6, 13.21; module-map section 3 rule 5;
+// The ledger's read models of stock search (goods-in 9.2, 9.4; stock-ledger 13.6, 13.22; module-map section 3 rule 5;
 // PRD-STK-001, PRD-STK-006, PRD-MOD-003; S2-F11-T01), served through the kernel's read-model gateway: the stock of
 // products at places, a page at a time, with their quantities apart; the same products' stock at each business unit;
 // and the cost of the balances a reader may see cost of. Each takes no lock and runs in the reader's transaction under

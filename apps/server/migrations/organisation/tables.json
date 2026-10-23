@@ -2378,6 +2378,20 @@
       "design": "goods-in 4.6, 6.3, 6.6; stock-ledger 6.1; code-house-rules 6.2, 7.1"
     },
     {
+      "table": "merchandise.pt_reversal",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 6.4, 6.7; DEC-137; PRD-REC-019; code-house-rules 6.2, 7.1"
+    },
+    {
+      "table": "merchandise.pt_reversal_decision",
+      "class": "scoped",
+      "marks": ["append-only"],
+      "runtime": ["INSERT", "SELECT"],
+      "design": "goods-in 6.7; DEC-097; code-house-rules 6.2, 7.1"
+    },
+    {
       "table": "merchandise.marked_attribute",
       "class": "unscoped",
       "marks": ["append-only", "locked"],

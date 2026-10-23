@@ -8,6 +8,7 @@ import {
   DAMAGE_DECISION,
   HELD_LINE_DECISION,
   PT_APPROVAL,
+  PT_REVERSAL_APPROVAL,
   RECOUNT_APPROVAL,
   fieldClassSchema,
   permissionRegistry,
@@ -3251,32 +3252,35 @@ const ptApprovalDecider = await grantSynthetic(
   const limitAccess = receivingStructure.accessWith({ rules: ptApprovalRules, effects: new Map() });
   const preparer = receivingStructure.preparer;
   const preparing = await grantSynthetic(receivingDatabase, { kind: 'user', id: preparer.id }, LIMIT_ADMIN_AUTHORITY);
-  const prepared = await receivingStructure.run(preparer.id, (context) =>
-    limitAccess.prepareApprovalLimit(
-      context,
-      { userId: preparer.id, roleAssignmentId: preparing.assignmentId },
-      {
-        actionType: PT_APPROVAL,
-        holder: {
-          kind: 'individual',
-          userId: ptApprovalApprover.id,
-          roleAssignmentId: ptApprovalDecider.assignmentId,
+  // A PT's approval, and its reversal before the scan-in, on the cost it reverses (goods-in 6.7; S2-F09-T01).
+  for (const actionType of [PT_APPROVAL, PT_REVERSAL_APPROVAL]) {
+    const prepared = await receivingStructure.run(preparer.id, (context) =>
+      limitAccess.prepareApprovalLimit(
+        context,
+        { userId: preparer.id, roleAssignmentId: preparing.assignmentId },
+        {
+          actionType,
+          holder: {
+            kind: 'individual',
+            userId: ptApprovalApprover.id,
+            roleAssignmentId: ptApprovalDecider.assignmentId,
+          },
+          // A SYNTHETIC ₹10,00,000.00 on the PT's total proposed acquisition cost.
+          limit: { kind: 'amount', amount: paise(100_000_000) },
+          coversUnknown: false,
+          origin: 'synthetic',
+          validFrom: receivingStructure.today(),
         },
-        // A SYNTHETIC ₹10,00,000.00 on the PT's total proposed acquisition cost.
-        limit: { kind: 'amount', amount: paise(100_000_000) },
-        coversUnknown: false,
-        origin: 'synthetic',
-        validFrom: receivingStructure.today(),
-      },
-    ),
-  );
-  if (prepared.kind !== 'success') throw new Error(`The PT limit was refused: ${prepared.refusal.code}`);
-  const decided = await receivingStructure.decideThrough(
-    limitAccess,
-    prepared.answer.requestId,
-    prepared.answer.limitId,
-  );
-  if (decided.kind !== 'success') throw new Error(`The PT limit was not approved: ${decided.refusal.code}`);
+      ),
+    );
+    if (prepared.kind !== 'success') throw new Error(`The PT limit was refused: ${prepared.refusal.code}`);
+    const decided = await receivingStructure.decideThrough(
+      limitAccess,
+      prepared.answer.requestId,
+      prepared.answer.limitId,
+    );
+    if (decided.kind !== 'success') throw new Error(`The PT limit was not approved: ${decided.refusal.code}`);
+  }
 }
 const ptApprovalStyle = syntheticCode(`JOURNEY-PTA-STYLE-${randomBytes(3).toString('hex').toUpperCase()}`);
 const ptApprovalFile = join(dirname(worldFile), syntheticPtFileName('journey-pt-approval'));
@@ -3290,6 +3294,19 @@ writeFileSync(
       ptRowOf('8900000000042', { DESIGN: ptApprovalStyle }),
     ],
     marker: 'JOURNEY-PT-APPROVAL',
+  }),
+);
+// The corrected file once the PT is reversed (goods-in 6.4; S2-F09-T01): the same two pieces at P RATE 900.00, so
+// MARGIN (1,999.00 − 900.00) ÷ 1,999.00 = 54.98.
+const ptApprovalCorrectedFile = join(dirname(worldFile), syntheticPtFileName('journey-pt-corrected'));
+writeFileSync(
+  ptApprovalCorrectedFile,
+  await syntheticPtWorkbook({
+    rows: [
+      ptRowOf('8900000000035', { DESIGN: ptApprovalStyle, 'P RATE': 900, MARGIN: 54.98 }),
+      ptRowOf('8900000000042', { DESIGN: ptApprovalStyle, 'P RATE': 900, MARGIN: 54.98 }),
+    ],
+    marker: 'JOURNEY-PT-CORRECTED',
   }),
 );
 // The scan-in's destination at the Store (goods-in 7.2; S2-F07-T01): a floor of the PT world's Store unit, SYNTHETIC,
@@ -3905,6 +3922,7 @@ writeFileSync(
       options: ptReceivingWorld.options,
       styleCode: ptApprovalStyle,
       file: ptApprovalFile,
+      correctedFile: ptApprovalCorrectedFile,
       // The file's two barcodes, one a piece, and the floor the scan-in puts them on, as the screen names it.
       barcodes: ['8900000000035', '8900000000042'],
       floor: `Floor: ${syntheticCode('JOURNEY-PTA-FLOOR')} · ${syntheticName('Journey shop floor')}`,

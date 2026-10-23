@@ -9,6 +9,10 @@ import {
   ptPreviewSchema,
   ptRevisionParamsSchema,
   ptRevisionReadSchema,
+  ptReversalDraftSchema,
+  ptReversalParamsSchema,
+  ptReversalProposedSchema,
+  ptReversalReadSchema,
   ptTemplateQuerySchema,
   ptTemplateSchema,
   ptWithdrawalSchema,
@@ -1322,6 +1326,18 @@ const PT_DECISION_CODES = [
 ] as const satisfies readonly ErrorCode[];
 
 /**
+ * The codes of a PT reversal's approval besides those a PT's decision answers (goods-in 6.4, 6.7, 10.3; DEC-137,
+ * PRD-REC-019; S2-F09-T01): the reversal decided already or its revision no longer the PT's newest Official one, a
+ * piece scanned in or held since the approval, and the GRN's mark no longer the revision's.
+ */
+const PT_REVERSAL_DECISION_CODES = [
+  'merchandise.pt-reversal-decided',
+  'merchandise.pt-scanned-in',
+  'merchandise.pt-goods-held',
+  'receiving.pt-not-attached',
+] as const satisfies readonly ErrorCode[];
+
+/**
  * The codes of a recount's approval (goods-in 4.7, 4.11, 10.3; S2-F02-T05): the receiving gate at the unit, the recount
  * decided already, its lines checked again under the locks, the decision verified under the ledger's locks on the
  * goods' cost then (access-and-approvals 9.7), and the shortage follow-up a recount raises (goods-in 4.9).
@@ -1994,6 +2010,8 @@ export const routes = {
       ...RECOUNT_DECISION_CODES,
       // A PT revision's approval or rejection (goods-in 6.3, 6.6; S2-F06-T01).
       ...PT_DECISION_CODES,
+      // A PT's reversal before the scan-in (goods-in 6.4, 6.7; S2-F09-T01).
+      ...PT_REVERSAL_DECISION_CODES,
       // Layout, mapping and mapping rule versions (imports-and-opening-data 6.4; S1-F06-T03).
       'files-imports.proposal-not-found',
       'files-imports.proposal-not-open',
@@ -5578,6 +5596,40 @@ export const routes = {
       'merchandise.record-not-found',
       'merchandise.pt-not-a-draft',
     ],
+  }),
+  // The reversal of an Official PT before the scan-in, proposed with a reason by whoever may change the PT, and read as
+  // its approver reads it in My work (goods-in 6.4, 6.7, section 11; DEC-137, PRD-REC-019; S2-F09-T01). Approving or
+  // rejecting it is `access`'s Decide (access-and-approvals 9.5); its effect is `merchandise` · PT's (9.8b).
+  proposePtReversal: defineRoute({
+    method: 'POST',
+    path: '/api/merchandise/pt/revisions/{revisionId}/reversals',
+    params: ptRevisionParamsSchema,
+    access: { kind: 'action', action: 'edit', recordType: PT_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: ptReversalDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: ptReversalProposedSchema,
+    codes: [
+      ...HISTORY_CODES,
+      'kernel.cross-site-request',
+      'kernel.stale-version',
+      'merchandise.record-not-found',
+      'merchandise.pt-not-official',
+      'merchandise.pt-reversal-open',
+      'merchandise.pt-scanned-in',
+      'merchandise.pt-goods-held',
+    ],
+  }),
+  readPtReversal: defineRoute({
+    method: 'GET',
+    path: '/api/merchandise/pt/reversals/{reversalId}',
+    params: ptReversalParamsSchema,
+    access: { kind: 'action', action: 'view', recordType: PT_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: ptReversalReadSchema,
+    codes: [...HISTORY_CODES, 'merchandise.record-not-found'],
   }),
   // A PT revision as its approver reviews it in My work and its GRN's screen shows it, and an Official PT downloaded in
   // its template's columns (goods-in 6.2, 6.5, 6.6, section 11; S2-F06-T01). Approving or rejecting it is `access`'s

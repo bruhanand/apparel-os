@@ -1,6 +1,6 @@
-import { and, asc, eq, gt, isNull, type SQL } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, isNull, type SQL } from 'drizzle-orm';
 import type { TransactionContext } from '../../../../kernel/index.js';
-import { balance, movement, movementPiece, piece, receiptOrigin } from '../db/schema.js';
+import { balance, coverage, movement, movementPiece, piece, receiptOrigin } from '../db/schema.js';
 
 // The ledger's reads (stock-ledger 13.6; S1-F10-T02): Custody, Piece, Availability, and Rebuild and compare over the
 // quantity projections (2.1). They take no lock and run in the reader's transaction, under the reader's actor, so
@@ -165,4 +165,100 @@ export async function sourceOfLine(context: TransactionContext, lineId: string):
     .from(receiptOrigin)
     .where(and(eq(receiptOrigin.sourceLineId, lineId), isNull(receiptOrigin.parentOriginId)));
   return row;
+}
+
+/** What a source's lines recorded of coverage and cost and still stands (13.6; 13.21), each by the line it names. */
+export interface SourceCoverageAndCost {
+  /** Each coverage record a line made that no later record removed, with its origin and units. */
+  readonly coverage: readonly {
+    readonly coverageId: string;
+    readonly lineId: string;
+    readonly receiptOriginId: string;
+    readonly quantity: number;
+  }[];
+  /** Each cost established a line made that no reversal undid. */
+  readonly costEstablished: readonly { readonly movementId: string; readonly lineId: string }[];
+}
+
+/**
+ * The coverage and the costs established a source's lines recorded and that still stand (13.5, 13.6; 13.21; goods-in
+ * 6.7; S2-F09-T01), such as a PT revision's approval: what its reversal removes and reverses, each by its own
+ * identifier. Read under the reader's actor, so what they may not see is left out; the ledger's own checks under its
+ * locks decide the rest (13.1).
+ */
+export async function coverageAndCostOfSource(
+  context: TransactionContext,
+  source: { readonly module: string; readonly recordType: string; readonly recordId: string },
+): Promise<SourceCoverageAndCost> {
+  const covers = await context.tx
+    .select({
+      id: coverage.id,
+      lineId: coverage.sourceLineId,
+      receiptOriginId: coverage.receiptOriginId,
+      quantity: coverage.quantity,
+    })
+    .from(coverage)
+    .where(
+      and(
+        eq(coverage.sourceModule, source.module),
+        eq(coverage.sourceRecordType, source.recordType),
+        eq(coverage.sourceRecordId, source.recordId),
+        eq(coverage.action, 'cover'),
+      ),
+    )
+    .orderBy(asc(coverage.sourceLineId), asc(coverage.id));
+  const removed =
+    covers.length === 0
+      ? []
+      : await context.tx
+          .select({ id: coverage.removesCoverageId })
+          .from(coverage)
+          .where(
+            and(
+              eq(coverage.action, 'remove'),
+              inArray(
+                coverage.removesCoverageId,
+                covers.map((row) => row.id),
+              ),
+            ),
+          );
+  const gone = new Set(removed.map((row) => row.id));
+  const costs = await context.tx
+    .select({ id: movement.id, lineId: movement.sourceLineId })
+    .from(movement)
+    .where(
+      and(
+        eq(movement.sourceModule, source.module),
+        eq(movement.sourceRecordType, source.recordType),
+        eq(movement.sourceRecordId, source.recordId),
+        eq(movement.kind, 'cost-established'),
+      ),
+    )
+    .orderBy(asc(movement.sourceLineId), asc(movement.id));
+  const reversals =
+    costs.length === 0
+      ? []
+      : await context.tx
+          .select({ id: movement.reversesMovementId })
+          .from(movement)
+          .where(
+            inArray(
+              movement.reversesMovementId,
+              costs.map((row) => row.id),
+            ),
+          );
+  const undone = new Set(reversals.map((row) => row.id));
+  return {
+    coverage: covers
+      .filter((row) => !gone.has(row.id))
+      .map((row) => ({
+        coverageId: row.id,
+        lineId: row.lineId,
+        receiptOriginId: row.receiptOriginId,
+        quantity: row.quantity,
+      })),
+    costEstablished: costs
+      .filter((row) => !undone.has(row.id))
+      .map((row) => ({ movementId: row.id, lineId: row.lineId })),
+  };
 }
