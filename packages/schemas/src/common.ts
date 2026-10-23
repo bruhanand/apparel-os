@@ -72,6 +72,16 @@ export const maybeKnownPaiseSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('unknown') }),
 ]);
 
+/**
+ * PRD-MOD-015: a text that may be Unknown, such as a product's code the reader's catalogue does not answer, or a
+ * colour the count did not state: known, or Unknown, never an empty text or null standing for it.
+ */
+export const maybeKnownTextSchema = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('known'), value: z.string() }),
+  z.strictObject({ kind: z.literal('unknown') }),
+]);
+export type MaybeKnownText = z.infer<typeof maybeKnownTextSchema>;
+
 /** A reference to one version of an owner's record: module, record type, record and version (domain-model 3.3). */
 export const recordVersionRefSchema = z.strictObject({
   module: z.string().min(1),
@@ -93,12 +103,18 @@ export const SETUP_PAGE_CAP = 100;
  * names, at most `limit` of them (the cap when left out). The cursor is the last record's identifier, opaque to the
  * screen, which only hands back the `next` it was given.
  */
-export const setupPageQuerySchema = z.strictObject({
-  after: idSchema.optional(),
-  limit: z
+/**
+ * How many rows a page of a list holds, as a query parameter (code-house-rules 12.1 "Reads"): a whole number from 1 to
+ * the list's cap, written in decimal digits. The one schema every paged list's `limit` uses.
+ */
+export const pageLimitSchema = (cap: number) =>
+  z
     .string()
     .regex(/^[1-9]\d*$/)
-    .refine((limit) => Number(limit) <= SETUP_PAGE_CAP, { message: `At most ${String(SETUP_PAGE_CAP)}` })
-    .optional(),
+    .refine((limit) => Number(limit) <= cap, { message: `At most ${String(cap)}` });
+
+export const setupPageQuerySchema = z.strictObject({
+  after: idSchema.optional(),
+  limit: pageLimitSchema(SETUP_PAGE_CAP).optional(),
 });
 export type SetupPageQuery = z.infer<typeof setupPageQuerySchema>;

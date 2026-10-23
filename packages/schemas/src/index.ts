@@ -9,7 +9,9 @@ export {
   idSchema,
   loginSchema,
   maybeKnownPaiseSchema,
+  maybeKnownTextSchema,
   organisationCodeSchema,
+  pageLimitSchema,
   paiseSchema,
   personaIdSchema,
   personasHeldSchema,
@@ -18,7 +20,7 @@ export {
   setupPageQuerySchema,
   totpCodeSchema,
 } from './common.js';
-export type { PersonaId, RecordVersionRef, SetupPageQuery } from './common.js';
+export type { MaybeKnownText, PersonaId, RecordVersionRef, SetupPageQuery } from './common.js';
 
 export {
   databaseNameSchema,

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { approvalRequestStateSchema } from './approvals.js';
 import { BOOKING_CAPS } from './booking.js';
-import { businessDateSchema, idSchema } from './common.js';
+import { businessDateSchema, idSchema, maybeKnownTextSchema, pageLimitSchema } from './common.js';
 import { DAMAGE_CAPS } from './damage.js';
 import { evidenceFileSchema, evidenceListSchema } from './files.js';
 import { missingItemSchema } from './errors.js';
@@ -704,11 +704,7 @@ export const INBOX_PAGE_CAP = 100;
 export const inboxQuerySchema = z.strictObject({
   view: inboxViewSchema,
   after: idSchema.optional(),
-  limit: z
-    .string()
-    .regex(/^[1-9]\d*$/)
-    .refine((limit) => Number(limit) <= INBOX_PAGE_CAP, { message: `At most ${String(INBOX_PAGE_CAP)}` })
-    .optional(),
+  limit: pageLimitSchema(INBOX_PAGE_CAP).optional(),
 });
 export type InboxQuery = z.infer<typeof inboxQuerySchema>;
 export const inboxParamsSchema = z.strictObject({ siteId: idSchema });
@@ -731,10 +727,13 @@ export const inboxEntrySchema = z.strictObject({
    * the product owner, 22 Oct 2026, RR-584).
    */
   /**
-   * Once its PT is approved, its scan-in, while any piece the PT covers waits at the receiving location (goods-in 7.1,
-   * 7.3; RR-606); nothing once none waits, the delivery then in History (S2-F07-T01).
+   * Once its PT is approved, its scan-in, until every piece the PT covers is accepted or under a damage report
+   * (goods-in 7.1, 7.3; RR-606); nothing then, the delivery in History (S2-F07-T01). Unknown, listed in Pending, once
+   * its PT file is submitted, to a reader whose grants of view on the stock the scan-in reads do not cover its goods,
+   * since whether its PT is approved and its scan-in complete is read from that stock (goods-in 7.5; PRD-MOD-015,
+   * PRD-SEC-005; code review 8 of stage 2).
    */
-  waitingFor: z.enum(['invoice', 'count', 'grn', 'held-lines', 'pt', 'pt-approval', 'scan-in']).nullable(),
+  waitingFor: z.enum(['invoice', 'count', 'grn', 'held-lines', 'pt', 'pt-approval', 'scan-in', 'unknown']).nullable(),
 });
 export type InboxEntry = z.infer<typeof inboxEntrySchema>;
 
@@ -812,39 +811,47 @@ export const SCAN_PAGE_CAP = 100;
 
 export const scanInQuerySchema = z.strictObject({
   after: idSchema.optional(),
-  limit: z
-    .string()
-    .regex(/^[1-9]\d*$/)
-    .refine((limit) => Number(limit) <= SCAN_PAGE_CAP, { message: `At most ${String(SCAN_PAGE_CAP)}` })
-    .optional(),
+  limit: pageLimitSchema(SCAN_PAGE_CAP).optional(),
 });
 export type ScanInQuery = z.infer<typeof scanInQuerySchema>;
 
 /**
- * Where a scan-in stands (goods-in 7.1, 7.3): its PT not yet approved, pieces still waiting at the receiving location,
- * or complete, every piece the PT covers accepted or under a damage report or another hold.
+ * Where a scan-in stands (goods-in 7.1, 7.3): its PT not yet approved, scanning, or complete, every piece the PT covers
+ * accepted or under a damage report.
  */
 export const scanInStateSchema = z.enum(['waiting-for-pt', 'scanning', 'complete']);
 export type ScanInState = z.infer<typeof scanInStateSchema>;
 
 /**
+ * A product as the scan-in names it: its SKU's code, style code and size as of today at the Site, or Unknown while the
+ * catalogue does not answer it, a size Unknown while it is (PRD-MOD-015).
+ */
+export const scanInProductNameSchema = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('known'), code: z.string(), styleCode: z.string(), size: maybeKnownTextSchema }),
+  z.strictObject({ kind: z.literal('unknown') }),
+]);
+export type ScanInProductName = z.infer<typeof scanInProductNameSchema>;
+
+/**
  * One product the PT covers, as the scan-in counts its pieces (goods-in 7.2, 7.3): covered by the PT, accepted, waiting
- * at the receiving location, and held, under a damage report or another hold. The product is named by its SKU's code,
- * style code and size, each null while Unknown (PRD-MOD-015).
+ * at the receiving location, under a damage report, held for it or confirmed damaged, and held otherwise, under another
+ * hold or in another condition, which no scan accepts.
  */
 export const scanInProductSchema = z.strictObject({
   skuId: idSchema,
-  code: z.string().nullable(),
-  styleCode: z.string().nullable(),
-  size: z.string().nullable(),
+  name: scanInProductNameSchema,
   covered: z.int().min(0),
   accepted: z.int().min(0),
   waiting: z.int().min(0),
+  damaged: z.int().min(0),
   held: z.int().min(0),
 });
 export type ScanInProduct = z.infer<typeof scanInProductSchema>;
 
-/** The scan-in of a GRN, as its screen shows it (goods-in 7, section 11): read with view on the Arrival. */
+/**
+ * The scan-in of a GRN, as its screen shows it (goods-in 7, section 11): read with view on the Arrival and on the stock
+ * it reads, the receipt origins, balances and holds of the GRN's goods, under the reader's own grants (goods-in 7.5).
+ */
 export const scanInReadSchema = z.strictObject({
   asOf: instantSchema,
   grnId: idSchema,

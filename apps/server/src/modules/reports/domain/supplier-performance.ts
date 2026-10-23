@@ -19,12 +19,15 @@ import type {
 //   extended ÷ delivered pieces. An arrival before the window's start is on time, never late (goods-in 3.7).
 // - **Damage rate**: pieces under a confirmed damage report at the count ÷ pieces counted now, a recount's count where
 //   one is approved (goods-in 4.11), over the GRN lines of the supplier and brand; a line is of the season of the
-//   booking it delivered to, and of an Unknown season when it delivered to none the reader sees.
+//   booking it delivered to, and of an Unknown season when it delivered to none the reader sees. A count's damage
+//   report the reader may not see makes its line's pieces Unknown, so the rate is Unknown (DEC-117; code review 9).
 //
 // A rate is measured only with a base and nothing Unknown in it; otherwise it is Unknown, never zero.
 
 /** A booking with a version in force, as the report reads it (goods-in 3.10). */
 export interface BookingFacts {
+  readonly bookingId: string;
+  readonly number: string;
   readonly supplierPartyId: string;
   readonly brandId: string;
   readonly seasonValueId: string;
@@ -36,14 +39,22 @@ export interface BookingFacts {
 /** A GRN line, as the report reads it. */
 export interface GrnLineFacts {
   readonly grnLineId: string;
+  /** Its GRN, which the figures drill down to (goods-in 9.1). */
+  readonly grnId: string;
   readonly supplierPartyId: string;
   readonly brandId: string;
   /** The business date the goods arrived. */
   readonly arrivalDate: string;
   /** The pieces counted on the line now. */
   readonly counted: number;
-  /** The damage report the count raised on the line, with its pieces and state; none when the count found none. */
-  readonly countDamage: { readonly quantity: number; readonly state: DamageReportState } | null;
+  /**
+   * The damage report the count raised on the line, with its pieces and state; none when the count found none; Unknown
+   * when the reader may not see it (DEC-117, PRD-MOD-015).
+   */
+  readonly countDamage:
+    | { readonly kind: 'none' }
+    | { readonly kind: 'shown'; readonly quantity: number; readonly state: DamageReportState }
+    | { readonly kind: 'unknown' };
 }
 
 const later = (a: string, b: string): string => (a > b ? a : b);
@@ -70,6 +81,12 @@ interface Sums {
   timed: number;
   counted: number;
   damaged: number;
+  /** Pieces counted on lines whose count's damage report the reader may not see. */
+  damageUnknown: number;
+  /** The records each figure is worked from (goods-in 9.1): the bookings of the fill rate, the GRNs of the others. */
+  readonly fillBookings: Map<string, string>;
+  readonly timedGrns: Set<string>;
+  readonly countedGrns: Set<string>;
 }
 
 /** The rows of the supplier report: one per supplier, brand and season with something to measure. */
@@ -96,11 +113,16 @@ export function supplierPerformance(
       timed: 0,
       counted: 0,
       damaged: 0,
+      damageUnknown: 0,
+      fillBookings: new Map(),
+      timedGrns: new Set(),
+      countedGrns: new Set(),
     };
     groups.set(key, made);
     return made;
   };
   const arrivals = new Map(lines.map((line) => [line.grnLineId, line.arrivalDate]));
+  const grnOfLine = new Map(lines.map((line) => [line.grnLineId, line.grnId]));
   /** The season each GRN line delivered to, by the booking its receipt link is of. */
   const seasonOfLine = new Map<string, string>();
   for (const booking of bookings) {
@@ -108,12 +130,15 @@ export function supplierPerformance(
     const sums = group(booking.supplierPartyId, booking.brandId, season);
     if (inFillBase(booking.status, today)) {
       sums.bookings += 1;
+      sums.fillBookings.set(booking.bookingId, booking.number);
       sums.ordered += booking.status.totals.ordered;
       sums.delivered += booking.status.totals.delivered;
     }
     for (const delivery of booking.deliveries) {
       seasonOfLine.set(delivery.grnLineId, booking.seasonValueId);
       sums.timed += delivery.quantity;
+      const grnId = grnOfLine.get(delivery.grnLineId);
+      if (grnId !== undefined) sums.timedGrns.add(grnId);
       const line = booking.status.lines.find((each) => each.lineKey === delivery.lineKey);
       const arrived = arrivals.get(delivery.grnLineId);
       if (line === undefined || arrived === undefined) {
@@ -133,7 +158,11 @@ export function supplierPerformance(
       seasonValueId === undefined ? { kind: 'unknown' } : { kind: 'value', seasonValueId },
     );
     sums.counted += line.counted;
-    if (line.countDamage?.state === 'Confirmed') sums.damaged += line.countDamage.quantity;
+    sums.countedGrns.add(line.grnId);
+    if (line.countDamage.kind === 'unknown') sums.damageUnknown += line.counted;
+    else if (line.countDamage.kind === 'shown' && line.countDamage.state === 'Confirmed') {
+      sums.damaged += line.countDamage.quantity;
+    }
   }
   return [...groups.values()].map((sums) => ({
     supplierPartyId: sums.supplierPartyId,
@@ -152,6 +181,16 @@ export function supplierPerformance(
       unknown: sums.unknown,
       rate: rateOf(sums.onTime, sums.timed, sums.unknown),
     },
-    damage: { counted: sums.counted, damaged: sums.damaged, rate: rateOf(sums.damaged, sums.counted) },
+    damage: {
+      counted: sums.counted,
+      damaged: sums.damaged,
+      unknown: sums.damageUnknown,
+      rate: rateOf(sums.damaged, sums.counted, sums.damageUnknown),
+    },
+    records: {
+      bookings: [...sums.fillBookings].map(([bookingId, number]) => ({ bookingId, number })),
+      timedGrnIds: [...sums.timedGrns],
+      countedGrnIds: [...sums.countedGrns],
+    },
   }));
 }

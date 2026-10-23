@@ -27,7 +27,8 @@ import { STORE_FILE_PATH, syntheticPdfUpload } from './support/opening-app.js';
 import { ptApprovalWorld, type Call, type Person, type PtApprovalWorld } from './support/pt-approval.js';
 import { approved } from './support/organisation.js';
 import { allowVerifier } from './support/postgres.js';
-import { STOCK_VIEW } from './support/receiving.js';
+import { grantSynthetic } from './support/grants.js';
+import { placeScope, STOCK_VIEW } from './support/receiving.js';
 
 // S2-F11-T02: the stage 2 reports through the whole application on real PostgreSQL (goods-in 9.1, 9.3, 9.5, 12 test
 // 20; PRD-BKG-005, PRD-BKG-011, PRD-PRO-001, PRD-EXC-009 to PRD-EXC-011, PRD-MOD-015). The data set is made through the
@@ -214,6 +215,8 @@ beforeAll(async () => {
     { recordType: BOOKING_TYPE, action: 'view' },
     { recordType: 'receiving.arrival', action: 'view' },
     { recordType: 'stock.damage_report', action: 'view' },
+    // The PTs, whose MRP the stock report's MRP value reads (goods-in 9.5; code review 8 of stage 2).
+    { recordType: 'merchandise.pt', action: 'view' },
     ...STOCK_VIEW,
   ];
   reader = await w.enrol('RPT-READER', REPORTS, { fieldClasses: ['cost'] });
@@ -393,7 +396,14 @@ describe('the booking status report (goods-in 3.6, 3.10, 9.3)', () => {
       number: G1.arrival.grn?.number,
       arrivalId: G1.arrival.id,
       siteId: w.fixture.siteId,
+      businessUnitId: w.fixture.wholeStore,
+      receivingLocationId: w.fixture.storeLocation,
     });
+    // The indicative cost is not shown (goods-in 9.1, 9.5; PRD-ACS-008): no line carries it.
+    for (const booking of report.bookings) {
+      for (const line of booking.status.lines) expect(Object.keys(line)).not.toContain('indicativeCost');
+    }
+    expect(report.asOf).toBe(new Date(report.asOf).toISOString());
     // Its names: the Site, brand, supplier and season shown.
     expect(report.names.suppliers.map((each) => each.id)).toEqual([w.fixture.supplier.id]);
     expect(report.names.seasons.map((each) => each.id)).toEqual([season]);
@@ -505,7 +515,8 @@ describe('the supplier fill rate and timeliness report (goods-in 9.3, 9.5)', () 
   it('PRD-BKG-011 fill rate, on-time delivery and damage rate per supplier, brand and season equal the figures worked by hand', async () => {
     const report = await supplierReport(reader, { supplierPartyId: w.fixture.supplier.id });
     expect(report.businessDate).toBe(w.setup.today());
-    const row = (brandId: string, seasonValueId: string | null) =>
+    expect(report.asOf).toBe(new Date(report.asOf).toISOString());
+    const found = (brandId: string, seasonValueId: string | null) =>
       report.rows.find(
         (each) =>
           each.brandId === brandId &&
@@ -513,6 +524,41 @@ describe('the supplier fill rate and timeliness report (goods-in 9.3, 9.5)', () 
             ? each.season.kind === 'unknown'
             : each.season.kind === 'value' && each.season.seasonValueId === seasonValueId),
       );
+    // The figures of a row, its records apart (goods-in 9.1), which are compared below.
+    const row = (brandId: string, seasonValueId: string | null) => {
+      const each = found(brandId, seasonValueId);
+      return each === undefined
+        ? undefined
+        : {
+            supplierPartyId: each.supplierPartyId,
+            brandId: each.brandId,
+            season: each.season,
+            fill: each.fill,
+            timeliness: each.timeliness,
+            damage: each.damage,
+          };
+    };
+    // Each figure drills down to the records it is worked from (goods-in 9.1; PRD-EXC-011): B, SPRING's fill rate to
+    // K1 and K3, its on-time rate to G1, G2 and G3, its damage rate to the same GRNs; O, SPRING's to K4 and G4.
+    const records = (brandId: string, seasonValueId: string | null) => {
+      const each = found(brandId, seasonValueId)?.records;
+      return {
+        bookings: each?.bookings.map((booking) => booking.bookingId).sort(),
+        timed: [...(each?.timedGrnIds ?? [])].sort(),
+        counted: [...(each?.countedGrnIds ?? [])].sort(),
+      };
+    };
+    expect(records(w.fixture.brand.id, season)).toEqual({
+      bookings: [K1.id, K3.id].sort(),
+      timed: [G1.grnId, G2.grnId, G3.grnId].sort(),
+      counted: [G1.grnId, G2.grnId, G3.grnId].sort(),
+    });
+    expect(records(w.owned.brandId, season)).toEqual({ bookings: [K4.id], timed: [G4.grnId], counted: [G4.grnId] });
+    expect(records(w.fixture.brand.id, null)).toEqual({ bookings: [], timed: [], counted: [G5.grnId] });
+    // The GRNs are named with where they were received, so each opens its Arrival.
+    expect(report.names.grns.map((each) => each.grnId).sort()).toEqual(
+      [G1.grnId, G2.grnId, G3.grnId, G4.grnId, G5.grnId].sort(),
+    );
     // B, SPRING. Fill over K1 (window ended T-1) and K3 (window ended T-2): (18 + 4) / (20 + 4) = 22/24; K2's window is
     // open with 2 outstanding, so it is not counted. On time: K1's 18 arrived T-1, by its window's end T-1; K2's 3 on
     // T, within its window; K3's 4 arrived T-1, after its window's end T-2, late: 21/25. Damage: G1, G2 and G3 counted
@@ -529,7 +575,7 @@ describe('the supplier fill rate and timeliness report (goods-in 9.3, 9.5)', () 
         unknown: 0,
         rate: { kind: 'measured', numerator: 21, denominator: 25 },
       },
-      damage: { counted: 25, damaged: 1, rate: { kind: 'measured', numerator: 1, denominator: 25 } },
+      damage: { counted: 25, damaged: 1, unknown: 0, rate: { kind: 'measured', numerator: 1, denominator: 25 } },
     });
     // O, SPRING. K4 closed, 3 of 3; all 3 arrived T-1, within the window; G4 counted 3, none damaged.
     expect(row(w.owned.brandId, season)).toEqual({
@@ -544,7 +590,7 @@ describe('the supplier fill rate and timeliness report (goods-in 9.3, 9.5)', () 
         unknown: 0,
         rate: { kind: 'measured', numerator: 3, denominator: 3 },
       },
-      damage: { counted: 3, damaged: 0, rate: { kind: 'measured', numerator: 0, denominator: 3 } },
+      damage: { counted: 3, damaged: 0, unknown: 0, rate: { kind: 'measured', numerator: 0, denominator: 3 } },
     });
     // B, season Unknown: G5 delivered to no booking. Nothing to fill or time: Unknown, never zero (PRD-MOD-015).
     expect(row(w.fixture.brand.id, null)).toEqual({
@@ -553,7 +599,7 @@ describe('the supplier fill rate and timeliness report (goods-in 9.3, 9.5)', () 
       season: { kind: 'unknown' },
       fill: { bookings: 0, ordered: 0, delivered: 0, rate: { kind: 'unknown' } },
       timeliness: { delivered: 0, onTime: 0, late: 0, unknown: 0, rate: { kind: 'unknown' } },
-      damage: { counted: 3, damaged: 0, rate: { kind: 'measured', numerator: 0, denominator: 3 } },
+      damage: { counted: 3, damaged: 0, unknown: 0, rate: { kind: 'measured', numerator: 0, denominator: 3 } },
     });
     expect(report.rows).toHaveLength(3);
   });
@@ -614,9 +660,9 @@ describe('the stock report (goods-in 9.2, 9.3, 9.5)', () => {
       cost: { kind: 'known', value: 94_500 },
     });
     expect(at(floor)).toMatchObject({
-      product: { kind: 'product', styleCode: style.P4, size: sizeCode(0) },
+      product: { kind: 'product', facts: { styleCode: style.P4, size: { kind: 'known', value: sizeCode(0) } } },
       condition: 'good',
-      owner: { kind: 'organisation', legalEntityId: w.fixture.legalEntityId },
+      owner: { kind: 'organisation', partyId: w.fixture.legalEntityId },
       availableAs: 'sell',
       grnIds: [G4.grnId],
     });
@@ -631,7 +677,8 @@ describe('the stock report (goods-in 9.2, 9.3, 9.5)', () => {
         (each) =>
           each.product.kind === 'counted' &&
           each.product.styleCode === styleCode &&
-          each.product.size === size &&
+          each.product.size.kind === 'known' &&
+          each.product.size.value === size &&
           each.condition === condition,
       );
     // G1's P1 size 0: 8 counted, the one damaged confirmed, so damaged and quarantined where it is (goods-in 8.3).
@@ -661,18 +708,24 @@ describe('the stock report (goods-in 9.2, 9.3, 9.5)', () => {
       held: 1,
       heldByKind: [{ kind: 'excess', quantity: 1 }],
     });
-    expect(of(style.P1, sizeCode(0), 'good')?.owner).toEqual({ kind: 'brand', brandId: w.fixture.brand.id });
+    expect(of(style.P1, sizeCode(0), 'good')?.owner).toEqual({ kind: 'brand', partyId: w.fixture.brand.id });
     expect(of(style.P1, sizeCode(0), 'good')?.grnIds).toEqual([G1.grnId]);
     expect((await stockOf(reader, { brandId: w.fixture.brand.id, condition: 'damaged' })).rows).toHaveLength(1);
   });
 
   it('PRD-ACS-008 cost is masked without the cost field class; MRP needs none', async () => {
-    const noCost = await w.enrol('RPT-NO-COST', STOCK_VIEW);
+    const noCost = await w.enrol('RPT-NO-COST', [...STOCK_VIEW, { recordType: 'merchandise.pt', action: 'view' }]);
     const report = await stockOf(noCost, { brandId: w.owned.brandId, locationId: floor });
     expect(figures(report.rows[0])).toMatchObject({
       mrpValue: { kind: 'known', value: 199_900 },
       cost: { kind: 'masked' },
     });
+  });
+
+  it('DEC-117 PRD-SEC-005 the MRP of a PT the reader may not see is Unknown to them, never read past their grants', async () => {
+    const noPt = await w.enrol('RPT-NO-PT', STOCK_VIEW, { fieldClasses: ['cost'] });
+    const report = await stockOf(noPt, { brandId: w.owned.brandId, locationId: floor });
+    expect(figures(report.rows[0])).toMatchObject({ mrpValue: { kind: 'unknown' } });
   });
 
   it('PRD-STK-001 the report pages by a cursor, and refuses a cursor it did not give', async () => {
@@ -711,6 +764,50 @@ describe('who sees the reports (goods-in 9.1, 12 test 20)', () => {
     const stock = await stockOf(scoped);
     expect(stock.rows.length).toBeGreaterThan(0);
     expect(stock.rows.every((each) => each.brandId === w.owned.brandId)).toBe(true);
+  });
+
+  it('PRD-EXC-011 PRD-ACS-005 a reader scoped to another Store sees none of this Store’s receipts or stock', async () => {
+    const elsewhere = await w.enrol(
+      'RPT-OTHER-STORE',
+      [
+        { recordType: BOOKING_TYPE, action: 'view' },
+        { recordType: 'receiving.arrival', action: 'view' },
+        { recordType: 'stock.damage_report', action: 'view' },
+        ...STOCK_VIEW,
+      ],
+      { scope: placeScope([{ type: 'store', id: w.fixture.otherStoreId }]) },
+    );
+    expect((await receiptProblems(elsewhere)).rows).toEqual([]);
+    expect((await stockOf(elsewhere)).rows).toEqual([]);
+    expect(
+      (await supplierReport(elsewhere)).rows.every(
+        (each) => each.damage.counted === 0 && each.records.countedGrnIds.length === 0,
+      ),
+    ).toBe(true);
+    // And one scoped to this Store sees its receipts and stock.
+    const here = await w.enrol('RPT-THIS-STORE', [{ recordType: 'receiving.arrival', action: 'view' }, ...STOCK_VIEW], {
+      scope: placeScope([{ type: 'store', id: w.fixture.storeId }]),
+    });
+    expect((await receiptProblems(here)).rows.length).toBeGreaterThan(0);
+    expect((await stockOf(here)).rows.length).toBeGreaterThan(0);
+  });
+
+  it('PRD-MOD-015 PRD-EXC-009 the arrivals of GRNs the reader may not see leave the on-time rate Unknown, never late or on time', async () => {
+    // Bookings over every place, Arrivals at another Store only: every delivered piece's arrival is hidden.
+    const hidden = await w.enrol('RPT-ARRIVALS-HIDDEN', [{ recordType: BOOKING_TYPE, action: 'view' }]);
+    await grantSynthetic(
+      w.database,
+      { kind: 'user', id: hidden.user.id },
+      [{ recordType: 'receiving.arrival', action: 'view' }],
+      {
+        scope: placeScope([{ type: 'store', id: w.fixture.otherStoreId }]),
+      },
+    );
+    const report = await supplierReport(hidden, { brandId: w.fixture.brand.id, seasonValueId: season });
+    expect(report.rows.map((each) => each.timeliness)).toEqual([
+      { delivered: 25, onTime: 0, late: 0, unknown: 25, rate: { kind: 'unknown' } },
+    ]);
+    expect(report.rows[0]?.records.timedGrnIds).toEqual([]);
   });
 
   it('PRD-EXC-011 a reader with no grant of view on bookings or Arrivals is refused those reports', async () => {
@@ -819,7 +916,8 @@ describe('the stock report after a PT reversal (goods-in 6.4, 9.5)', () => {
     ok(await w.decide(w.people.ptApprover, requestId, revisionId));
     const rowOf = async () =>
       (await stockOf(reader, { brandId: w.owned.brandId, locationId: w.fixture.storeLocation })).rows.find(
-        (each) => each.product.kind === 'product' && each.product.styleCode === P6,
+        (each) =>
+          each.product.kind === 'product' && each.product.facts.kind === 'known' && each.product.facts.styleCode === P6,
       );
     expect(figures(await rowOf())).toMatchObject({
       physical: 1,
@@ -841,5 +939,29 @@ describe('the stock report after a PT reversal (goods-in 6.4, 9.5)', () => {
       mrpValue: { kind: 'unknown' },
       cost: { kind: 'unknown' },
     });
+  });
+});
+
+// Last in the file: it adds wrong and unidentified goods to the data set, which no test above counts.
+describe('wrong and unidentified goods (goods-in 4.4, 4.9, 9.3)', () => {
+  it('PRD-REC-006 the receipt problems show wrong and unidentified goods, held, each with its decision waiting', async () => {
+    const [p4] = (await stockOf(reader, { brandId: w.owned.brandId })).rows;
+    if (p4?.product.kind !== 'product') throw new Error('The data set has no product of brand O');
+    const style6 = syntheticCode('RPT-P6-WRONG');
+    const { grnId } = await w.issuedGrn(
+      [
+        // P4's product, sent where none was invoiced: its own style code and size (goods-in 4.4).
+        { style: style.P4, sizeAt: 0, counted: 1, invoice: 0, extra: 'received', wrongSkuId: p4.product.skuId },
+        { style: style6, sizeAt: 0, counted: 2, invoice: 0, extra: 'received', unidentified: 'SYNTHETIC grey hoodies' },
+      ],
+      { brand: 'owned', unit: 'warehouse', by: receiver },
+    );
+    const report = await receiptProblems(reader, { brandId: w.owned.brandId });
+    const lines = report.rows.filter((each) => each.grnId === grnId).map((each) => each.line);
+    expect(lines.map((line) => [line.goods, line.findings.extra])).toEqual([
+      ['wrong', 1],
+      ['unidentified', 2],
+    ]);
+    expect(lines.every((line) => line.heldLine?.state === 'Awaiting approval')).toBe(true);
   });
 });

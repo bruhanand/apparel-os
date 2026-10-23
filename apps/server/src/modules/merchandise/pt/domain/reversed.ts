@@ -1,5 +1,6 @@
+import { addPaise, paise, type Paise } from '@apparel-os/domain';
 import type { PtBasis } from '../../../receiving/index.js';
-import type { PtRevisionGoods } from '../../../stock/ledger/index.js';
+import type { ItemValue, LedgerItemKind, PtRevisionGoods } from '../../../stock/ledger/index.js';
 
 // What a PT's reversal before the scan-in leaves for the PT after it (goods-in 6.4, 6.7; stock-ledger 13.19, 13.21;
 // DEC-137, PRD-REC-019; S2-F09-T01). Pure: no database, no clock (code-house-rules 2).
@@ -80,9 +81,28 @@ export function goodsAfterReversals(
 export function originsNotWaiting(goods: readonly PtRevisionGoods[]): readonly string[] {
   const found = new Set<string>();
   for (const row of goods) {
-    if (row.locationId === null || row.accepted > 0 || row.held > 0 || (row.quantity > 0 && row.condition !== 'good')) {
+    const held = row.damageHeld + row.otherHeld;
+    if (row.locationId === null || row.accepted > 0 || held > 0 || (row.quantity > 0 && row.condition !== 'good')) {
       found.add(row.receiptOriginId);
     }
   }
   return [...found].sort();
+}
+
+/**
+ * The cost a reversal takes off (goods-in 6.7; access-and-approvals 9.7; `PRD-ACS-015`, `PRD-ACS-016`): the value each
+ * of its reversal items takes off, under the ledger's locks, summed exactly in whole paise (`PRD-MOD-014`); Unknown
+ * when any is, never zero (`PRD-MOD-015`). Other items, the coverage removed, carry no value.
+ */
+export function costReversed(
+  items: readonly { readonly kind: LedgerItemKind }[],
+  values: readonly ItemValue[],
+): { readonly kind: 'known'; readonly amountPaise: Paise } | { readonly kind: 'unknown' } {
+  let cost = paise(0);
+  for (const [index, value] of values.entries()) {
+    if (items[index]?.kind !== 'reversal') continue;
+    if (value.kind !== 'known') return { kind: 'unknown' };
+    cost = addPaise(cost, value.amountPaise);
+  }
+  return { kind: 'known', amountPaise: cost };
 }

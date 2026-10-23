@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { businessDateSchema, idSchema } from './common.js';
+import { businessDateSchema, idSchema, pageLimitSchema } from './common.js';
 import { recordStateSchema } from './access-records.js';
 import { approvalRequestStateSchema } from './approvals.js';
 import { evidenceListSchema } from './files.js';
@@ -188,11 +188,7 @@ export const MASTER_PAGE_CAP = 100;
  */
 export const masterPageQuerySchema = z.strictObject({
   after: idSchema.optional(),
-  limit: z
-    .string()
-    .regex(/^[1-9]\d*$/)
-    .refine((limit) => Number(limit) <= MASTER_PAGE_CAP, { message: `At most ${String(MASTER_PAGE_CAP)}` })
-    .optional(),
+  limit: pageLimitSchema(MASTER_PAGE_CAP).optional(),
 });
 export type MasterPageQuery = z.infer<typeof masterPageQuerySchema>;
 

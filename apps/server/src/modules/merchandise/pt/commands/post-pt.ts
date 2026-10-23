@@ -1,6 +1,6 @@
 import { paise, uuidv7 } from '@apparel-os/domain';
 import { textKey } from '@apparel-os/calculations/booking';
-import { GRN_TYPE, PT_APPROVAL, PT_TYPE, type MissingItem } from '@apparel-os/schemas';
+import { GRN_TYPE, PT_APPROVAL, PT_TYPE, STOCK_RECEIPT_ORIGIN_TYPE, type MissingItem } from '@apparel-os/schemas';
 import {
   CommandDefect,
   insertInParts,
@@ -400,7 +400,7 @@ function identityStep(checked: Checked, ptApprovalId: string, revisionId: string
       // An origin the approver may not see: the ledger's rows are hidden from them (stock-ledger 14.3).
       if (part.receiptOriginId === null) {
         return refused('not-authorised', 'access.not-authorised', [
-          { kind: 'permission', recordType: 'stock.receipt_origin', action: 'view' },
+          { kind: 'permission', recordType: STOCK_RECEIPT_ORIGIN_TYPE, action: 'view' },
         ]);
       }
       sources.push({ receiptOriginId: part.receiptOriginId, skuId: part.skuId, units: part.quantity });

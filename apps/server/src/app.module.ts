@@ -117,18 +117,17 @@ import {
   STOCK_POSTING_EVENT_KINDS,
   StockLedgerModule,
   stockLedgerReadModels,
+  stockRecordsReadModels,
   stockReportReadModels,
   type CallerRegistration,
   type StockLedgerInterface,
 } from './modules/stock/ledger/index.js';
 import {
   damageExceptionType,
-  STOCK_DOCUMENTS,
   StockDocumentsModule,
   stockDocumentsApprovals,
   stockDocumentsReadModels,
   stockDocumentsStockCaller,
-  type StockDocumentsInterface,
 } from './modules/stock/documents/index.js';
 import {
   BOOK_HELD_STOCK,
@@ -321,34 +320,6 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
         ...ptExceptionTypes,
       ] satisfies readonly ExceptionTypeRegistration[],
     },
-    // The read-model gateway, with the read models each module serves (module-map 4.1, section 3 rule 5; goods-in 9.4;
-    // S2-F11-T01): the stock of products at places from `stock` · ledger, the products and brands from `merchandise` ·
-    // catalogue, the places from `organisation`; fixed once the application has started.
-    // And those of the stage 2 reports (goods-in 9.5; S2-F11-T02): the booking status from `booking`; the receipt
-    // problems, a supplier's GRN lines and the GRNs' numbers from `receiving`, which reads through `access` and `stock`
-    // · documents when a read runs, never at start; the damage reports' states from `stock` · documents; stock by
-    // condition and owner from `stock` · ledger; the MRP of a PT's goods from `merchandise` · PT; the names of values
-    // and parties from `merchandise`.
-    {
-      provide: READ_MODEL_GATEWAY,
-      useFactory: (modules: ModuleRef) =>
-        new ReadModelGateway([
-          ...stockLedgerReadModels,
-          ...catalogueReadModels,
-          ...organisationReadModels,
-          ...bookingReadModels,
-          ...receivingReadModels(() => ({
-            access: modules.get<AccessInterface>(ACCESS, { strict: false }),
-            documents: modules.get<StockDocumentsInterface>(STOCK_DOCUMENTS, { strict: false }),
-          })),
-          ...stockDocumentsReadModels,
-          ...stockReportReadModels,
-          ...ptReadModels,
-          ...catalogueNameReadModels,
-          ...partiesReadModels,
-        ]),
-      inject: [ModuleRef],
-    },
     // The decision-evidence contract of `access`, which files-imports' Attach implements (9.5; S1-F08-T03).
     { provide: DECISION_EVIDENCE, useFactory: (audit: AuditInterface) => decisionEvidence(audit), inject: [AUDIT] },
     // The policy-evidence contract of `configuration`, which files-imports' Attach implements (module-map 4.4;
@@ -371,10 +342,47 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
     DECISION_EVIDENCE,
     POLICY_EVIDENCE,
     PT_POSTING_QUEUE,
-    READ_MODEL_GATEWAY,
   ],
 })
 export class ModuleApprovalsModule {}
+
+/**
+ * The kernel's read-model gateway, in a module of its own, apart from the approval effects (module-map 4.1, section 3
+ * rule 5; code review 8 of stage 2): global, so `reports` reaches it without importing the composition root.
+ */
+@Global()
+@Module({
+  providers: [
+    // The read-model gateway, with the read models each module serves (module-map 4.1, section 3 rule 5; goods-in 9.4;
+    // S2-F11-T01): the stock of products at places from `stock` · ledger, the products and brands from `merchandise` ·
+    // catalogue, the places from `organisation`; fixed once the application has started.
+    // And those of the stage 2 reports (goods-in 9.5; S2-F11-T02): the booking status from `booking`; the receipt
+    // problems, a supplier's GRN lines and the GRNs' numbers from `receiving`, which reads through `access` when a read
+    // runs, never at start; the damage reports' states and pieces from `stock` · documents, as the reader may see them; stock by
+    // condition and owner from `stock` · ledger; the MRP of a PT's goods from `merchandise` · PT, as the reader may see the PT; the names of values
+    // and parties from `merchandise`.
+    {
+      provide: READ_MODEL_GATEWAY,
+      useFactory: (modules: ModuleRef) =>
+        new ReadModelGateway([
+          ...stockLedgerReadModels,
+          ...catalogueReadModels,
+          ...organisationReadModels,
+          ...bookingReadModels,
+          ...receivingReadModels(() => ({ access: modules.get<AccessInterface>(ACCESS, { strict: false }) })),
+          ...stockDocumentsReadModels,
+          ...stockReportReadModels,
+          ...stockRecordsReadModels,
+          ...ptReadModels,
+          ...catalogueNameReadModels,
+          ...partiesReadModels,
+        ]),
+      inject: [ModuleRef],
+    },
+  ],
+  exports: [READ_MODEL_GATEWAY],
+})
+export class ReadModelsModule {}
 
 /**
  * The application's modules with the contracts between them (module-map section 2), which `app` serves and `worker`
@@ -391,6 +399,7 @@ export class ModuleApprovalsModule {}
     // The idempotency helper with the contracts access implements (RR-248), global for every module's commands.
     idempotencyModuleWith(AccessContractsModule),
     ModuleApprovalsModule,
+    ReadModelsModule,
     // The policy gate, with the policy status, capabilities and activity grants (module-map 4.4; S1-F04-T01).
     ConfigurationModule,
     OrganisationModule,

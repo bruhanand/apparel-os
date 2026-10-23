@@ -1,33 +1,39 @@
 import {
+  STOCK_OWNER_NAMES,
   stockConditionSchema,
   type ReportNames,
-  type StockCost,
   type StockOwner,
+  type StockRecordGrn,
+  type StockRecords as Records,
   type StockReport as Report,
   type StockReportFilters,
   type StockReportRow,
 } from '@apparel-os/schemas';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { api } from '../api';
 import { useSubmission } from '../api/command';
 import { ApiFailure } from '../api/query';
 import { Button } from '../components/Button';
+import { AmountInCell, CostInCell, numberCell, UnknownInCell } from '../components/cells';
 import { EmptyState } from '../components/StandardStates';
 import { AsOf } from '../history/AsOf';
 import { t } from '../messages/catalogue';
-import { optionText, unknownText } from '../receiving/names';
-import { formatPaise, formatQuantity } from '../setup/format';
+import { optionText } from '../receiving/names';
+import { formatQuantity } from '../setup/format';
 import { ListRead, SubmissionBanner, Th, Toolbar } from '../setup/parts';
 import { useTimeZone } from '../shell/session';
-import { productDetail, productText, useFilterLists } from '../stock/StockSearchScreen';
+import { productDetail, productText } from '../stock/results';
+import { StockRecords } from '../stock/StockRecords';
+import { useFilterLists } from '../stock/StockSearchScreen';
 import { ArrivalDrill, cell, FilterSelect, GrnLinks, nameIn, saveFile } from './parts';
 
 // Reports › Stock (goods-in 9.2, 9.3, 9.5, section 11; PRD-PRO-001, PRD-ORG-015, PRD-ACS-008; S2-F11-T02): stock by
 // product, size, location, condition and owner, with the quantities of stock search apart, the MRP value for everyone
-// and the cost only for whoever may see it, Hidden otherwise; Unknown while goods have no PT (PRD-MOD-015); the time
-// read; a row opens the GRNs its pieces were counted on (the drill-down, goods-in 9.1); Load more; Export to XLSX,
-// which records the access when it carries cost.
+// and the cost only for whoever may see it, Hidden otherwise; a blank cell read as unknown while goods have no PT
+// (design-language 8; PRD-MOD-015); the time read; a row opens the GRNs its pieces were counted on and the records
+// behind its figures, its PT and its movements (the drill-down, goods-in 9.1); Load more; Export to XLSX, which records
+// the access when it carries cost.
 
 async function readPage(filters: StockReportFilters, after: string | undefined): Promise<Report> {
   const result = await api.call('readStockReport', {
@@ -37,20 +43,14 @@ async function readPage(filters: StockReportFilters, after: string | undefined):
   throw new ApiFailure(result.status, result.error);
 }
 
-function ownerText(names: ReportNames, owner: StockOwner): string {
-  if (owner.kind === 'unknown') return unknownText();
-  if (owner.kind === 'organisation') {
-    return t('report.stock.owner.organisation', { name: nameIn(names.legalEntities, owner.legalEntityId) });
-  }
-  if (owner.kind === 'supplier')
-    return t('report.stock.owner.supplier', { name: nameIn(names.suppliers, owner.partyId) });
-  return t('report.stock.owner.brand', { name: nameIn(names.brands, owner.brandId) });
-}
-
-function costText(cost: StockCost): string {
-  if (cost.kind === 'known') return formatPaise(cost.value);
-  if (cost.kind === 'unknown') return unknownText();
-  return t('stock-search.cost.masked');
+/**
+ * The owner of a row's goods (goods-in 9.3; PRD-ORG-015), its party named from the list `STOCK_OWNER_NAMES` says; a
+ * blank cell read as unknown while Unknown.
+ */
+function Owner({ names, owner }: { names: ReportNames; owner: StockOwner }) {
+  if (owner.kind === 'unknown') return <UnknownInCell />;
+  const name = nameIn(names[STOCK_OWNER_NAMES[owner.kind]], owner.partyId);
+  return <>{t(`report.stock.owner.${owner.kind}`, { name })}</>;
 }
 
 function Row({
@@ -60,54 +60,88 @@ function Row({
 }: {
   row: StockReportRow;
   names: ReportNames;
-  onGrn: (grn: ReportNames['grns'][number]) => void;
+  onGrn: (grn: StockRecordGrn, places: Pick<ReportNames, 'businessUnits' | 'locations'>) => void;
 }) {
   const detail = productDetail(row.product);
+  const [records, setRecords] = useState(false);
   return (
-    <tr>
-      <td className={cell}>
-        <span className="flex flex-col">
-          <span className="font-semibold">{productText(row.product)}</span>
-          {detail !== null && <span className="text-caption text-text-2">{detail}</span>}
-          {row.frozen && <span className="text-caption text-text-2">{t('stock-search.frozen')}</span>}
-        </span>
-      </td>
-      <td className={cell}>{nameIn(names.brands, row.brandId)}</td>
-      <td className={cell}>
-        {t('stock-search.place', {
-          site: nameIn(names.sites, row.siteId),
-          unit: nameIn(names.businessUnits, row.businessUnitId),
-          location: nameIn(names.locations, row.locationId),
-        })}
-      </td>
-      <td className={cell}>{t(`condition.${row.condition}`)}</td>
-      <td className={cell}>{ownerText(names, row.owner)}</td>
-      <td className={`${cell} tabular-nums`}>{formatQuantity(row.physical)}</td>
-      <td className={cell}>
-        <span className="flex flex-col">
-          <span className="tabular-nums">{formatQuantity(row.available)}</span>
-          <span className="text-caption text-text-2">{t(`stock-search.available.${row.availableAs}`)}</span>
-        </span>
-      </td>
-      <td className={`${cell} tabular-nums`}>{formatQuantity(row.waiting)}</td>
-      <td className={cell}>
-        <span className="flex flex-col">
-          <span className="tabular-nums">{formatQuantity(row.held)}</span>
-          {row.heldByKind.map((each) => (
-            <span key={each.kind} className="text-caption text-text-2">
-              {t('stock-search.held.kind', { kind: t(`hold-kind.${each.kind}`), count: formatQuantity(each.quantity) })}
+    <Fragment>
+      <tr>
+        <td className={cell}>
+          <span className="flex flex-col">
+            <span className="font-semibold">{productText(row.product)}</span>
+            {detail !== null && <span className="text-caption text-text-2">{detail}</span>}
+            {row.frozen && <span className="text-caption text-text-2">{t('stock-search.frozen')}</span>}
+          </span>
+        </td>
+        <td className={cell}>{nameIn(names.brands, row.brandId)}</td>
+        <td className={cell}>
+          {t('stock-search.place', {
+            site: nameIn(names.sites, row.siteId),
+            unit: nameIn(names.businessUnits, row.businessUnitId),
+            location: nameIn(names.locations, row.locationId),
+          })}
+        </td>
+        <td className={cell}>{t(`condition.${row.condition}`)}</td>
+        <td className={cell}>
+          <Owner names={names} owner={row.owner} />
+        </td>
+        <td className={`${cell} ${numberCell}`}>{formatQuantity(row.physical)}</td>
+        <td className={cell}>
+          <span className="flex flex-col">
+            <span className="tabular-nums">{formatQuantity(row.available)}</span>
+            <span className="text-caption text-text-2">{t(`stock-search.available.${row.availableAs}`)}</span>
+          </span>
+        </td>
+        <td className={`${cell} ${numberCell}`}>{formatQuantity(row.waiting)}</td>
+        <td className={cell}>
+          <span className="flex flex-col">
+            <span className="tabular-nums">{formatQuantity(row.held)}</span>
+            {row.heldByKind.map((each) => (
+              <span key={each.kind} className="text-caption text-text-2">
+                {t('stock-search.held.kind', {
+                  kind: t(`hold-kind.${each.kind}`),
+                  count: formatQuantity(each.quantity),
+                })}
+              </span>
+            ))}
+          </span>
+        </td>
+        <td className={`${cell} ${numberCell}`}>
+          <AmountInCell amount={row.mrpValue} />
+        </td>
+        <td className={`${cell} ${numberCell}`}>
+          <CostInCell cost={row.cost} />
+        </td>
+        <td className={cell}>
+          <span className="flex flex-col gap-2">
+            <GrnLinks
+              names={names}
+              grnIds={row.grnIds}
+              onOpen={(grn) => {
+                onGrn(grn, names);
+              }}
+            />
+            <span>
+              <Button
+                size="small"
+                label={records ? 'stock-search.records.close' : 'stock-search.records.open'}
+                onClick={() => {
+                  setRecords(!records);
+                }}
+              />
             </span>
-          ))}
-        </span>
-      </td>
-      <td className={`${cell} tabular-nums`}>
-        {row.mrpValue.kind === 'known' ? formatPaise(row.mrpValue.value) : unknownText()}
-      </td>
-      <td className={`${cell} tabular-nums`}>{costText(row.cost)}</td>
-      <td className={cell}>
-        <GrnLinks names={names} grnIds={row.grnIds} onOpen={onGrn} />
-      </td>
-    </tr>
+          </span>
+        </td>
+      </tr>
+      {records && (
+        <tr>
+          <td className={cell} colSpan={12}>
+            <StockRecords of={{ of: 'report', key: row.rowKey }} onGrn={onGrn} />
+          </td>
+        </tr>
+      )}
+    </Fragment>
   );
 }
 
@@ -144,7 +178,7 @@ export function StockReportScreen() {
   const timeZone = useTimeZone();
   const lists = useFilterLists();
   const [filters, setFilters] = useState<StockReportFilters>({});
-  const [open, setOpen] = useState<ReportNames['grns'][number] | null>(null);
+  const [open, setOpen] = useState<{ grn: StockRecordGrn; places: Records['places'] } | null>(null);
   const query = useInfiniteQuery({
     queryKey: ['readStockReport', 'pages', filters],
     queryFn: ({ pageParam }) => readPage(filters, pageParam),
@@ -165,7 +199,8 @@ export function StockReportScreen() {
   if (open !== null) {
     return (
       <ArrivalDrill
-        grn={open}
+        grn={open.grn}
+        places={open.places}
         onBack={() => {
           setOpen(null);
         }}
@@ -259,7 +294,14 @@ export function StockReportScreen() {
                     </thead>
                     <tbody>
                       {rows.map(({ row, names }) => (
-                        <Row key={row.rowKey} row={row} names={names} onGrn={setOpen} />
+                        <Row
+                          key={row.rowKey}
+                          row={row}
+                          names={names}
+                          onGrn={(grn, places) => {
+                            setOpen({ grn, places });
+                          }}
+                        />
                       ))}
                     </tbody>
                   </table>

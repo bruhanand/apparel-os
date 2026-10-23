@@ -21,6 +21,13 @@ describe('the route table (code-house-rules 12.2)', () => {
     });
   });
 
+  it('DEC-118 an export that holds its authority at step 0 lists the stale version it answers when a role changed', () => {
+    // Stock search's and the stock report's exports hold every grant that shows their rows (code-house-rules 8.2).
+    for (const route of [routes.exportStockSearch, routes.exportStockReport]) {
+      expect(codesOfRoute(route)).toContain('kernel.stale-version');
+    }
+  });
+
   it('names every route once, by method and path', () => {
     const keys = Object.values(routes).map((route) => `${route.method} ${route.path}`);
     expect(new Set(keys).size).toBe(keys.length);

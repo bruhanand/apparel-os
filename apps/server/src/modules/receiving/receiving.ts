@@ -17,7 +17,8 @@ import type {
   ScanInQuery,
   ScanInRead,
 } from '@apparel-os/schemas';
-import type { LockTarget, TransactionContext } from '../../kernel/index.js';
+import { ARRIVAL_TYPE } from '@apparel-os/schemas';
+import type { CommandRefusal, LockTarget, TransactionContext } from '../../kernel/index.js';
 import type { AccessInterface, RecordFacts } from '../access/index.js';
 import type { AuditInterface } from '../audit/index.js';
 import type { BookingInterface } from '../booking/index.js';
@@ -27,9 +28,9 @@ import type { FilesImportsInterface } from '../files-imports/index.js';
 import type { NumberingInterface } from '../numbering/index.js';
 import { unitReadiness } from '../organisation/index.js';
 import type { StockDocumentsInterface } from '../stock/documents/index.js';
-import type { StockLedgerInterface } from '../stock/ledger/index.js';
+import { PT_GOODS_READS, type StockLedgerInterface } from '../stock/ledger/index.js';
 import { attachPhotos, recordArrival, recordInvoice } from './commands/arrival.js';
-import { arrivalRow, entriesOf, factsOf, type Actor } from './commands/common.js';
+import { arrivalRow, entriesOf, factsOf, recordNotFound, type Actor } from './commands/common.js';
 import { removeCountLine, saveCountLine } from './commands/count.js';
 import { nameHeldLineProduct } from './commands/name-held-line-product.js';
 import { issueGrn } from './commands/issue.js';
@@ -39,7 +40,7 @@ import { proposeRecount } from './commands/propose-recount.js';
 import { ptMarkLock, type PtMarkChange } from './commands/pt-mark.js';
 import { setPtMark } from './commands/set-pt-mark.js';
 import { scanPiece } from './commands/scan.js';
-import { anyAccepted, scanInView } from './queries/scan-in.js';
+import { anyAccepted, readScanIn, stockShown } from './queries/scan-in.js';
 import { grnRow } from './queries/grns.js';
 import { grnForPt, ptMarkOf, type GrnForPt, type PtMark } from './queries/pt-mark.js';
 import { currentLines } from './domain/lines.js';
@@ -66,7 +67,10 @@ import {
 
 export interface ReceivingDependencies {
   readonly audit: AuditInterface;
-  readonly access: Pick<AccessInterface, 'authorise' | 'requestApproval' | 'requestLockTargets'>;
+  readonly access: Pick<
+    AccessInterface,
+    'authorise' | 'authoriseEach' | 'partyNames' | 'requestApproval' | 'requestLockTargets'
+  >;
   readonly configuration: Pick<ConfigurationInterface, 'checkAvailability'>;
   readonly files: Pick<FilesImportsInterface, 'attach'>;
   readonly numbering: Pick<NumberingInterface, 'liveSeries' | 'seriesLockTarget' | 'allocate'>;
@@ -348,20 +352,32 @@ export class Receiving {
     return scanPiece(context, this.dependencies, actor, grnId, draft, idempotencyKey);
   }
 
-  /** The GRN's scan-in as its screen shows it (goods-in 7, section 11), or undefined when the reader may not see it. */
-  async readScanIn(
+  /**
+   * The GRN's scan-in as its screen shows it (goods-in 7, 7.5, section 11), read as the reader: not found for a GRN
+   * they may not see; refused without view on its Arrival and on the stock it reads.
+   */
+  readScanIn(
     context: TransactionContext,
+    actorId: string,
     grnId: string,
     query: ScanInQuery,
     today: string,
-    named: (userIds: readonly string[]) => Promise<ReadonlyMap<string, string>>,
-  ): Promise<Omit<ScanInRead, 'asOf'> | undefined> {
-    const issued = await grnRow(context, grnId);
-    const row = issued === undefined ? undefined : await arrivalRow(context, issued.arrivalId);
-    if (issued === undefined || row === undefined) return undefined;
-    const view = await scanInView(context, this.dependencies, issued, row, query, today);
-    const names = await named([...new Set(view.scans.map((each) => each.scannedBy))]);
-    return { ...view, people: [...names].map(([userId, name]) => ({ userId, name })) };
+  ): Promise<{ readonly refused: CommandRefusal } | { readonly read: Omit<ScanInRead, 'asOf'> }> {
+    return readScanIn(context, this.dependencies, actorId, grnId, query, today);
+  }
+
+  /**
+   * The further permissions a scan relies on besides create on the scan (goods-in 7.5, 10.3; stock-ledger 14.3): view
+   * on each stock record type it reads and writes, at the GRN's facts; none for a GRN the scanner may not see.
+   */
+  async scanNeeds(
+    context: TransactionContext,
+    grnId: string,
+  ): Promise<readonly { readonly action: 'view'; readonly recordType: string; readonly facts: RecordFacts }[]> {
+    const facts = await this.grnFacts(context, grnId);
+    return facts === undefined
+      ? []
+      : PT_GOODS_READS.map((recordType) => ({ action: 'view' as const, recordType, facts }));
   }
 
   /**
@@ -377,17 +393,43 @@ export class Receiving {
     return receiptProblems(context, query, requests);
   }
 
-  /** The Receive Goods inbox of a Site (goods-in 4.1), or undefined when no Site has the identifier. */
-  inbox(
+  /**
+   * The Receive Goods inbox of a Site (goods-in 4.1), read as the reader: each delivery whose Arrival they may view,
+   * where its scan-in stands only as far as they may see its stock (goods-in 7.5); refused when they may view no
+   * Arrival at all, and not found when no Site has the identifier.
+   */
+  async inbox(
     context: TransactionContext,
+    actorId: string,
     siteId: string,
     query: InboxQuery,
     today: string,
-    covered: (facts: readonly RecordFacts[]) => Promise<readonly boolean[]>,
-  ): Promise<Omit<Inbox, 'asOf'> | undefined> {
-    return inboxOf(context, this.dependencies, siteId, query, today, covered, (lineIds) =>
-      this.dependencies.documents.damageOfGrnLines(context, lineIds),
+  ): Promise<{ readonly refused: CommandRefusal } | { readonly inbox: Omit<Inbox, 'asOf'> }> {
+    let refusal: CommandRefusal | undefined;
+    const covered = async (facts: readonly RecordFacts[]) => {
+      const checked = await this.dependencies.access.authoriseEach(
+        context,
+        { actorId, action: 'view', recordType: ARRIVAL_TYPE },
+        facts,
+      );
+      if (checked.kind === 'refused') {
+        refusal = checked.refusal;
+        return facts.map(() => false);
+      }
+      return checked.each.map((each) => each.kind === 'allowed');
+    };
+    const inbox = await inboxOf(
+      context,
+      this.dependencies,
+      siteId,
+      query,
+      today,
+      { covered, stockShown: (facts) => stockShown(context, { access: this.dependencies.access, actorId }, facts) },
+      (lineIds) => this.dependencies.documents.damageOfGrnLines(context, lineIds),
     );
+    if (refusal !== undefined) return { refused: refusal };
+    if (inbox === undefined) return { refused: recordNotFound('organisation.site', siteId) };
+    return { inbox };
   }
 }
 

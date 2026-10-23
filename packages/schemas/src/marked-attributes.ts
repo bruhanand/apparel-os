@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { approvalRequestStateSchema } from './approvals.js';
-import { idSchema } from './common.js';
+import { idSchema, pageLimitSchema } from './common.js';
 import { settingOriginSchema } from './settings.js';
 
 // The Organisation's season attribute and size attribute (structure-and-masters 4.2 "As built"; goods-in GI-2, GI-3;
@@ -114,13 +114,7 @@ export const MARKED_ATTRIBUTE_PAGE_CAP = 100;
  */
 export const markedAttributeVersionPageQuerySchema = z.strictObject({
   after: idSchema.optional(),
-  limit: z
-    .string()
-    .regex(/^[1-9]\d*$/)
-    .refine((limit) => Number(limit) <= MARKED_ATTRIBUTE_PAGE_CAP, {
-      message: `At most ${String(MARKED_ATTRIBUTE_PAGE_CAP)}`,
-    })
-    .optional(),
+  limit: pageLimitSchema(MARKED_ATTRIBUTE_PAGE_CAP).optional(),
 });
 export type MarkedAttributeVersionPageQuery = z.infer<typeof markedAttributeVersionPageQuerySchema>;
 

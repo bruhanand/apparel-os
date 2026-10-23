@@ -86,22 +86,10 @@ export class ReceivingController {
   ) {
     const { siteId } = input.params;
     const answer = await this.read(user, 'receiving.read-inbox', async (context, today) => {
-      let refusal: CommandRefusal | undefined;
-      const inbox = await this.receiving.inbox(context, siteId, input.query, today, async (facts) => {
-        const checked = await this.access.authoriseEach(
-          context,
-          { actorId: user.userId, action: 'view', recordType: ARRIVAL_TYPE },
-          facts,
-        );
-        if (checked.kind === 'refused') {
-          refusal = checked.refusal;
-          return facts.map(() => false);
-        }
-        return checked.each.map((each) => each.kind === 'allowed');
-      });
-      if (refusal !== undefined) return { refused: refusal };
-      if (inbox === undefined) return { refused: recordNotFound('organisation.site', siteId) };
-      return { asOf: context.startedAt.toISOString(), ...inbox };
+      // Each delivery is authorised with its own facts in `receiving`'s read, as the reader (goods-in 4.1, 7.5).
+      const read = await this.receiving.inbox(context, user.userId, siteId, input.query, today);
+      if ('refused' in read) return read;
+      return { asOf: context.startedAt.toISOString(), ...read.inbox };
     });
     if ('refused' in answer) throw new ApiRefusal({ ...answer.refused, missing: [...answer.refused.missing] });
     return answer;
@@ -282,7 +270,8 @@ export class ReceivingController {
   scanPiece(@RouteInput() input: RouteInputOf<typeof routes.scanPiece>, @SignedIn() user: SignedInUser) {
     const { grnId } = input.params;
     // A scan carries its GRN's facts, so it authorises with them; a GRN the scanner may not see is not found (goods-in
-    // 7.2; code-house-rules 12.3).
+    // 7.2; code-house-rules 12.3). It reads and writes the stock of the GRN's goods, so it needs view on it too, held
+    // at step 0 with the scan's own (goods-in 7.5; stock-ledger 14.3; RR-444).
     return this.command(
       routes.scanPiece,
       'receiving.scan-piece',
@@ -291,6 +280,7 @@ export class ReceivingController {
       (context) => this.receiving.grnFacts(context, grnId),
       recordNotFound(GRN_TYPE, grnId),
       (context, actor) => this.receiving.scanPiece(context, actor, grnId, input.body, input.idempotencyKey),
+      (context) => this.receiving.scanNeeds(context, grnId),
     );
   }
 
@@ -298,26 +288,11 @@ export class ReceivingController {
   async readScanIn(@RouteInput() input: RouteInputOf<typeof routes.readScanIn>, @SignedIn() user: SignedInUser) {
     const { grnId } = input.params;
     const answer = await this.read(user, 'receiving.read-scan-in', async (context, today) => {
-      // A GRN the reader's scope does not cover is hidden by row-level security, so it carries no fact: it is not
-      // found, never refused as not authorised, which would say it exists (code-house-rules 12.3; PRD-SEC-005).
-      const facts = await this.receiving.grnFacts(context, grnId);
-      if (facts === undefined) return { refused: recordNotFound(GRN_TYPE, grnId) };
-      const authorised = await this.access.authorise(context, {
-        actorId: user.userId,
-        action: 'view',
-        recordType: ARRIVAL_TYPE,
-        facts,
-      });
-      if (authorised.kind === 'refused') return { refused: authorised.refusal };
-      const scanIn = await this.receiving.readScanIn(
-        context,
-        grnId,
-        input.query,
-        today,
-        async (userIds) => (await this.access.partyNames(context, userIds, [])).users,
-      );
-      if (scanIn === undefined) return { refused: recordNotFound(GRN_TYPE, grnId) };
-      return { asOf: context.startedAt.toISOString(), ...scanIn };
+      // Authorised in `receiving`'s read with the GRN's facts: a GRN the reader's scope does not cover is not found,
+      // never refused, which would say it exists (code-house-rules 12.3; PRD-SEC-005; goods-in 7.5).
+      const read = await this.receiving.readScanIn(context, user.userId, grnId, input.query, today);
+      if ('refused' in read) return read;
+      return { asOf: context.startedAt.toISOString(), ...read.read };
     });
     if ('refused' in answer) throw new ApiRefusal({ ...answer.refused, missing: [...answer.refused.missing] });
     return answer;

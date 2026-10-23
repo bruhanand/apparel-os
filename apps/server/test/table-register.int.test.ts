@@ -80,9 +80,6 @@ const RUNTIME_FUNCTIONS: Record<MigrationSetName, readonly string[]> = {
     'finance.lines_hidden',
     // books-and-posting 9.1: every line of a journal for its reversal, whatever the reverser sees, SECURITY DEFINER.
     'finance.lines_to_reverse',
-    // goods-in 9.5: the MRP of the goods a PT established, by the receipt origin its approval made, whatever the
-    // reader sees, SECURITY DEFINER (DEC-117; S2-F11-T02).
-    'merchandise.pt_mrp_of_origins',
     // structure-and-masters 3.5: what a location version would break in the nesting of locations (S1-F02-T02 review).
     'organisation.location_nesting_broken',
     // structure-and-masters 3.4: whether an approved mapping is out of step with the State rule (GC2-1; S1-F02-T02).
@@ -97,9 +94,9 @@ const RUNTIME_FUNCTIONS: Record<MigrationSetName, readonly string[]> = {
     'stock.damage_of_grn_lines',
     // structure-and-masters 3.5: the location-in-use contract's answer, SECURITY DEFINER (S1-F02-T02).
     'stock.location_has_stock',
-    // goods-in 7.5; stock-ledger 13.20: the goods a PT revision covers, for the scan-in, whatever the reader sees,
-    // SECURITY DEFINER (DEC-117; S2-F07-T01).
-    'stock.pt_revision_goods',
+    // goods-in 6.7; stock-ledger 13.20: a PT reversal's recheck under its locks of whether any piece the PT covers is
+    // no longer waiting, answering only that, SECURITY DEFINER (DEC-117; S2-F09-T01; code review 8 of stage 2).
+    'stock.pt_goods_not_waiting',
     // stock-ledger 13.6: whether Rebuild and compare saw only part, SECURITY DEFINER (DEC-117).
     'stock.rebuild_partial',
     // structure-and-masters 4.4, 4.6: the stock-presence contract's answer, SECURITY DEFINER (S1-F03-T02).

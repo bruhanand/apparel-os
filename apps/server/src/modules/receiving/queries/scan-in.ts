@@ -1,20 +1,32 @@
-import { SCAN_PAGE_CAP, type Scan, type ScanInProduct, type ScanInQuery, type ScanInRead } from '@apparel-os/schemas';
+import {
+  ARRIVAL_TYPE,
+  GRN_TYPE,
+  SCAN_PAGE_CAP,
+  type Scan,
+  type ScanInProduct,
+  type ScanInQuery,
+  type ScanInRead,
+} from '@apparel-os/schemas';
 import { and, desc, eq, lt } from 'drizzle-orm';
-import type { TransactionContext } from '../../../kernel/index.js';
+import type { CommandRefusal, TransactionContext } from '../../../kernel/index.js';
+import type { AccessInterface, RecordFacts } from '../../access/index.js';
 import { skuOn } from '../../merchandise/catalogue/index.js';
 import { structureOn } from '../../organisation/index.js';
-import { ptRevisionGoods, type PtRevisionGoods } from '../../stock/ledger/index.js';
+import { PT_GOODS_READS, ptRevisionGoods, type PtRevisionGoods } from '../../stock/ledger/index.js';
 import { scan, type grn } from '../db/schema.js';
 import { destinationAllowed, progressOf, scanInComplete, type CoveredGoods } from '../domain/scan-in.js';
-import type { ArrivalRow } from '../commands/common.js';
+import { arrivalRow, factsOf, recordNotFound, type ArrivalRow } from '../commands/common.js';
 import { receivingMissing, type AvailabilityDependencies } from './availability.js';
+import { grnRow } from './grns.js';
 import { setMarksOf } from './pt-mark.js';
 
-// The scan-in of a GRN as the inbox and its screen read it (goods-in 4.1, 7, 7.5, section 11; S2-F07-T01): the PT it
-// scans in, once approved, whose covered goods the ledger answers whatever the reader may see of the stock rows
-// (stock-ledger 13.20; DEC-117); what of each product waits, is accepted or is held; where pieces may go; and the scans,
-// newest first, a page at a time. Read under the reader's actor, so row-level security keeps out a GRN or scans the
-// reader may not see (code-house-rules 6.2).
+// The scan-in of a GRN as the inbox and its screen read it (goods-in 4.1, 7, 7.5, section 11; S2-F07-T01; code review
+// 8 of stage 2): the PT it scans in, once approved; what of each product waits, is accepted, is under a damage report
+// or is held otherwise; where pieces may go; and the scans, newest first, a page at a time. Everything is read under
+// the reader's own actor, so row-level security keeps out a GRN, scans or stock rows the reader may not see
+// (code-house-rules 6.2; PRD-SEC-005). What the PT covers is the ledger's stock (stock-ledger 13.20), so a reader is
+// shown it only while their grants of view on the stock it is read from cover the GRN's goods: the scan-in's read is
+// refused otherwise, and the inbox says Unknown (PRD-MOD-015).
 
 type GrnRow = typeof grn.$inferSelect;
 
@@ -26,8 +38,60 @@ const coveredOf = (row: PtRevisionGoods): CoveredGoods => ({
   condition: row.condition,
   quantity: row.quantity,
   accepted: row.accepted,
-  held: row.held,
+  damageHeld: row.damageHeld,
+  otherHeld: row.otherHeld,
 });
+
+/** What reading the stock of a GRN's goods needs: `access`, asked as the reader (access-and-approvals 7.1 step 3). */
+export interface StockReader {
+  readonly access: Pick<AccessInterface, 'authorise' | 'authoriseEach'>;
+  readonly actorId: string;
+}
+
+/**
+ * Whether the reader's grants of view on each stock record type the scan-in reads cover the facts of each GRN given
+ * (goods-in 7.5; stock-ledger 14.3): then row-level security shows them every row of its goods, but a hold whose brand
+ * set holds a brand outside theirs (14.1). One after another, as a transaction's connection answers one statement at a
+ * time.
+ */
+export async function stockShown(
+  context: TransactionContext,
+  reader: StockReader,
+  facts: readonly RecordFacts[],
+): Promise<readonly boolean[]> {
+  const shown = facts.map(() => true);
+  if (facts.length === 0) return shown;
+  for (const recordType of PT_GOODS_READS) {
+    const checked = await reader.access.authoriseEach(
+      context,
+      { actorId: reader.actorId, action: 'view', recordType },
+      facts,
+    );
+    if (checked.kind === 'refused') return facts.map(() => false);
+    checked.each.forEach((each, at) => {
+      if (each.kind !== 'allowed') shown[at] = false;
+    });
+  }
+  return shown;
+}
+
+/** The refusal of a reader whose grants of view on the stock the scan-in reads do not cover the GRN's goods. */
+async function stockRefusal(
+  context: TransactionContext,
+  reader: StockReader,
+  facts: RecordFacts,
+): Promise<CommandRefusal | undefined> {
+  for (const recordType of PT_GOODS_READS) {
+    const checked = await reader.access.authorise(context, {
+      actorId: reader.actorId,
+      action: 'view',
+      recordType,
+      facts,
+    });
+    if (checked.kind === 'refused') return checked.refusal;
+  }
+  return undefined;
+}
 
 /** A GRN's approved PT: the revision its "PT attached" mark names, and the goods it covers (goods-in 5.8, 6.3). */
 export interface OfficialPt {
@@ -122,12 +186,17 @@ async function productsOf(
   const products: ScanInProduct[] = [];
   for (const product of progressOf(pt.goods, arrival.receivingLocationId)) {
     const read = await skuOn(context, product.skuId, arrival.siteId, today);
-    const sku = 'sku' in read ? read.sku : undefined;
     products.push({
       ...product,
-      code: sku?.code ?? null,
-      styleCode: sku?.styleCode ?? null,
-      size: sku?.size ?? null,
+      name:
+        'sku' in read
+          ? {
+              kind: 'known',
+              code: read.sku.code,
+              styleCode: read.sku.styleCode,
+              size: read.sku.size === null ? { kind: 'unknown' } : { kind: 'known', value: read.sku.size },
+            }
+          : { kind: 'unknown' },
     });
   }
   return products;
@@ -163,7 +232,7 @@ async function scansOf(
 }
 
 /** The scan-in of a GRN as its screen shows it (goods-in 7, section 11), without its as-of time and names. */
-export async function scanInView(
+async function scanInView(
   context: TransactionContext,
   dependencies: AvailabilityDependencies,
   grnRow: GrnRow,
@@ -194,4 +263,42 @@ export async function scanInView(
       today,
     ),
   };
+}
+
+/** What reading a GRN's scan-in needs: the gate's services, `access` and the reader (goods-in 7.5). */
+export interface ScanInReadDependencies extends AvailabilityDependencies {
+  readonly access: Pick<AccessInterface, 'authorise' | 'authoriseEach' | 'partyNames'>;
+}
+
+/**
+ * A GRN's scan-in as its screen shows it (goods-in 7, 7.5, section 11), with the names of the people who scanned: not
+ * found for a GRN the reader may not see (code-house-rules 12.3); refused without view on its Arrival, or on the stock
+ * it reads at the GRN's facts (access-and-approvals 7.1 step 3).
+ */
+export async function readScanIn(
+  context: TransactionContext,
+  dependencies: ScanInReadDependencies,
+  actorId: string,
+  grnId: string,
+  query: ScanInQuery,
+  today: string,
+): Promise<{ readonly refused: CommandRefusal } | { readonly read: Omit<ScanInRead, 'asOf'> }> {
+  const issued = await grnRow(context, grnId);
+  const row = issued === undefined ? undefined : await arrivalRow(context, issued.arrivalId);
+  if (issued === undefined || row === undefined) return { refused: recordNotFound(GRN_TYPE, grnId) };
+  const facts = factsOf(row);
+  const authorised = await dependencies.access.authorise(context, {
+    actorId,
+    action: 'view',
+    recordType: ARRIVAL_TYPE,
+    facts,
+  });
+  if (authorised.kind === 'refused') return { refused: authorised.refusal };
+  const stock = await stockRefusal(context, { access: dependencies.access, actorId }, facts);
+  if (stock !== undefined) return { refused: stock };
+  const view = await scanInView(context, dependencies, issued, row, query, today);
+  const names = (
+    await dependencies.access.partyNames(context, [...new Set(view.scans.map((each) => each.scannedBy))], [])
+  ).users;
+  return { read: { ...view, people: [...names].map(([userId, name]) => ({ userId, name })) } };
 }

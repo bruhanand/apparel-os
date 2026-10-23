@@ -1309,8 +1309,9 @@ export const receivingCodes = declareCodes({
  *
  * - `merchandise.pt-scanned-in`: a piece of the GRN is scanned in, so the PT is no longer reversed (DEC-137); `missing`
  *   names the GRN.
- * - `merchandise.pt-goods-held`: a piece the PT covers is held or damaged since its approval, as by a damage report,
- *   so its corrected PT could not cover it (goods-in 6.7, 8.4); `missing` names each receipt origin.
+ * - `merchandise.pt-goods-held`: a piece the PT covers is held, damaged or accepted since its approval, as by a damage
+ *   report, so its corrected PT could not cover it (goods-in 6.7, 8.4); `missing` names each receipt origin the actor
+ *   may see, or, when only goods they may not see block it, the PT revision alone, nothing of those goods (DEC-117).
  * - `merchandise.pt-reversal-open`: a reversal of the revision waits for its approval already; `missing` names it.
  * - `merchandise.pt-reversal-decided`: the reversal is decided already, or its revision is no longer the PT's newest
  *   Official one.
@@ -1370,13 +1371,17 @@ export const stockDocumentsCodes = declareCodes({
 /**
  * `reports`' codes (goods-in 9.1, 9.4, 9.5; S2-F11-T01, S2-F11-T02):
  *
+ * - `reports.record-not-found`: no figure of stock search or the stock report has the key asked for its records, or
+ *   none the reader may see (code-house-rules 12.3); `missing` names the stock balances asked by their place.
  * - `reports.export-too-large`: the search or report finds more results than one export holds
- *   (`STOCK_SEARCH_EXPORT_CAP` and the reports' export caps, technical caps). Narrow the search or the report.
+ *   (`STOCK_SEARCH_EXPORT_CAP` and the reports' export caps, technical caps); `missing` is empty. Narrow the search
+ *   or the report.
  * - `reports.report-too-large`: the supplier report would read more bookings or GRN lines than it reads to work out
- *   its figures (`SUPPLIER_REPORT_BOOKING_CAP`, `SUPPLIER_REPORT_LINE_CAP`, technical caps), so it shows none from
+ *   its figures (`REPORT_BOOKING_READ_CAP`, `REPORT_LINE_READ_CAP`, technical caps), so it shows none from
  *   part of its records (PRD-PRF-004). Narrow it by supplier, brand or season.
  */
 export const reportsCodes = declareCodes({
+  'reports.record-not-found': 'not-found',
   'reports.export-too-large': 'refused',
   'reports.report-too-large': 'refused',
 });

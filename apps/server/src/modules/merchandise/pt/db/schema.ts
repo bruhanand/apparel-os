@@ -3,7 +3,7 @@ import type { MissingItem } from '@apparel-os/schemas';
 import type { PtRowDetail } from '../domain/detail.js';
 
 // Drizzle definitions of `merchandise` · PT's tables (code-house-rules 3.4). They mirror the reviewed migration
-// (migrations/organisation/0106, 0109, 0113) and never create or change a table; an integration test compares each with the
+// (migrations/organisation/0106, 0109, 0112) and never create or change a table; an integration test compares each with the
 // migrated database. Never exported from the unit's index.ts, so no other unit can name these tables
 // (code-house-rules 2). The part shares the schema `merchandise` with the catalogue; each table belongs to one part.
 

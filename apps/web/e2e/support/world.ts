@@ -328,6 +328,8 @@ export interface SyntheticWorld {
     readonly organisationCode: string;
     readonly maker: EnrolledUser;
     readonly approver: EnrolledUser;
+    /** A Store's staff (P-STM) at the PT world's Store, who scans in and searches stock there (code review 8). */
+    readonly storeStaff: EnrolledUser;
     readonly reasonId: string;
     readonly options: ReceivingOptions;
     readonly styleCode: string;

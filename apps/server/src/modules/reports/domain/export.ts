@@ -1,4 +1,11 @@
-import type { HoldKind, StockPosition, StockProduct, StockSearch, StockSearchNames } from '@apparel-os/schemas';
+import type {
+  HoldKind,
+  MaybeKnownText,
+  StockPosition,
+  StockProduct,
+  StockSearch,
+  StockSearchNames,
+} from '@apparel-os/schemas';
 import { exportText, holdKindText, instantText, listText } from './export-text.js';
 
 // Stock search as the sheets of its export (goods-in 9.1 "Any report or search result exports to XLSX as shown"; 9.4;
@@ -29,8 +36,11 @@ export interface Sheet {
 export const text = (value: string): Cell => ({ kind: 'text', text: value });
 export const quantity = (value: number): Cell => ({ kind: 'quantity', quantity: value });
 export const emptyCell = (): Cell => ({ kind: 'empty' });
-export const unknownCell = (): Cell => text(exportText('stock-search.unknown'));
+export const unknownCell = (): Cell => text(exportText('export.unknown'));
 export const orUnknown = (value: string | null): Cell => (value === null ? unknownCell() : text(value));
+/** A text that may be Unknown, as the word when it is (PRD-MOD-015). */
+export const maybeKnownCell = (value: MaybeKnownText): Cell =>
+  value.kind === 'known' ? text(value.value) : unknownCell();
 
 /** A named record as "CODE · Name", Unknown when the read did not name it. */
 export function namedCell(
@@ -38,7 +48,7 @@ export function namedCell(
   id: string,
 ): Cell {
   const found = list.find((each) => each.id === id);
-  return found === undefined ? unknownCell() : text(exportText('stock-search.named', found));
+  return found === undefined ? unknownCell() : text(exportText('export.named', found));
 }
 
 /** The goods' columns: what they are, product code, style code, size, identity and article number. */
@@ -53,23 +63,27 @@ export function goodsCells(product: StockProduct | undefined): Cell[] {
       text(exportText('stock-search.goods.counted')),
       { kind: 'empty' },
       text(product.styleCode),
-      orUnknown(product.size),
-      orUnknown(product.colour),
+      maybeKnownCell(product.size),
+      maybeKnownCell(product.colour),
       { kind: 'empty' },
     ];
   }
-  const identity = product.identity.map((value) => {
+  const { facts } = product;
+  if (facts.kind === 'unknown') {
+    return [text(exportText('stock-search.goods.product')), ...Array.from({ length: 5 }, unknownCell)];
+  }
+  const identity = facts.identity.map((value) => {
     if (value.kind === 'value') return value.name ?? value.code;
     if (value.kind === 'text') return value.text;
-    return exportText('stock-search.unknown');
+    return exportText('export.unknown');
   });
   return [
     text(exportText('stock-search.goods.product')),
-    orUnknown(product.code),
-    orUnknown(product.styleCode),
-    orUnknown(product.size),
+    text(facts.code),
+    text(facts.styleCode),
+    maybeKnownCell(facts.size),
     identity.length === 0 ? { kind: 'empty' } : text(listText(identity)),
-    product.articleNumber === null ? { kind: 'empty' } : text(product.articleNumber),
+    facts.articleNumber === null ? { kind: 'empty' } : text(facts.articleNumber),
   ];
 }
 

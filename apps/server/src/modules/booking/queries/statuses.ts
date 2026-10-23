@@ -1,4 +1,4 @@
-import type { BookingInForceState, BookingStatus } from '@apparel-os/schemas';
+import { bookingInForceStateSchema, type BookingInForceState, type BookingStatus } from '@apparel-os/schemas';
 import { and, asc, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import { CommandDefect, declareReadModel, serveReadModel, type TransactionContext } from '../../../kernel/index.js';
 import { booking, bookingLine, bookingNumber, bookingReceiptLink, bookingVersion } from '../db/schema.js';
@@ -48,8 +48,6 @@ export interface BookingStatusEntry {
   readonly status: BookingStatus;
   readonly deliveries: readonly BookingDelivery[];
 }
-
-const IN_FORCE: readonly string[] = ['Approved', 'Issued', 'Confirmed'];
 
 /**
  * A page of the bookings with a version in force the reader may see, newest first by identifier, filtered by brand,
@@ -102,11 +100,12 @@ export async function bookingStatuses(
     .orderBy(asc(bookingReceiptLink.id));
   const bookings = read.map(({ booking: row, version, state, number }): BookingStatusEntry => {
     // The version in force is approved, so its state is one of the three: anything else is a defect.
-    if (!IN_FORCE.includes(state)) throw new CommandDefect(`A booking in force in state ${state}: ${row.id}`);
+    const inForce = bookingInForceStateSchema.safeParse(state);
+    if (!inForce.success) throw new CommandDefect(`A booking in force in state ${state}: ${row.id}`);
     return {
       bookingId: row.id,
       number,
-      state: state as BookingInForceState,
+      state: inForce.data,
       brandId: row.brandId,
       seasonValueId: version.seasonValueId,
       supplierPartyId: version.supplierPartyId,

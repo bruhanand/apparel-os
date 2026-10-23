@@ -4,12 +4,11 @@ import {
   type ReceiptProblemsFilters,
   type ReceiptProblemsReport,
 } from '@apparel-os/schemas';
-import type { ReadModelGateway, TransactionContext } from '../../../kernel/index.js';
-import type { AccessInterface } from '../../access/index.js';
 import { RECEIVING_RECEIPT_PROBLEMS } from '../../receiving/index.js';
 import { STOCK_DAMAGE_REPORT_STATES } from '../../stock/documents/index.js';
-import { viewable } from './authority.js';
+import { factsOf, viewable } from './authority.js';
 import { namesOf } from './names.js';
+import type { Reading } from './reading.js';
 
 // The receipt problems report (goods-in 4.4, 4.9, 9.3, 9.5; PRD-REC-006, PRD-REC-013; S2-F11-T02): per GRN and line,
 // shortage, excess, wrong, unidentified and damage, each with its decision and who made it, by Site, supplier, brand
@@ -22,35 +21,20 @@ export interface ReceiptProblemsRequest {
   readonly filters: ReceiptProblemsFilters;
   readonly after?: string;
   readonly limit: number;
-  readonly today: string;
 }
 
 export async function receiptProblemsReport(
-  gateway: ReadModelGateway,
-  access: AccessInterface,
-  context: TransactionContext,
-  actorId: string,
+  reading: Reading,
   request: ReceiptProblemsRequest,
-): Promise<ReceiptProblemsReport> {
+): Promise<{ readonly report: ReceiptProblemsReport; readonly read: number }> {
+  const { gateway, context } = reading;
   const read = await gateway.read(context, RECEIVING_RECEIPT_PROBLEMS, {
     ...request.filters,
     ...(request.after === undefined ? {} : { after: request.after }),
     limit: request.limit,
   });
   const page = read.answer.rows;
-  const shown = await viewable(
-    access,
-    context,
-    actorId,
-    ARRIVAL_TYPE,
-    page.map((each) => ({
-      siteId: each.siteId,
-      ...(each.storeId === null ? {} : { storeId: each.storeId }),
-      businessUnitId: each.businessUnitId,
-      legalEntityId: each.legalEntityId,
-      brandId: each.brandId,
-    })),
-  );
+  const shown = await viewable(reading.access, context, reading.actorId, ARRIVAL_TYPE, page.map(factsOf));
   const rows = page.filter((_, at) => shown[at] === true);
   const reportIds = rows.flatMap((each) => (each.line.damage === null ? [] : [each.line.damage.damageReportId]));
   const states = (await gateway.read(context, STOCK_DAMAGE_REPORT_STATES, reportIds)).answer;
@@ -66,25 +50,21 @@ export async function receiptProblemsReport(
           decision: found.decision === null ? null : { ...found.decision },
         };
   };
-  const { names } = await namesOf(
-    gateway,
-    access,
-    context,
-    {
-      siteIds: rows.map((each) => each.siteId),
-      brandIds: rows.map((each) => each.brandId),
-      supplierIds: rows.map((each) => each.supplierPartyId),
-      userIds: [
-        ...rows.flatMap((each) => {
-          const decided = each.line.heldLine?.decision;
-          return decided === undefined || decided === null ? [] : [decided.decidedBy];
-        }),
-        ...states.flatMap((each) => (each.decision === null ? [] : [each.decision.decidedBy])),
-      ],
-    },
-    request.today,
-  );
-  return {
+  const { names } = await namesOf(reading, {
+    // Each GRN, which opens its Arrival named by where it was received (goods-in 9.1).
+    grnIds: rows.map((each) => each.grnId),
+    siteIds: rows.map((each) => each.siteId),
+    brandIds: rows.map((each) => each.brandId),
+    supplierIds: rows.map((each) => each.supplierPartyId),
+    userIds: [
+      ...rows.flatMap((each) => {
+        const decided = each.line.heldLine?.decision;
+        return decided === undefined || decided === null ? [] : [decided.decidedBy];
+      }),
+      ...states.flatMap((each) => (each.decision === null ? [] : [each.decision.decidedBy])),
+    ],
+  });
+  const report: ReceiptProblemsReport = {
     asOf: read.asOf,
     rows: rows.map((each) => ({
       grnId: each.grnId,
@@ -100,4 +80,5 @@ export async function receiptProblemsReport(
     names,
     next: read.answer.next,
   };
+  return { report, read: page.length };
 }

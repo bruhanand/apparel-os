@@ -534,6 +534,37 @@ export async function receivingGateOpen(
   );
 }
 
+/**
+ * A capability switched on or off through configuration's command (goods-in 10.5; module-map 4.4), by the setup's
+ * preparer: a test closes a gate this way to see an operation refused, and opens it again (code review 8 of stage 2).
+ */
+export async function capabilitySwitched(
+  setup: StructureSetup,
+  database: string,
+  operation: Parameters<Configuration['registerOperation']>[0],
+  on: boolean,
+): Promise<void> {
+  const { configuration } = composedConfiguration([]);
+  const { capability } = operation;
+  if (!configuration.operations().some((each) => each.capability === capability)) {
+    configuration.registerOperation(operation);
+  }
+  const switcher = setup.preparer;
+  const switching = await grantSynthetic(database, { kind: 'user', id: switcher.id }, [
+    { recordType: 'configuration.capability', action: 'edit' },
+  ]);
+  ok(
+    await setup.run(switcher.id, (context) =>
+      configuration.switchCapability(
+        context,
+        { userId: switcher.id, roleAssignmentId: switching.assignmentId },
+        capability,
+        on,
+      ),
+    ),
+  );
+}
+
 /** The people receiving's operations need at a unit (goods-in 10.5; PRD-ACS-006), for its users-and-access check. */
 const RECEIVING_PEOPLE: readonly SyntheticAuthority[] = (RECEIVE_GOODS.needs?.permissions ?? []).map((each) => ({
   recordType: each.recordType,

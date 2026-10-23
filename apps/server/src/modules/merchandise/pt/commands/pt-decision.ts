@@ -1,7 +1,13 @@
 import { uuidv7 } from '@apparel-os/domain';
 import { PT_APPROVAL, PT_REVERSAL_APPROVAL, PT_TYPE } from '@apparel-os/schemas';
 import { CommandDefect, type LockTarget, type TransactionContext } from '../../../../kernel/index.js';
-import type { DocumentEffect, EffectDecider, EffectOutcome, ModuleApprovals } from '../../../access/index.js';
+import type {
+  AccessInterface,
+  DocumentEffect,
+  EffectDecider,
+  EffectOutcome,
+  ModuleApprovals,
+} from '../../../access/index.js';
 import type { ExceptionsInterface } from '../../../exceptions/index.js';
 import { ptProductLockTargets } from '../../catalogue/index.js';
 import type { ReceivingInterface } from '../../../receiving/index.js';
@@ -42,6 +48,8 @@ export type PtPostingQueue =
 
 /** What the decision's effect acts through, bound late, since `access` is built with it (access-and-approvals 9.8b). */
 export interface PtDecisionServices extends PostingServices {
+  /** And Authorise, which a reversal asks for the stock it reads and writes (goods-in 6.7; stock-ledger 14.3). */
+  readonly access: PostingServices['access'] & Pick<AccessInterface, 'authorise'>;
   readonly receiving: Pick<ReceivingInterface, 'ptBasis' | 'grnForPt' | 'ptMarkLock' | 'clearPtMark' | 'anyAccepted'>;
   /** Where a refused posting's unfinished-operation exception is raised (books-and-posting 10 step 3). */
   readonly exceptions: Pick<ExceptionsInterface, 'raiseInOwnCommand'>;
@@ -178,7 +186,7 @@ export function ptDecisionEffect(dependencies: PtDecisionDependencies): Document
       if (standing === undefined) return;
       await raisePostingRefused(context, dependencies.services().exceptions, {
         revision: standing.revision,
-        revisionId,
+        versionId: revisionId,
         raisingEvent: decision.raisingEvent,
         refusal: decision.refusal,
         raisedBy: decision.actor,

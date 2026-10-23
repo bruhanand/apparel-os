@@ -1,24 +1,22 @@
-import type { DamageReportState } from '@apparel-os/schemas';
 import { and, asc, eq, gt, inArray, type SQL } from 'drizzle-orm';
 import {
-  CommandDefect,
   declareReadModel,
   serveReadModel,
   type ServedReadModel,
   type TransactionContext,
 } from '../../../kernel/index.js';
 import type { AccessInterface } from '../../access/index.js';
-import type { StockDocumentsInterface } from '../../stock/documents/index.js';
-import { arrival, grn, grnLine, recount } from '../db/schema.js';
-import { GRN_SOURCE_TYPE, RECEIVING_MODULE, RECOUNT_SOURCE_TYPE } from '../domain/kinds.js';
+import type { SourceRecord } from '../../stock/ledger/index.js';
+import { arrival, grn, grnLine, recount, scan } from '../db/schema.js';
+import { GRN_SOURCE_TYPE, RECEIVING_MODULE, RECOUNT_SOURCE_TYPE, SCAN_SOURCE_TYPE } from '../domain/kinds.js';
 import { receiptProblems, type ReceiptProblem, type ReceiptProblemsQuery } from './held-lines.js';
 import { recountedCounts } from './recounts.js';
 
 // `receiving`'s read models of the stage 2 reports (goods-in 4.9, 9.3, 9.5; module-map section 3 rule 5; S2-F11-T02),
 // served through the kernel's read-model gateway, each read in the reader's transaction under the reader's actor, so
 // row-level security keeps out the GRNs the reader may not see (code-house-rules 6.2): the receipt problems read model
-// (4.9); the GRN lines of a supplier and brand with their arrival date, their count now and the count's damage report
-// with its state, for the supplier report; and the GRNs by their numbers and Arrivals, for the reports' drill-down.
+// (4.9); the GRN lines of a supplier and brand with their arrival date, their count now and the count's damage report,
+// by its identifier, for the supplier report; and the GRNs by their numbers and Arrivals, for the reports' drill-down.
 
 /** One GRN line as the supplier report reads it (goods-in 9.3 "Supplier fill rate and timeliness", 9.5). */
 export interface ReportGrnLine {
@@ -37,14 +35,11 @@ export interface ReportGrnLine {
   /** The pieces counted on the line now: its latest approved recount's count, or the GRN's own (goods-in 4.11). */
   readonly counted: number;
   /**
-   * The damage report the count raised on the line, its pieces and its state, read through `stock` · documents'
-   * narrowly authorised read, as the GRN's PT basis reads it (goods-in 4.9; DEC-117); none when the count found none.
+   * The damage report the count raised on the line, by its identifier, which `receiving` keeps; none when the count
+   * found none. Its pieces and state are `stock` · documents', which the reader reads under their own authority
+   * (code-house-rules 6.2; DEC-117; code review 9 of stage 2).
    */
-  readonly countDamage: {
-    readonly damageReportId: string;
-    readonly quantity: number;
-    readonly state: DamageReportState;
-  } | null;
+  readonly countDamageReportId: string | null;
 }
 
 export interface ReportGrnLinesQuery {
@@ -56,12 +51,9 @@ export interface ReportGrnLinesQuery {
   readonly limit: number;
 }
 
-type Documents = Pick<StockDocumentsInterface, 'damageOfGrnLines'>;
-
 /** A page of the GRN lines the reader may see, of the supplier and brand given, oldest first by identifier. */
 export async function reportGrnLines(
   context: TransactionContext,
-  documents: Documents,
   query: ReportGrnLinesQuery,
 ): Promise<{ readonly lines: readonly ReportGrnLine[]; readonly next: string | null }> {
   const filters: (SQL | undefined)[] = [
@@ -80,14 +72,7 @@ export async function reportGrnLines(
   const read = page.slice(0, query.limit);
   const lineIds = read.map((row) => row.line.id);
   const counts = await recountedCounts(context, lineIds);
-  const damage = await documents.damageOfGrnLines(context, lineIds);
   const lines = read.map(({ line, grn: issued, arrivalDate, supplierPartyId }): ReportGrnLine => {
-    const report =
-      line.damageReportId === null ? undefined : damage.find((each) => each.damageReportId === line.damageReportId);
-    // The narrowly authorised read answers every report on the line, so the count's report not found is a defect.
-    if (line.damageReportId !== null && report === undefined) {
-      throw new CommandDefect(`The count's damage report of GRN line ${line.id} was not found`);
-    }
     return {
       grnLineId: line.id,
       grnId: issued.id,
@@ -101,25 +86,18 @@ export async function reportGrnLines(
       brandId: issued.brandId,
       supplierPartyId,
       counted: counts.get(line.id) ?? line.countedQuantity,
-      countDamage:
-        report === undefined
-          ? null
-          : { damageReportId: report.damageReportId, quantity: report.quantity, state: report.state },
+      countDamageReportId: line.damageReportId,
     };
   });
   return { lines, next: page.length > query.limit ? (read.at(-1)?.line.id ?? null) : null };
 }
 
-/** A record another module's source names, by module, record type and identifier (stock-ledger 2.1). */
-export interface SourceRecord {
-  readonly module: string;
-  readonly recordType: string;
-  readonly recordId: string;
-}
-
 export interface GrnNamesQuery {
   readonly grnIds: readonly string[];
-  /** Sources the ledger's receipt origins name; those of `receiving`, a GRN or a recount, are answered by their GRN. */
+  /**
+   * Sources the ledger's receipt origins and movements name; those of `receiving`, a GRN, a recount or a scan, are
+   * answered by their GRN.
+   */
   readonly sources: readonly SourceRecord[];
 }
 
@@ -129,13 +107,15 @@ export interface GrnNamesAnswer {
     readonly number: string;
     readonly arrivalId: string;
     readonly siteId: string;
+    readonly businessUnitId: string;
+    readonly receivingLocationId: string;
   }[];
   readonly sources: readonly (SourceRecord & { readonly grnId: string })[];
 }
 
 /**
- * The GRNs given, and those the sources name, each with its number, its Site and the Arrival it was issued from, as
- * the reader may see them: the drill-down from a report's figure to its GRN (goods-in 9.1; PRD-EXC-011). A source of
+ * The GRNs given, and those the sources name, each with its number, the Arrival it was issued from and where it was
+ * received, its Site, business unit and receiving location, as the reader may see them: the drill-down from a report's figure to its GRN (goods-in 9.1; PRD-EXC-011). A source of
  * another module, or one the reader may not see, is not answered.
  */
 export async function grnNames(context: TransactionContext, query: GrnNamesQuery): Promise<GrnNamesAnswer> {
@@ -148,9 +128,18 @@ export async function grnNames(context: TransactionContext, query: GrnNamesQuery
           .select({ id: recount.id, grnId: recount.grnId })
           .from(recount)
           .where(inArray(recount.id, [...new Set(recountIds)]));
+  const scanIds = ours.filter((each) => each.recordType === SCAN_SOURCE_TYPE).map((each) => each.recordId);
+  const scans =
+    scanIds.length === 0
+      ? []
+      : await context.tx
+          .select({ id: scan.id, grnId: scan.grnId })
+          .from(scan)
+          .where(inArray(scan.id, [...new Set(scanIds)]));
   const sourceGrn = (source: SourceRecord): string | undefined => {
     if (source.recordType === GRN_SOURCE_TYPE) return source.recordId;
     if (source.recordType === RECOUNT_SOURCE_TYPE) return recounts.find((each) => each.id === source.recordId)?.grnId;
+    if (source.recordType === SCAN_SOURCE_TYPE) return scans.find((each) => each.id === source.recordId)?.grnId;
     return undefined;
   };
   const named = ours.flatMap((source) => {
@@ -162,8 +151,16 @@ export async function grnNames(context: TransactionContext, query: GrnNamesQuery
     grnIds.length === 0
       ? []
       : await context.tx
-          .select({ grnId: grn.id, number: grn.number, arrivalId: grn.arrivalId, siteId: grn.siteId })
+          .select({
+            grnId: grn.id,
+            number: grn.number,
+            arrivalId: grn.arrivalId,
+            siteId: grn.siteId,
+            businessUnitId: grn.businessUnitId,
+            receivingLocationId: arrival.receivingLocationId,
+          })
           .from(grn)
+          .innerJoin(arrival, eq(arrival.id, grn.arrivalId))
           .where(inArray(grn.id, grnIds))
           .orderBy(asc(grn.id));
   return { grns, sources: named.filter((each) => grns.some((found) => found.grnId === each.grnId)) };
@@ -181,21 +178,17 @@ export const RECEIVING_GRN_NAMES = declareReadModel<GrnNamesQuery, GrnNamesAnswe
 
 /**
  * `receiving`'s read models as it serves them, handed to the gateway by the composition root, with the interfaces they
- * read through, reached when a read runs, never at start, since `access` and `stock` · documents are built after the
- * gateway: `access` for the latest request of each held line's version (4.9), `stock` · documents for the count's
- * damage reports.
+ * read through, reached when a read runs, never at start, since `access` is built after the gateway: for the latest
+ * request of each held line's version (4.9).
  */
 export function receivingReadModels(
-  services: () => {
-    readonly access: Pick<AccessInterface, 'approvalRequestsOf'>;
-    readonly documents: Documents;
-  },
+  services: () => { readonly access: Pick<AccessInterface, 'approvalRequestsOf'> },
 ): ServedReadModel[] {
   return [
     serveReadModel(RECEIVING_RECEIPT_PROBLEMS, (context, query) =>
       receiptProblems(context, query, (versionIds) => services().access.approvalRequestsOf(context, versionIds)),
     ),
-    serveReadModel(RECEIVING_REPORT_LINES, (context, query) => reportGrnLines(context, services().documents, query)),
+    serveReadModel(RECEIVING_REPORT_LINES, reportGrnLines),
     serveReadModel(RECEIVING_GRN_NAMES, grnNames),
   ];
 }

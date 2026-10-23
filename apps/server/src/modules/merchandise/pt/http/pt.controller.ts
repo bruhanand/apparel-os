@@ -33,13 +33,7 @@ import {
   type SignedInUser,
 } from '../../../access/index.js';
 import { PT_FIELD_CLASSES } from '../domain/kinds.js';
-import {
-  BUSINESS_DATE_NOT_SET,
-  grnNotFound,
-  recordItem,
-  reversalNotFound,
-  revisionNotFound,
-} from '../domain/refusals.js';
+import { BUSINESS_DATE_NOT_SET, grnNotFound, recordItem, revisionNotFound } from '../domain/refusals.js';
 import type { PtInterface } from '../pt.js';
 import { PT } from '../tokens.js';
 
@@ -456,26 +450,11 @@ export class PtController {
     @SignedIn() user: SignedInUser,
   ) {
     const { reversalId } = input.params;
-    const notFound = reversalNotFound(reversalId);
     return this.read(user, 'merchandise.read-pt-reversal', async (context) => {
-      const facts = await this.pt.reversalFacts(context, reversalId);
-      if (facts === undefined) refuse(notFound);
-      const authorised = await this.access.authorise(context, {
-        actorId: user.userId,
-        action: 'view',
-        recordType: PT_TYPE,
-        facts,
-      });
-      if (authorised.kind === 'refused') refuse(authorised.refusal);
-      const request = (await this.access.approvalRequestsOf(context, [reversalId])).get(reversalId);
-      const read = await this.pt.reversal(context, reversalId, request);
-      if (read === undefined) refuse(notFound);
-      const names = (await this.access.partyNames(context, read.people, [])).users;
-      return {
-        asOf: context.startedAt.toISOString(),
-        ...read.view,
-        people: [...names].map(([userId, name]) => ({ userId, name })),
-      };
+      // Authorised in the PT's own read with the reversal's facts; one the reader may not see is not found (12.3).
+      const read = await this.pt.readReversal(context, user.userId, reversalId);
+      if ('refused' in read) refuse(read.refused);
+      return { asOf: context.startedAt.toISOString(), ...read.read };
     });
   }
 

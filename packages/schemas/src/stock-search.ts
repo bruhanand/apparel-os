@@ -1,6 +1,7 @@
 import { z } from 'zod';
-import { idSchema, paiseSchema } from './common.js';
+import { idSchema, maybeKnownTextSchema, pageLimitSchema, paiseSchema } from './common.js';
 import { STOCK_BALANCE_TYPE } from './imports.js';
+import { RECEIVING_CAPS } from './receiving.js';
 
 // Stock search (goods-in 9.1, 9.2, section 11; module-map section 5 `reports`; PRD-STK-001, PRD-STK-006,
 // PRD-ACS-008, PRD-EXC-010, PRD-MOD-003; S2-F11-T01). Each result is a product at a place, a Site, a business unit and
@@ -11,6 +12,12 @@ import { STOCK_BALANCE_TYPE } from './imports.js';
 
 /** The stock record type of a receipt origin, whose cost is the field class cost (stock-ledger 14.3). */
 export const STOCK_RECEIPT_ORIGIN_TYPE = 'stock.receipt_origin';
+/** The stock record types of holds and reservations, with their claims (stock-ledger 14.3). */
+export const STOCK_HOLD_TYPE = 'stock.hold';
+export const STOCK_RESERVATION_TYPE = 'stock.reservation';
+/** The stock record types of movements, with their legs, and of coverage records (stock-ledger 14.3). */
+export const STOCK_MOVEMENT_TYPE = 'stock.movement';
+export const STOCK_COVERAGE_TYPE = 'stock.coverage';
 /**
  * Every stock record type the search reads a result from, each under the reader's own grants (stock-ledger 14.3): its
  * balances, its origins with their coverage, and the holds and reservations claimed on them. A result is shown only to
@@ -20,8 +27,8 @@ export const STOCK_RECEIPT_ORIGIN_TYPE = 'stock.receipt_origin';
 export const STOCK_SEARCH_READS = [
   STOCK_BALANCE_TYPE,
   STOCK_RECEIPT_ORIGIN_TYPE,
-  'stock.hold',
-  'stock.reservation',
+  STOCK_HOLD_TYPE,
+  STOCK_RESERVATION_TYPE,
 ] as const;
 
 /** The most results one page holds, a technical cap (code-house-rules 12.1 "Reads"); Load more reads the next. */
@@ -33,14 +40,20 @@ export const STOCK_SEARCH_PAGE_CAP = 100;
 export const STOCK_SEARCH_PRODUCT_CAP = 1_000;
 /** The most results one export holds, a technical cap: past it the export is refused, naming the cap (goods-in 9.4). */
 export const STOCK_SEARCH_EXPORT_CAP = 10_000;
-/** The longest text a search names: a style code, a size or a barcode, as receiving's codes (goods-in 4.8). */
-export const STOCK_SEARCH_TEXT_CAP = 60;
+/**
+ * The longest text a search names: a style code, a size or a barcode, receiving's cap of a code (`RECEIVING_CAPS`
+ * `codeText`; goods-in 4.8), one constant.
+ */
+export const STOCK_SEARCH_TEXT_CAP = RECEIVING_CAPS.codeText;
 
-/** A condition of stock (stock-ledger 2.2, 14.1). */
+/** A condition of stock (stock-ledger 2.2, 14.1), the one list the ledger's `Condition` is. */
 export const stockConditionSchema = z.enum(['good', 'damaged', 'wrong', 'unidentified']);
 export type StockCondition = z.infer<typeof stockConditionSchema>;
 
-/** A kind of hold placed on goods (stock-ledger 6.1); a count freeze is shown apart, as `frozen`. */
+/**
+ * A kind of hold placed on goods (stock-ledger 6.1), the one list the ledger's `PlacedHoldKind` is; a count freeze is
+ * shown apart, as `frozen`.
+ */
 export const holdKindSchema = z.enum([
   'damage',
   'quarantine',
@@ -87,11 +100,7 @@ export type StockSearchFilters = z.infer<typeof stockSearchFiltersSchema>;
 export const stockSearchQuerySchema = z.strictObject({
   ...filterShape,
   after: stockSearchCursorSchema.optional(),
-  limit: z
-    .string()
-    .regex(/^[1-9]\d*$/)
-    .refine((limit) => Number(limit) <= STOCK_SEARCH_PAGE_CAP, { message: `At most ${String(STOCK_SEARCH_PAGE_CAP)}` })
-    .optional(),
+  limit: pageLimitSchema(STOCK_SEARCH_PAGE_CAP).optional(),
 });
 export type StockSearchQuery = z.infer<typeof stockSearchQuerySchema>;
 
@@ -104,26 +113,35 @@ export const identityValueSchema = z.discriminatedUnion('kind', [
 export type IdentityValueView = z.infer<typeof identityValueSchema>;
 
 /**
- * The goods of a result (goods-in 9.2): a product, by its SKU, named by its code, style code, size, the brand's article
- * number and its identity, each null while the catalogue does not answer it (Unknown; PRD-MOD-015); goods before PT
- * approval, by their style code, colour and size as counted, a colour or size the count did not state null (Unknown;
- * PRD-MER-005, DEC-138); or unidentified goods, which carry no identity.
+ * A product's facts as the catalogue answers them today (goods-in 9.2): its code, style code and size, Unknown while it
+ * is; the brand's article number of the style version in force, none while none is; and its identity. Unknown as a
+ * whole while the catalogue does not answer the product (PRD-MOD-015).
  */
-export const stockProductSchema = z.discriminatedUnion('kind', [
+export const stockProductFactsSchema = z.discriminatedUnion('kind', [
   z.strictObject({
-    kind: z.literal('product'),
-    skuId: idSchema,
-    code: z.string().nullable(),
-    styleCode: z.string().nullable(),
-    size: z.string().nullable(),
+    kind: z.literal('known'),
+    code: z.string(),
+    styleCode: z.string(),
+    size: maybeKnownTextSchema,
     articleNumber: z.string().nullable(),
     identity: z.array(identityValueSchema),
   }),
+  z.strictObject({ kind: z.literal('unknown') }),
+]);
+export type StockProductFacts = z.infer<typeof stockProductFactsSchema>;
+
+/**
+ * The goods of a result (goods-in 9.2): a product, by its SKU, with its facts; goods before PT approval, by their style
+ * code, colour and size as counted, a colour or size the count did not state Unknown (PRD-MER-005, DEC-138,
+ * PRD-MOD-015); or unidentified goods, which carry no identity.
+ */
+export const stockProductSchema = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('product'), skuId: idSchema, facts: stockProductFactsSchema }),
   z.strictObject({
     kind: z.literal('counted'),
     styleCode: z.string(),
-    colour: z.string().nullable(),
-    size: z.string().nullable(),
+    colour: maybeKnownTextSchema,
+    size: maybeKnownTextSchema,
   }),
   z.strictObject({ kind: z.literal('unidentified') }),
 ]);
@@ -156,6 +174,8 @@ const quantityShape = {
 
 /** One result: a product at a place, with its quantities apart (goods-in 9.2). */
 export const stockPositionSchema = z.strictObject({
+  /** The result's key, opaque, which names it apart from every other and asks for its records (goods-in 9.1). */
+  resultKey: stockSearchCursorSchema,
   /** The product's key, opaque, which `elsewhere` names it by. */
   productKey: z.string(),
   product: stockProductSchema,
@@ -165,6 +185,8 @@ export const stockPositionSchema = z.strictObject({
   storeId: idSchema.nullable(),
   businessUnitId: idSchema,
   locationId: idSchema,
+  /** The legal entity of its balances: a result's place and product with another legal entity is another result. */
+  legalEntityId: idSchema,
   ...quantityShape,
   heldByKind: z.array(heldByKindSchema),
   /** A count freeze covers some of it, so nothing of it is available until the count closes (stock-ledger 8.1). */
@@ -179,18 +201,20 @@ export const stockElsewhereSchema = z.strictObject({
   siteId: idSchema,
   storeId: idSchema.nullable(),
   businessUnitId: idSchema,
+  legalEntityId: idSchema,
   ...quantityShape,
 });
 export type StockElsewhere = z.infer<typeof stockElsewhereSchema>;
 
-const namedSchema = z.strictObject({ id: idSchema, code: z.string(), name: z.string() });
+/** A record named by its code and name, as in force on the date read (goods-in 9.1). */
+export const namedRecordSchema = z.strictObject({ id: idSchema, code: z.string(), name: z.string() });
 
 /** The names of the places and brands a page shows, as in force today; one not answered is Unknown. */
 export const stockSearchNamesSchema = z.strictObject({
-  sites: z.array(namedSchema),
-  businessUnits: z.array(namedSchema),
-  locations: z.array(namedSchema.extend({ kind: z.string() })),
-  brands: z.array(namedSchema),
+  sites: z.array(namedRecordSchema),
+  businessUnits: z.array(namedRecordSchema),
+  locations: z.array(namedRecordSchema.extend({ kind: z.string() })),
+  brands: z.array(namedRecordSchema),
 });
 export type StockSearchNames = z.infer<typeof stockSearchNamesSchema>;
 
@@ -215,3 +239,106 @@ export const stockSearchExportSchema = z.strictObject({
   contentBase64: z.string(),
 });
 export type StockSearchExport = z.infer<typeof stockSearchExportSchema>;
+
+// The records behind a figure (goods-in 9.1 "Every figure drills down to its records: the booking, the GRN, the PT,
+// the movements", 9.2, 9.5; PRD-EXC-011; code reviews 8 and 9 of stage 2): for one result of stock search, or one row
+// of the stock report, the GRNs its pieces were counted on, the PTs that cover them, and their movements at the
+// location, newest first, a page at a time, as the reader may see them.
+
+/** The most movements one page of a figure's records holds, a technical cap (code-house-rules 12.1); Load more reads on. */
+export const STOCK_RECORDS_PAGE_CAP = 100;
+
+/** A kind of stock movement (stock-ledger 2.3, 14.2), the list the ledger's `movement_kind` check holds. */
+export const stockMovementKindSchema = z.enum([
+  'receipt-count',
+  'opening-count',
+  'location-move',
+  'condition-change',
+  'identity-resolved',
+  'dispatch',
+  'arrival-count',
+  'failed-delivery-return',
+  'sale-issue',
+  'customer-return',
+  'supplier-return-departure',
+  'supplier-handover',
+  'supplier-rejection-return',
+  'count-difference',
+  'disposal',
+  'ownership-change',
+  'cost-established',
+  'cost-adjustment',
+  'write-off',
+  'nrv-write-down',
+  'reversal',
+]);
+export type StockMovementKind = z.infer<typeof stockMovementKindSchema>;
+
+/** The record a movement came from, by kind: what the screen names it as (goods-in 9.1). */
+export const stockRecordSourceSchema = z.enum([
+  'grn',
+  'recount',
+  'scan',
+  'pt',
+  'pt-reversal',
+  'damage-report',
+  'damage-reversal',
+  'other',
+]);
+export type StockRecordSource = z.infer<typeof stockRecordSourceSchema>;
+
+/**
+ * Which figure's records: a result of stock search, or a row of the stock report, by the key the answer gave it,
+ * opaque to the screen.
+ */
+export const stockRecordsQuerySchema = z.strictObject({
+  of: z.enum(['search', 'report']),
+  key: stockSearchCursorSchema,
+  /** The last movement of the page before. */
+  after: idSchema.optional(),
+  limit: pageLimitSchema(STOCK_RECORDS_PAGE_CAP).optional(),
+});
+export type StockRecordsQuery = z.infer<typeof stockRecordsQuerySchema>;
+
+/**
+ * A GRN a figure came from, by its number, with the Arrival it was issued from and where it was received: its Site,
+ * business unit and receiving location (goods-in 4.5), which its Arrival is named by when it opens (goods-in 9.1).
+ */
+export const stockRecordGrnSchema = z.strictObject({
+  grnId: idSchema,
+  number: z.string(),
+  arrivalId: idSchema,
+  siteId: idSchema,
+  businessUnitId: idSchema,
+  receivingLocationId: idSchema,
+});
+export type StockRecordGrn = z.infer<typeof stockRecordGrnSchema>;
+
+/** One movement of the goods at the location: one leg of it, in or out (stock-ledger 2.3). */
+export const stockRecordMovementSchema = z.strictObject({
+  id: idSchema,
+  movementId: idSchema,
+  kind: stockMovementKindSchema,
+  direction: z.enum(['in', 'out']),
+  quantity: z.int().min(1),
+  condition: stockConditionSchema,
+  businessDate: z.iso.date(),
+  occurredAt: z.iso.datetime({ offset: true }),
+  source: stockRecordSourceSchema,
+  /** The GRN the movement's pieces were counted on, which opens its Arrival, or none the reader may see. */
+  grnId: idSchema.nullable(),
+});
+export type StockRecordMovement = z.infer<typeof stockRecordMovementSchema>;
+
+/** A figure's records, as the reader may see them, read through the read-model gateway with its as-of time. */
+export const stockRecordsSchema = z.strictObject({
+  asOf: z.iso.datetime({ offset: true }),
+  grns: z.array(stockRecordGrnSchema),
+  /** The names of the units and receiving locations of the GRNs, as in force today; one not answered is Unknown. */
+  places: z.strictObject({ businessUnits: z.array(namedRecordSchema), locations: z.array(namedRecordSchema) }),
+  /** The PT revisions covering the pieces, each with the GRN whose PT it is, or none the reader may see. */
+  pts: z.array(z.strictObject({ ptRevisionId: idSchema, grnId: idSchema.nullable() })),
+  movements: z.array(stockRecordMovementSchema),
+  next: idSchema.nullable(),
+});
+export type StockRecords = z.infer<typeof stockRecordsSchema>;

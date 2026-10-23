@@ -5,14 +5,16 @@ import { damageDecision, damageReport, damageRound } from '../db/schema.js';
 import { stateOf } from './reports.js';
 
 // The damage reports a report names (goods-in 8.5, 9.3, 9.5; module-map section 3 rule 5; S2-F11-T02), served
-// through the kernel's read-model gateway for the receipt problems report: each report's number, its state and the
-// decision of its latest round, with who made it and when (goods-in 9.3 "each with its decision and who made it").
+// through the kernel's read-model gateway for the receipt problems and the supplier report: each report's number, its
+// pieces, its state and the decision of its latest round, with who made it and when (goods-in 9.3 "each with its decision and who made it").
 // Read under the reader's actor, so row-level security keeps out a report the reader may not see (code-house-rules
 // 6.2): one not answered is Unknown to its reader (PRD-MOD-015).
 
 export interface DamageReportStateRow {
   readonly damageReportId: string;
   readonly number: string;
+  /** The pieces the report holds (goods-in 8.2). */
+  readonly quantity: number;
   readonly state: DamageReportState;
   readonly decision: {
     readonly outcome: 'Confirmed' | 'Rejected';
@@ -29,7 +31,7 @@ export async function damageReportStates(
   if (reportIds.length === 0) return [];
   const ids = [...new Set(reportIds)];
   const reports = await context.tx
-    .select({ id: damageReport.id, number: damageReport.number })
+    .select({ id: damageReport.id, number: damageReport.number, quantity: damageReport.quantity })
     .from(damageReport)
     .where(inArray(damageReport.id, ids))
     .orderBy(asc(damageReport.id));
@@ -48,6 +50,7 @@ export async function damageReportStates(
     return {
       damageReportId: report.id,
       number: report.number,
+      quantity: report.quantity,
       state: stateOf(
         ofReport,
         decisions.filter((each) => each.damageReportId === report.id),

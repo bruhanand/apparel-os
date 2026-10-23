@@ -5,9 +5,12 @@ import { readWorld } from './support/world';
 
 // S2-F11-T02: the reports journey (goods-in 9.1, 9.3, 9.5, section 11; PRD-BKG-005, PRD-EXC-010, PRD-EXC-011;
 // code-house-rules 10.1). Booking (P-BKG) opens Reports › Booking status, finds the booking the journeys' server
-// approved, four pieces of one style and size, ordered and still outstanding, nothing delivered; exports the report as
-// XLSX; opens the booking from it; and is refused the stock report, which needs a grant of view on stock that Booking
-// does not hold, with the reason shown. Every value is SYNTHETIC.
+// approved, four pieces of one style and size, ordered and still outstanding, nothing delivered, with the line's own
+// delivery date beside its due date; exports the report as XLSX; opens the booking from it; opens Receipt problems and
+// Supplier performance, the supplier's row with the records its figures are worked from; and is refused the stock
+// report, which needs a grant of view on stock that Booking does not hold, with the reason shown. The stock report is
+// opened by a Store's staff (P-STM) in the PT approval journey (code reviews 8 and 9 of stage 2). Every value is
+// SYNTHETIC.
 
 test('PRD-BKG-005 PRD-EXC-011 Booking reads the booking status, exports it and opens a booking from it; the stock report is refused with its reason', async ({
   page,
@@ -35,12 +38,13 @@ test('PRD-BKG-005 PRD-EXC-011 Booking reads the booking status, exports it and o
     await expect(table.getByRole('button', { name: world.bookingNumber })).toBeVisible();
     const line = table.getByRole('row').filter({ hasText: world.styleCode });
     await expect(line).toHaveCount(1);
-    // Ordered 4, delivered 0, cancelled 0, outstanding 4, over-delivered 0, by hand.
+    // Its own delivery date (none) beside its due date; ordered 4, delivered 0, cancelled 0, outstanding 4, by hand.
     const cells = line.getByRole('cell');
-    await expect(cells.nth(2)).toHaveText('4');
-    await expect(cells.nth(3)).toHaveText('0');
+    await expect(cells.nth(1)).toHaveText('none');
+    await expect(cells.nth(3)).toHaveText('4');
     await expect(cells.nth(4)).toHaveText('0');
-    await expect(cells.nth(5)).toHaveText('4');
+    await expect(cells.nth(5)).toHaveText('0');
+    await expect(cells.nth(6)).toHaveText('4');
     await expect(page.getByText(/^as of /)).toBeVisible();
   });
 
@@ -58,6 +62,24 @@ test('PRD-BKG-005 PRD-EXC-011 Booking reads the booking status, exports it and o
     await expect(page.getByRole('heading', { level: 2, name: `Booking ${world.bookingNumber}` })).toBeVisible();
     await page.getByRole('button', { name: 'Back to the bookings' }).click();
     await expect(page.getByRole('table', { name: 'Booking status' })).toBeVisible();
+  });
+
+  await test.step('Booking opens Receipt problems and Supplier performance, and the records of the supplier’s figures', async () => {
+    const menu = page.getByRole('navigation', { name: 'Main menu' });
+    await menu.getByRole('link', { name: 'Receipt problems', exact: true }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Receipt problems' })).toBeVisible();
+    await expect(
+      page.getByRole('table', { name: 'Receipt problems' }).or(page.getByText('No receipt problems')),
+    ).toBeVisible({ timeout: 30_000 });
+    await menu.getByRole('link', { name: 'Supplier performance', exact: true }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Supplier performance' })).toBeVisible();
+    await page.getByLabel('Supplier').selectOption({ label: world.options.supplier });
+    const row = page.getByRole('table', { name: 'Supplier performance' }).getByRole('row').nth(1);
+    await expect(row).toContainText(world.options.supplier, { timeout: 30_000 });
+    // The booking's window has not ended and pieces are outstanding: no fill base yet, so the rate is Unknown, a blank
+    // cell, and its records name no booking (goods-in 9.3, 9.1; design-language 8).
+    await row.getByRole('button', { name: 'Records' }).click();
+    await expect(page.getByText('Fill rate: its bookings')).toBeVisible();
   });
 
   await test.step('Booking is refused the stock report, with the permission it needs named', async () => {

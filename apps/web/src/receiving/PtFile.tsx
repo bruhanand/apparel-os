@@ -28,6 +28,7 @@ import { unknownText } from './names';
 import { amountText, PtContent } from './PtContent';
 import { PtDownload, PtFailure } from './PtReview';
 import { PtReversals } from './PtReversal';
+import { PT_READS } from './pt-reads';
 
 // Receive Goods › a GRN › Upload PT file (goods-in 5, 6.5, section 11; DEC-134, DEC-135, DEC-137, DEC-138, DEC-140;
 // S2-F04-T02): whoever is assigned to make PTs downloads the blank template with its lists, uploads the filled file,
@@ -38,7 +39,6 @@ import { PtReversals } from './PtReversal';
 // see is masked. Every word comes from the message catalogue (code-house-rules 12.13).
 
 const XLSX_ACCEPT = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-const PT_READS = ['readGrnPt', 'readReceivingInbox', 'listMyWork'] as const;
 
 type Layout = ImportLayoutList['layouts'][number];
 

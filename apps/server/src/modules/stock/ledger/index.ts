@@ -38,6 +38,7 @@ export type {
   Place,
   PlacedHoldKind,
   ReservationKind,
+  SourceRecord,
 } from './domain/request.js';
 export type { ExpectedQuantity } from './domain/working.js';
 export type { LedgerBooks, LedgerPlaces, LedgerSkus, SkuFacts, UnitFacts } from './ports.js';
@@ -53,7 +54,7 @@ export {
 } from './queries/reads.js';
 export type { CustodyQuery, CustodyRow, LineSource, SourceCoverageAndCost, SourceLineOrigin } from './queries/reads.js';
 export { availability } from './queries/availability.js';
-export { ptRevisionGoods } from './queries/pt-goods.js';
+export { PT_GOODS_READS, ptGoodsNotWaiting, ptRevisionGoods } from './queries/pt-goods.js';
 export type { PtRevisionGoods } from './queries/pt-goods.js';
 export type { AvailabilityRow } from './queries/availability.js';
 // The read models of stock search, served through the kernel's read-model gateway (stock-ledger 13.22; goods-in 9.4;
@@ -67,7 +68,9 @@ export {
 export type { Position, PositionFilters, PositionKey, UnitPosition, UnitPositionsQuery } from './queries/positions.js';
 // The read model of the stage 2 stock report (stock-ledger 13.23; goods-in 9.5; S2-F11-T02).
 export { STOCK_HOLDINGS, stockReportReadModels } from './queries/holdings.js';
-export type { Holding, HoldingKey, HoldingOwner } from './queries/holdings.js';
+export type { Holding, HoldingKey } from './queries/holdings.js';
+export { STOCK_RECORDS, stockRecordsReadModels } from './queries/records.js';
+export type { RecordsOf } from './queries/records.js';
 export { rebuildAndCompare } from './queries/rebuild.js';
 export { inventoryReconciliation, value } from './queries/value.js';
 export type { PoolValue, ReconciledMovement, TransitHeld, ValueLayer } from './queries/value.js';

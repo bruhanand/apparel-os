@@ -11,10 +11,13 @@ import { anHourAgo, serverNow } from './support/clock';
 // new product it sets up, and approves it; the PT is then Official with its number from the PT series, and its maker
 // downloads it in the template's columns; then proposes reversing it with a reason, which Operations approves from My
 // work, the PT then Reversed, and uploads the corrected file at another P RATE, which Operations approves again
-// (goods-in 6.4, 6.7; DEC-137, PRD-REC-019; S2-F09-T01); then, at phone width, scans its two pieces in to the Store's
-// floor, a barcode not on the PT refused and kept (goods-in 7, section 11; S2-F07-T01); then finds them in Stock
-// search, physical, available to sell, waiting and held as the ledger holds them, exports the search, and is refused
-// damage on the product once, with the reason shown (goods-in 9.2, 8.1; S2-F11-T01). Every value is SYNTHETIC.
+// (goods-in 6.4, 6.7; DEC-137, PRD-REC-019; S2-F09-T01); then, at phone width, scans one piece in to the Store's floor,
+// a barcode not on the PT refused and kept (goods-in 7, section 11; S2-F07-T01). The Store's staff (P-STM), at their
+// own Store, scan the other piece in, refused once for a barcode not on the PT, then find both in Stock search
+// there, their cost hidden, and open the records behind the figure, and the stock report (code-house-rules 10.1;
+// code reviews 8 and 9 of stage 2). Warehouse then finds them in Stock search, physical, available to sell, waiting and
+// held as worked out by hand, exports the search, and is refused damage on the product once, with the reason shown
+// (goods-in 9.2, 8.1; S2-F11-T01). Every value is SYNTHETIC.
 
 /** A SYNTHETIC invoice PDF, as the supplier sent it. */
 const INVOICE_PDF = {
@@ -65,8 +68,10 @@ test('PRD-REC-017 PRD-REC-018 POL-02.07 PRD-REC-019 PRD-REC-021 PRD-STK-006 a PT
   const { options, styleCode } = world;
   const makerContext = await browser.newContext({ acceptDownloads: true });
   const approverContext = await browser.newContext();
+  const staffContext = await browser.newContext();
   const maker = await makerContext.newPage();
   const approver = await approverContext.newPage();
+  const staff = await staffContext.newPage();
   let grnNumber = '';
   // The approver's authenticator app, which gives each code for a later step than the last (support/authenticator.ts).
   let approverApp: Authenticator | undefined;
@@ -232,7 +237,7 @@ test('PRD-REC-017 PRD-REC-018 POL-02.07 PRD-REC-019 PRD-REC-021 PRD-STK-006 a PT
       await expect(revisions.getByRole('row').nth(2)).toContainText('Reversed');
     });
 
-    await test.step('Warehouse scans the two pieces in to the floor at phone width, a barcode not on the PT refused', async () => {
+    await test.step('Warehouse scans one piece in to the floor at phone width, a barcode not on the PT refused', async () => {
       // The inbox now says the delivery waits for its scan-in (goods-in 7.1; RR-606).
       await maker.getByRole('button', { name: 'Back to the inbox' }).click();
       const row = maker.getByRole('row').filter({ hasText: grnNumber });
@@ -253,24 +258,80 @@ test('PRD-REC-017 PRD-REC-018 POL-02.07 PRD-REC-019 PRD-REC-021 PRD-STK-006 a PT
       await barcode.fill('8900000099999');
       await barcode.press('Enter');
       await expect(form.getByRole('alert').filter({ hasText: 'Not on this PT' })).toBeVisible();
-      for (const [index, code] of world.barcodes.entries()) {
-        await barcode.fill(code);
-        // The scanner's Enter sends it.
-        await barcode.press('Enter');
-        if (index === 0) {
-          await expect(form.getByRole('status').filter({ hasText: 'Accepted' })).toBeVisible();
-          await expect(maker.getByText('1 piece left to scan in')).toBeVisible();
-        }
-      }
-      await expect(maker.getByText('Every piece is scanned in or under a damage report.')).toBeVisible();
+      await barcode.fill(world.barcodes[0] ?? '');
+      // The scanner's Enter sends it.
+      await barcode.press('Enter');
+      await expect(form.getByRole('status').filter({ hasText: 'Accepted' })).toBeVisible();
+      await expect(maker.getByText('1 piece left to scan in')).toBeVisible();
       const scans = maker.getByRole('list', { name: 'Scans' });
-      await expect(scans.getByRole('listitem')).toHaveCount(3);
+      await expect(scans.getByRole('listitem')).toHaveCount(2);
       await expect(scans.getByRole('listitem').last()).toContainText('refused: on no product of this PT');
       // One column at phone width: nothing scrolls sideways (design-language; PRD-PRO-009).
       expect(await maker.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     });
 
-    await test.step('Warehouse finds the two pieces in Stock search as the ledger holds them, exports it, and is refused damage once', async () => {
+    await test.step('Store staff scan the other piece in at their own Store, refused once for a barcode not on the PT', async () => {
+      // A Store's staff (P-STM) at their own Store (goods-in 7.1, section 11; code-house-rules 10.1), who open the
+      // inbox and then scan at phone width.
+      await signedIn(staff, world.organisationCode, world.storeStaff);
+      await staff
+        .getByRole('navigation', { name: 'Main menu' })
+        .getByRole('link', { name: 'Inbox', exact: true })
+        .click();
+      await staff.getByLabel('Site').selectOption({ label: options.site });
+      const row = staff.getByRole('row').filter({ hasText: grnNumber });
+      await expect(row).toContainText('Waiting for its scan-in', { timeout: 30_000 });
+      await staff.setViewportSize({ width: 375, height: 812 });
+      await row.getByRole('button').first().click();
+      const summary = staff.getByRole('region', { name: 'Scan-in' });
+      await expect(summary.getByText('1 piece left to scan in')).toBeVisible({ timeout: 30_000 });
+      await summary.getByRole('button', { name: 'Scan the pieces in' }).click();
+      const form = staff.getByRole('form', { name: 'Scan a piece' });
+      await form.getByLabel('Where the pieces go').selectOption({ label: world.floor });
+      const barcode = form.getByLabel('Barcode');
+      // A tag of another supplier's goods: on no product of this PT, the reason shown and the scan kept (goods-in 7.2).
+      await barcode.fill('8900000099998');
+      await barcode.press('Enter');
+      await expect(form.getByRole('alert').filter({ hasText: 'Not on this PT' })).toBeVisible();
+      await barcode.fill(world.barcodes[1] ?? '');
+      await barcode.press('Enter');
+      await expect(form.getByRole('status').filter({ hasText: 'Accepted' })).toBeVisible();
+      await expect(staff.getByText('Every piece is scanned in or under a damage report.')).toBeVisible();
+      await expect(staff.getByRole('list', { name: 'Scans' }).getByRole('listitem')).toHaveCount(4);
+    });
+
+    await test.step('Store staff find both pieces in Stock search at their Store, cost hidden, with the records behind them, and in the stock report', async () => {
+      await staff.setViewportSize({ width: 1280, height: 900 });
+      const menu = staff.getByRole('navigation', { name: 'Main menu' });
+      await menu.getByRole('link', { name: 'Stock search', exact: true }).click();
+      const form = staff.getByRole('search', { name: 'Search stock' });
+      await form.getByLabel('Style code or product').fill(styleCode);
+      await form.getByRole('button', { name: 'Search', exact: true }).click();
+      const row = staff.getByRole('table', { name: 'Stock found' }).getByRole('row').filter({ hasText: styleCode });
+      await expect(row).toHaveCount(1);
+      await expect(row).toContainText(world.floorName);
+      const cells = row.getByRole('cell');
+      await expect(cells.nth(3)).toHaveText('2');
+      // No cost field class: Hidden, never an amount (access-and-approvals 6; PRD-ACS-008).
+      await expect(cells.nth(7)).toHaveText('Hidden');
+      // The records behind the figure: the GRN its pieces were counted on, and its movements (goods-in 9.1).
+      await row.getByRole('button', { name: 'Records' }).click();
+      const records = staff.getByRole('region', { name: 'Records behind this figure' });
+      await expect(records.getByRole('button', { name: grnNumber }).first()).toBeVisible({ timeout: 30_000 });
+      await expect(records.getByRole('table', { name: 'Movements here' }).getByRole('row')).toHaveCount(3);
+      // The stock report shows the same goods at the Store, their cost hidden too (goods-in 9.5).
+      await menu.getByRole('link', { name: 'Stock by place, condition and owner', exact: true }).click();
+      await expect(staff.getByRole('heading', { level: 1, name: 'Stock by place, condition and owner' })).toBeVisible();
+      const reported = staff
+        .getByRole('table', { name: 'Stock by place, condition and owner' })
+        .getByRole('row')
+        .filter({ hasText: styleCode });
+      await expect(reported).toHaveCount(1);
+      await expect(reported.getByRole('cell').nth(5)).toHaveText('2');
+      await expect(reported.getByRole('cell').nth(10)).toHaveText('Hidden');
+    });
+
+    await test.step('Warehouse finds the two pieces in Stock search with their figures worked by hand, exports it, and is refused damage once', async () => {
       // S2-F11-T01 (goods-in 9.1, 9.2, 9.4; PRD-STK-001, PRD-STK-006, PRD-DMG-004): on the journey's own data.
       await maker.setViewportSize({ width: 1280, height: 900 });
       await maker
@@ -283,8 +344,9 @@ test('PRD-REC-017 PRD-REC-018 POL-02.07 PRD-REC-019 PRD-REC-021 PRD-STK-006 a PT
       await form.getByRole('button', { name: 'Search', exact: true }).click();
       const row = maker.getByRole('table', { name: 'Stock found' }).getByRole('row').filter({ hasText: styleCode });
       // The two pieces scanned in are on the floor, accepted, covered and free: physical 2, available to sell 2, none
-      // waiting and none held, as the ledger holds them; nothing is left at the receiving location. Their cost, at
-      // the corrected PT's P RATE, 900.00 a piece, shows for whoever may see cost (SYNTHETIC; goods-in 9.4).
+      // waiting and none held, worked out by hand; nothing is left at the receiving location. Their cost, at the
+      // corrected PT's P RATE, 900.00 a piece, shows for whoever may see cost, with no ₹ in the cell (SYNTHETIC;
+      // goods-in 9.4; design-language 8).
       await expect(row).toHaveCount(1);
       await expect(row).toContainText(world.floorName);
       const cells = row.getByRole('cell');
@@ -292,7 +354,7 @@ test('PRD-REC-017 PRD-REC-018 POL-02.07 PRD-REC-019 PRD-REC-021 PRD-STK-006 a PT
       await expect(cells.nth(4)).toHaveText(/^2\s*to sell$/);
       await expect(cells.nth(5)).toHaveText('0');
       await expect(cells.nth(6)).toHaveText('0');
-      await expect(cells.nth(7)).toHaveText('₹1,800.00');
+      await expect(cells.nth(7)).toHaveText('1,800.00');
       const downloading = maker.waitForEvent('download');
       await maker.getByRole('button', { name: 'Export to XLSX' }).click();
       // Named by the business date, on the server's clock (Etc/UTC on the journeys' server).
@@ -312,5 +374,6 @@ test('PRD-REC-017 PRD-REC-018 POL-02.07 PRD-REC-019 PRD-REC-021 PRD-STK-006 a PT
   } finally {
     await makerContext.close();
     await approverContext.close();
+    await staffContext.close();
   }
 });

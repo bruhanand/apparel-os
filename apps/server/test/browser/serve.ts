@@ -3270,6 +3270,22 @@ await grantSynthetic(
     ],
   },
 );
+// A Store's staff (P-STM) at the PT world's Store, who scans its second piece in at their own Store and finds the goods
+// in Stock search and the stock report there (goods-in 7.1, 9.2, 9.5, section 11; code-house-rules 10.1; code reviews
+// 8 and 9 of stage 2): the receiver's grants and the scan at that Store only, the lists of masters from a second
+// assignment; no cost field class. Who holds them is the product owner's: SYNTHETIC here.
+const ptApprovalStoreStaff = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-PTA-STORE',
+  enrolled: true,
+  personas: ['P-STM'],
+});
+await grantSynthetic(
+  receivingDatabase,
+  { kind: 'user', id: ptApprovalStoreStaff.id },
+  [...RECEIVER_AUTHORITY, { recordType: 'receiving.scan', action: 'create' }],
+  { scope: placeScope([{ type: 'store', id: ptReceivingWorld.storeId }]) },
+);
+await grantSynthetic(receivingDatabase, { kind: 'user', id: ptApprovalStoreStaff.id }, RECEIVING_LISTS);
 const ptApprovalApprover = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
   label: 'BROWSER-PTA-APPROVER',
   enrolled: true,
@@ -4002,6 +4018,7 @@ writeFileSync(
       organisationCode: receivingCode,
       maker: credentialsOf(ptApprovalMaker),
       approver: credentialsOf(ptApprovalApprover),
+      storeStaff: credentialsOf(ptApprovalStoreStaff),
       reasonId: bookingReasonId,
       options: ptReceivingWorld.options,
       styleCode: ptApprovalStyle,
