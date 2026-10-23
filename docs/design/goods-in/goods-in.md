@@ -864,6 +864,8 @@ Each test runs on synthetic data: real PostgreSQL for rules, concurrency and fai
 
 Not proved by the first version: goods owned before they arrive (`PRD-ACP-020`, `DEC-139`) and the side-by-side test import (`PRD-LIF-014`, parked); both wait for their placement (RR-546).
 
+**As built** (`S2-F07-T02`): where each test is proved, the timings of test 21 and the exit checks the first version reaches are in the first version's [acceptance evidence](../../plan/stage-2/s2-f07-scan-in/evidence.md). Test 22 is `apps/web/e2e/goods-in-journey.spec.ts`; test 19 is proved across every write of the flow, from the budget to the scan-in, in `apps/server/test/goods-in-acceptance.int.test.ts`.
+
 ## 13. Open questions
 
 | ID | Question | Owner | Blocks |
