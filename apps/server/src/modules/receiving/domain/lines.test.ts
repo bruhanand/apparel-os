@@ -79,14 +79,14 @@ describe('what stops a GRN (goods-in 4.5; DEC-133)', () => {
     });
   });
 
-  it('PRD-MER-005 a line of goods on the invoice or of wrong goods with no size stops the GRN, naming it (RR-586)', () => {
+  it('PRD-MER-005 a line of goods on the invoice or of wrong goods with no size and no product stops the GRN, naming it (RR-586)', () => {
     const sized = currentLines([entry('s1', 's1', null)]);
     const unsized = currentLines([
       entry('s2', 's2', null, { styleCode: 'SYN-A', size: null }),
       entry('s3', 's3', null, {
         styleCode: 'SYN-B',
         goods: 'wrong',
-        skuId: 'sku-b',
+        skuId: null,
         size: null,
         invoiceQuantity: 0,
         extra: 'received',
@@ -99,6 +99,9 @@ describe('what stops a GRN (goods-in 4.5; DEC-133)', () => {
         { kind: 'count-line', lineId: 's3' },
       ],
     });
+    // A line naming a product takes its size from it, so it is not asked again (RR-586, RR-608; code review 7).
+    const named = currentLines([entry('n1', 'n1', null, { styleCode: 'SYN-C', skuId: 'sku-c', size: null })]);
+    expect(grnBlockers(1, [...sized, ...named])).toBeUndefined();
     // Unidentified goods are described, not sized (goods-in 4.4, 4.9).
     const unidentified = currentLines([
       entry('u1', 'u1', null, {

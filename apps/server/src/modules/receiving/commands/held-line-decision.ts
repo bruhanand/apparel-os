@@ -23,6 +23,7 @@ import {
   heldLineNotFound,
   recordItem,
   refusalOf,
+  refused,
   scopeColumns,
   valueChange,
   type Actor,
@@ -96,11 +97,7 @@ export function heldLineDecisionEffect(dependencies: EffectDependencies): Docume
     const { row, version } = open;
     // Unidentified goods are taken in only once Booking names their product (goods-in 4.6; POL-17.02).
     if (outcome === 'taken-in' && row.kind === 'unidentified' && version.kind !== 'named') {
-      return refusalOf({
-        kind: 'refused',
-        code: 'receiving.product-not-named',
-        missing: [recordItem(HELD_LINE_TYPE, row.id)],
-      });
+      return refused('refused', 'receiving.product-not-named', [recordItem(HELD_LINE_TYPE, row.id)]);
     }
     const { actor, decisionId } = deciding(decider);
     const heldLineDecisionId = uuidv7();

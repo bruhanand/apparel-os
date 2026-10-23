@@ -17,7 +17,7 @@ import type { AuditInterface, AuditScope } from '../../audit/index.js';
 import { DECISION_EVIDENCE_KIND, type DecisionEvidence } from '../contracts/decision-evidence.js';
 import { approvalDecision, approvalReason, approvalReasonVersion, approvalRequest } from '../db/schema.js';
 import { authorityOf, offeredTo, type Authority, type LimitedValue, type LimitRow } from '../domain/approval-limits.js';
-import type { ApprovalRule, DecisionWritten, DocumentEffect } from '../domain/approval-rules.js';
+import type { ApprovalRule, DecisionWritten, DocumentEffect, RefusedDecision } from '../domain/approval-rules.js';
 import type { OrganisationKeys } from '../domain/organisation-keys.js';
 import { scopeCoversMove } from '../domain/scope.js';
 import { approvalDecided } from '../events.js';
@@ -132,6 +132,8 @@ interface DocumentHandler {
   precheck?(context: TransactionContext, versionId: string): Promise<CommandRefusal | undefined>;
   /** When the decision is written, against an approval's effect; after it unless the effect says before (9.8b). */
   readonly decisionWritten?: DecisionWritten;
+  /** A module effect's follow-up of a refused decision, in a command of its own (9.8b; books-and-posting 10 step 3). */
+  refused?(context: TransactionContext, versionId: string, decision: RefusedDecision): Promise<void>;
   approve(context: TransactionContext, decider: Decider, versionId: string): Promise<Prepared<unknown>>;
   reject(
     context: TransactionContext,
@@ -198,6 +200,12 @@ function moduleEffect(effect: DocumentEffect): DocumentHandler {
       ? {}
       : { precheck: (c: TransactionContext, v: string) => effect.precheck?.(c, v) ?? Promise.resolve(undefined) }),
     ...(effect.decisionWritten === undefined ? {} : { decisionWritten: effect.decisionWritten }),
+    ...(effect.refused === undefined
+      ? {}
+      : {
+          refused: (c: TransactionContext, v: string, d: RefusedDecision) =>
+            effect.refused?.(c, v, d) ?? Promise.resolve(),
+        }),
     approve: (c, d, v) => effect.approve(c, decider(d), v),
     reject: (c, d, v) => effect.reject(c, decider(d), v),
   };
@@ -390,6 +398,26 @@ export class Approvals {
           eq(approvalRequest.state, 'Awaiting approval'),
         ),
       );
+  }
+
+  /**
+   * The follow-up of a decision its effect refused (9.8b; books-and-posting 10 step 3), in the caller's command of its
+   * own: the request's module effect is given the refusal; a request of `access`, or one whose effect follows none,
+   * does nothing. A request the person may no longer see does nothing either.
+   */
+  async followRefusal(
+    context: TransactionContext,
+    actor: DecidingActor,
+    requestId: string,
+    decision: Omit<RefusedDecision, 'actor'>,
+  ): Promise<void> {
+    if (actor.kind !== 'user') return;
+    const request = await this.findRequest(context, requestId);
+    if (request === undefined) return;
+    await this.handlerOf(request.actionType).refused?.(context, request.documentVersionId, {
+      ...decision,
+      actor: { kind: 'user', id: actor.id },
+    });
   }
 
   private async findRequest(context: TransactionContext, requestId: string): Promise<RequestRow | undefined> {

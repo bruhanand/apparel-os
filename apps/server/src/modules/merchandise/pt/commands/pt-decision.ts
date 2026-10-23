@@ -2,17 +2,18 @@ import { uuidv7 } from '@apparel-os/domain';
 import { PT_APPROVAL, PT_TYPE } from '@apparel-os/schemas';
 import { CommandDefect, type LockTarget, type TransactionContext } from '../../../../kernel/index.js';
 import type { DocumentEffect, EffectDecider, EffectOutcome, ModuleApprovals } from '../../../access/index.js';
+import type { ExceptionsInterface } from '../../../exceptions/index.js';
 import { ptProductLockTargets } from '../../catalogue/index.js';
-import { mappingOn } from '../../../organisation/index.js';
 import type { ReceivingInterface } from '../../../receiving/index.js';
-import { ptPostRequest, ptRejection } from '../db/schema.js';
-import { PT_MODULE, ptApprovalRules } from '../domain/kinds.js';
-import { BUSINESS_DATE_NOT_SET } from '../domain/refusals.js';
-import { ptPostRequested } from '../events.js';
+import { ptRejection } from '../db/schema.js';
+import { POSTING_REFUSED, PT_MODULE, ptApprovalRules } from '../domain/kinds.js';
+import { BUSINESS_DATE_NOT_SET, refusalOutcome, revisionNotFound } from '../domain/refusals.js';
 import { productTargetsOf, revisionRowCount, revisionStanding } from '../queries/approval.js';
-import { draftRefusal, postApproval, ptGateRefusal, type PostingServices } from './post-pt.js';
+import { draftRefusal, postApproval, type PostingServices } from './post-pt.js';
 import { ptLock } from './pt-lock.js';
-import { scopeColumnsOf } from './scope-columns.js';
+import { raisePostingRefused } from './raise-posting-refused.js';
+import { requestPosting } from './request-posting.js';
+import { auditScopeOf, scopeColumnsOf } from './scope-columns.js';
 
 // A PT revision's decision (goods-in 6.1 to 6.3, 6.6, 10.3; access-and-approvals 9.5, 9.8, 9.8b; module-map 6.2 flows C
 // and E; PRD-REC-017, PRD-ACS-006, PRD-ACS-007, POL-02.07; DEC-097; S2-F06-T01): the effect `access`'s Decide runs in
@@ -25,10 +26,12 @@ import { scopeColumnsOf } from './scope-columns.js';
 //
 // - **Approve** a PT of at most `queue.rows` rows posts it in this transaction (post-pt.ts), the decision written first
 //   under a savepoint so the ledger verifies and uses it under its locks (9.8b "before-effect"); any refusal rolls both
-//   back and nothing is written. A larger PT asks the policy gate, then records a request to post naming the decision
-//   and the GRN unit's accounting book and publishes `merchandise.pt-post-requested`, with no stock or money effect: the
-//   posting job posts it, one at a time per book (jobs/posting.ts; stock-ledger 10.6). While the composition has no
-//   posting job, every PT posts with its decision (goods-in 6.6; RR-602).
+//   back and nothing is written, the request still waiting, so the approver approves again once the cause is fixed
+//   (books-and-posting 10 step 5). A posting the ledger refuses under the locks raises its unfinished-operation exception
+//   in a command of its own once the refusal is kept (`refused`; books-and-posting 10 step 3). A larger PT asks the
+//   policy gate, then records a request to post (request-posting.ts), with no stock or money effect: the posting job
+//   posts it, one at a time per book (jobs/posting.ts; stock-ledger 10.6). The application queues above
+//   PT_POSTED_WITH_DECISION_ROWS rows, and its worker composes the job (goods-in 6.6; code review 7).
 // - **Reject** ends the draft: the rejection, the GRN's mark cleared (`pt-rejected`), the audit record. It records no
 //   business effect, so it asks no gate (DEC-116); the uploader uploads a corrected file (goods-in 6.3).
 
@@ -39,6 +42,8 @@ export type PtPostingQueue =
 /** What the decision's effect acts through, bound late, since `access` is built with it (access-and-approvals 9.8b). */
 export interface PtDecisionServices extends PostingServices {
   readonly receiving: Pick<ReceivingInterface, 'ptBasis' | 'grnForPt' | 'ptMarkLock' | 'clearPtMark'>;
+  /** Where a refused posting's unfinished-operation exception is raised (books-and-posting 10 step 3). */
+  readonly exceptions: Pick<ExceptionsInterface, 'raiseInOwnCommand'>;
 }
 
 export interface PtDecisionDependencies {
@@ -93,7 +98,19 @@ export function ptDecisionEffect(dependencies: PtDecisionDependencies): Document
       const decided = deciding(decider);
       const { queue } = dependencies;
       if (queue.kind === 'queued-above' && (await revisionRowCount(context, revisionId)) > queue.rows) {
-        return requestPosting(context, services, decided, revisionId, decider.reason);
+        const standing = await revisionStanding(context, revisionId);
+        const notDraft = draftRefusal(standing, revisionId);
+        if (notDraft !== undefined || standing === undefined)
+          return refusalOutcome(notDraft ?? revisionNotFound(revisionId));
+        return requestPosting(context, services, {
+          revision: standing.revision,
+          revisionId,
+          decisionId: decided.decisionId,
+          approverUserId: decided.userId,
+          requester: { userId: decided.userId, roleAssignmentId: decided.roleAssignmentId },
+          from: 'Awaiting approval',
+          ...(decider.reason === undefined ? {} : { reason: decider.reason }),
+        });
       }
       const posted = await postApproval(context, services, {
         revisionId,
@@ -113,7 +130,7 @@ export function ptDecisionEffect(dependencies: PtDecisionDependencies): Document
         throw new CommandDefect(`A PT revision ${revisionId} was rejected past its check`);
       }
       const date = await context.businessDate();
-      if (date.kind === 'not-set') return { kind: 'refusal', refusal: BUSINESS_DATE_NOT_SET };
+      if (date.kind === 'not-set') return refusalOutcome(BUSINESS_DATE_NOT_SET);
       const { revision } = standing;
       const rejectionId = uuidv7();
       await context.tx.insert(ptRejection).values({
@@ -138,7 +155,7 @@ export function ptDecisionEffect(dependencies: PtDecisionDependencies): Document
         roleAssignmentId: decided.roleAssignmentId,
         approval: { decisionId: decided.decisionId },
         ...(decider.reason === undefined ? {} : { reason: decider.reason }),
-        scope: scopeColumnsOfAudit(revision),
+        scope: auditScopeOf(revision),
         record: { module: PT_MODULE, type: PT_TYPE, id: revision.ptId, versionId: revisionId },
         operation: 'reject-pt',
         changes: [
@@ -149,94 +166,24 @@ export function ptDecisionEffect(dependencies: PtDecisionDependencies): Document
       });
       return { kind: 'success', answer: { revisionId, rejectionId } };
     },
+    /**
+     * A posting the ledger refused under the locks rolled the approval back (books-and-posting 10 step 2): its
+     * unfinished-operation exception, in a command of its own, keyed by the decision's command (step 3). Any other
+     * refusal leaves nothing unfinished: nothing was decided, and the approver sees why.
+     */
+    async refused(context, revisionId, decision) {
+      if (decision.refusal.code !== POSTING_REFUSED) return;
+      const standing = await revisionStanding(context, revisionId);
+      if (standing === undefined) return;
+      await raisePostingRefused(context, dependencies.services().exceptions, {
+        revision: standing.revision,
+        revisionId,
+        raisingEvent: decision.raisingEvent,
+        refusal: decision.refusal,
+        raisedBy: decision.actor,
+      });
+    },
   };
-}
-
-/** A revision's scope facts as an audit record carries them: no Store is none (numbering-and-audit 4.1). */
-function scopeColumnsOfAudit(revision: {
-  siteId: string;
-  storeId: string | null;
-  businessUnitId: string;
-  legalEntityId: string;
-  brandId: string;
-}) {
-  return {
-    siteId: revision.siteId,
-    businessUnitId: revision.businessUnitId,
-    legalEntityId: revision.legalEntityId,
-    brandId: revision.brandId,
-    ...(revision.storeId === null ? {} : { storeId: revision.storeId }),
-  };
-}
-
-/**
- * The click of a large PT's approval (stock-ledger 10.6; access-and-approvals 9.8 step 1): the gate asked, then a
- * request to post naming the decision and the accounting book of the GRN unit's mapping in force, its audit record
- * and `merchandise.pt-post-requested`, with no stock or money effect. The PT shows Queued until its job posts it.
- */
-async function requestPosting(
-  context: TransactionContext,
-  services: PtDecisionServices,
-  decided: { readonly userId: string; readonly roleAssignmentId: string; readonly decisionId: string },
-  revisionId: string,
-  reason: string | undefined,
-): Promise<EffectOutcome> {
-  const standing = await revisionStanding(context, revisionId);
-  const notDraft = draftRefusal(standing, revisionId);
-  if (notDraft !== undefined || standing === undefined)
-    return {
-      kind: 'refusal',
-      refusal: notDraft ?? { kind: 'not-found', code: 'merchandise.record-not-found', missing: [] },
-    };
-  const { revision } = standing;
-  const date = await context.businessDate();
-  if (date.kind === 'not-set') return { kind: 'refusal', refusal: BUSINESS_DATE_NOT_SET };
-  const place = { siteId: revision.siteId, businessUnitId: revision.businessUnitId };
-  const gate = await ptGateRefusal(context, services.configuration, place);
-  if (gate !== undefined) return { kind: 'refusal', refusal: gate };
-  const mapping = await mappingOn(context, revision.businessUnitId, date.date);
-  if (mapping === undefined) {
-    return {
-      kind: 'refusal',
-      refusal: {
-        kind: 'unavailable',
-        code: 'configuration.operation-unavailable',
-        missing: [{ kind: 'mapping', businessUnitId: revision.businessUnitId, lacks: 'mapping' }],
-      },
-    };
-  }
-  const postRequestId = uuidv7();
-  await context.tx.insert(ptPostRequest).values({
-    id: postRequestId,
-    ptRevisionId: revisionId,
-    ...scopeColumnsOf(revision),
-    approvalDecisionId: decided.decisionId,
-    accountingBookId: mapping.accountingBookId,
-    requestedByUserId: decided.userId,
-    roleAssignmentId: decided.roleAssignmentId,
-    requestedAt: context.startedAt,
-  });
-  const scope = scopeColumnsOfAudit(revision);
-  await services.audit.record(context, {
-    actor: { kind: 'user', id: decided.userId },
-    roleAssignmentId: decided.roleAssignmentId,
-    approval: { decisionId: decided.decisionId },
-    ...(reason === undefined ? {} : { reason }),
-    scope,
-    record: { module: PT_MODULE, type: PT_TYPE, id: revision.ptId, versionId: revisionId },
-    operation: 'request-pt-posting',
-    changes: [
-      { kind: 'value', field: 'state', before: 'Awaiting approval', after: 'Queued' },
-      { kind: 'value', field: 'postRequestId', before: null, after: postRequestId },
-    ],
-    source: { kind: 'screen' },
-  });
-  await context.publish(ptPostRequested, {
-    subject: { module: PT_MODULE, recordType: PT_TYPE, recordId: revision.ptId, versionId: revisionId },
-    scope,
-    payload: { postRequestId, revisionId, bookId: mapping.accountingBookId },
-  });
-  return { kind: 'success', answer: { revisionId, postRequestId } };
 }
 
 /**

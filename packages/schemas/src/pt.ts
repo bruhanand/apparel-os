@@ -58,14 +58,15 @@ export const ptMarkSchema = z.discriminatedUnion('kind', [
 
 /**
  * A revision's state (design-language 7; goods-in 6.3, 6.6): Awaiting approval, Withdrawn or Rejected; once approved,
- * Official when its approval is posted, Queued while a large PT waits for its posting job, and Failed when that job was
- * refused, its decision kept unused (stock-ledger 10.6; access-and-approvals 9.8; S2-F06-T01).
+ * Official when its approval is posted, Posting while a large PT waits for its posting job, as stock-ledger 10.6 names
+ * it, and Failed when that job was refused, its decision kept unused (access-and-approvals 9.8; S2-F06-T01, code
+ * review 7).
  */
 export const ptRevisionStateSchema = z.enum([
   'Awaiting approval',
   'Withdrawn',
   'Rejected',
-  'Queued',
+  'Posting',
   'Failed',
   'Official',
 ]);
@@ -211,6 +212,12 @@ export const ptWithdrawalSchema = z.strictObject({ versionToken: idSchema });
 export const ptWithdrawnSchema = z.strictObject({ ptId: idSchema, revisionId: idSchema, withdrawalId: idSchema });
 
 /**
+ * A failed PT posted again: the further request to post naming the same decision, which the posting job posts
+ * (goods-in 6.6; access-and-approvals 9.8 step 5; books-and-posting 10 step 5; code review 7).
+ */
+export const ptPostedAgainSchema = z.strictObject({ revisionId: idSchema, postRequestId: idSchema });
+
+/**
  * The blank template of a Confirmed layout version, and the name of its lists sheet in the screen's words, apart from
  * the template's sheet (code-house-rules 12.13): at most 31 characters, none of those a sheet name may not hold.
  */
@@ -238,7 +245,8 @@ export const ptRevisionParamsSchema = z.strictObject({ revisionId: idSchema });
 
 /**
  * A PT revision as its approver reviews it in My work and its GRN's screen shows it (goods-in 6.2, 6.3, 6.6, section
- * 11; S2-F06-T01): the GRN with its Arrival, whose invoices and photos the Arrival shows; who uploaded it and when; its
+ * 11; S2-F06-T01): the GRN with its Arrival, whose invoices and photos the Arrival shows, and the bookings its lines
+ * are linked to; who uploaded it and when; its
  * state, its number once Official, and a queued posting's failure; the totals of pieces, MRP, BASIC and P RATE times
  * QTY side by side (DEC-140); the new products it proposes, each with its SKU code once confirmed; the repeated barcodes
  * and the differences from existing products (goods-in 5.5); and its rows, a page at a time, with BASIC, P RATE and
@@ -256,6 +264,25 @@ export const ptRevisionReadSchema = z.strictObject({
   submittedAt: asOf,
   request: z.strictObject({ id: idSchema, state: approvalRequestStateSchema }).optional(),
   failure: ptPostingFailureSchema.optional(),
+  /**
+   * The bookings the GRN's lines are linked to, as far as the reader may see them, each with the GRN lines linked to
+   * it: the line's style and size and the booking line's key (goods-in 6.2; code review 7). The screen reads each
+   * booking for its reference.
+   */
+  bookings: z.array(
+    z.strictObject({
+      bookingId: idSchema,
+      lines: z.array(
+        z.strictObject({
+          grnLineId: idSchema,
+          /** Unknown (null) for goods the count could not identify (goods-in 4.6; PRD-MOD-015). */
+          styleCode: z.string().nullable(),
+          size: z.string().nullable(),
+          lineKey: idSchema,
+        }),
+      ),
+    }),
+  ),
   totals: ptTotalsSchema,
   newProducts: z.array(
     z.strictObject({

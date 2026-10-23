@@ -64,7 +64,7 @@ describe('the message catalogue (code-house-rules 12.13; design-language 11)', (
         const match = /^\| (\d+) \| ([^|]+) \| ([^|]+) \|/.exec(line);
         return match?.[2] && match[3] ? [{ name: match[2].trim(), family: match[3].trim().toLowerCase() }] : [];
       });
-    expect(table).toHaveLength(64);
+    expect(table).toHaveLength(65);
     expect(stateIds.map((id) => ({ name: t(`state.${id}`), family: stateFamilies[id] }))).toEqual(table);
     expect(new Set(Object.values(stateFamilies))).toEqual(new Set(families));
   });

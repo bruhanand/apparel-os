@@ -1,6 +1,6 @@
 # S2-F11-T01 — Stock search
 
-Status: blocked
+Status: in-progress
 Blocked by: S2-F07-T01
 Feature: [Stage 2 first version](../../spec.md)
 

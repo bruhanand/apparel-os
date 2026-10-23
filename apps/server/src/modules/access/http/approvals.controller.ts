@@ -9,6 +9,7 @@ import {
   requestContentOf,
   RouteInput,
   type CommandOutcome,
+  type CommandRefusal,
   type CommandRunner,
   type IdempotencyHelper,
   type JsonValue,
@@ -78,7 +79,37 @@ export class ApprovalsController {
         },
       },
     );
+    if (answer.kind === 'refusal' && answer.kept) {
+      await this.followRefusal(user, requestId, answer.refusal, `access.decide-approval:${input.idempotencyKey}`);
+    }
     return commandAnswer(answer);
+  }
+
+  /**
+   * A decision its effect refused, once kept, followed in a command of its own, so the rollback does not lose what the
+   * owning module writes for it: the unfinished-operation exception of a posting refused under the locks
+   * (access-and-approvals 9.8b; books-and-posting 10 step 3; PRD-EXC-001; S2-F06-T01 code review 7). Run again for a
+   * replay of the refusal; the raising event, the decision's operation, actor and key, keeps it to one (PRD-INT-008).
+   */
+  private async followRefusal(
+    user: SignedInUser,
+    requestId: string,
+    refusal: CommandRefusal<string>,
+    operationAndKey: string,
+  ): Promise<void> {
+    await this.runner.run(
+      {
+        commandName: 'access.follow-refused-decision',
+        organisation: user.organisation,
+        correlationId: user.correlationId,
+        actor: { kind: 'actor', actorId: user.userId },
+      },
+      (context) =>
+        this.access.followRefusedDecision(context, { kind: 'user', id: user.userId }, requestId, {
+          raisingEvent: `${operationAndKey.toLowerCase()}:${user.userId}`,
+          refusal,
+        }),
+    );
   }
 
   /**
@@ -164,6 +195,14 @@ export class ApprovalsController {
             : outcome;
         },
       });
+      if (decided.kind === 'refusal' && decided.kept) {
+        await this.followRefusal(
+          user,
+          item.requestId,
+          decided.refusal,
+          `access.decide-in-bulk.item-${item.requestId}:${input.idempotencyKey}`,
+        );
+      }
       items.push(
         decided.kind === 'success'
           ? {

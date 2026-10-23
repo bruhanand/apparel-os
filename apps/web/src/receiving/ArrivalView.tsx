@@ -51,6 +51,7 @@ import {
 import { optionText, unknownText, useMasterNames, useProducts } from './names';
 import { PtFile } from './PtFile';
 import { ProposeRecount, RecountsView } from './Recounts';
+import type { Reading } from './reading';
 import { ScanIn, ScanInSummary } from './ScanIn';
 
 // Receive Goods › an Arrival: its details, its supplier invoices first, its photos, the count line by line and its GRN
@@ -62,17 +63,6 @@ import { ScanIn, ScanInSummary } from './ScanIn';
 
 /** The reads a change of an Arrival makes stale. */
 const ARRIVAL_READS = ['readArrival', 'readReceivingInbox'] as const;
-
-/**
- * Whether the Arrival is being read again, as it is after every change saved here, which makes the versions it showed
- * stale. An action that names a version the screen shows (issuing the GRN, changing or removing a line) waits for the
- * read, so it never sends the version a save has just replaced (code-house-rules 12.7): `shown` disables it on screen,
- * and `now` asks the read itself when it is pressed, before the screen has caught up with a save.
- */
-interface Reading {
-  readonly shown: boolean;
-  readonly now: () => boolean;
-}
 
 /** The reason a version-checked action waits while the Arrival is read again. */
 const READING = 'receive.reading-again';

@@ -9,7 +9,7 @@ import { Audit } from '../../src/modules/audit/index.js';
 import { Configuration, type ValidityCheck } from '../../src/modules/configuration/index.js';
 import { JOURNAL_KIND, postingConfigurationCheck } from '../../src/modules/finance/books/index.js';
 import { policyEvidence } from '../../src/modules/files-imports/index.js';
-import { PT_APPROVAL_CAPABILITY, PT_OPERATIONS } from '../../src/modules/merchandise/pt/index.js';
+import { PT_APPROVAL_CAPABILITY, PT_OPERATIONS } from '../../src/modules/merchandise/pt/domain/gate.js';
 import { syntheticCode, syntheticName } from '../fixtures/synthetic.js';
 import { syntheticPolicyValues } from './booking.js';
 import { TEST_COMPOSITION } from './composition.js';

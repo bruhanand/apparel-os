@@ -23,33 +23,58 @@ import {
   type PtProductRequest,
 } from '../../catalogue/index.js';
 import type { NumberingInterface } from '../../../numbering/index.js';
-import type { PtBasis, ReceivingInterface } from '../../../receiving/index.js';
-import type { LedgerActor, LedgerItem, StockLedgerInterface } from '../../../stock/ledger/index.js';
+import type { GrnForPt, PtBasis, ReceivingInterface } from '../../../receiving/index.js';
+import type { CheckedRequest, LedgerActor, LedgerItem, StockLedgerInterface } from '../../../stock/ledger/index.js';
 import { ptApproval, ptHoldRelease, ptOrigin, ptProduct } from '../db/schema.js';
 import { PT_OPERATIONS } from '../domain/gate.js';
 import { ptIdentityParts, type PtIdentityPart } from '../domain/identity.js';
 import { PT_KIND, PT_MODULE, PT_REVISION_TYPE, PT_SCOPE_KEY, PT_STOCK_SOURCE_TYPE } from '../domain/kinds.js';
-import { BUSINESS_DATE_NOT_SET, grnNotFound, recordItem, revisionNotFound, type Outcome } from '../domain/refusals.js';
+import {
+  BUSINESS_DATE_NOT_SET,
+  grnNotFound,
+  notADraft,
+  recordItem,
+  refusalOutcome,
+  refused,
+  revisionNotFound,
+  type Outcome,
+} from '../domain/refusals.js';
 import { ptApproved } from '../events.js';
-import { revisionContent, revisionStanding, type ApprovalRow, type RevisionStanding } from '../queries/approval.js';
+import {
+  revisionContent,
+  revisionStanding,
+  type ApprovalRow,
+  type RevisionRow,
+  type RevisionStanding,
+} from '../queries/approval.js';
 import { heldLinesOpen } from '../queries/plan.js';
-import { scopeColumnsOf } from './scope-columns.js';
+import { auditScopeOf, scopeColumnsOf } from './scope-columns.js';
 
 // Posting a PT revision's approval (goods-in 6.3, 6.6, 10.3; module-map 6.2 flow C; stock-ledger 10.2 to 10.4, 13.1,
 // 13.14; access-and-approvals 9.7; PRD-REC-015, PRD-REC-017, PRD-REC-018, PRD-MER-013, PRD-PTW-010, PRD-INT-004;
 // DEC-097, DEC-135, DEC-140; S2-F06-T01). One transaction, in the stock ledger's lock order, with the PT's, the GRN's
 // and the catalogue's rows already held at step 1 by its caller: the decision's effect, for a PT posted with its
-// decision, or the posting job of a large one (flow E). Under those locks it rechecks the revision, the policy gate and
-// the GRN: nothing waiting for a decision, and the GRN's good pieces still those the PT covers, which a recount, a held
-// line or a damage report decided since would change; checks the PT's new products against the catalogue; works out the
-// identity step, which gives every covered piece a new receipt origin of one SKU at one P RATE (domain/identity.ts);
-// then posts, as one ledger request: the end of the excess holds and quarantines of goods Booking took in, by the PT
-// route (goods-in 4.6), the identity step, the coverage of each new origin, and its cost at P RATE, which `finance` ·
-// books posts under the posting map of `stock.cost-established` for owned goods and records only for goods the brand
-// or supplier still owns (stock-ledger 7.2, 13.4; DEC-141). The decision is verified and used under the ledger's locks
-// on the PT's cost then (access-and-approvals 9.7). Then the new products confirmed with their SKU codes, the barcodes
-// recorded, the PT numbered, its records, the audit record and `merchandise.pt-approved`. The goods stay at their
-// receiving location, not accepted and not sellable until the scan-in (goods-in 6.3; stock-ledger 6.3).
+// decision, or the posting job of a large one (flow E). It runs goods-in 6.3's steps, each a function below:
+//
+// - **Under the locks** (recheckUnderLocks): the revision still the PT's newest draft; the policy gate; nothing of the
+//   GRN waiting for a decision; the GRN's good pieces still those the PT covers, which a recount, a held line or a
+//   damage report decided since would change; the PT's and the SKU codes' series Open; the PT's new products checked
+//   by the catalogue.
+// - **Steps 4 and 5 planned** (identityStep): the identity step gives every covered piece a new receipt origin of one
+//   SKU at one P RATE (domain/identity.ts), with the coverage and cost of each and the end of the holds of goods Booking
+//   took in (goods-in 4.6).
+// - **The ledger request** (lockAndValue): Plan, the locks of steps 2 to 8, the PT's and the SKU codes' series with the
+//   periods at step 8 in one call, Recheck and value.
+// - **Step 1** (verifyAndUse): `access` verifies and uses the decision under those locks on the PT's cost then (9.7).
+// - **Steps 4 to 6 written**: the ledger writes the identity step, the coverage and the cost at P RATE, which `finance`
+//   · books posts under the posting map of `stock.cost-established` for owned goods and records only for goods the
+//   brand or supplier still owns (stock-ledger 7.2, 13.4; DEC-141).
+// - **Step 2** (confirmProducts): the new products confirmed with their SKU codes, and the rows' barcodes recorded.
+// - **Step 3** (numberPt): the PT numbered from its series.
+// - **Step 7** (recordApproval): the PT's own records, the audit record and `merchandise.pt-approved`.
+//
+// The goods stay at their receiving location, not accepted and not sellable until the scan-in (goods-in 6.3;
+// stock-ledger 6.3).
 
 export interface PostingServices {
   readonly audit: AuditInterface;
@@ -82,11 +107,6 @@ export interface PostingRequest {
   readonly reason?: string;
 }
 
-const refused = (kind: CommandRefusal['kind'], code: string, missing: MissingItem[]): Outcome<never> => ({
-  kind: 'refusal',
-  refusal: { kind, code, missing },
-});
-
 const auditActorOf = (poster: Poster): AuditActor =>
   poster.kind === 'user'
     ? { kind: 'user', id: poster.userId }
@@ -115,7 +135,7 @@ const keyOf = (styleCode: string, size: string | null) => `${textKey(styleCode)}
 export function draftRefusal(standing: RevisionStanding | undefined, revisionId: string): CommandRefusal | undefined {
   if (standing === undefined) return revisionNotFound(revisionId);
   if (!standing.newest || standing.withdrawn || standing.rejected || standing.approval !== undefined) {
-    return { kind: 'refused', code: 'merchandise.pt-not-a-draft', missing: [recordItem(PT_REVISION_TYPE, revisionId)] };
+    return notADraft(revisionId);
   }
   return undefined;
 }
@@ -150,31 +170,30 @@ export async function ptGateRefusal(
 function changedRefusal(
   basis: PtBasis,
   coverage: readonly { styleCode: string; sizeCode: string | null; quantity: number }[],
-) {
+): CommandRefusal | undefined {
+  const changed = (styleCode: string, size: string | null): CommandRefusal => ({
+    kind: 'refused',
+    code: 'merchandise.pt-grn-changed',
+    missing: [styleSize(styleCode, size)],
+  });
   const goods = new Map(basis.goods.map((each) => [keyOf(each.styleCode, each.size), each]));
   for (const each of coverage) {
     const now = goods.get(keyOf(each.styleCode, each.sizeCode));
-    if (now?.quantity !== each.quantity) {
-      return {
-        kind: 'refused' as const,
-        code: 'merchandise.pt-grn-changed',
-        missing: [styleSize(each.styleCode, each.sizeCode)],
-      };
-    }
+    if (now?.quantity !== each.quantity) return changed(each.styleCode, each.sizeCode);
     goods.delete(keyOf(each.styleCode, each.sizeCode));
   }
   const [extra] = goods.values();
-  return extra === undefined
-    ? undefined
-    : {
-        kind: 'refused' as const,
-        code: 'merchandise.pt-grn-changed',
-        missing: [styleSize(extra.styleCode, extra.size)],
-      };
+  return extra === undefined ? undefined : changed(extra.styleCode, extra.size);
 }
 
-/** The new products of the revision as the catalogue checks them: each from the first row proposing it (6.6). */
-function productRequests(content: Awaited<ReturnType<typeof revisionContent>>, brandId: string): PtProductRequest[] {
+type RevisionContent = Awaited<ReturnType<typeof revisionContent>>;
+
+/**
+ * The new products of the revision as the catalogue checks them, each from its rows (6.6): the rows of one new style
+ * agree on its values, which the upload's check makes sure of (goods-in 5.3; code review 7), so its first row's are
+ * the style's.
+ */
+function productRequests(content: RevisionContent, brandId: string): PtProductRequest[] {
   return content.proposals.map((proposal) => {
     const rows = content.rows.filter((row) => row.ptProposedSkuId === proposal.id);
     const [first] = rows;
@@ -195,19 +214,130 @@ function productRequests(content: Awaited<ReturnType<typeof revisionContent>>, b
   });
 }
 
+/** The refusal codes of one series the approval draws from: none, Paused, or used up (goods-in 6.6, 10.4). */
+interface SeriesCodes {
+  readonly numberedKind: string;
+  readonly missing: string;
+  readonly paused: string;
+  readonly exhausted: string;
+}
+
+const PT_SERIES: SeriesCodes = {
+  numberedKind: PT_KIND.kind,
+  missing: 'merchandise.no-pt-series',
+  paused: 'merchandise.pt-series-paused',
+  exhausted: 'merchandise.pt-series-exhausted',
+};
+
+const SKU_CODE_SERIES: SeriesCodes = {
+  numberedKind: SKU_CODE_KIND.kind,
+  missing: 'merchandise.no-sku-code-series',
+  paused: 'merchandise.sku-code-series-paused',
+  exhausted: 'merchandise.sku-code-series-exhausted',
+};
+
+/** A series refusal of the approval, naming the series kind (code-house-rules 12.3). */
+const seriesRefusal = (codes: SeriesCodes, code: string): CommandRefusal => ({
+  kind: 'unavailable',
+  code,
+  missing: [{ kind: 'number-series', numberedKind: codes.numberedKind }],
+});
+
+/**
+ * Allocate's own refusal on a series the approval holds, as the approval's (numbering-and-audit 3.5, 3.7): none, Paused,
+ * or used up. Any other cannot happen on a live series the command holds, for a new document: a defect.
+ */
+function allocateRefusal(codes: SeriesCodes, code: string): CommandRefusal {
+  if (code === 'numbering.series-not-found') return seriesRefusal(codes, codes.missing);
+  if (code === 'numbering.series-paused') return seriesRefusal(codes, codes.paused);
+  if (code === 'numbering.series-exhausted') return seriesRefusal(codes, codes.exhausted);
+  throw new CommandDefect(`Allocate refused the ${codes.numberedKind} series: ${code}`);
+}
+
 /** A live Open series of a kind, as a lock target, or the refusal naming the series missing or paused (10.4). */
 async function openSeries(
   context: TransactionContext,
   numbering: PostingServices['numbering'],
-  kind: string,
+  codes: SeriesCodes,
   scopeKey: string,
-  codes: { readonly missing: string; readonly paused: string },
-): Promise<{ readonly seriesId: string } | { readonly refusal: CommandRefusal }> {
-  const series = await numbering.liveSeries(context, { kind, scopeKey });
-  const missing: MissingItem[] = [{ kind: 'number-series', numberedKind: kind }];
-  if (series === undefined) return { refusal: { kind: 'unavailable', code: codes.missing, missing } };
-  if (series.state !== 'Open') return { refusal: { kind: 'unavailable', code: codes.paused, missing } };
-  return { seriesId: series.seriesId };
+): Promise<Outcome<{ readonly seriesId: string }>> {
+  const series = await numbering.liveSeries(context, { kind: codes.numberedKind, scopeKey });
+  if (series === undefined) return refusalOutcome(seriesRefusal(codes, codes.missing));
+  if (series.state !== 'Open') return refusalOutcome(seriesRefusal(codes, codes.paused));
+  return { kind: 'success', answer: { seriesId: series.seriesId } };
+}
+
+/** What the rechecks under the locks found, which the steps after them use. */
+interface Checked {
+  readonly revision: RevisionRow;
+  readonly date: string;
+  readonly grn: GrnForPt;
+  readonly place: { readonly siteId: string; readonly businessUnitId: string };
+  readonly basis: PtBasis;
+  readonly content: RevisionContent;
+  readonly ptSeries: { readonly seriesId: string };
+  /** The SKU code series, while the PT proposes new products (RR-585). */
+  readonly skuSeries: { readonly seriesId: string } | undefined;
+  readonly products: CheckedPtProducts;
+}
+
+/**
+ * Under the locks the caller took at step 1 (goods-in 6.3 "Under the locks the approval is refused"): the revision the
+ * PT's newest draft; a business date; the GRN; the policy gate (goods-in 10.5; PRD-SEC-017); nothing of the GRN waiting
+ * for a decision; its good pieces still those the PT covers; the PT's series, and the SKU code series while it proposes
+ * products, Open; and its new products, checked by the catalogue (step 2; RR-585). Writes nothing.
+ */
+async function recheckUnderLocks(
+  context: TransactionContext,
+  services: PostingServices,
+  revisionId: string,
+): Promise<Outcome<Checked>> {
+  const standing = await revisionStanding(context, revisionId);
+  const notDraft = draftRefusal(standing, revisionId);
+  if (notDraft !== undefined || standing === undefined) return refusalOutcome(notDraft ?? revisionNotFound(revisionId));
+  const { revision } = standing;
+  const date = await context.businessDate();
+  if (date.kind === 'not-set') return refusalOutcome(BUSINESS_DATE_NOT_SET);
+  const grn = await services.receiving.grnForPt(context, standing.grnId);
+  if (grn === undefined) return refusalOutcome(grnNotFound(standing.grnId));
+  const place = { siteId: grn.facts.siteId, businessUnitId: grn.facts.businessUnitId };
+  const gate = await ptGateRefusal(context, services.configuration, place);
+  if (gate !== undefined) return refusalOutcome(gate);
+  const basis = await services.receiving.ptBasis(context, standing.grnId);
+  if (basis === undefined) return refusalOutcome(grnNotFound(standing.grnId));
+  const open = heldLinesOpen(basis);
+  if (open !== undefined) return refusalOutcome(open);
+  const content = await revisionContent(context, revisionId);
+  const changed = changedRefusal(basis, content.coverage);
+  if (changed !== undefined) return refusalOutcome(changed);
+  const ptSeries = await openSeries(context, services.numbering, PT_SERIES, PT_SCOPE_KEY);
+  if (ptSeries.kind === 'refusal') return ptSeries;
+  let skuSeries: { readonly seriesId: string } | undefined;
+  if (content.proposals.length > 0) {
+    const found = await openSeries(context, services.numbering, SKU_CODE_SERIES, SKU_CODE_SCOPE_KEY);
+    if (found.kind === 'refusal') return found;
+    skuSeries = found.answer;
+  }
+  const checked = await checkPtProducts(context, {
+    products: productRequests(content, revision.brandId),
+    siteId: place.siteId,
+    date: date.date,
+  });
+  if (checked.kind === 'refused') return refusalOutcome(checked.refusal);
+  return {
+    kind: 'success',
+    answer: {
+      revision,
+      date: date.date,
+      grn,
+      place,
+      basis,
+      content,
+      ptSeries: ptSeries.answer,
+      skuSeries,
+      products: checked.checked,
+    },
+  };
 }
 
 /** One new origin of the identity step, with what it covers (pt_origin). */
@@ -218,69 +348,42 @@ interface PlannedOrigin {
   readonly part: PtIdentityPart;
 }
 
-export async function postApproval(
-  context: TransactionContext,
-  services: PostingServices,
-  request: PostingRequest,
-): Promise<Outcome<{ readonly ptApprovalId: string; readonly number: string }>> {
-  const { revisionId, poster } = request;
-  const standing = await revisionStanding(context, revisionId);
-  const notDraft = draftRefusal(standing, revisionId);
-  if (notDraft !== undefined || standing === undefined)
-    return { kind: 'refusal', refusal: notDraft ?? revisionNotFound(revisionId) };
-  const { revision } = standing;
-  const date = await context.businessDate();
-  if (date.kind === 'not-set') return { kind: 'refusal', refusal: BUSINESS_DATE_NOT_SET };
-  const grn = await services.receiving.grnForPt(context, standing.grnId);
-  if (grn === undefined) return { kind: 'refusal', refusal: grnNotFound(standing.grnId) };
-  const place = { siteId: grn.facts.siteId, businessUnitId: grn.facts.businessUnitId };
-  // The policy gate, under the locks (goods-in 10.5; PRD-SEC-017).
-  const gate = await ptGateRefusal(context, services.configuration, place);
-  if (gate !== undefined) return { kind: 'refusal', refusal: gate };
-  // The GRN as it stands under its lock (goods-in 6.3: refused when it changed after the upload).
-  const basis = await services.receiving.ptBasis(context, standing.grnId);
-  if (basis === undefined) return { kind: 'refusal', refusal: grnNotFound(standing.grnId) };
-  const open = heldLinesOpen(basis);
-  if (open !== undefined) return { kind: 'refusal', refusal: open };
-  const content = await revisionContent(context, revisionId);
-  const changed = changedRefusal(basis, content.coverage);
-  if (changed !== undefined) return { kind: 'refusal', refusal: changed };
-  // The series it draws from (goods-in 10.4; RR-585): the PT's, and the SKU codes' while it proposes new products.
-  const ptSeries = await openSeries(context, services.numbering, PT_KIND.kind, PT_SCOPE_KEY, {
-    missing: 'merchandise.no-pt-series',
-    paused: 'merchandise.pt-series-paused',
-  });
-  if ('refusal' in ptSeries) return { kind: 'refusal', refusal: ptSeries.refusal };
-  let skuSeries: { readonly seriesId: string } | undefined;
-  if (content.proposals.length > 0) {
-    const found = await openSeries(context, services.numbering, SKU_CODE_KIND.kind, SKU_CODE_SCOPE_KEY, {
-      missing: 'merchandise.no-sku-code-series',
-      paused: 'merchandise.sku-code-series-paused',
-    });
-    if ('refusal' in found) return { kind: 'refusal', refusal: found.refusal };
-    skuSeries = found;
-  }
-  // The new products, checked by the catalogue under the locks (goods-in 6.3 step 2; RR-585).
-  const checked = await checkPtProducts(context, {
-    products: productRequests(content, revision.brandId),
-    siteId: place.siteId,
-    date: date.date,
-  });
-  if (checked.kind === 'refused') return { kind: 'refusal', refusal: checked.refusal };
-  const products: CheckedPtProducts = checked.checked;
+/** A hold of goods Booking took in that the approval ends, with its event (goods-in 4.6; pt_hold_release). */
+interface PlannedRelease {
+  readonly id: string;
+  readonly grnLineId: string;
+  readonly holdId: string;
+  readonly event: 'pt-route' | 'approved-decision';
+}
+
+interface IdentityPlan {
+  readonly origins: readonly PlannedOrigin[];
+  readonly releases: readonly PlannedRelease[];
+  readonly items: readonly LedgerItem[];
+}
+
+/** Each row's product: the SKU it names, or the one the catalogue checked for its proposal. */
+function productOfRow(products: CheckedPtProducts): (row: ApprovalRow) => string {
   const skuOfProposal = new Map(products.products.map((each) => [each.key, each.skuId]));
-  const skuOfRow = (row: ApprovalRow): string => {
+  return (row) => {
     const skuId = row.skuId ?? (row.ptProposedSkuId === null ? undefined : skuOfProposal.get(row.ptProposedSkuId));
     if (skuId === undefined) throw new CommandDefect(`PT row ${row.id} has no product`);
     return skuId;
   };
+}
 
-  // The identity step, per style and size the PT covers (goods-in 6.3 steps 4 and 5; domain/identity.ts).
-  const ptApprovalId = uuidv7();
-  const planned: PlannedOrigin[] = [];
-  const releases: { id: string; grnLineId: string; holdId: string; event: 'pt-route' | 'approved-decision' }[] = [];
-  const goods = new Map(basis.goods.map((each) => [keyOf(each.styleCode, each.size), each]));
-  for (const each of content.coverage) {
+/**
+ * Steps 4 and 5 planned (goods-in 6.3; stock-ledger 13.14, 13.19): for each style and size the PT covers, the GRN's
+ * good pieces split by the PT's rows into new receipt origins of one SKU at one P RATE (domain/identity.ts), each with
+ * its coverage and its cost; and the end of each hold of goods Booking took in, an excess hold by the PT route and a
+ * quarantine of wrong or unidentified goods by the approved decision (goods-in 4.6, 4.9). Writes nothing.
+ */
+function identityStep(checked: Checked, ptApprovalId: string, revisionId: string): Outcome<IdentityPlan> {
+  const skuOfRow = productOfRow(checked.products);
+  const origins: PlannedOrigin[] = [];
+  const releases: PlannedRelease[] = [];
+  const goods = new Map(checked.basis.goods.map((each) => [keyOf(each.styleCode, each.size), each]));
+  for (const each of checked.content.coverage) {
     const group = goods.get(keyOf(each.styleCode, each.sizeCode));
     if (group === undefined) throw new CommandDefect('A PT coverage lost its GRN goods after the check');
     const sources = [];
@@ -296,7 +399,7 @@ export async function postApproval(
       lineOfOrigin.set(part.receiptOriginId, part.grnLineId);
       for (const release of part.releases) releases.push({ id: uuidv7(), grnLineId: part.grnLineId, ...release });
     }
-    const rows = content.rows
+    const rows = checked.content.rows
       .filter((row) => row.ptCoverageId === each.id)
       .map((row) => ({ skuId: skuOfRow(row), pRatePaise: row.pRatePaise, quantity: row.quantity }));
     const split = ptIdentityParts(sources, rows, uuidv7);
@@ -304,12 +407,10 @@ export async function postApproval(
       return refused('refused', 'merchandise.pt-grn-changed', [styleSize(each.styleCode, each.sizeCode)]);
     }
     for (const part of split.parts) {
-      planned.push({
-        id: uuidv7(),
-        coverageId: each.id,
-        grnLineId: lineOfOrigin.get(part.receiptOriginId) ?? '',
-        part,
-      });
+      const grnLineId = lineOfOrigin.get(part.receiptOriginId);
+      if (grnLineId === undefined)
+        throw new CommandDefect('The identity step made a part of an origin it was not given');
+      origins.push({ id: uuidv7(), coverageId: each.id, grnLineId, part });
     }
   }
   const items: LedgerItem[] = [
@@ -322,22 +423,22 @@ export async function postApproval(
     {
       kind: 'identity-resolved',
       lineId: ptApprovalId,
-      at: place,
-      parts: planned.map(({ part }) => ({
+      at: checked.place,
+      parts: origins.map(({ part }) => ({
         receiptOriginId: part.receiptOriginId,
         skuId: part.skuId,
         quantity: part.quantity,
         newReceiptOriginId: part.newReceiptOriginId,
       })),
     },
-    ...planned.map((origin) => ({
+    ...origins.map((origin) => ({
       kind: 'record-coverage' as const,
       lineId: origin.id,
       ptRevisionId: revisionId,
       receiptOriginId: origin.part.newReceiptOriginId,
       quantity: origin.part.quantity,
     })),
-    ...planned.map((origin) => ({
+    ...origins.map((origin) => ({
       kind: 'cost-established' as const,
       lineId: origin.id,
       receiptOriginId: origin.part.newReceiptOriginId,
@@ -345,73 +446,99 @@ export async function postApproval(
       pRatePaise: paise(origin.part.pRatePaise),
     })),
   ];
+  return { kind: 'success', answer: { origins, releases, items } };
+}
 
-  // The ledger request (stock-ledger 13.1 "The caller's command"): Plan; Lock, steps 2 to 6; the periods at step 7;
-  // the journal series with the PT's and the SKU codes' series at step 8 in one call; Recheck and value.
-  const useId = uuidv7();
+/**
+ * The ledger request (stock-ledger 13.1 "The caller's command"): Plan; Lock, steps 2 to 6; the periods at step 7; the
+ * journal series with the PT's and the SKU codes' series at step 8 in one call; Recheck and value. Writes nothing.
+ */
+async function lockAndValue(
+  context: TransactionContext,
+  services: PostingServices,
+  request: PostingRequest,
+  checked: Checked,
+  plan: IdentityPlan,
+  useId: string,
+): Promise<Outcome<CheckedRequest>> {
   const planning = await services.ledger.plan(context, {
     source: {
       module: PT_MODULE,
       recordType: PT_STOCK_SOURCE_TYPE,
-      recordId: revisionId,
-      versionId: revisionId,
+      recordId: request.revisionId,
+      versionId: request.revisionId,
       importKind: 'none',
     },
-    actor: ledgerActorOf(poster),
+    actor: ledgerActorOf(request.poster),
     approval: { decisionId: request.decisionId, useId },
-    madeSkus: products.products.map((each) => each.facts),
-    items,
+    madeSkus: checked.products.products.map((each) => each.facts),
+    items: [...plan.items],
   });
-  if (planning.kind === 'refused') return { kind: 'refusal', refusal: planning.refusal };
+  if (planning.kind === 'refused') return refusalOutcome(planning.refusal);
   const locked = await services.ledger.lock(context, planning.value);
   const periods = await services.ledger.holdPeriods(context, planning.value);
-  if (periods.kind === 'refused') return { kind: 'refusal', refusal: periods.refusal };
+  if (periods.kind === 'refused') return refusalOutcome(periods.refusal);
   const series: LockTarget[] = [
     ...periods.value,
-    services.numbering.seriesLockTarget(ptSeries.seriesId),
-    ...(skuSeries === undefined ? [] : [services.numbering.seriesLockTarget(skuSeries.seriesId)]),
+    services.numbering.seriesLockTarget(checked.ptSeries.seriesId),
+    ...(checked.skuSeries === undefined ? [] : [services.numbering.seriesLockTarget(checked.skuSeries.seriesId)]),
   ];
   await context.lock(LOCK_STEP.numberSeries, series);
   const recheck = await services.ledger.recheck(context, locked);
-  if (recheck.kind === 'refused') return { kind: 'refusal', refusal: recheck.refusal };
-  // The approval is on the PT's cost (goods-in 6.1; PRD-ACS-015): its cost established, P RATE times the pieces, under
-  // the locks now; Unknown when any piece's is (PRD-ACS-016).
+  if (recheck.kind === 'refused') return refusalOutcome(recheck.refusal);
+  return { kind: 'success', answer: recheck.value };
+}
+
+/**
+ * Step 1 (goods-in 6.3; access-and-approvals 9.7): `access` verifies the decision under the ledger's locks, on the PT's
+ * cost established now, P RATE times the pieces (6.1; PRD-ACS-015), Unknown when any piece's is (PRD-ACS-016), and
+ * records its use. Answers the refusal, or undefined.
+ */
+async function verifyAndUse(
+  context: TransactionContext,
+  services: PostingServices,
+  request: PostingRequest,
+  revision: RevisionRow,
+  plan: IdentityPlan,
+  valued: CheckedRequest,
+  useId: string,
+): Promise<CommandRefusal | undefined> {
   let cost = 0;
   let unknown = false;
-  for (const [index, value] of recheck.value.itemValues.entries()) {
-    if (items[index]?.kind !== 'cost-established') continue;
+  for (const [index, value] of valued.itemValues.entries()) {
+    if (plan.items[index]?.kind !== 'cost-established') continue;
     if (value.kind === 'known') cost += value.amountPaise;
     else unknown = true;
   }
   const check = {
     decisionId: request.decisionId,
     actionType: PT_APPROVAL,
-    document: { module: PT_MODULE, recordType: PT_TYPE, recordId: revision.ptId, versionId: revisionId },
+    document: { module: PT_MODULE, recordType: PT_TYPE, recordId: revision.ptId, versionId: request.revisionId },
     preparers: revision.preparerUserIds,
     value: unknown ? { kind: 'unknown' as const } : { kind: 'known' as const, amountPaise: paise(cost) },
   };
   const verified = await services.access.verifyUnderLock(context, check);
-  if (verified !== undefined) return { kind: 'refusal', refusal: verified };
-  const used = await services.access.recordUse(context, {
-    ...check,
-    useId,
-    actor:
-      poster.kind === 'user'
-        ? { kind: 'user', id: poster.userId }
-        : { kind: 'service-identity', id: poster.serviceIdentityId, onBehalfOfUserId: poster.onBehalfOfUserId },
-  });
-  if (used !== undefined) return { kind: 'refusal', refusal: used };
+  if (verified !== undefined) return verified;
+  return services.access.recordUse(context, { ...check, useId, actor: auditActorOf(request.poster) });
+}
 
-  // Writes, every lock held (code-house-rules 8.2): the ledger's, then the products, the barcodes and the PT's own.
-  // Posted from the approval panel, or by the posting job (numbering-and-audit 4.1).
-  const source: AuditSource = poster.kind === 'user' ? { kind: 'screen' } : { kind: 'job' };
-  const written = await services.ledger.write(context, recheck.value, source);
-  if (written.kind === 'refused') return { kind: 'refusal', refusal: written.refusal };
+/**
+ * Step 2 (goods-in 6.3; PRD-MER-013; RR-585): each new product given its code from the SKU code series and confirmed,
+ * then each row's barcode not yet mapped to its product recorded under the PT's brand. Under every lock.
+ */
+async function confirmProducts(
+  context: TransactionContext,
+  services: PostingServices,
+  request: PostingRequest,
+  checked: Checked,
+  source: AuditSource,
+): Promise<CommandRefusal | undefined> {
+  const { revision, products, skuSeries } = checked;
   const confirmer: PtConfirmer = {
     userId: request.approverUserId,
     approvalDecisionId: request.decisionId,
-    actor: auditActorOf(poster),
-    roleAssignmentId: poster.roleAssignmentId,
+    actor: auditActorOf(request.poster),
+    roleAssignmentId: request.poster.roleAssignmentId,
   };
   const codes = new Map<string, string>();
   if (skuSeries !== undefined) {
@@ -421,11 +548,7 @@ export async function postApproval(
         documentType: 'merchandise.sku',
         documentId: product.skuId,
       });
-      if (allocated.kind === 'refused') {
-        return refused('unavailable', 'merchandise.sku-code-series-paused', [
-          { kind: 'number-series', numberedKind: SKU_CODE_KIND.kind },
-        ]);
-      }
+      if (allocated.kind === 'refused') return allocateRefusal(SKU_CODE_SERIES, allocated.refusal.code);
       codes.set(product.key, allocated.value.formattedText);
     }
   }
@@ -436,43 +559,74 @@ export async function postApproval(
     confirmer,
     importedFrom: { batchId: revision.importBatchId, documentId: revision.importDocumentId },
     source,
-    date: date.date,
+    date: checked.date,
   });
-  if (confirmed.kind === 'refused') return { kind: 'refusal', refusal: confirmed.refusal };
+  if (confirmed.kind === 'refused') return confirmed.refusal;
+  const skuOfRow = productOfRow(products);
   const mapped = await mapPtBarcodes(context, services.audit, {
     brandId: revision.brandId,
-    date: date.date,
-    mappings: content.rows
+    date: checked.date,
+    mappings: checked.content.rows
       .filter((row) => !row.barcodeMapped)
       .map((row) => ({ code: row.barcode, skuId: skuOfRow(row), rowNumber: row.rowNumber })),
     preparedBy: confirmer,
     source,
   });
-  if (mapped.kind === 'refused') return { kind: 'refusal', refusal: mapped.refusal };
+  return mapped.kind === 'refused' ? mapped.refusal : undefined;
+}
+
+/** Step 3 (goods-in 6.3; PRD-REC-018): the PT's number from its series, which the command holds at step 8. */
+async function numberPt(
+  context: TransactionContext,
+  services: PostingServices,
+  checked: Checked,
+  revisionId: string,
+): Promise<Outcome<{ readonly formattedText: string; readonly allocationId: string }>> {
   const number = await services.numbering.allocate(context, {
-    seriesId: ptSeries.seriesId,
+    seriesId: checked.ptSeries.seriesId,
     documentType: PT_REVISION_TYPE,
     documentId: revisionId,
   });
-  if (number.kind === 'refused') {
-    return refused('unavailable', 'merchandise.pt-series-paused', [
-      { kind: 'number-series', numberedKind: PT_KIND.kind },
-    ]);
-  }
+  if (number.kind === 'refused') return refusalOutcome(allocateRefusal(PT_SERIES, number.refusal.code));
+  return { kind: 'success', answer: number.value };
+}
+
+/**
+ * Step 7 (goods-in 6.3, 6.6): the PT's records of the approval (`pt_approval`, `pt_product`, `pt_origin`,
+ * `pt_hold_release`), the audit record `approve-pt` and `merchandise.pt-approved`. A PT the job posts was Posting.
+ */
+async function recordApproval(
+  context: TransactionContext,
+  services: PostingServices,
+  request: PostingRequest,
+  checked: Checked,
+  plan: IdentityPlan,
+  written: {
+    readonly ptApprovalId: string;
+    readonly number: string;
+    readonly allocationId: string;
+    readonly useId: string;
+  },
+  movementIds: readonly string[],
+  source: AuditSource,
+): Promise<void> {
+  const { revision, products, grn, date } = checked;
+  const { ptApprovalId, number } = written;
+  const { poster, revisionId } = request;
   const scope = scopeColumnsOf(revision);
   await context.tx.insert(ptApproval).values({
     id: ptApprovalId,
     ptRevisionId: revisionId,
     ...scope,
-    number: number.value.formattedText,
-    numberAllocationId: number.value.allocationId,
+    number,
+    numberAllocationId: written.allocationId,
     approvalDecisionId: request.decisionId,
-    approvalUseId: useId,
+    approvalUseId: written.useId,
     approvedByUserId: request.approverUserId,
     ptPostRequestId: request.postRequestId ?? null,
     postedByServiceIdentityId: poster.kind === 'service-identity' ? poster.serviceIdentityId : null,
     postedAt: context.startedAt,
-    businessDate: date.date,
+    businessDate: date,
   });
   if (products.products.length > 0) {
     await insertInParts(
@@ -490,7 +644,7 @@ export async function postApproval(
   await insertInParts(
     context,
     ptOrigin,
-    planned.map((origin) => ({
+    plan.origins.map((origin) => ({
       id: origin.id,
       ptApprovalId,
       ptCoverageId: origin.coverageId,
@@ -503,11 +657,11 @@ export async function postApproval(
       pRatePaise: origin.part.pRatePaise,
     })),
   );
-  if (releases.length > 0) {
+  if (plan.releases.length > 0) {
     await insertInParts(
       context,
       ptHoldRelease,
-      releases.map((release) => ({ ...release, ptApprovalId, ...scope })),
+      plan.releases.map((release) => ({ ...release, ptApprovalId, ...scope })),
     );
   }
   await services.audit.record(context, {
@@ -515,25 +669,75 @@ export async function postApproval(
     roleAssignmentId: poster.roleAssignmentId,
     approval: { decisionId: request.decisionId },
     ...(request.reason === undefined ? {} : { reason: request.reason }),
-    scope: grn.facts,
+    scope: auditScopeOf(revision),
     record: { module: PT_MODULE, type: PT_TYPE, id: revision.ptId, versionId: revisionId },
     operation: 'approve-pt',
     changes: [
-      { kind: 'value', field: 'state', before: 'Awaiting approval', after: 'Official' },
-      { kind: 'value', field: 'number', before: null, after: number.value.formattedText },
-      { kind: 'value', field: 'movements', before: null, after: [...written.value.movementIds] },
+      {
+        kind: 'value',
+        field: 'state',
+        before: request.postRequestId === undefined ? 'Awaiting approval' : 'Posting',
+        after: 'Official',
+      },
+      { kind: 'value', field: 'number', before: null, after: number },
+      { kind: 'value', field: 'movements', before: null, after: [...movementIds] },
       { kind: 'value', field: 'newProducts', before: null, after: products.products.map((each) => each.skuId) },
-      { kind: 'value', field: 'holdsReleased', before: null, after: releases.map((each) => each.holdId) },
+      { kind: 'value', field: 'holdsReleased', before: null, after: plan.releases.map((each) => each.holdId) },
       { kind: 'value', field: 'grn', before: null, after: grn.grnId },
     ],
     source,
   });
   await context.publish(ptApproved, {
     subject: { module: PT_MODULE, recordType: PT_TYPE, recordId: revision.ptId, versionId: revisionId },
-    scope: grn.facts,
+    scope: auditScopeOf(revision),
     payload: { ptId: revision.ptId, revisionId, ptApprovalId },
   });
-  return { kind: 'success', answer: { ptApprovalId, number: number.value.formattedText } };
+}
+
+export async function postApproval(
+  context: TransactionContext,
+  services: PostingServices,
+  request: PostingRequest,
+): Promise<Outcome<{ readonly ptApprovalId: string; readonly number: string }>> {
+  const checked = await recheckUnderLocks(context, services, request.revisionId);
+  if (checked.kind === 'refusal') return checked;
+  const ptApprovalId = uuidv7();
+  const plan = identityStep(checked.answer, ptApprovalId, request.revisionId);
+  if (plan.kind === 'refusal') return plan;
+  const useId = uuidv7();
+  const valued = await lockAndValue(context, services, request, checked.answer, plan.answer, useId);
+  if (valued.kind === 'refusal') return valued;
+  const used = await verifyAndUse(
+    context,
+    services,
+    request,
+    checked.answer.revision,
+    plan.answer,
+    valued.answer,
+    useId,
+  );
+  if (used !== undefined) return refusalOutcome(used);
+  // Writes, every lock held (code-house-rules 8.2): the ledger's (steps 4 to 6), then the products and barcodes (step
+  // 2), the number (step 3) and the PT's own (step 7). Posted from the approval panel, or by the posting job
+  // (numbering-and-audit 4.1).
+  const source: AuditSource = request.poster.kind === 'user' ? { kind: 'screen' } : { kind: 'job' };
+  const written = await services.ledger.write(context, valued.answer, source);
+  if (written.kind === 'refused') return refusalOutcome(written.refusal);
+  const confirmed = await confirmProducts(context, services, request, checked.answer, source);
+  if (confirmed !== undefined) return refusalOutcome(confirmed);
+  const number = await numberPt(context, services, checked.answer, request.revisionId);
+  if (number.kind === 'refusal') return number;
+  await recordApproval(
+    context,
+    services,
+    request,
+    checked.answer,
+    plan.answer,
+    { ptApprovalId, number: number.answer.formattedText, allocationId: number.answer.allocationId, useId },
+    written.value.movementIds,
+    source,
+  );
+  return { kind: 'success', answer: { ptApprovalId, number: number.answer.formattedText } };
 }
 
 /** The GRN a revision is for, as a missing item (goods-in 5.7). */

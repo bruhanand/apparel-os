@@ -1,6 +1,6 @@
 # S2-F07-T01 — Scan-in at the Site
 
-Status: blocked
+Status: in-progress
 Blocked by: S2-F06-T01, S2-F08-T01
 Feature: [Stage 2 first version](../../spec.md)
 
@@ -28,3 +28,4 @@ Design tests 13, 14 and 17 pass, including the last piece scanned twice at once 
 - A design choice for the product owner: a piece is never scanned in to the receiving location itself (RR-611).
 - Beyond the ticket: the inbox's History view, filled a batch at a time with a technical cap of 1,000 deliveries a request (`INBOX_EXAMINED_CAP`); the event `receiving.piece-accepted` (goods-in 10.4 proposed it); the stock ledger's record acceptance in a named condition and its ownership-change item, built for the SL-26 refusal only (stock-ledger 13.20); `merchandise` · catalogue's `resolveCode` exported for `receiving`; the damage report form taking a product at a location, for damage found while scanning; the test world's warehouse granted receiving, `issuedGrn`'s unit and brand choices and `enrol`; the browser journeys' server's floor location for the PT world and the maker's scan permission.
 - Open, for the product owner: RR-610, RR-611, RR-612.
+- Built and merged 23 Oct 2026 (commits 9055c838, ca57cfca, 11a1d451, merged in 2a3dfbab); every check and 47 browser journeys pass. Awaiting code review with wave F; `Status:` stays in-progress until then.

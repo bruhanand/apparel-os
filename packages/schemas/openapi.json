@@ -2001,7 +2001,9 @@
               "kernel.recovery-hold",
               "merchandise.no-pt-series",
               "merchandise.no-sku-code-series",
+              "merchandise.pt-series-exhausted",
               "merchandise.pt-series-paused",
+              "merchandise.sku-code-series-exhausted",
               "merchandise.sku-code-series-paused",
               "organisation.location-in-use-unanswered",
               "stock.no-cost-setting",
@@ -4002,7 +4004,7 @@
       }
     },
     "/api/merchandise/pt/revisions/{revisionId}/download": {
-      "get": {
+      "post": {
         "operationId": "downloadPt",
         "x-access": {
           "kind": "action",
@@ -4019,6 +4021,15 @@
               "type": "string",
               "format": "uuid",
               "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
@@ -4059,6 +4070,8 @@
               }
             },
             "x-error-codes": [
+              "kernel.cross-site-request",
+              "kernel.idempotency-key-required",
               "kernel.invalid-request"
             ]
           },
@@ -4088,7 +4101,8 @@
             },
             "x-error-codes": [
               "access.business-date-not-set",
-              "access.not-authorised"
+              "access.not-authorised",
+              "kernel.recovery-hold"
             ]
           },
           "404": {
@@ -4103,6 +4117,21 @@
             "x-error-codes": [
               "files-imports.layout-not-found",
               "merchandise.record-not-found"
+            ]
+          },
+          "409": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.answer-not-repeatable",
+              "kernel.idempotency-key-reused",
+              "kernel.request-in-progress"
             ]
           },
           "422": {
@@ -4128,7 +4157,8 @@
               }
             },
             "x-error-codes": [
-              "kernel.failed"
+              "kernel.failed",
+              "kernel.outcome-unknown"
             ]
           },
           "503": {
@@ -4143,6 +4173,18 @@
             "x-error-codes": [
               "kernel.timed-out"
             ]
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              }
+            }
           }
         }
       }
@@ -37199,6 +37241,192 @@
         }
       }
     },
+    "/api/merchandise/pt/revisions/{revisionId}/post-again": {
+      "post": {
+        "operationId": "postPtAgain",
+        "x-access": {
+          "kind": "action",
+          "action": "approve",
+          "recordType": "merchandise.pt",
+          "authorisedIn": "command"
+        },
+        "parameters": [
+          {
+            "name": "revisionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "revisionId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    },
+                    "postRequestId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                    }
+                  },
+                  "required": [
+                    "revisionId",
+                    "postRequestId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.cross-site-request",
+              "kernel.idempotency-key-required",
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.business-date-not-set",
+              "access.not-authorised",
+              "configuration.operation-unavailable",
+              "kernel.recovery-hold"
+            ]
+          },
+          "404": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "merchandise.record-not-found"
+            ]
+          },
+          "409": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.idempotency-key-reused",
+              "kernel.request-in-progress"
+            ]
+          },
+          "422": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "merchandise.pt-not-failed"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed",
+              "kernel.outcome-unknown"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/finance/accounts": {
       "post": {
         "operationId": "prepareAccount",
@@ -65354,7 +65582,7 @@
                                       "Awaiting approval",
                                       "Withdrawn",
                                       "Rejected",
-                                      "Queued",
+                                      "Posting",
                                       "Failed",
                                       "Official"
                                     ]
@@ -74379,7 +74607,7 @@
                         "Awaiting approval",
                         "Withdrawn",
                         "Rejected",
-                        "Queued",
+                        "Posting",
                         "Failed",
                         "Official"
                       ]
@@ -74485,6 +74713,61 @@
                         "at"
                       ],
                       "additionalProperties": false
+                    },
+                    "bookings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "bookingId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          },
+                          "lines": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "grnLineId": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                },
+                                "styleCode": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "size": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "lineKey": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                }
+                              },
+                              "required": [
+                                "grnLineId",
+                                "styleCode",
+                                "size",
+                                "lineKey"
+                              ],
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "required": [
+                          "bookingId",
+                          "lines"
+                        ],
+                        "additionalProperties": false
+                      }
                     },
                     "totals": {
                       "type": "object",
@@ -74950,6 +75233,7 @@
                     "grn",
                     "uploadedBy",
                     "submittedAt",
+                    "bookings",
                     "totals",
                     "newProducts",
                     "repeatedBarcodes",

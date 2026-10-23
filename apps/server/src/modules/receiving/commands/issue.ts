@@ -100,16 +100,20 @@ const SHOW_MARGINS = false;
 /**
  * What the lines' products ask of them on the issue date (PRD-MER-011): a batch and expiry exactly where the
  * product's tracking profile in force at the Site requires them; a line with no product carries none. A product no
- * longer in force at the Site is refused as not of its line.
+ * longer in force at the Site is refused as not of its line. A line naming a product with no size recorded takes the
+ * product's size, which the PT file is matched on (goods-in 4.3, 5.4; RR-586; code review 7, RR-608), and is refused
+ * `receiving.size-required` only while the product has none. Answers each such line's size.
  */
-async function batchRefusal(
+async function productChecks(
   context: TransactionContext,
   row: ArrivalRow,
   lines: readonly CurrentLine[],
   date: string,
-): Promise<Outcome<never> | undefined> {
+): Promise<Outcome<ReadonlyMap<string, string>>> {
   const required: MissingItem[] = [];
   const untracked: MissingItem[] = [];
+  const unsized: MissingItem[] = [];
+  const sizes = new Map<string, string>();
   for (const line of lines) {
     const { entry } = line;
     if (entry.skuId === null) {
@@ -126,10 +130,15 @@ async function batchRefusal(
     const requires = read.sku.tracking?.batchExpiryRequired === true;
     if (requires && entry.batch === null) required.push(lineItem(line.lineId));
     if (!requires && entry.batch !== null) untracked.push(lineItem(line.lineId));
+    if (entry.size === null && entry.goods !== 'unidentified') {
+      if (read.sku.size === null) unsized.push(lineItem(line.lineId));
+      else sizes.set(line.lineId, read.sku.size);
+    }
   }
   if (required.length > 0) return refused('refused', 'receiving.batch-required', required);
   if (untracked.length > 0) return refused('refused', 'receiving.batch-not-tracked', untracked);
-  return undefined;
+  if (unsized.length > 0) return refused('refused', 'receiving.size-required', unsized);
+  return { kind: 'success', answer: sizes };
 }
 
 /** One line of the GRN being issued: its count line, its identifier, its number, its findings and its origin. */
@@ -228,8 +237,9 @@ export async function issueGrn(
   const lines = currentLines(await entriesOf(context, row.id));
   const blocked = grnBlockers(invoices.length, lines);
   if (blocked !== undefined) return refused('refused', blocked.code, blocked.missing);
-  const batches = await batchRefusal(context, row, lines, date);
-  if (batches !== undefined) return batches;
+  const products = await productChecks(context, row, lines, date);
+  if (products.kind === 'refusal') return products;
+  const sizeOfProduct = products.answer;
   const series = await dependencies.numbering.liveSeries(context, { kind: GRN_KIND.kind, scopeKey: GRN_SCOPE_KEY });
   if (series === undefined) return refused('unavailable', 'receiving.no-grn-series', [MISSING_GRN_SERIES]);
   if (series.state !== 'Open') return refused('unavailable', 'receiving.grn-series-paused', [MISSING_GRN_SERIES]);
@@ -430,6 +440,8 @@ export async function issueGrn(
       countEntryId: line.entry.id,
       ...scopeColumns(row),
       ...grnLineContentColumns(contentOf(line.entry)),
+      // A line naming a product with no size recorded takes the product's (RR-586, RR-608).
+      ...(sizeOfProduct.has(line.lineId) ? { sizeCode: sizeOfProduct.get(line.lineId) ?? null } : {}),
       damageReportId: reports.get(id) ?? null,
       countedByUserIds: [...line.countedBy],
     })),
