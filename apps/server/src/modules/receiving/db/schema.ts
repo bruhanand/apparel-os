@@ -1,8 +1,8 @@
-import type { ReviewReason } from '@apparel-os/schemas';
+import type { ReviewReason, ScanRefusal } from '@apparel-os/schemas';
 import { boolean, date, integer, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 // Drizzle definitions of `receiving`'s tables (code-house-rules 3.4). They mirror the reviewed migration
-// (migrations/organisation/0088, 0096, 0102, 0105, 0107) and never create or change a table; an integration test compares each
+// (migrations/organisation/0088, 0096, 0102, 0105, 0107, 0110) and never create or change a table; an integration test compares each
 // with the migrated database. Never exported from the unit's index.ts, so no other unit can name these tables
 // (code-house-rules 2).
 
@@ -300,5 +300,27 @@ export const recountMovement = receiving.table('recount_movement', {
   reversesMovementId: uuid('reverses_movement_id'),
   movementId: uuid('movement_id').notNull(),
   quantity: integer('quantity').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/**
+ * One scan of the scan-in (goods-in 7.2, 7.5; S2-F07-T01; migration 0110): accepted, with the product and the receipt
+ * origin its piece came from, the ledger's record, no foreign key; or refused, with why, and no stock change.
+ */
+export const scan = receiving.table('scan', {
+  id: uuid('id').primaryKey(),
+  grnId: uuid('grn_id').notNull(),
+  ...facts(),
+  ptRevisionId: uuid('pt_revision_id').notNull(),
+  barcode: text('barcode').notNull(),
+  destinationLocationId: uuid('destination_location_id').notNull(),
+  outcome: text('outcome').$type<'accepted' | 'refused'>().notNull(),
+  reason: text('reason').$type<ScanRefusal>(),
+  skuId: uuid('sku_id'),
+  receiptOriginId: uuid('receipt_origin_id'),
+  scannedByUserId: uuid('scanned_by_user_id').notNull(),
+  roleAssignmentId: uuid('role_assignment_id').notNull(),
+  scannedAt: at('scanned_at').notNull(),
+  businessDate: day('business_date').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });

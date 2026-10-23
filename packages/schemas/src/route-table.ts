@@ -72,6 +72,11 @@ import {
   recountParamsSchema,
   recountProposedSchema,
   recountReadSchema,
+  SCAN_TYPE,
+  scanAnsweredSchema,
+  scanDraftSchema,
+  scanInQuerySchema,
+  scanInReadSchema,
 } from './receiving.js';
 import {
   DAMAGE_REPORT_TYPE,
@@ -5432,6 +5437,58 @@ export const routes = {
     access: { kind: 'action', action: 'view', recordType: ARRIVAL_TYPE, authorisedIn: 'command' },
     command: false,
     response: recountReadSchema,
+    codes: [...HISTORY_CODES, 'receiving.record-not-found'],
+  }),
+  // The scan-in at the Site (goods-in 7, 7.5, section 11; PRD-REC-021, PRD-REC-022, PRD-MER-007; DEC-135, DEC-141;
+  // S2-F07-T01): once the GRN's PT is approved, one piece a scan, to a floor or backstore at a Store or a bin at a
+  // warehouse; a barcode the PT's products repeat asks which product it is; one the PT does not cover, or a product with
+  // nothing left, is refused and kept in the record. A scan carries its GRN's facts, so it authorises in its command
+  // with them (access-and-approvals 5.3); policy-gated as a GRN's issue is (goods-in 10.5). The read is the screen's.
+  scanPiece: defineRoute({
+    method: 'POST',
+    path: '/api/receiving/grns/{grnId}/scans',
+    params: grnParamsSchema,
+    access: { kind: 'action', action: 'create', recordType: SCAN_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: scanDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: scanAnsweredSchema,
+    codes: [
+      ...HISTORY_CODES,
+      'kernel.cross-site-request',
+      // Holding the actor's authority answers it when their role changed under the lock (code-house-rules 8.2).
+      'kernel.stale-version',
+      'configuration.operation-unavailable',
+      'receiving.record-not-found',
+      'receiving.pt-not-official',
+      'receiving.destination-not-allowed',
+      'receiving.barcode-repeated',
+      'receiving.product-not-of-barcode',
+      // The ledger's refusals of the acceptance, the location move and the ownership change (stock-ledger 13.8, 13.20):
+      // a piece held or taken since, a claim the scanner cannot see, a count freeze, and the ownership change of goods
+      // whose cost is established, which waits for SL-26.
+      'stock.invalid-item',
+      'stock.place-invalid',
+      'stock.plan-stale',
+      'stock.rule-not-set',
+      'stock.insufficient-available',
+      'stock.held',
+      'stock.reserved',
+      'stock.blocked',
+      'stock.count-freeze-active',
+      'stock.exceeds-source',
+    ],
+  }),
+  readScanIn: defineRoute({
+    method: 'GET',
+    path: '/api/receiving/grns/{grnId}/scan-in',
+    params: grnParamsSchema,
+    query: scanInQuerySchema,
+    access: { kind: 'action', action: 'view', recordType: ARRIVAL_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: scanInReadSchema,
     codes: [...HISTORY_CODES, 'receiving.record-not-found'],
   }),
   // Booking's later link of GRN lines to the lines of one booking (goods-in 3.7, 4.10, section 11; PRD-BKG-008;

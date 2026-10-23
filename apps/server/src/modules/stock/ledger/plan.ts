@@ -872,6 +872,27 @@ export async function planRequest(
         probe(item.lineId, 'stock.count-loss', unit, sku);
         return;
       }
+      case 'ownership-change': {
+        // The owner on the origin changes, so it is locked exclusively at step 2 (14.3), and its units at the place
+        // with their SKU balance at step 3 (13.4, 13.20; POL-01.05).
+        const unit = await place(item.lineId, item.at.siteId, item.at.businessUnitId, item.at.locationId);
+        const [origin] = await context.tx
+          .select()
+          .from(receiptOrigin)
+          .where(eq(receiptOrigin.id, item.receiptOriginId));
+        if (origin?.skuId == null) {
+          throw new StockRefused(
+            refusalOf('invalid-item', item.lineId, [{ kind: 'receipt-origin', receiptOriginId: item.receiptOriginId }]),
+          );
+        }
+        originIds.set(item.receiptOriginId, 'exclusive');
+        await goodsAt(item.lineId, unit, {
+          skuId: origin.skuId,
+          quantity: item.quantity,
+          receiptOriginId: item.receiptOriginId,
+        });
+        return;
+      }
       case 'reversal': {
         const [reversed] = await context.tx.select().from(movement).where(eq(movement.id, item.movementId));
         if (reversed === undefined) {

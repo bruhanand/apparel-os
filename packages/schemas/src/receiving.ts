@@ -5,6 +5,7 @@ import { businessDateSchema, idSchema } from './common.js';
 import { DAMAGE_CAPS } from './damage.js';
 import { evidenceFileSchema, evidenceListSchema } from './files.js';
 import { missingItemSchema } from './errors.js';
+import { locationKindSchema } from './organisation.js';
 
 // `receiving`'s Arrival, count and GRN (goods-in 4.1 to 4.6, 4.9, 10.1, 10.3, section 11; PRD-REC-001 to PRD-REC-008,
 // PRD-REC-012, PRD-REC-013; DEC-133, DEC-138; S2-F02-T02, S2-F02-T03). The receiver records the Arrival at the Site
@@ -36,6 +37,12 @@ export const RECOUNT_TYPE = 'receiving.recount';
  * difference, keeping the original count; reject changes nothing. Never decided by whoever proposed it (POL-02.07).
  */
 export const RECOUNT_APPROVAL = 'receiving.recount.approval';
+/**
+ * The record type of a scan of the scan-in (goods-in 7.2, 7.5; PRD-REC-021, PRD-REC-022; S2-F07-T01): create scans a
+ * piece in at the GRN's Site. A scan is read with its Arrival, under view on `receiving.arrival`, so it declares no view
+ * of its own.
+ */
+export const SCAN_TYPE = 'receiving.scan';
 
 const instantSchema = z.iso.datetime({ offset: true });
 
@@ -723,7 +730,11 @@ export const inboxEntrySchema = z.strictObject({
    * and damage reported at the count, its PT, or, once a PT file is submitted for it, that PT's approval (goods-in 4.8;
    * the product owner, 22 Oct 2026, RR-584).
    */
-  waitingFor: z.enum(['invoice', 'count', 'grn', 'held-lines', 'pt', 'pt-approval']),
+  /**
+   * Once its PT is approved, its scan-in, while any piece the PT covers waits at the receiving location (goods-in 7.1,
+   * 7.3; RR-606); nothing once none waits, the delivery then in History (S2-F07-T01).
+   */
+  waitingFor: z.enum(['invoice', 'count', 'grn', 'held-lines', 'pt', 'pt-approval', 'scan-in']).nullable(),
 });
 export type InboxEntry = z.infer<typeof inboxEntrySchema>;
 
@@ -748,3 +759,111 @@ export const inboxSchema = z.strictObject({
   next: idSchema.nullable(),
 });
 export type Inbox = z.infer<typeof inboxSchema>;
+
+// The scan-in at the Site (goods-in 7, 7.5, section 11; PRD-REC-021, PRD-REC-022, PRD-STK-003, PRD-MER-007; DEC-135,
+// DEC-141; S2-F07-T01). Once the GRN's PT is approved, its pieces are scanned in where they are, one piece a scan, into
+// the floor or the backstore at a Store or a bin at a warehouse; a barcode repeated across the PT's products asks which
+// product it is; a barcode the PT does not cover, or a product with nothing left to accept, is refused and kept in the
+// scan-in's record, with no stock change.
+
+/** Why a scan was refused and kept in the scan-in's record (goods-in 7.2): no product of the PT, or none left. */
+export const scanRefusalSchema = z.enum(['not-covered', 'nothing-left']);
+export type ScanRefusal = z.infer<typeof scanRefusalSchema>;
+
+/**
+ * One scan (goods-in 7.2): the barcode as scanned or typed from the tag, where the piece goes, and, for a barcode the
+ * PT's products repeat, the product the person chose, never chosen for them (PRD-MER-007, DEC-135).
+ */
+export const scanDraftSchema = z.strictObject({
+  barcode: text(RECEIVING_CAPS.codeText),
+  destinationLocationId: idSchema,
+  skuId: idSchema.optional(),
+});
+export type ScanDraft = z.infer<typeof scanDraftSchema>;
+
+/** What a scan answers: the piece accepted, or the scan refused and kept with why (goods-in 7.2). */
+export const scanAnsweredSchema = z.strictObject({
+  scanId: idSchema,
+  outcome: z.enum(['accepted', 'refused']),
+  reason: scanRefusalSchema.nullable(),
+  /** The product the piece is, once the barcode named one of the PT's; none for a barcode the PT does not cover. */
+  skuId: idSchema.nullable(),
+});
+export type ScanAnswered = z.infer<typeof scanAnsweredSchema>;
+
+/** A scan as the scan-in's record keeps it (goods-in 7.2, 7.5). */
+export const scanSchema = z.strictObject({
+  id: idSchema,
+  barcode: z.string(),
+  outcome: z.enum(['accepted', 'refused']),
+  reason: scanRefusalSchema.nullable(),
+  skuId: idSchema.nullable(),
+  destinationLocationId: idSchema,
+  scannedBy: idSchema,
+  scannedAt: instantSchema,
+});
+export type Scan = z.infer<typeof scanSchema>;
+
+/**
+ * The most scans one page of the scan-in's record holds, a technical cap (code-house-rules 12.1); older scans are read
+ * page by page with the cursor, the last scan of the page before.
+ */
+export const SCAN_PAGE_CAP = 100;
+
+export const scanInQuerySchema = z.strictObject({
+  after: idSchema.optional(),
+  limit: z
+    .string()
+    .regex(/^[1-9]\d*$/)
+    .refine((limit) => Number(limit) <= SCAN_PAGE_CAP, { message: `At most ${String(SCAN_PAGE_CAP)}` })
+    .optional(),
+});
+export type ScanInQuery = z.infer<typeof scanInQuerySchema>;
+
+/**
+ * Where a scan-in stands (goods-in 7.1, 7.3): its PT not yet approved, pieces still waiting at the receiving location,
+ * or complete, every piece the PT covers accepted or under a damage report or another hold.
+ */
+export const scanInStateSchema = z.enum(['waiting-for-pt', 'scanning', 'complete']);
+export type ScanInState = z.infer<typeof scanInStateSchema>;
+
+/**
+ * One product the PT covers, as the scan-in counts its pieces (goods-in 7.2, 7.3): covered by the PT, accepted, waiting
+ * at the receiving location, and held, under a damage report or another hold. The product is named by its SKU's code,
+ * style code and size, each null while Unknown (PRD-MOD-015).
+ */
+export const scanInProductSchema = z.strictObject({
+  skuId: idSchema,
+  code: z.string().nullable(),
+  styleCode: z.string().nullable(),
+  size: z.string().nullable(),
+  covered: z.int().min(0),
+  accepted: z.int().min(0),
+  waiting: z.int().min(0),
+  held: z.int().min(0),
+});
+export type ScanInProduct = z.infer<typeof scanInProductSchema>;
+
+/** The scan-in of a GRN, as its screen shows it (goods-in 7, section 11): read with view on the Arrival. */
+export const scanInReadSchema = z.strictObject({
+  asOf: instantSchema,
+  grnId: idSchema,
+  grnNumber: z.string(),
+  arrivalId: idSchema,
+  state: scanInStateSchema,
+  /** The approved PT revision whose pieces are scanned in, or none before its approval. */
+  ptRevisionId: idSchema.nullable(),
+  siteId: idSchema,
+  businessUnitId: idSchema,
+  receivingLocationId: idSchema,
+  /** Where pieces may go: at a Store its floor and backstore, at a warehouse its bins, in force today (goods-in 7.2). */
+  destinations: z.array(z.strictObject({ id: idSchema, code: z.string(), name: z.string(), kind: locationKindSchema })),
+  products: z.array(scanInProductSchema),
+  /** The scans, newest first, a page at a time; where the next page starts, null on the last (12.1). */
+  scans: z.array(scanSchema),
+  next: idSchema.nullable(),
+  /** What blocks scanning at the GRN's unit now: the receiving gate (goods-in 10.5; PRD-UXP-003). */
+  blocking: z.array(missingItemSchema),
+  people: z.array(z.strictObject({ userId: idSchema, name: z.string() })),
+});
+export type ScanInRead = z.infer<typeof scanInReadSchema>;

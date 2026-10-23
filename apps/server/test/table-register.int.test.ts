@@ -94,6 +94,9 @@ const RUNTIME_FUNCTIONS: Record<MigrationSetName, readonly string[]> = {
     'stock.damage_of_grn_lines',
     // structure-and-masters 3.5: the location-in-use contract's answer, SECURITY DEFINER (S1-F02-T02).
     'stock.location_has_stock',
+    // goods-in 7.5; stock-ledger 13.20: the goods a PT revision covers, for the scan-in, whatever the reader sees,
+    // SECURITY DEFINER (DEC-117; S2-F07-T01).
+    'stock.pt_revision_goods',
     // stock-ledger 13.6: whether Rebuild and compare saw only part, SECURITY DEFINER (DEC-117).
     'stock.rebuild_partial',
     // structure-and-masters 4.4, 4.6: the stock-presence contract's answer, SECURITY DEFINER (S1-F03-T02).
@@ -793,6 +796,8 @@ describe('the references inside receiving (code-house-rules 3.2; S2-F02-T02)', (
       'recount_movement (grn_line_id) grn_line',
       'recount_movement (recount_id) recount',
       'recount_movement (recount_line_id) recount_line',
+      // A scan of the scan-in (goods-in 7.5; S2-F07-T01).
+      'scan (grn_id) grn',
     ]);
   });
 });

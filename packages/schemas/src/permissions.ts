@@ -459,12 +459,19 @@ const bookingRecordTypes = [
  * approver's limit on the goods' cost, Unknown before their PT (DM-8, DEC-105). It is read with its Arrival, under view
  * on `receiving.arrival`, so it declares no view of its own. **Design choice**; who holds them is the product owner's
  * to name (V-01).
+ *
+ * A scan (goods-in 7.2, 7.5; PRD-REC-021, PRD-REC-022; S2-F07-T01), one piece scanned in at the GRN's Site, belongs to
+ * the GRN's place, legal entity and brand, so it carries every scope fact: create scans a piece in, needing no second
+ * person (PRD-REC-022). It is read with its Arrival, under view on `receiving.arrival`, so it declares no view of its
+ * own. **Design choice**; who holds it is the product owner's to name (V-01): at a Store its staff, at a warehouse
+ * Warehouse (goods-in 7.1).
  */
 const receivingRecordTypes = [
   declare('receiving.arrival', ['view', 'create', 'edit'], ALL),
   declare('receiving.grn', ['view', 'create'], ALL),
   declare('receiving.held_line', ['edit', 'approve'], ALL),
   declare('receiving.recount', ['create', 'approve'], ALL),
+  declare('receiving.scan', ['create'], ALL),
 ] as const;
 
 /**
