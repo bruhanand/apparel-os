@@ -362,7 +362,9 @@ function InboxTable({ inbox, onOpen }: { inbox: Inbox; onOpen: (arrivalId: strin
                 <span className="flex flex-wrap items-center gap-2">
                   <StatusBadge state={stateIdOf(entry.state)} />
                   {entry.grn !== null && <span className="text-body-sm">{entry.grn.number}</span>}
-                  <span className="text-caption text-text-2">{t(`receive.waiting.${entry.waitingFor}`)}</span>
+                  <span className="text-caption text-text-2">
+                    {t(entry.waitingFor === null ? 'receive.waiting.done' : `receive.waiting.${entry.waitingFor}`)}
+                  </span>
                 </span>
               </td>
             </tr>

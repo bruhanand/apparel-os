@@ -24,21 +24,31 @@ export async function currentPtMark(context: TransactionContext, grnId: string):
 }
 
 /**
- * The GRNs of those given whose "PT attached" mark is set now (goods-in 4.1, 4.8, 5.8): a PT file is submitted for each
- * and waits for its approval (RR-584).
+ * The PT revision whose "PT attached" mark is set now on each of the GRNs given, by GRN (goods-in 4.1, 4.8, 5.8): a PT
+ * file is submitted for each, waiting for approval or approved (RR-584, RR-606). A GRN whose mark is not set is left out.
  */
-export async function grnsMarked(context: TransactionContext, grnIds: readonly string[]): Promise<ReadonlySet<string>> {
-  if (grnIds.length === 0) return new Set();
+export async function setMarksOf(
+  context: TransactionContext,
+  grnIds: readonly string[],
+): Promise<ReadonlyMap<string, string>> {
+  if (grnIds.length === 0) return new Map();
   const rows = await context.tx
-    .select({ grnId: grnPtMark.grnId, change: grnPtMark.change, changeNumber: grnPtMark.changeNumber })
+    .select({
+      grnId: grnPtMark.grnId,
+      change: grnPtMark.change,
+      changeNumber: grnPtMark.changeNumber,
+      ptRevisionId: grnPtMark.ptRevisionId,
+    })
     .from(grnPtMark)
-    .where(inArray(grnPtMark.grnId, [...grnIds]));
+    .where(inArray(grnPtMark.grnId, [...new Set(grnIds)]));
   const newest = new Map<string, (typeof rows)[number]>();
   for (const row of rows) {
     const known = newest.get(row.grnId);
     if (known === undefined || row.changeNumber > known.changeNumber) newest.set(row.grnId, row);
   }
-  return new Set([...newest.values()].filter((row) => row.change === 'set').map((row) => row.grnId));
+  return new Map(
+    [...newest.values()].filter((row) => row.change === 'set').map((row) => [row.grnId, row.ptRevisionId]),
+  );
 }
 
 /** A GRN's "PT attached" mark now (goods-in 5.8): set by a PT revision, or not set; with its latest change. */

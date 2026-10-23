@@ -26,7 +26,8 @@ import {
 } from '../db/schema.js';
 import { currentLines, grnBlockers } from '../domain/lines.js';
 import { grnLineViews, linesOfGrn, type Requests } from './held-lines.js';
-import { grnsMarked } from './pt-mark.js';
+import { setMarksOf } from './pt-mark.js';
+import { scanInsOf } from './scan-in.js';
 import { recountViewsOf } from './recounts.js';
 import { arrivalRow, entriesByArrival, entriesOf, factsOf, newestChange, type ArrivalRow } from '../commands/common.js';
 import { receivingMissing, type AvailabilityDependencies } from './availability.js';
@@ -260,13 +261,22 @@ export function peopleOf(arrival: Arrival): string[] {
 }
 
 /**
+ * The most deliveries one request of the inbox reads to fill a page of its view, a technical cap (code-house-rules
+ * 12.1; goods-in 7.5): a page may then hold fewer than asked, with its cursor where the next read starts. **Design
+ * choice.**
+ */
+const INBOX_EXAMINED_CAP = 1_000;
+
+/**
  * The Receive Goods inbox of a Site (goods-in 4.1), newest recorded first, a page at a time (code-house-rules 12.1);
- * undefined when no Site has the identifier. Pending holds Arrivals not yet issued as a GRN, GRNs with held lines or
- * damage reported at the count not yet decided, GRNs waiting for their PT file, and GRNs whose PT file is submitted and
- * waits for approval, marked "PT attached" (goods-in 4.8; the product owner, 22 Oct 2026, RR-584), which every one does
- * until the PT approval is built (S2-F06-T01); History holds the rest, none yet. Each unit of the Site in force today comes with whether
- * receiving is available there, naming what is missing, and its locations in force; `covered` answers, for the facts
- * of each Arrival, whether the reader may view it; `damage` where the damage reports on GRN lines stand.
+ * undefined when no Site has the identifier. Pending holds the deliveries that wait for something: Arrivals not yet
+ * issued as a GRN, GRNs with held lines or damage reported at the count not yet decided, GRNs waiting for their PT file,
+ * GRNs whose PT file is submitted and waits for approval, marked "PT attached" (goods-in 4.8; the product owner, 22 Oct
+ * 2026, RR-584), and GRNs whose PT is approved while a piece it covers waits for its scan-in (goods-in 7.1, 7.3;
+ * RR-606); History holds the GRNs whose scan-in is complete (S2-F07-T01). Each unit of the Site in force today comes
+ * with whether receiving is available there, naming what is missing, and its locations in force; `covered` answers,
+ * for the facts of each Arrival, whether the reader may view it; `damage` where the damage reports on GRN lines stand.
+ * A page is filled from at most INBOX_EXAMINED_CAP deliveries a request.
  */
 export async function inboxOf(
   context: TransactionContext,
@@ -292,19 +302,53 @@ export async function inboxOf(
         .map((each) => ({ id: each.id, code: each.code, name: each.name })),
     });
   }
-  // Every delivery waits for something until its PT and scan-in are built, so History holds none yet (4.1).
   const limit = Math.min(Number(query.limit ?? INBOX_PAGE_CAP), INBOX_PAGE_CAP);
-  const page =
-    query.view === 'history'
-      ? []
-      : await context.tx
-          .select()
-          .from(arrival)
-          .where(and(eq(arrival.siteId, siteId), query.after === undefined ? undefined : lt(arrival.id, query.after)))
-          .orderBy(desc(arrival.id))
-          .limit(limit + 1);
-  const rows = page.slice(0, limit);
-  const next = page.length > limit ? (rows.at(-1)?.id ?? null) : null;
+  const listed: InboxEntry[] = [];
+  let after = query.after;
+  let examined = 0;
+  let next: string | null = null;
+  // Deliveries are read newest first, a batch at a time, until one more of the view than the page holds is found,
+  // none is left or the cap is reached; the next page starts after the page's last, or after the last one read.
+  for (;;) {
+    const batch = await context.tx
+      .select()
+      .from(arrival)
+      .where(and(eq(arrival.siteId, siteId), after === undefined ? undefined : lt(arrival.id, after)))
+      .orderBy(desc(arrival.id))
+      .limit(limit + 1);
+    const entries = await inboxEntriesOf(context, batch, covered, damage);
+    const inView = entries.filter(
+      (entry): entry is InboxEntry => entry !== undefined && (entry.waitingFor === null) === (query.view === 'history'),
+    );
+    if (listed.length + inView.length > limit) {
+      listed.push(...inView.slice(0, limit - listed.length));
+      next = listed.at(-1)?.arrivalId ?? null;
+      break;
+    }
+    listed.push(...inView);
+    examined += batch.length;
+    const last = batch.at(-1)?.id;
+    if (batch.length <= limit || last === undefined) break;
+    after = last;
+    if (examined >= INBOX_EXAMINED_CAP) {
+      next = last;
+      break;
+    }
+  }
+  return { siteId, view: query.view, units, entries: listed, next };
+}
+
+/**
+ * Each delivery given as the inbox lists it, with what it waits for next (goods-in 4.1), or undefined where the reader
+ * may not view it: its invoice, its count, its GRN, the decisions of its held lines and damage reported at the count,
+ * its PT file, its PT's approval, its scan-in, or nothing once the scan-in is complete.
+ */
+async function inboxEntriesOf(
+  context: TransactionContext,
+  rows: readonly ArrivalRow[],
+  covered: (facts: readonly RecordFacts[]) => Promise<readonly boolean[]>,
+  damage: (grnLineIds: readonly string[]) => Promise<readonly GrnLineDamage[]>,
+): Promise<(InboxEntry | undefined)[]> {
   const allowed = await covered(rows.map((row) => factsOf(row)));
   const shown = rows.filter((_row, index) => allowed[index] === true);
   const ids = shown.map((row) => row.id);
@@ -329,26 +373,30 @@ export async function inboxOf(
     grns.map((each) => each.id),
     damage,
   );
-  const marked = await grnsMarked(
+  const marked = await setMarksOf(
     context,
     grns.map((each) => each.id),
   );
-  const listed: InboxEntry[] = shown.map((row) => {
+  const scanIns = await scanInsOf(
+    context,
+    grns.flatMap((each) => {
+      const row = shown.find((one) => one.id === each.arrivalId);
+      return row === undefined ? [] : [{ grnId: each.id, receivingLocationId: row.receivingLocationId }];
+    }),
+  );
+  return rows.map((row, index): InboxEntry | undefined => {
+    if (allowed[index] !== true) return undefined;
     const numbers = invoices.filter((each) => each.arrivalId === row.id).map((each) => each.number);
     const lines = currentLines(entries.get(row.id) ?? []);
     const issued = grns.find((each) => each.arrivalId === row.id);
-    const waitingFor: InboxEntry['waitingFor'] =
-      issued !== undefined
-        ? waiting.has(issued.id)
-          ? 'held-lines'
-          : marked.has(issued.id)
-            ? 'pt-approval'
-            : 'pt'
-        : numbers.length === 0
-          ? 'invoice'
-          : lines.length === 0
-            ? 'count'
-            : 'grn';
+    let waitingFor: InboxEntry['waitingFor'];
+    if (issued === undefined) waitingFor = numbers.length === 0 ? 'invoice' : lines.length === 0 ? 'count' : 'grn';
+    else if (waiting.has(issued.id)) waitingFor = 'held-lines';
+    else if (!marked.has(issued.id)) waitingFor = 'pt';
+    else {
+      const scanIn = scanIns.get(issued.id);
+      waitingFor = scanIn === undefined ? 'pt-approval' : scanIn === 'scanning' ? 'scan-in' : null;
+    }
     return {
       arrivalId: row.id,
       state: issued === undefined ? 'In progress' : 'Issued',
@@ -363,7 +411,6 @@ export async function inboxOf(
       waitingFor,
     };
   });
-  return { siteId, view: query.view, units, entries: listed, next };
 }
 
 /**

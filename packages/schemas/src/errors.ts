@@ -1212,6 +1212,17 @@ export const bookingCodes = declareCodes({
  *   none, so what happens to them is not recorded.
  * - `receiving.recount-below-damage`: the recount would count fewer pieces than the count found damaged.
  * - `receiving.recount-linked`: the line delivers its pieces to a booking, linked or proposed (goods-in 3.7, 4.10).
+ *
+ * The scan-in (goods-in 7, 7.5; PRD-REC-021, PRD-REC-022, PRD-MER-007; S2-F07-T01):
+ *
+ * - `receiving.pt-not-official`: the GRN's PT is not approved yet, so nothing of it is scanned in (goods-in 7.1);
+ *   `missing` names the GRN.
+ * - `receiving.destination-not-allowed`: the location is not one a piece of the GRN may go to: at a Store its floor or
+ *   backstore, at a warehouse a bin, of the GRN's unit, in force today and not retired (goods-in 7.2); `missing` names it.
+ * - `receiving.barcode-repeated`: the barcode is on more than one of the PT's products; `missing` names each, and the
+ *   person chooses which the piece is, nothing chosen for them (PRD-MER-007, DEC-135).
+ * - `receiving.product-not-of-barcode`: the product chosen is not one of the PT's products the barcode is on; `missing`
+ *   names it.
  */
 export const receivingCodes = declareCodes({
   'receiving.record-not-found': 'not-found',
@@ -1251,6 +1262,11 @@ export const receivingCodes = declareCodes({
   'receiving.recount-adds-extra': 'refused',
   'receiving.recount-below-damage': 'refused',
   'receiving.recount-linked': 'refused',
+  // The scan-in (goods-in 7; S2-F07-T01).
+  'receiving.pt-not-official': 'refused',
+  'receiving.destination-not-allowed': 'refused',
+  'receiving.barcode-repeated': 'refused',
+  'receiving.product-not-of-barcode': 'refused',
 });
 
 /**

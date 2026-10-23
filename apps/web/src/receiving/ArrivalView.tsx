@@ -52,6 +52,7 @@ import { optionText, unknownText, useMasterNames, useProducts } from './names';
 import { PtFile } from './PtFile';
 import { ProposeRecount, RecountsView } from './Recounts';
 import type { Reading } from './reading';
+import { ScanIn, ScanInSummary } from './ScanIn';
 
 // Receive Goods › an Arrival: its details, its supplier invoices first, its photos, the count line by line and its GRN
 // (goods-in 4.2 to 4.5, section 11; PRD-REC-003 to PRD-REC-008; DEC-133, DEC-138; S2-F02-T02). The count is saved as
@@ -1002,7 +1003,11 @@ function GrnPrint({
         </table>
       </div>
       {damageLine !== null && (
-        <ReportDamage key={damageLine} grnLineId={damageLine} locationId={arrival.receivingLocationId} />
+        <ReportDamage
+          key={damageLine}
+          goods={{ kind: 'grn-line', grnLineId: damageLine }}
+          locationId={arrival.receivingLocationId}
+        />
       )}
       <CountDamage lines={grn.lines} />
       <RecountsView arrival={arrival} grn={grn} />
@@ -1197,6 +1202,19 @@ export function ArrivalView({
           ]),
         ],
   );
+  // The GRN's scan-in, on a screen of its own, which back to the Arrival stops (goods-in 7.3; S2-F07-T01).
+  const [scanning, setScanning] = useState<string | null>(null);
+  if (scanning !== null) {
+    return (
+      <ScanIn
+        grnId={scanning}
+        onBack={() => {
+          setScanning(null);
+          void query.refetch();
+        }}
+      />
+    );
+  }
   return (
     <div className="flex flex-col gap-4">
       <Toolbar>
@@ -1208,6 +1226,8 @@ export function ArrivalView({
             void query.refetch();
             // And the GRN's PT, whose approval another person decides (goods-in 6.3, 6.5; S2-F06-T01).
             void queryClient.invalidateQueries({ queryKey: ['readGrnPt'] });
+            // And its scan-in, which follows the PT's approval (goods-in 7.1; S2-F07-T01).
+            void queryClient.invalidateQueries({ queryKey: ['readScanIn'] });
           }}
         />
       </Toolbar>
@@ -1306,6 +1326,7 @@ export function ArrivalView({
                 />
               )}
               {arrival.grn !== null && <PtFile grnId={arrival.grn.id} />}
+              {arrival.grn !== null && <ScanInSummary grnId={arrival.grn.id} onOpen={setScanning} />}
             </div>
           );
         }}

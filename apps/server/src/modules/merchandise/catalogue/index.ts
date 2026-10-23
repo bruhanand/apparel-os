@@ -43,3 +43,6 @@ export { ptProductLockTargets } from './commands/pt-barcode-keys.js';
 export type { CheckedPtProducts, PtConfirmer, PtProductRequest } from './domain/pt-products.js';
 export { SKU_CODE_KIND, SKU_CODE_SCOPE_KEY } from './domain/kinds.js';
 export { skuCodesOf } from './queries/sku.js';
+// Resolve a code (4.7; PRD-MER-006, PRD-MER-007; RR-554), for `receiving`'s scan-in, which resolves a scanned barcode
+// under the PT's brand (goods-in 7.2; S2-F07-T01).
+export { resolveCode } from './commands/codes.js';

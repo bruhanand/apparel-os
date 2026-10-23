@@ -45,9 +45,17 @@ export const GRN_SOURCE_TYPE = 'grn';
 export const RECOUNT_SOURCE_TYPE = 'recount';
 
 /**
+ * The record type a scan's acceptance, location move and ownership change name as their source, each item's line one
+ * effect of the scan (stock-ledger 13.2, 13.20; goods-in 7.2, 7.5).
+ */
+export const SCAN_SOURCE_TYPE = 'scan';
+
+/**
  * `receiving` as a stock caller (stock-ledger 13.2, 13.16): a GRN posts receipt counts and, in the same request, the
  * holds of what its count found: excess under an excess hold, wrong and unidentified goods in quarantine, damage under
- * a damage hold (goods-in 4.5, 4.9; S2-F02-T03); no import kind. Acceptance comes with the scan-in (S2-F07-T01).
+ * a damage hold (goods-in 4.5, 4.9; S2-F02-T03); no import kind. A scan of the scan-in moves its piece from the
+ * receiving location to where it goes and accepts it there, and, under an Agreement passing ownership at receipt and
+ * acceptance, changes its owner (goods-in 7.2; DEC-141; S2-F07-T01).
  */
 export const receivingStockCaller: CallerRegistration = {
   module: RECEIVING_MODULE,
@@ -57,6 +65,11 @@ export const receivingStockCaller: CallerRegistration = {
     // A recount adds receipt counts for pieces found and reverses receipt counts for pieces counted in error
     // (goods-in 4.11; stock-ledger 13.18; S2-F02-T05).
     { recordType: RECOUNT_SOURCE_TYPE, itemKinds: ['receipt-count', 'reversal'], importKinds: ['none'] },
+    {
+      recordType: SCAN_SOURCE_TYPE,
+      itemKinds: ['location-move', 'record-acceptance', 'ownership-change'],
+      importKinds: ['none'],
+    },
   ],
 };
 

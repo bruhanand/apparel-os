@@ -17,3 +17,10 @@ export const heldLineDecided = defineEvent({
   version: 1,
   payload: z.strictObject({ heldLineId: z.uuid(), heldLineDecisionId: z.uuid() }),
 });
+
+/** A piece of a GRN was scanned in: accepted where it went (goods-in 7.2, 10.4; S2-F07-T01). */
+export const pieceAccepted = defineEvent({
+  type: 'receiving.piece-accepted',
+  version: 1,
+  payload: z.strictObject({ scanId: z.uuid(), grnId: z.uuid() }),
+});

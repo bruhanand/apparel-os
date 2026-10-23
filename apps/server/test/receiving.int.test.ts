@@ -944,7 +944,8 @@ describe('who sees receipts (goods-in 12 test 20; access-and-approvals 5.3)', ()
     expect((await get(otherStoreReader, `/api/receiving/arrivals/${own}`)).status).toBe(200);
     // Someone with no receiving permission reads no inbox.
     expect((await get(outsider, `/api/receiving/sites/${fixture.siteId}/inbox?view=pending`)).status).toBe(403);
-    // A receiver over every place sees both, and History holds none yet: every GRN waits for its PT (goods-in 4.1).
+    // A receiver over every place sees both, and History holds none: every GRN here waits for its PT, so none is scanned
+    // in (goods-in 4.1, 7.5).
     const all = inboxSchema.parse(
       (await get(receiver, `/api/receiving/sites/${fixture.siteId}/inbox?view=pending`)).body,
     );

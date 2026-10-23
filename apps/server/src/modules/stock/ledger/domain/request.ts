@@ -214,7 +214,18 @@ export type LedgerItem =
       readonly pieceCodes?: readonly string[];
     }
   | { readonly kind: 'remove-coverage'; readonly lineId: string; readonly coverageId: string }
-  | { readonly kind: 'record-acceptance'; readonly lineId: string; readonly at: Place; readonly goods: Goods }
+  | {
+      /**
+       * Record acceptance (13.5; PRD-REC-021, PRD-REC-022): the barcode verified and the units physically accepted at
+       * the place. With a condition, only units in it are accepted, as the scan-in accepts good pieces only, never
+       * damaged ones (13.20; goods-in 7.2; PRD-DMG-010); with none, any condition at the place, as before.
+       */
+      readonly kind: 'record-acceptance';
+      readonly lineId: string;
+      readonly at: Place;
+      readonly goods: Goods;
+      readonly condition?: Condition;
+    }
   | {
       readonly kind: 'place-hold';
       readonly lineId: string;
@@ -392,6 +403,20 @@ export type ValuedItem =
     }
   | {
       /**
+       * Ownership change (2.3, 13.4, 13.20; PRD-ORG-014, POL-01.05; DEC-141): at the Agreement's ownership event, the
+       * units of the origin named pass from the brand or supplier its owner names to the owner given, the Organisation,
+       * as the legal entity of the receiving unit. Units of known cost would then enter a pool, for which no posting
+       * event kind exists yet: refused `rule-not-set` naming SL-26 until the product owner settles it (S2-F07-T01).
+       */
+      readonly kind: 'ownership-change';
+      readonly lineId: string;
+      readonly receiptOriginId: string;
+      readonly quantity: number;
+      readonly at: Place;
+      readonly owner: Owner;
+    }
+  | {
+      /**
        * Piece correction (13.4, 8.4; PRD-STK-015, DEC-035): piece A, found at the place named, was wrongly named by the
        * movement named, and piece B of the same SKU left instead (S1-F10-T06).
        */
@@ -422,6 +447,7 @@ export const VALUED_ITEM_KINDS: readonly ValuedItemKind[] = [
   'count-difference',
   'reversal',
   'piece-correction',
+  'ownership-change',
 ];
 
 export type LedgerItemKind = LedgerItem['kind'];
