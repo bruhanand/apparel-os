@@ -424,23 +424,30 @@ export const RECEIPT_PROBLEMS_PAGE_CAP = 100;
 
 /** A query of the receipt problems read model (goods-in 9.3): by Site, supplier, brand and dates, a page at a time. */
 export interface ReceiptProblemsQuery {
-  readonly siteId?: string;
-  readonly supplierPartyId?: string;
-  readonly brandId?: string;
+  readonly siteId?: string | undefined;
+  readonly supplierPartyId?: string | undefined;
+  readonly brandId?: string | undefined;
   /** The first and last business dates of the GRNs, both included. */
-  readonly from?: string;
-  readonly to?: string;
+  readonly from?: string | undefined;
+  readonly to?: string | undefined;
   /** The last GRN line of the page before. */
   readonly after?: string;
   readonly limit?: number;
 }
 
-/** One GRN line with a finding, and each decision on it and who made it (goods-in 9.3 "Receipt problems"). */
+/**
+ * One GRN line with a finding, and each decision on it and who made it (goods-in 9.3 "Receipt problems"), with the
+ * Arrival its GRN was issued from and the GRN's scope facts, which its reader is authorised with (S2-F11-T02).
+ */
 export interface ReceiptProblem {
   readonly grnId: string;
   readonly grnNumber: string;
+  readonly arrivalId: string;
   readonly businessDate: string;
   readonly siteId: string;
+  readonly storeId: string | null;
+  readonly businessUnitId: string;
+  readonly legalEntityId: string;
   readonly supplierPartyId: string;
   readonly brandId: string;
   readonly line: GrnLine;
@@ -495,8 +502,12 @@ export async function receiptProblems(
       return {
         grnId: row.grn.id,
         grnNumber: row.grn.number,
+        arrivalId: row.grn.arrivalId,
         businessDate: row.grn.businessDate,
         siteId: row.grn.siteId,
+        storeId: row.grn.storeId,
+        businessUnitId: row.grn.businessUnitId,
+        legalEntityId: row.grn.legalEntityId,
         supplierPartyId: row.supplierPartyId,
         brandId: row.grn.brandId,
         line,

@@ -4,8 +4,8 @@ import type { Sheet } from '../domain/export.js';
 // A report or a search as an XLSX file (goods-in 9.1 "Any report or search result exports to XLSX as shown"; PRD Stack
 // row Documents: ExcelJS; code-house-rules 2 `writers/`; S2-F11-T01): one sheet a table, its lines of preface above the
 // header row, then the rows. A quantity is a whole number; an amount in paise is written in rupees with two decimals,
-// from the integer paise exactly, as the PT's download writes them (goods-in 6.6). It writes no formula, no link and no
-// macro. Pure: bytes in memory, no file, no network.
+// from the integer paise exactly, as the PT's download writes them (goods-in 6.6); a rate of the stage 2 reports as a
+// percentage (S2-F11-T02). It writes no formula, no link and no macro. Pure: bytes in memory, no file, no network.
 
 /** An amount in paise as rupees with two decimals, from the integer paise exactly (PRD-MOD-014). */
 function rupees(amountPaise: number): number {
@@ -37,6 +37,11 @@ export async function workbookOf(sheets: readonly Sheet[]): Promise<Buffer> {
         if (cell.kind === 'paise') {
           target.value = rupees(cell.paise);
           target.numFmt = '#,##0.00';
+        }
+        // A rate as the fraction of its two whole numbers, shown as a percentage (S2-F11-T02). Not money.
+        if (cell.kind === 'rate') {
+          target.value = cell.numerator / cell.denominator;
+          target.numFmt = '0.0%';
         }
       });
       row.commit();

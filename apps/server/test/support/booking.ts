@@ -148,7 +148,11 @@ const BOOKING_POLICIES: readonly PolicyNumber[] = [5, 1];
  * approver, who entered none of their values, validates them, each with a SYNTHETIC stored file as evidence; the
  * preparer switches the bookings capability on. The values validated are the TEST-ONLY checks' above.
  */
-export async function bookingGateOpen(setup: StructureSetup, database: string): Promise<void> {
+export async function bookingGateOpen(
+  setup: StructureSetup,
+  database: string,
+  policies: readonly PolicyNumber[] = BOOKING_POLICIES,
+): Promise<void> {
   const audit = new Audit(capturingLogger().logger);
   const configuration = new Configuration({ audit, environment: { name: 'local' }, evidence: policyEvidence(audit) });
   for (const check of BOOKING_POLICY_CHECKS) configuration.registerCheck(check, TEST_COMPOSITION);
@@ -165,7 +169,7 @@ export async function bookingGateOpen(setup: StructureSetup, database: string): 
   const ok = (outcome: { kind: string; refusal?: { code: string } }) => {
     if (outcome.kind !== 'success') throw new Error(`Refused: ${outcome.refusal?.code ?? outcome.kind}`);
   };
-  for (const policy of BOOKING_POLICIES) {
+  for (const policy of policies) {
     const signatureEvidence = await writeSyntheticStoredFile(database, signer.id);
     ok(
       await setup.run(signer.id, (context) =>

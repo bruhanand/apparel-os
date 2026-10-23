@@ -1,4 +1,3 @@
-import { uuidv7 } from '@apparel-os/domain';
 import {
   STOCK_BALANCE_TYPE,
   STOCK_SEARCH_EXPORT_CAP,
@@ -16,10 +15,11 @@ import type {
   RoutedOrganisation,
 } from '../../../kernel/index.js';
 import { replayRefusal, type AccessInterface } from '../../access/index.js';
-import type { AuditInterface, AuditScope } from '../../audit/index.js';
+import type { AuditInterface } from '../../audit/index.js';
 import { stockSearchSheets } from '../domain/export.js';
+import { recordCostExport } from './cost-export-access.js';
 import { BUSINESS_DATE_NOT_SET, EXPORT_TOO_LARGE } from '../domain/refusals.js';
-import { readerAuthority, SearchRefused } from '../queries/authority.js';
+import { readerAuthority, ReadRefused } from '../queries/authority.js';
 import { searchStock } from '../queries/stock-search.js';
 import { workbookOf } from '../writers/xlsx.js';
 
@@ -90,36 +90,11 @@ export async function exportStockSearch(
             readerAuthority(deps.access, context, exporter.userId),
           );
         } catch (error) {
-          if (error instanceof SearchRefused) return { kind: 'refusal', refusal: error.refusal, causedBySecret: false };
+          if (error instanceof ReadRefused) return { kind: 'refusal', refusal: error.refusal, causedBySecret: false };
           throw error;
         }
         if (read.search.next !== null) return { kind: 'refusal', refusal: EXPORT_TOO_LARGE, causedBySecret: false };
-        const exportId = uuidv7();
-        // One record for each place and brand whose cost the file carries (numbering-and-audit 5.2).
-        const scopes = new Map(
-          read.costFacts.map((facts) => {
-            const scope: AuditScope = {
-              ...(facts.legalEntityId === undefined ? {} : { legalEntityId: facts.legalEntityId }),
-              ...(facts.siteId === undefined ? {} : { siteId: facts.siteId }),
-              ...(facts.storeId === undefined ? {} : { storeId: facts.storeId }),
-              ...(facts.businessUnitId === undefined ? {} : { businessUnitId: facts.businessUnitId }),
-              ...(facts.brandId === undefined ? {} : { brandId: facts.brandId }),
-            };
-            return [JSON.stringify(scope), scope];
-          }),
-        );
-        for (const scope of scopes.values()) {
-          await deps.audit.recordAccess(context, {
-            kind: 'sensitive-access',
-            outcome: 'succeeded',
-            userId: exporter.userId,
-            networkAddress: exporter.networkAddress,
-            scope,
-            record: { ...EXPORT_RECORD, id: exportId },
-            fieldClass: 'cost',
-            exposure: 'exported',
-          });
-        }
+        await recordCostExport(deps.audit, context, exporter, EXPORT_RECORD, read.costFacts);
         const bytes = await workbookOf(stockSearchSheets(read.search, date.timezone));
         const answer: StockSearchExport = {
           fileName: `stock-search-${date.date}.xlsx`,

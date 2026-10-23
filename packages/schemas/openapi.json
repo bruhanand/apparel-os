@@ -5387,6 +5387,536 @@
         }
       }
     },
+    "/api/reports/booking-status/export": {
+      "get": {
+        "operationId": "exportBookingStatusReport",
+        "x-access": {
+          "kind": "action",
+          "action": "view",
+          "recordType": "booking.booking",
+          "authorisedIn": "command"
+        },
+        "parameters": [
+          {
+            "name": "brandId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "seasonValueId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "supplierPartyId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "destinationSiteId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Approved",
+                "Issued",
+                "Confirmed"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "fileName": {
+                      "type": "string"
+                    },
+                    "contentBase64": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "fileName",
+                    "contentBase64"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.business-date-not-set",
+              "access.not-authorised"
+            ]
+          },
+          "422": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "reports.export-too-large"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
+          }
+        }
+      }
+    },
+    "/api/reports/receipt-problems/export": {
+      "get": {
+        "operationId": "exportReceiptProblemsReport",
+        "x-access": {
+          "kind": "action",
+          "action": "view",
+          "recordType": "receiving.arrival",
+          "authorisedIn": "command"
+        },
+        "parameters": [
+          {
+            "name": "siteId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "supplierPartyId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "brandId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "fileName": {
+                      "type": "string"
+                    },
+                    "contentBase64": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "fileName",
+                    "contentBase64"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.business-date-not-set",
+              "access.not-authorised"
+            ]
+          },
+          "422": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "reports.export-too-large"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
+          }
+        }
+      }
+    },
+    "/api/reports/stock/export": {
+      "post": {
+        "operationId": "exportStockReport",
+        "x-access": {
+          "kind": "action",
+          "action": "view",
+          "recordType": "stock.balance",
+          "authorisedIn": "command"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "fileName": {
+                      "type": "string"
+                    },
+                    "contentBase64": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "fileName",
+                    "contentBase64"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.cross-site-request",
+              "kernel.idempotency-key-required",
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.business-date-not-set",
+              "access.not-authorised",
+              "kernel.recovery-hold"
+            ]
+          },
+          "409": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.answer-not-repeatable",
+              "kernel.idempotency-key-reused",
+              "kernel.request-in-progress"
+            ]
+          },
+          "422": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "reports.export-too-large"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed",
+              "kernel.outcome-unknown"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "brandId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                  },
+                  "siteId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                  },
+                  "businessUnitId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                  },
+                  "locationId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                  },
+                  "condition": {
+                    "type": "string",
+                    "enum": [
+                      "good",
+                      "damaged",
+                      "wrong",
+                      "unidentified"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/reports/stock-search/export": {
       "post": {
         "operationId": "exportStockSearch",
@@ -5587,6 +6117,155 @@
                 "additionalProperties": false
               }
             }
+          }
+        }
+      }
+    },
+    "/api/reports/supplier-performance/export": {
+      "get": {
+        "operationId": "exportSupplierPerformanceReport",
+        "x-access": {
+          "kind": "action",
+          "action": "view",
+          "recordType": "booking.booking",
+          "authorisedIn": "command"
+        },
+        "parameters": [
+          {
+            "name": "supplierPartyId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "brandId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "seasonValueId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "fileName": {
+                      "type": "string"
+                    },
+                    "contentBase64": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "fileName",
+                    "contentBase64"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.business-date-not-set",
+              "access.not-authorised"
+            ]
+          },
+          "422": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "reports.report-too-large"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
           }
         }
       }
@@ -60492,6 +61171,724 @@
         }
       }
     },
+    "/api/reports/booking-status": {
+      "get": {
+        "operationId": "readBookingStatusReport",
+        "x-access": {
+          "kind": "action",
+          "action": "view",
+          "recordType": "booking.booking",
+          "authorisedIn": "command"
+        },
+        "parameters": [
+          {
+            "name": "brandId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "seasonValueId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "supplierPartyId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "destinationSiteId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Approved",
+                "Issued",
+                "Confirmed"
+              ]
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9]\\d*$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "asOf": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "bookings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "bookingId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          },
+                          "number": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "Approved",
+                              "Issued",
+                              "Confirmed"
+                            ]
+                          },
+                          "brandId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          },
+                          "seasonValueId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          },
+                          "supplierPartyId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          },
+                          "destinationSiteId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          },
+                          "status": {
+                            "type": "object",
+                            "properties": {
+                              "versionId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "versionNumber": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 9007199254740991
+                              },
+                              "deliveryWindow": {
+                                "type": "object",
+                                "properties": {
+                                  "from": {
+                                    "type": "string",
+                                    "format": "date",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                  },
+                                  "to": {
+                                    "type": "string",
+                                    "format": "date",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                  }
+                                },
+                                "required": [
+                                  "from",
+                                  "to"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "lines": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "lineKey": {
+                                      "type": "string",
+                                      "format": "uuid",
+                                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                    },
+                                    "lineNumber": {
+                                      "type": "integer",
+                                      "minimum": 1,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "styleCode": {
+                                      "type": "string",
+                                      "minLength": 1
+                                    },
+                                    "colour": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "minLength": 1
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "size": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "minLength": 1
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "indicativeCost": {
+                                      "type": "number"
+                                    },
+                                    "deliveryDate": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string",
+                                          "format": "date",
+                                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "dueDate": {
+                                      "type": "string",
+                                      "format": "date",
+                                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                    },
+                                    "ordered": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "delivered": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "cancelled": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "outstanding": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "overDelivered": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "overdue": {
+                                      "type": "boolean"
+                                    }
+                                  },
+                                  "required": [
+                                    "lineKey",
+                                    "lineNumber",
+                                    "styleCode",
+                                    "colour",
+                                    "size",
+                                    "indicativeCost",
+                                    "deliveryDate",
+                                    "dueDate",
+                                    "ordered",
+                                    "delivered",
+                                    "cancelled",
+                                    "outstanding",
+                                    "overDelivered",
+                                    "overdue"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "totals": {
+                                "type": "object",
+                                "properties": {
+                                  "ordered": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "delivered": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "cancelled": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "outstanding": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "overDelivered": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "ordered",
+                                  "delivered",
+                                  "cancelled",
+                                  "outstanding",
+                                  "overDelivered"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "versionId",
+                              "versionNumber",
+                              "deliveryWindow",
+                              "lines",
+                              "totals"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "deliveries": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "lineKey": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                },
+                                "grnId": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                },
+                                "grnLineId": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                },
+                                "quantity": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 9007199254740991
+                                }
+                              },
+                              "required": [
+                                "lineKey",
+                                "grnId",
+                                "grnLineId",
+                                "quantity"
+                              ],
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "required": [
+                          "bookingId",
+                          "number",
+                          "state",
+                          "brandId",
+                          "seasonValueId",
+                          "supplierPartyId",
+                          "destinationSiteId",
+                          "status",
+                          "deliveries"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "names": {
+                      "type": "object",
+                      "properties": {
+                        "sites": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "code": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "code",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "businessUnits": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "code": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "code",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "locations": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "code": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "code",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "legalEntities": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "code": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "code",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "brands": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "code": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "code",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "suppliers": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "code": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "code",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "seasons": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "code": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "code",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "people": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "userId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "userId",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "grns": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "grnId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "number": {
+                                "type": "string"
+                              },
+                              "arrivalId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "siteId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              }
+                            },
+                            "required": [
+                              "grnId",
+                              "number",
+                              "arrivalId",
+                              "siteId"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "sites",
+                        "businessUnits",
+                        "locations",
+                        "legalEntities",
+                        "brands",
+                        "suppliers",
+                        "seasons",
+                        "people",
+                        "grns"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "next": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "asOf",
+                    "bookings",
+                    "names",
+                    "next"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.business-date-not-set",
+              "access.not-authorised"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
+          }
+        }
+      }
+    },
     "/api/merchandise/brands/{recordId}": {
       "get": {
         "operationId": "readBrand",
@@ -75622,6 +77019,1034 @@
         }
       }
     },
+    "/api/reports/receipt-problems": {
+      "get": {
+        "operationId": "readReceiptProblemsReport",
+        "x-access": {
+          "kind": "action",
+          "action": "view",
+          "recordType": "receiving.arrival",
+          "authorisedIn": "command"
+        },
+        "parameters": [
+          {
+            "name": "siteId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "supplierPartyId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "brandId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9]\\d*$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "asOf": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "grnId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          },
+                          "grnNumber": {
+                            "type": "string"
+                          },
+                          "arrivalId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          },
+                          "businessDate": {
+                            "type": "string",
+                            "format": "date",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                          },
+                          "siteId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          },
+                          "supplierPartyId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          },
+                          "brandId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          },
+                          "line": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "lineNumber": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 9007199254740991
+                              },
+                              "goods": {
+                                "type": "string",
+                                "enum": [
+                                  "on-invoice",
+                                  "wrong",
+                                  "unidentified"
+                                ]
+                              },
+                              "styleCode": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "colour": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "size": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "skuId": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "description": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "invoiceQuantity": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 1000000
+                              },
+                              "countedQuantity": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 1000000
+                              },
+                              "extra": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "received",
+                                      "not-received"
+                                    ]
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "findings": {
+                                "type": "object",
+                                "properties": {
+                                  "shortage": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 1000000
+                                  },
+                                  "extra": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 1000000
+                                  },
+                                  "received": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 1000000
+                                  },
+                                  "damaged": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 1000000
+                                  }
+                                },
+                                "required": [
+                                  "shortage",
+                                  "extra",
+                                  "received",
+                                  "damaged"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "damage": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "quantity": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "description": {
+                                        "type": "string"
+                                      },
+                                      "damageReportId": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                      }
+                                    },
+                                    "required": [
+                                      "quantity",
+                                      "description",
+                                      "damageReportId"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "heldLine": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                      },
+                                      "kind": {
+                                        "type": "string",
+                                        "enum": [
+                                          "excess",
+                                          "wrong",
+                                          "unidentified"
+                                        ]
+                                      },
+                                      "quantity": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "Awaiting approval",
+                                          "Accepted",
+                                          "Held"
+                                        ]
+                                      },
+                                      "versionToken": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                      },
+                                      "named": {
+                                        "anyOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "styleCode": {
+                                                "type": "string"
+                                              },
+                                              "colour": {
+                                                "type": [
+                                                  "string",
+                                                  "null"
+                                                ]
+                                              },
+                                              "size": {
+                                                "anyOf": [
+                                                  {
+                                                    "type": "object",
+                                                    "properties": {
+                                                      "attributeId": {
+                                                        "type": "string",
+                                                        "format": "uuid",
+                                                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                                      },
+                                                      "valueId": {
+                                                        "type": "string",
+                                                        "format": "uuid",
+                                                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                                      },
+                                                      "markedAttributeVersionId": {
+                                                        "type": "string",
+                                                        "format": "uuid",
+                                                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                                      },
+                                                      "code": {
+                                                        "type": "string"
+                                                      }
+                                                    },
+                                                    "required": [
+                                                      "attributeId",
+                                                      "valueId",
+                                                      "markedAttributeVersionId",
+                                                      "code"
+                                                    ],
+                                                    "additionalProperties": false
+                                                  },
+                                                  {
+                                                    "type": "null"
+                                                  }
+                                                ]
+                                              },
+                                              "skuId": {
+                                                "anyOf": [
+                                                  {
+                                                    "type": "string",
+                                                    "format": "uuid",
+                                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                                  },
+                                                  {
+                                                    "type": "null"
+                                                  }
+                                                ]
+                                              }
+                                            },
+                                            "required": [
+                                              "styleCode",
+                                              "colour",
+                                              "size",
+                                              "skuId"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
+                                      },
+                                      "requestId": {
+                                        "anyOf": [
+                                          {
+                                            "type": "string",
+                                            "format": "uuid",
+                                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
+                                      },
+                                      "requestState": {
+                                        "anyOf": [
+                                          {
+                                            "type": "string",
+                                            "enum": [
+                                              "Awaiting approval",
+                                              "Approved",
+                                              "Rejected",
+                                              "Superseded",
+                                              "Withdrawn"
+                                            ]
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
+                                      },
+                                      "decision": {
+                                        "anyOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "outcome": {
+                                                "type": "string",
+                                                "enum": [
+                                                  "taken-in",
+                                                  "left-held"
+                                                ]
+                                              },
+                                              "decidedBy": {
+                                                "type": "string",
+                                                "format": "uuid",
+                                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                              },
+                                              "decidedAt": {
+                                                "type": "string",
+                                                "format": "date-time",
+                                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                              }
+                                            },
+                                            "required": [
+                                              "outcome",
+                                              "decidedBy",
+                                              "decidedAt"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "kind",
+                                      "quantity",
+                                      "state",
+                                      "versionToken",
+                                      "named",
+                                      "requestId",
+                                      "requestState",
+                                      "decision"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "batch": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "code": {
+                                        "type": "string"
+                                      },
+                                      "expiryDate": {
+                                        "type": "string",
+                                        "format": "date",
+                                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                      }
+                                    },
+                                    "required": [
+                                      "code",
+                                      "expiryDate"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "countedBy": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                }
+                              },
+                              "recounted": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "countedQuantity": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 1000000
+                                      },
+                                      "findings": {
+                                        "type": "object",
+                                        "properties": {
+                                          "shortage": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 1000000
+                                          },
+                                          "extra": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 1000000
+                                          },
+                                          "received": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 1000000
+                                          },
+                                          "damaged": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 1000000
+                                          }
+                                        },
+                                        "required": [
+                                          "shortage",
+                                          "extra",
+                                          "received",
+                                          "damaged"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    },
+                                    "required": [
+                                      "countedQuantity",
+                                      "findings"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "lineNumber",
+                              "goods",
+                              "styleCode",
+                              "colour",
+                              "size",
+                              "skuId",
+                              "description",
+                              "invoiceQuantity",
+                              "countedQuantity",
+                              "extra",
+                              "findings",
+                              "damage",
+                              "heldLine",
+                              "batch",
+                              "countedBy",
+                              "recounted"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "damageReport": {
+                            "anyOf": [
+                              {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "shown"
+                                      },
+                                      "damageReportId": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                      },
+                                      "number": {
+                                        "type": "string"
+                                      },
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "Submitted",
+                                          "Confirmed",
+                                          "Rejected"
+                                        ]
+                                      },
+                                      "decision": {
+                                        "anyOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "outcome": {
+                                                "type": "string",
+                                                "enum": [
+                                                  "Confirmed",
+                                                  "Rejected"
+                                                ]
+                                              },
+                                              "decidedBy": {
+                                                "type": "string",
+                                                "format": "uuid",
+                                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                              },
+                                              "decidedAt": {
+                                                "type": "string",
+                                                "format": "date-time",
+                                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                                              }
+                                            },
+                                            "required": [
+                                              "outcome",
+                                              "decidedBy",
+                                              "decidedAt"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "damageReportId",
+                                      "number",
+                                      "state",
+                                      "decision"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "unknown"
+                                      }
+                                    },
+                                    "required": [
+                                      "kind"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "grnId",
+                          "grnNumber",
+                          "arrivalId",
+                          "businessDate",
+                          "siteId",
+                          "supplierPartyId",
+                          "brandId",
+                          "line",
+                          "damageReport"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "names": {
+                      "type": "object",
+                      "properties": {
+                        "sites": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "code": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "code",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "businessUnits": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "code": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "code",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "locations": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "code": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "code",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "legalEntities": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "code": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "code",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "brands": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "code": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "code",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "suppliers": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "code": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "code",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "seasons": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "code": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "code",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "people": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "userId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "userId",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "grns": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "grnId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "number": {
+                                "type": "string"
+                              },
+                              "arrivalId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "siteId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              }
+                            },
+                            "required": [
+                              "grnId",
+                              "number",
+                              "arrivalId",
+                              "siteId"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "sites",
+                        "businessUnits",
+                        "locations",
+                        "legalEntities",
+                        "brands",
+                        "suppliers",
+                        "seasons",
+                        "people",
+                        "grns"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "next": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "asOf",
+                    "rows",
+                    "names",
+                    "next"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.business-date-not-set",
+              "access.not-authorised"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
+          }
+        }
+      }
+    },
     "/api/receiving/sites/{siteId}/inbox": {
       "get": {
         "operationId": "readReceivingInbox",
@@ -80409,6 +82834,899 @@
         }
       }
     },
+    "/api/reports/stock": {
+      "get": {
+        "operationId": "readStockReport",
+        "x-access": {
+          "kind": "action",
+          "action": "view",
+          "recordType": "stock.balance",
+          "authorisedIn": "command"
+        },
+        "parameters": [
+          {
+            "name": "brandId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "siteId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "businessUnitId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "locationId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "condition",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "good",
+                "damaged",
+                "wrong",
+                "unidentified"
+              ]
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 2048,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9]\\d*$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "asOf": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "rowKey": {
+                            "type": "string"
+                          },
+                          "product": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "product"
+                                  },
+                                  "skuId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                  },
+                                  "code": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "styleCode": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "size": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "articleNumber": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "identity": {
+                                    "type": "array",
+                                    "items": {
+                                      "oneOf": [
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "kind": {
+                                              "type": "string",
+                                              "const": "value"
+                                            },
+                                            "code": {
+                                              "type": "string"
+                                            },
+                                            "name": {
+                                              "type": [
+                                                "string",
+                                                "null"
+                                              ]
+                                            }
+                                          },
+                                          "required": [
+                                            "kind",
+                                            "code",
+                                            "name"
+                                          ],
+                                          "additionalProperties": false
+                                        },
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "kind": {
+                                              "type": "string",
+                                              "const": "text"
+                                            },
+                                            "text": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "kind",
+                                            "text"
+                                          ],
+                                          "additionalProperties": false
+                                        },
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "kind": {
+                                              "type": "string",
+                                              "const": "unknown"
+                                            }
+                                          },
+                                          "required": [
+                                            "kind"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      ]
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "skuId",
+                                  "code",
+                                  "styleCode",
+                                  "size",
+                                  "articleNumber",
+                                  "identity"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "counted"
+                                  },
+                                  "styleCode": {
+                                    "type": "string"
+                                  },
+                                  "colour": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "size": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "styleCode",
+                                  "colour",
+                                  "size"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "unidentified"
+                                  }
+                                },
+                                "required": [
+                                  "kind"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          },
+                          "brandId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          },
+                          "siteId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          },
+                          "storeId": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "businessUnitId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          },
+                          "locationId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          },
+                          "condition": {
+                            "type": "string",
+                            "enum": [
+                              "good",
+                              "damaged",
+                              "wrong",
+                              "unidentified"
+                            ]
+                          },
+                          "owner": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "organisation"
+                                  },
+                                  "legalEntityId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "legalEntityId"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "supplier"
+                                  },
+                                  "partyId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "partyId"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "brand"
+                                  },
+                                  "brandId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "brandId"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "unknown"
+                                  }
+                                },
+                                "required": [
+                                  "kind"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          },
+                          "availableAs": {
+                            "type": "string",
+                            "enum": [
+                              "sell",
+                              "move"
+                            ]
+                          },
+                          "physical": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "available": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "waiting": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "held": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "heldByKind": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "damage",
+                                    "quarantine",
+                                    "excess",
+                                    "source-conflict",
+                                    "expiry",
+                                    "ordinary",
+                                    "inspection",
+                                    "write-off"
+                                  ]
+                                },
+                                "quantity": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "quantity"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "frozen": {
+                            "type": "boolean"
+                          },
+                          "mrpValue": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "known"
+                                  },
+                                  "value": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "value"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "unknown"
+                                  }
+                                },
+                                "required": [
+                                  "kind"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          },
+                          "cost": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "known"
+                                  },
+                                  "value": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "value"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "unknown"
+                                  }
+                                },
+                                "required": [
+                                  "kind"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "masked"
+                                  }
+                                },
+                                "required": [
+                                  "kind"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          },
+                          "grnIds": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                            }
+                          }
+                        },
+                        "required": [
+                          "rowKey",
+                          "product",
+                          "brandId",
+                          "siteId",
+                          "storeId",
+                          "businessUnitId",
+                          "locationId",
+                          "condition",
+                          "owner",
+                          "availableAs",
+                          "physical",
+                          "available",
+                          "waiting",
+                          "held",
+                          "heldByKind",
+                          "frozen",
+                          "mrpValue",
+                          "cost",
+                          "grnIds"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "names": {
+                      "type": "object",
+                      "properties": {
+                        "sites": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "code": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "code",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "businessUnits": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "code": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "code",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "locations": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "code": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "code",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "legalEntities": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "code": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "code",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "brands": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "code": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "code",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "suppliers": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "code": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "code",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "seasons": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "code": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "code",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "people": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "userId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "userId",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "grns": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "grnId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "number": {
+                                "type": "string"
+                              },
+                              "arrivalId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "siteId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              }
+                            },
+                            "required": [
+                              "grnId",
+                              "number",
+                              "arrivalId",
+                              "siteId"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "sites",
+                        "businessUnits",
+                        "locations",
+                        "legalEntities",
+                        "brands",
+                        "suppliers",
+                        "seasons",
+                        "people",
+                        "grns"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "next": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 2048,
+                          "pattern": "^[A-Za-z0-9_-]+$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "asOf",
+                    "rows",
+                    "names",
+                    "next"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.business-date-not-set",
+              "access.not-authorised"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
+          }
+        }
+      }
+    },
     "/api/organisation/stores/{recordId}": {
       "get": {
         "operationId": "readStore",
@@ -81149,6 +84467,677 @@
             },
             "x-error-codes": [
               "merchandise.record-not-found"
+            ]
+          },
+          "500": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.failed"
+            ]
+          },
+          "503": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.timed-out"
+            ]
+          }
+        }
+      }
+    },
+    "/api/reports/supplier-performance": {
+      "get": {
+        "operationId": "readSupplierPerformanceReport",
+        "x-access": {
+          "kind": "action",
+          "action": "view",
+          "recordType": "booking.booking",
+          "authorisedIn": "command"
+        },
+        "parameters": [
+          {
+            "name": "supplierPartyId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "brandId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          },
+          {
+            "name": "seasonValueId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "asOf": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "businessDate": {
+                      "type": "string",
+                      "format": "date",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "supplierPartyId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          },
+                          "brandId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                          },
+                          "season": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "value"
+                                  },
+                                  "seasonValueId": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "seasonValueId"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "unknown"
+                                  }
+                                },
+                                "required": [
+                                  "kind"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          },
+                          "fill": {
+                            "type": "object",
+                            "properties": {
+                              "bookings": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "ordered": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "delivered": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "rate": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "measured"
+                                      },
+                                      "numerator": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "denominator": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "maximum": 9007199254740991
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "numerator",
+                                      "denominator"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "unknown"
+                                      }
+                                    },
+                                    "required": [
+                                      "kind"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "bookings",
+                              "ordered",
+                              "delivered",
+                              "rate"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "timeliness": {
+                            "type": "object",
+                            "properties": {
+                              "delivered": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "onTime": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "late": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "unknown": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "rate": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "measured"
+                                      },
+                                      "numerator": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "denominator": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "maximum": 9007199254740991
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "numerator",
+                                      "denominator"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "unknown"
+                                      }
+                                    },
+                                    "required": [
+                                      "kind"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "delivered",
+                              "onTime",
+                              "late",
+                              "unknown",
+                              "rate"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "damage": {
+                            "type": "object",
+                            "properties": {
+                              "counted": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "damaged": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "rate": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "measured"
+                                      },
+                                      "numerator": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "denominator": {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "maximum": 9007199254740991
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "numerator",
+                                      "denominator"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "unknown"
+                                      }
+                                    },
+                                    "required": [
+                                      "kind"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "counted",
+                              "damaged",
+                              "rate"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "supplierPartyId",
+                          "brandId",
+                          "season",
+                          "fill",
+                          "timeliness",
+                          "damage"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "names": {
+                      "type": "object",
+                      "properties": {
+                        "sites": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "code": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "code",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "businessUnits": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "code": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "code",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "locations": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "code": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "code",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "legalEntities": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "code": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "code",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "brands": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "code": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "code",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "suppliers": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "code": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "code",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "seasons": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "code": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "code",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "people": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "userId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "userId",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "grns": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "grnId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "number": {
+                                "type": "string"
+                              },
+                              "arrivalId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              },
+                              "siteId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$"
+                              }
+                            },
+                            "required": [
+                              "grnId",
+                              "number",
+                              "arrivalId",
+                              "siteId"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "sites",
+                        "businessUnits",
+                        "locations",
+                        "legalEntities",
+                        "brands",
+                        "suppliers",
+                        "seasons",
+                        "people",
+                        "grns"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "asOf",
+                    "businessDate",
+                    "rows",
+                    "names"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "kernel.invalid-request"
+            ]
+          },
+          "401": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.not-signed-in",
+              "access.session-locked",
+              "access.sign-in-incomplete"
+            ]
+          },
+          "403": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "access.business-date-not-set",
+              "access.not-authorised"
+            ]
+          },
+          "422": {
+            "description": "The error envelope (code-house-rules 12.3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "x-error-codes": [
+              "reports.report-too-large"
             ]
           },
           "500": {

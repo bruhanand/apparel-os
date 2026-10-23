@@ -112,12 +112,12 @@ export interface BalanceCost {
 }
 
 /** The product key of a balance, opaque text that orders and compares in SQL: a SKU, or goods as counted. */
-const productKey = sql`case when b.sku_id is not null then jsonb_build_array('sku', b.sku_id)::text
+export const productKey = sql`case when b.sku_id is not null then jsonb_build_array('sku', b.sku_id)::text
   else jsonb_build_array('counted', b.brand_id, upper(btrim(o.described_style_code)),
     upper(btrim(o.described_colour)), o.described_size)::text end`;
 
 /** The filters of a read, as SQL over a balance `b` and its origin `o` (goods-in 9.2). */
-function filtersOf(filters: PositionFilters): SQL[] {
+export function filtersOf(filters: PositionFilters): SQL[] {
   const where: SQL[] = [];
   if (filters.products !== undefined) {
     const { skuIds, counted } = filters.products;
@@ -139,9 +139,9 @@ function filtersOf(filters: PositionFilters): SQL[] {
   return where;
 }
 
-const IN_CUSTODY = sql`b.held_as = 'custody' and b.quantity > 0 and b.location_id is not null`;
+export const IN_CUSTODY = sql`b.held_as = 'custody' and b.quantity > 0 and b.location_id is not null`;
 
-interface DetailRow extends Record<string, unknown> {
+export interface DetailRow extends Record<string, unknown> {
   id: string;
   matching: boolean;
   site_id: string;
@@ -163,10 +163,15 @@ interface DetailRow extends Record<string, unknown> {
   reserved: number;
   covered: number;
   reserved_everywhere: number;
+  /** Who owns the goods, from the origin's state (14.2; S2-F11-T02): null while Unknown. */
+  owner_kind: 'organisation' | 'supplier' | 'brand' | null;
+  owner_legal_entity_id: string | null;
+  owner_party_id: string | null;
+  owner_brand_id: string | null;
 }
 
 /** A balance read in detail, with its quantities and whether a count freeze covers it. */
-interface Detailed {
+export interface Detailed {
   readonly row: DetailRow;
   readonly quantities: PositionQuantities;
   readonly frozen: boolean;
@@ -177,11 +182,12 @@ interface Detailed {
  * read with them, under the reader's actor, so an origin's covered quantity is drawn on once as the Availability read
  * draws it (13.9); only the matching ones are answered.
  */
-async function matchingBalances(context: TransactionContext, where: SQL): Promise<Detailed[]> {
+export async function matchingBalances(context: TransactionContext, where: SQL): Promise<Detailed[]> {
   const result = await context.tx.execute<DetailRow>(sql`
     with matching as (
       select b.id, b.receipt_origin_id from stock.balance b
       join stock.receipt_origin o on o.id = b.receipt_origin_id
+      left join stock.receipt_origin_state s on s.receipt_origin_id = b.receipt_origin_id
       where ${IN_CUSTODY} and ${where}
     )
     select b.id, b.id in (select id from matching) as matching, b.site_id, b.store_id, b.business_unit_id,
@@ -201,7 +207,8 @@ async function matchingBalances(context: TransactionContext, where: SQL): Promis
            coalesce((select sum(c.quantity) from stock.reservation_claim c
                      join stock.reservation r on r.id = c.reservation_id
                      join stock.balance e on e.id = c.balance_id
-                     where e.receipt_origin_id = b.receipt_origin_id), 0)::integer as reserved_everywhere
+                     where e.receipt_origin_id = b.receipt_origin_id), 0)::integer as reserved_everywhere,
+           s.owner_kind, s.owner_legal_entity_id, s.owner_party_id, s.owner_brand_id
     from stock.balance b
     join stock.receipt_origin o on o.id = b.receipt_origin_id
     left join stock.receipt_origin_state s on s.receipt_origin_id = b.receipt_origin_id
@@ -239,13 +246,13 @@ async function matchingBalances(context: TransactionContext, where: SQL): Promis
 }
 
 /** The brand of a balance: the SKU's, or the one its goods were counted under; a balance has one (14.2). */
-function brandOf(row: DetailRow): string {
+export function brandOf(row: DetailRow): string {
   if (row.brand_id === null) throw new CommandDefect(`A balance with no brand: ${row.id}`);
   return row.brand_id;
 }
 
 /** The goods of a result, from its balances, the first counted where several share an identity (13.14). */
-function productOf(rows: readonly DetailRow[]): PositionProduct {
+export function productOf(rows: readonly DetailRow[]): PositionProduct {
   const first = [...rows].sort((a, b) => a.receipt_origin_id.localeCompare(b.receipt_origin_id))[0];
   if (first === undefined) throw new CommandDefect('A result with no balance');
   if (first.sku_id !== null) return { kind: 'sku', skuId: first.sku_id };
@@ -259,7 +266,7 @@ function productOf(rows: readonly DetailRow[]): PositionProduct {
 }
 
 /** Balances by a key of theirs, in the order first met. */
-function groupBy<Key>(details: readonly Detailed[], keyOf: (row: DetailRow) => Key, text: (key: Key) => string) {
+export function groupBy<Key>(details: readonly Detailed[], keyOf: (row: DetailRow) => Key, text: (key: Key) => string) {
   const groups = new Map<string, { key: Key; members: Detailed[] }>();
   for (const each of details) {
     const key = keyOf(each.row);

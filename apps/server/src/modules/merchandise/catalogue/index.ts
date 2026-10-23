@@ -49,4 +49,6 @@ export { resolveCode } from './commands/codes.js';
 // The read models of stock search, served through the kernel's read-model gateway (goods-in 9.4; S2-F11-T01): the
 // products a search names and the facts of products and brands a result shows.
 export { CATALOGUE_PRODUCT_FACTS, CATALOGUE_PRODUCT_SEARCH, catalogueReadModels } from './queries/product-search.js';
+// The names of vocabulary values the stage 2 reports show, through the read-model gateway (goods-in 9.5; S2-F11-T02).
+export { CATALOGUE_VALUE_NAMES, catalogueNameReadModels } from './queries/value-names.js';
 export type { ProductFacts } from './queries/product-search.js';

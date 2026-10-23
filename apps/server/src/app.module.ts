@@ -24,6 +24,7 @@ import {
   BOOKING,
   BookingModule,
   bookingApprovals,
+  bookingReadModels,
   overdueExceptionType,
   type BookingInterface,
 } from './modules/booking/index.js';
@@ -31,6 +32,7 @@ import {
   ReceivingModule,
   receivingApprovals,
   receivingExceptionTypes,
+  receivingReadModels,
   receivingStockCaller,
 } from './modules/receiving/index.js';
 import { AUDIT, AuditModule, type AuditInterface } from './modules/audit/index.js';
@@ -69,6 +71,7 @@ import { EboImportsModule } from './modules/ebo-imports/index.js';
 import {
   CatalogueModule,
   catalogueApprovals,
+  catalogueNameReadModels,
   catalogueReadModels,
   catalogueScopeMembers,
   STOCK_PRESENCE,
@@ -76,7 +79,12 @@ import {
   type StockPresence,
   type SupplierRoles,
 } from './modules/merchandise/catalogue/index.js';
-import { PartiesModule, partiesApprovals, partiesSupplierRoles } from './modules/merchandise/parties/index.js';
+import {
+  PartiesModule,
+  partiesApprovals,
+  partiesReadModels,
+  partiesSupplierRoles,
+} from './modules/merchandise/parties/index.js';
 import {
   PT,
   PT_POSTED_WITH_DECISION_ROWS,
@@ -84,6 +92,7 @@ import {
   PtModule,
   ptApprovals,
   ptExceptionTypes,
+  ptReadModels,
   ptStockCaller,
   type PtInterface,
   type PtPostingQueue,
@@ -108,14 +117,18 @@ import {
   STOCK_POSTING_EVENT_KINDS,
   StockLedgerModule,
   stockLedgerReadModels,
+  stockReportReadModels,
   type CallerRegistration,
   type StockLedgerInterface,
 } from './modules/stock/ledger/index.js';
 import {
   damageExceptionType,
+  STOCK_DOCUMENTS,
   StockDocumentsModule,
   stockDocumentsApprovals,
+  stockDocumentsReadModels,
   stockDocumentsStockCaller,
+  type StockDocumentsInterface,
 } from './modules/stock/documents/index.js';
 import {
   BOOK_HELD_STOCK,
@@ -311,10 +324,30 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
     // The read-model gateway, with the read models each module serves (module-map 4.1, section 3 rule 5; goods-in 9.4;
     // S2-F11-T01): the stock of products at places from `stock` · ledger, the products and brands from `merchandise` ·
     // catalogue, the places from `organisation`; fixed once the application has started.
+    // And those of the stage 2 reports (goods-in 9.5; S2-F11-T02): the booking status from `booking`; the receipt
+    // problems, a supplier's GRN lines and the GRNs' numbers from `receiving`, which reads through `access` and `stock`
+    // · documents when a read runs, never at start; the damage reports' states from `stock` · documents; stock by
+    // condition and owner from `stock` · ledger; the MRP of a PT's goods from `merchandise` · PT; the names of values
+    // and parties from `merchandise`.
     {
       provide: READ_MODEL_GATEWAY,
-      useFactory: () =>
-        new ReadModelGateway([...stockLedgerReadModels, ...catalogueReadModels, ...organisationReadModels]),
+      useFactory: (modules: ModuleRef) =>
+        new ReadModelGateway([
+          ...stockLedgerReadModels,
+          ...catalogueReadModels,
+          ...organisationReadModels,
+          ...bookingReadModels,
+          ...receivingReadModels(() => ({
+            access: modules.get<AccessInterface>(ACCESS, { strict: false }),
+            documents: modules.get<StockDocumentsInterface>(STOCK_DOCUMENTS, { strict: false }),
+          })),
+          ...stockDocumentsReadModels,
+          ...stockReportReadModels,
+          ...ptReadModels,
+          ...catalogueNameReadModels,
+          ...partiesReadModels,
+        ]),
+      inject: [ModuleRef],
     },
     // The decision-evidence contract of `access`, which files-imports' Attach implements (9.5; S1-F08-T03).
     { provide: DECISION_EVIDENCE, useFactory: (audit: AuditInterface) => decisionEvidence(audit), inject: [AUDIT] },

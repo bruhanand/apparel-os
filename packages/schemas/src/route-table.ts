@@ -97,6 +97,20 @@ import {
   stockSearchSchema,
 } from './stock-search.js';
 import {
+  bookingStatusFiltersSchema,
+  bookingStatusQuerySchema,
+  bookingStatusReportSchema,
+  receiptProblemsFiltersSchema,
+  receiptProblemsQuerySchema,
+  receiptProblemsReportSchema,
+  reportExportSchema,
+  stockReportFiltersSchema,
+  stockReportQuerySchema,
+  stockReportSchema,
+  supplierPerformanceFiltersSchema,
+  supplierPerformanceReportSchema,
+} from './reports.js';
+import {
   demoSignInListSchema,
   demoSignInRequestSchema,
   enrolmentConfirmRequestSchema,
@@ -5753,6 +5767,94 @@ export const routes = {
       ...HISTORY_CODES,
       'kernel.cross-site-request',
       // More results than one export holds (STOCK_SEARCH_EXPORT_CAP): narrow the search (goods-in 9.4).
+      'reports.export-too-large',
+    ],
+  }),
+  // The stage 2 reports (goods-in 9.1, 9.3, 9.5, section 11; PRD-BKG-005, PRD-BKG-011, PRD-PRO-001, PRD-EXC-009 to
+  // PRD-EXC-011; S2-F11-T02): each read through the read-model gateway, each row shown to a reader whose grants of view
+  // cover its place and brand. The exports of the booking status, the receipt problems and the supplier report carry
+  // no restricted field, so each is a read (code-house-rules 12.1 "Reads"); the stock report's carries cost, so its
+  // export is a command that writes the access record (numbering-and-audit 5.1), as stock search's.
+  readBookingStatusReport: defineRoute({
+    method: 'GET',
+    path: '/api/reports/booking-status',
+    query: bookingStatusQuerySchema,
+    access: { kind: 'action', action: 'view', recordType: BOOKING_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: bookingStatusReportSchema,
+    codes: [...HISTORY_CODES],
+  }),
+  exportBookingStatusReport: defineRoute({
+    method: 'GET',
+    path: '/api/reports/booking-status/export',
+    query: bookingStatusFiltersSchema,
+    access: { kind: 'action', action: 'view', recordType: BOOKING_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: reportExportSchema,
+    // More bookings than one export holds (BOOKING_STATUS_EXPORT_CAP): narrow the report (goods-in 9.5).
+    codes: [...HISTORY_CODES, 'reports.export-too-large'],
+  }),
+  readReceiptProblemsReport: defineRoute({
+    method: 'GET',
+    path: '/api/reports/receipt-problems',
+    query: receiptProblemsQuerySchema,
+    access: { kind: 'action', action: 'view', recordType: ARRIVAL_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: receiptProblemsReportSchema,
+    codes: [...HISTORY_CODES],
+  }),
+  exportReceiptProblemsReport: defineRoute({
+    method: 'GET',
+    path: '/api/reports/receipt-problems/export',
+    query: receiptProblemsFiltersSchema,
+    access: { kind: 'action', action: 'view', recordType: ARRIVAL_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: reportExportSchema,
+    codes: [...HISTORY_CODES, 'reports.export-too-large'],
+  }),
+  // The supplier report reads bookings and GRNs: view on both (goods-in 9.5).
+  readSupplierPerformanceReport: defineRoute({
+    method: 'GET',
+    path: '/api/reports/supplier-performance',
+    query: supplierPerformanceFiltersSchema,
+    access: { kind: 'action', action: 'view', recordType: BOOKING_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: supplierPerformanceReportSchema,
+    // More bookings or GRN lines than the report reads (SUPPLIER_REPORT_BOOKING_CAP, SUPPLIER_REPORT_LINE_CAP).
+    codes: [...HISTORY_CODES, 'reports.report-too-large'],
+  }),
+  exportSupplierPerformanceReport: defineRoute({
+    method: 'GET',
+    path: '/api/reports/supplier-performance/export',
+    query: supplierPerformanceFiltersSchema,
+    access: { kind: 'action', action: 'view', recordType: BOOKING_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: reportExportSchema,
+    codes: [...HISTORY_CODES, 'reports.report-too-large'],
+  }),
+  readStockReport: defineRoute({
+    method: 'GET',
+    path: '/api/reports/stock',
+    query: stockReportQuerySchema,
+    access: { kind: 'action', action: 'view', recordType: STOCK_BALANCE_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: stockReportSchema,
+    codes: [...HISTORY_CODES],
+  }),
+  exportStockReport: defineRoute({
+    method: 'POST',
+    path: '/api/reports/stock/export',
+    access: { kind: 'action', action: 'view', recordType: STOCK_BALANCE_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: stockReportFiltersSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'restricted-value',
+    response: reportExportSchema,
+    codes: [
+      ...HISTORY_CODES,
+      'kernel.cross-site-request',
+      // More rows than one export holds (STOCK_REPORT_EXPORT_CAP): narrow the report (goods-in 9.5).
       'reports.export-too-large',
     ],
   }),

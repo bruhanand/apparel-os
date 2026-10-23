@@ -12,3 +12,11 @@ export type { GoodPiecesPart, PtBasis, ReceiptProblem, ReceiptProblemsQuery } fr
 export type { GrnForPt, PtMark, PtMarkChangeView } from './queries/pt-mark.js';
 export { grnIssued, heldLineDecided } from './events.js';
 export { receivingRestoreParticipant } from './restore-participant.js';
+// The read models of the stage 2 reports, served through the read-model gateway (goods-in 9.5; S2-F11-T02).
+export {
+  RECEIVING_GRN_NAMES,
+  RECEIVING_RECEIPT_PROBLEMS,
+  RECEIVING_REPORT_LINES,
+  receivingReadModels,
+} from './queries/report-reads.js';
+export type { GrnNamesAnswer, ReportGrnLine, SourceRecord } from './queries/report-reads.js';

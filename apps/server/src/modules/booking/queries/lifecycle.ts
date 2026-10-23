@@ -71,20 +71,54 @@ export async function lineKeysOf(context: TransactionContext, bookingId: string)
   return new Set(rows.map(lineKeyOf));
 }
 
-/** The pieces delivered to each line of the booking by key, from its receipt links only (PRD-BKG-006). */
-export async function deliveredOf(context: TransactionContext, bookingId: string): Promise<Map<string, number>> {
-  const rows = await context.tx
-    .select({ key: bookingReceiptLink.bookingLineId, pieces: sql<string>`sum(${bookingReceiptLink.quantity})::text` })
-    .from(bookingReceiptLink)
-    .where(eq(bookingReceiptLink.bookingId, bookingId))
-    .groupBy(bookingReceiptLink.bookingLineId);
-  return new Map(rows.map((row) => [row.key, Number(row.pieces)]));
+/** Sums of pieces by booking and line key, from rows that each name both. */
+function byBookingAndKey(
+  rows: readonly { readonly bookingId: string; readonly key: string; readonly pieces: string }[],
+): Map<string, Map<string, number>> {
+  const answer = new Map<string, Map<string, number>>();
+  for (const row of rows) {
+    const lines = answer.get(row.bookingId) ?? new Map<string, number>();
+    lines.set(row.key, Number(row.pieces));
+    answer.set(row.bookingId, lines);
+  }
+  return answer;
 }
 
-/** The pieces cancelled of each line of the booking by key, by its approved cancellations (PRD-BKG-005). */
-export async function cancelledOf(context: TransactionContext, bookingId: string): Promise<Map<string, number>> {
+/**
+ * The pieces delivered to each line of each booking given, by key, from its receipt links only (PRD-BKG-006): one read
+ * for every booking, as the stage 2 reports read a page of them (S2-F11-T02).
+ */
+export async function deliveredOfBookings(
+  context: TransactionContext,
+  bookingIds: readonly string[],
+): Promise<Map<string, Map<string, number>>> {
+  if (bookingIds.length === 0) return new Map();
   const rows = await context.tx
     .select({
+      bookingId: bookingReceiptLink.bookingId,
+      key: bookingReceiptLink.bookingLineId,
+      pieces: sql<string>`sum(${bookingReceiptLink.quantity})::text`,
+    })
+    .from(bookingReceiptLink)
+    .where(inArray(bookingReceiptLink.bookingId, [...new Set(bookingIds)]))
+    .groupBy(bookingReceiptLink.bookingId, bookingReceiptLink.bookingLineId);
+  return byBookingAndKey(rows);
+}
+
+/** The pieces delivered to each line of the booking by key, from its receipt links only (PRD-BKG-006). */
+export async function deliveredOf(context: TransactionContext, bookingId: string): Promise<Map<string, number>> {
+  return (await deliveredOfBookings(context, [bookingId])).get(bookingId) ?? new Map();
+}
+
+/** The pieces cancelled of each line of each booking given, by key, by its approved cancellations (PRD-BKG-005). */
+export async function cancelledOfBookings(
+  context: TransactionContext,
+  bookingIds: readonly string[],
+): Promise<Map<string, Map<string, number>>> {
+  if (bookingIds.length === 0) return new Map();
+  const rows = await context.tx
+    .select({
+      bookingId: bookingAmendment.bookingId,
       key: bookingAmendmentLine.bookingLineId,
       pieces: sql<string>`sum(${bookingAmendmentLine.quantity})::text`,
     })
@@ -93,30 +127,39 @@ export async function cancelledOf(context: TransactionContext, bookingId: string
     .innerJoin(bookingAmendmentDecision, eq(bookingAmendmentDecision.bookingAmendmentId, bookingAmendment.id))
     .where(
       and(
-        eq(bookingAmendment.bookingId, bookingId),
+        inArray(bookingAmendment.bookingId, [...new Set(bookingIds)]),
         eq(bookingAmendment.kind, 'cancellation'),
         eq(bookingAmendmentDecision.decision, 'Approved'),
       ),
     )
-    .groupBy(bookingAmendmentLine.bookingLineId);
-  return new Map(rows.map((row) => [row.key, Number(row.pieces)]));
+    .groupBy(bookingAmendment.bookingId, bookingAmendmentLine.bookingLineId);
+  return byBookingAndKey(rows);
 }
 
-/** The approved extensions of a version, in the order decided (goods-in 3.5). */
-export async function extensionsOf(context: TransactionContext, versionId: string): Promise<ApprovedExtension[]> {
+/** The pieces cancelled of each line of the booking by key, by its approved cancellations (PRD-BKG-005). */
+export async function cancelledOf(context: TransactionContext, bookingId: string): Promise<Map<string, number>> {
+  return (await cancelledOfBookings(context, [bookingId])).get(bookingId) ?? new Map();
+}
+
+/** The approved extensions of each version given, in the order decided (goods-in 3.5). */
+export async function extensionsOfVersions(
+  context: TransactionContext,
+  versionIds: readonly string[],
+): Promise<Map<string, ApprovedExtension[]>> {
+  if (versionIds.length === 0) return new Map();
   const rows = await context.tx
     .select({ amendment: bookingAmendment })
     .from(bookingAmendment)
     .innerJoin(bookingAmendmentDecision, eq(bookingAmendmentDecision.bookingAmendmentId, bookingAmendment.id))
     .where(
       and(
-        eq(bookingAmendment.bookingVersionId, versionId),
+        inArray(bookingAmendment.bookingVersionId, [...new Set(versionIds)]),
         eq(bookingAmendment.kind, 'extension'),
         eq(bookingAmendmentDecision.decision, 'Approved'),
       ),
     )
     .orderBy(asc(bookingAmendmentDecision.decidedAt), asc(bookingAmendmentDecision.id));
-  if (rows.length === 0) return [];
+  if (rows.length === 0) return new Map();
   const lines = await context.tx
     .select()
     .from(bookingAmendmentLine)
@@ -126,7 +169,8 @@ export async function extensionsOf(context: TransactionContext, versionId: strin
         rows.map((row) => row.amendment.id),
       ),
     );
-  return rows.map(({ amendment }) => {
+  const answer = new Map<string, ApprovedExtension[]>();
+  for (const { amendment } of rows) {
     // An extension always names the window's end, by its table's constraint (migration 0098): none is a defect.
     if (amendment.windowTo === null) throw new CommandDefect(`An extension names no window end: ${amendment.id}`);
     const dated = new Map<string, string>();
@@ -135,8 +179,16 @@ export async function extensionsOf(context: TransactionContext, versionId: strin
         dated.set(line.bookingLineId, line.deliveryDate);
       }
     }
-    return { windowTo: amendment.windowTo, lines: dated };
-  });
+    const extensions = answer.get(amendment.bookingVersionId) ?? [];
+    extensions.push({ windowTo: amendment.windowTo, lines: dated });
+    answer.set(amendment.bookingVersionId, extensions);
+  }
+  return answer;
+}
+
+/** The approved extensions of a version, in the order decided (goods-in 3.5). */
+export async function extensionsOf(context: TransactionContext, versionId: string): Promise<ApprovedExtension[]> {
+  return (await extensionsOfVersions(context, [versionId])).get(versionId) ?? [];
 }
 
 /** The lines of a version as the status reads them, by key (goods-in 3.10). */

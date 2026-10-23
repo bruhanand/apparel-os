@@ -52,7 +52,7 @@ function nameIn(list: readonly { readonly id: string; readonly code: string; rea
 }
 
 /** The goods of a result (goods-in 9.2): a product by its codes, goods as counted before their PT, or unidentified. */
-function productText(product: StockProduct | undefined): string {
+export function productText(product: StockProduct | undefined): string {
   if (product === undefined) return unknownText();
   if (product.kind === 'unidentified') return t('stock-search.goods.unidentified');
   if (product.kind === 'counted') {
@@ -70,7 +70,7 @@ function productText(product: StockProduct | undefined): string {
 }
 
 /** A product's identity, such as its colour, and its brand's article number, as one line, or nothing. */
-function productDetail(product: StockProduct): string | null {
+export function productDetail(product: StockProduct): string | null {
   if (product.kind !== 'product') return null;
   const identity = product.identity.map((value) => {
     if (value.kind === 'value') return value.name ?? value.code;
@@ -256,7 +256,7 @@ function Elsewhere({ pages }: { pages: readonly StockSearch[] }) {
 }
 
 /** The lists the place and brand filters choose from, as far as the person may read them. */
-function useFilterLists() {
+export function useFilterLists() {
   const brands = useQuery({
     ...readQuery(api, 'listBrands', { query: {} }),
     enabled: useGranted('merchandise.brand', 'view'),

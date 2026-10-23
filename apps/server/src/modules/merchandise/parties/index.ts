@@ -14,3 +14,5 @@ export { termsInForce } from './queries/records.js';
 export { termsOfVersion } from './queries/records.js';
 export type { Page, PageRequest } from './queries/records.js';
 export { partiesRestoreParticipant } from './restore-participant.js';
+// The names of parties the stage 2 reports show, through the read-model gateway (goods-in 9.5; S2-F11-T02).
+export { PARTY_NAMES, partiesReadModels } from './queries/party-names.js';

@@ -19,7 +19,7 @@ import { AUDIT, type AuditInterface } from '../../audit/index.js';
 import { exportStockSearch } from '../commands/export-stock-search.js';
 import { BUSINESS_DATE_NOT_SET, invalidCursor } from '../domain/refusals.js';
 import { keyOfCursor } from '../domain/search.js';
-import { readerAuthority, SearchRefused } from '../queries/authority.js';
+import { readerAuthority, ReadRefused } from '../queries/authority.js';
 import { searchStock } from '../queries/stock-search.js';
 
 /**
@@ -68,7 +68,7 @@ export class StockSearchController {
           );
           return read.search;
         } catch (error) {
-          if (error instanceof SearchRefused) {
+          if (error instanceof ReadRefused) {
             throw new ApiRefusal({ ...error.refusal, missing: [...error.refusal.missing] });
           }
           throw error;
