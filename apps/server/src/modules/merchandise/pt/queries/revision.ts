@@ -12,7 +12,8 @@ import { shownPaise } from './grn-pt.js';
 
 // A PT revision as its approver reviews it in My work and its GRN's screen shows it (goods-in 6.2, 6.6, section 11;
 // S2-F06-T01): read under the reader's actor, so row-level security keeps out a revision the reader may not see
-// (code-house-rules 6.2). The GRN with its Arrival, whose invoices and photos the Arrival's own read shows; its state and
+// (code-house-rules 6.2). The GRN with its Arrival, whose invoices and photos the Arrival's own read shows, and the
+// bookings its lines are linked to, from `receiving` (code review 7); its state and
 // number; the totals, BASIC and P RATE side by side (DEC-140); the new products, each with the SKU code its approval
 // generated; the repeated barcodes and the differences; and the rows a page at a time by a cursor, at most
 // PT_REVISION_ROWS_PAGE_CAP (code-house-rules 12.1). BASIC, P RATE and their totals are masked for a reader not granted
@@ -26,7 +27,7 @@ export interface RevisionPage {
 
 export async function revisionReview(
   context: TransactionContext,
-  receiving: Pick<ReceivingInterface, 'grnForPt'>,
+  receiving: Pick<ReceivingInterface, 'grnForPt' | 'grnBookingLinks'>,
   revisionId: string,
   request: LatestRequest | undefined,
   page: RevisionPage,
@@ -130,6 +131,10 @@ export async function revisionReview(
               at: standing.failure.failedAt.toISOString(),
             },
           }),
+      bookings: (await receiving.grnBookingLinks(context, standing.grnId)).map((booking) => ({
+        bookingId: booking.bookingId,
+        lines: booking.lines.map((line) => ({ ...line })),
+      })),
       totals: {
         rows: counted?.count ?? 0,
         pieces: revision.pieces,

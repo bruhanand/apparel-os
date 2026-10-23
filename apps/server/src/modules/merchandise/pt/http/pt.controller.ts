@@ -24,7 +24,15 @@ import {
   type RouteInputOf,
   type TransactionContext,
 } from '../../../../kernel/index.js';
-import { ACCESS, replayRefusal, SignedIn, type AccessInterface, type SignedInUser } from '../../../access/index.js';
+import {
+  ACCESS,
+  replayRefusal,
+  SignedIn,
+  type AccessInterface,
+  type RecordFacts,
+  type SignedInUser,
+} from '../../../access/index.js';
+import { PT_FIELD_CLASSES } from '../domain/kinds.js';
 import { BUSINESS_DATE_NOT_SET, grnNotFound, recordItem, revisionNotFound } from '../domain/refusals.js';
 import type { PtInterface } from '../pt.js';
 import { PT } from '../tokens.js';
@@ -36,12 +44,16 @@ const batchNotFound = (batchId: string): CommandRefusal => ({
   missing: [recordItem(IMPORT_BATCH_TYPE, batchId)],
 });
 
-/** The classes of a PT's cost and margin, masked for a reader not granted them (access-and-approvals 6). */
-const PT_CLASSES: readonly FieldClass[] = ['cost', 'margin'];
-
 function refuse(refusal: CommandRefusal): never {
   throw new ApiRefusal({ ...refusal, missing: [...refusal.missing] });
 }
+
+/** A command's refusal, which no secret caused, so it is kept under the key (code-house-rules 12.4, 12.5). */
+const refusalOutcome = (refusal: CommandRefusal): CommandOutcome<never> => ({
+  kind: 'refusal',
+  refusal,
+  causedBySecret: false,
+});
 
 /**
  * `merchandise` · PT's routes (goods-in 5, section 11; module-map section 5; code-house-rules 12.1; S2-F04-T02). A PT
@@ -177,28 +189,82 @@ export class PtController {
   }
 
   /**
-   * An Official PT as an XLSX file in its template's columns (goods-in 6.5; PRD-PTW-008, PRD-PTW-009; S2-F06-T01). The
-   * file carries BASIC, P RATE and MARGIN, so its reader is authorised with the cost and margin classes besides view
-   * on the PT (access-and-approvals 6; PRD-ACS-008). Downloading changes nothing.
+   * An Official PT as an XLSX file in its template's columns (goods-in 6.5, 6.6; PRD-PTW-008, PRD-PTW-009; S2-F06-T01,
+   * code review 7): a command, since an export that includes a restricted field writes its access record
+   * (numbering-and-audit 5.1; PRD-SEC-007). Authorised for view on the PT with the revision's facts and held at step 0;
+   * BASIC and P RATE only for a reader granted cost, MARGIN only for one granted margin, each left out otherwise
+   * (access-and-approvals 6; PRD-ACS-008). The answer is never kept under the key: an identical replay is refused as
+   * not repeatable (code-house-rules 12.4, 12.6).
    */
   @ApiRoute(routes.downloadPt)
   async downloadPt(@RouteInput() input: RouteInputOf<typeof routes.downloadPt>, @SignedIn() user: SignedInUser) {
     const { revisionId } = input.params;
-    return this.read(user, 'merchandise.download-pt', async (context) => {
-      const found = await this.pt.revisionFacts(context, revisionId);
-      if (found === undefined) refuse(revisionNotFound(revisionId));
-      const authorised = await this.access.authorise(context, {
-        actorId: user.userId,
-        action: 'view',
-        recordType: PT_TYPE,
-        facts: found.facts,
-        fieldClasses: PT_CLASSES.map((fieldClass) => ({ fieldClass, use: 'view' as const })),
-      });
-      if (authorised.kind === 'refused') refuse(authorised.refusal);
-      const file = await this.pt.download(context, revisionId);
-      if ('code' in file) refuse(file);
-      return { fileName: file.fileName, contentBase64: file.bytes.toString('base64') };
+    const authoriseIn = (context: TransactionContext) => this.authorisedOn(context, user, revisionId, 'view');
+    const answer = await this.helper.run(this.request(user, 'merchandise.download-pt'), {
+      key: input.idempotencyKey,
+      content: requestContentOf(routes.downloadPt, input),
+      authoriseReplay: this.replayOf(authoriseIn),
+      work: async (context): Promise<CommandOutcome<JsonValue>> => {
+        const authorised = await authoriseIn(context);
+        if (authorised.kind === 'refused') return refusalOutcome(authorised.refusal);
+        const held = await this.access.holdAuthority(
+          context,
+          { kind: 'user', id: user.userId },
+          authorised.roleAssignmentId,
+          { action: 'view', recordType: PT_TYPE, facts: authorised.facts },
+        );
+        if (held !== undefined) return refusalOutcome(held);
+        const masked = await this.maskedFor(context, user, authorised.roleAssignmentId);
+        const file = await this.pt.download(
+          context,
+          { userId: user.userId, networkAddress: user.networkAddress },
+          revisionId,
+          masked,
+        );
+        if ('code' in file) return refusalOutcome(file);
+        return {
+          kind: 'success',
+          answer: { fileName: file.fileName, contentBase64: file.bytes.toString('base64') },
+          shows: 'restricted-value',
+        };
+      },
     });
+    return commandAnswer(answer);
+  }
+
+  /**
+   * Post a failed PT again once its cause is fixed (goods-in 6.6; access-and-approvals 9.8 step 5; books-and-posting 10
+   * step 5; code review 7): approve on the PT with the revision's facts, held at step 0; the command posts nothing
+   * itself, it records a further request to post naming the same decision, which the posting job posts.
+   */
+  @ApiRoute(routes.postPtAgain)
+  async postPtAgain(@RouteInput() input: RouteInputOf<typeof routes.postPtAgain>, @SignedIn() user: SignedInUser) {
+    const { revisionId } = input.params;
+    const authoriseIn = (context: TransactionContext) => this.authorisedOn(context, user, revisionId, 'approve');
+    const answer = await this.helper.run(this.request(user, 'merchandise.post-pt-again'), {
+      key: input.idempotencyKey,
+      content: requestContentOf(routes.postPtAgain, input),
+      authoriseReplay: this.replayOf(authoriseIn),
+      work: async (context): Promise<CommandOutcome<JsonValue>> => {
+        const authorised = await authoriseIn(context);
+        if (authorised.kind === 'refused') return refusalOutcome(authorised.refusal);
+        const held = await this.access.holdAuthority(
+          context,
+          { kind: 'user', id: user.userId },
+          authorised.roleAssignmentId,
+          { action: 'approve', recordType: PT_TYPE, facts: authorised.facts },
+        );
+        if (held !== undefined) return refusalOutcome(held);
+        const outcome = await this.pt.postAgain(
+          context,
+          { userId: user.userId, roleAssignmentId: authorised.roleAssignmentId },
+          revisionId,
+        );
+        if (outcome.kind === 'success') return { kind: 'success', answer: { ...outcome.answer }, shows: 'nothing' };
+        return refusalOutcome(outcome.refusal);
+      },
+    });
+    return commandAnswer(answer);
   }
 
   @ApiRoute(routes.downloadPtTemplate)
@@ -231,62 +297,82 @@ export class PtController {
     @RouteInput() input: RouteInputOf<typeof routes.withdrawPtRevision>,
     @SignedIn() user: SignedInUser,
   ) {
-    const route = routes.withdrawPtRevision;
     const { revisionId } = input.params;
-    const authoriseIn = async (context: TransactionContext) => {
-      const found = await this.pt.revisionFacts(context, revisionId);
-      if (found === undefined) return { kind: 'refused' as const, refusal: revisionNotFound(revisionId) };
-      const authorised = await this.access.authorise(context, {
-        actorId: user.userId,
-        action: 'edit',
-        recordType: PT_TYPE,
-        facts: found.facts,
-      });
-      if (authorised.kind === 'refused') return authorised;
-      return { kind: 'allowed' as const, roleAssignmentId: authorised.roleAssignmentId, facts: found.facts };
-    };
-    // A replay answers as any request failing the same checks would: a record not found stays not found (12.3, 12.4).
-    const authoriseReplay: ReplayAuthorisation = async (context) => {
+    const authoriseIn = (context: TransactionContext) => this.authorisedOn(context, user, revisionId, 'edit');
+    const answer = await this.helper.run(this.request(user, 'merchandise.withdraw-pt-revision'), {
+      key: input.idempotencyKey,
+      content: requestContentOf(routes.withdrawPtRevision, input),
+      authoriseReplay: this.replayOf(authoriseIn),
+      work: async (context): Promise<CommandOutcome<JsonValue>> => {
+        const authorised = await authoriseIn(context);
+        if (authorised.kind === 'refused') return refusalOutcome(authorised.refusal);
+        // Step 0: the actor and the assignment relied on, rechecked under the locks with the same facts (8.2).
+        const held = await this.access.holdAuthority(
+          context,
+          { kind: 'user', id: user.userId },
+          authorised.roleAssignmentId,
+          { action: 'edit', recordType: PT_TYPE, facts: authorised.facts },
+        );
+        if (held !== undefined) return refusalOutcome(held);
+        const outcome = await this.pt.withdraw(
+          context,
+          { userId: user.userId, roleAssignmentId: authorised.roleAssignmentId },
+          revisionId,
+          input.body.versionToken,
+        );
+        if (outcome.kind === 'success') return { kind: 'success', answer: { ...outcome.answer }, shows: 'nothing' };
+        return refusalOutcome(outcome.refusal);
+      },
+    });
+    return commandAnswer(answer);
+  }
+
+  /**
+   * The revision's facts, as the reader may see it, and the action authorised with them; a revision the reader may not
+   * see is not found, never refused as not authorised (code-house-rules 12.3).
+   */
+  private async authorisedOn(
+    context: TransactionContext,
+    user: SignedInUser,
+    revisionId: string,
+    action: 'view' | 'edit' | 'approve',
+  ): Promise<
+    | { readonly kind: 'allowed'; readonly roleAssignmentId: string; readonly facts: RecordFacts }
+    | { readonly kind: 'refused'; readonly refusal: CommandRefusal }
+  > {
+    const found = await this.pt.revisionFacts(context, revisionId);
+    if (found === undefined) return { kind: 'refused', refusal: revisionNotFound(revisionId) };
+    const authorised = await this.access.authorise(context, {
+      actorId: user.userId,
+      action,
+      recordType: PT_TYPE,
+      facts: found.facts,
+    });
+    if (authorised.kind === 'refused') return authorised;
+    return { kind: 'allowed', roleAssignmentId: authorised.roleAssignmentId, facts: found.facts };
+  }
+
+  /** A replay answered as any request failing the same checks would: a record not found stays not found (12.3, 12.4). */
+  private replayOf(
+    authoriseIn: (
+      context: TransactionContext,
+    ) => Promise<{ readonly kind: 'allowed' } | { readonly kind: 'refused'; readonly refusal: CommandRefusal }>,
+  ): ReplayAuthorisation {
+    return async (context) => {
       const authorised = await authoriseIn(context);
       if (authorised.kind === 'allowed') return { kind: 'allowed' };
       return { kind: 'refused', refusal: replayRefusal(authorised.refusal) };
     };
-    const answer = await this.helper.run(
-      {
-        commandName: 'merchandise.withdraw-pt-revision',
-        organisation: user.organisation,
-        correlationId: user.correlationId,
-        actor: { kind: 'actor', actorId: user.userId },
-      },
-      {
-        key: input.idempotencyKey,
-        content: requestContentOf(route, input),
-        authoriseReplay,
-        work: async (context): Promise<CommandOutcome<JsonValue>> => {
-          const authorised = await authoriseIn(context);
-          if (authorised.kind === 'refused') {
-            return { kind: 'refusal', refusal: authorised.refusal, causedBySecret: false };
-          }
-          // Step 0: the actor and the assignment relied on, rechecked under the locks with the same facts (8.2).
-          const held = await this.access.holdAuthority(
-            context,
-            { kind: 'user', id: user.userId },
-            authorised.roleAssignmentId,
-            { action: 'edit', recordType: PT_TYPE, facts: authorised.facts },
-          );
-          if (held !== undefined) return { kind: 'refusal', refusal: held, causedBySecret: false };
-          const outcome = await this.pt.withdraw(
-            context,
-            { userId: user.userId, roleAssignmentId: authorised.roleAssignmentId },
-            revisionId,
-            input.body.versionToken,
-          );
-          if (outcome.kind === 'success') return { kind: 'success', answer: { ...outcome.answer }, shows: 'nothing' };
-          return { kind: 'refusal', refusal: outcome.refusal, causedBySecret: false };
-        },
-      },
-    );
-    return commandAnswer(answer);
+  }
+
+  /** A command as the signed-in user (code-house-rules 8.1, 12.4). */
+  private request(user: SignedInUser, commandName: string) {
+    return {
+      commandName,
+      organisation: user.organisation,
+      correlationId: user.correlationId,
+      actor: { kind: 'actor' as const, actorId: user.userId },
+    };
   }
 
   /** The classes of a PT the reader's assignment does not grant, masked in what they read (access-and-approvals 6). */
@@ -297,7 +383,7 @@ export class PtController {
   ): Promise<ReadonlySet<FieldClass>> {
     const restricted = await this.access.restrictFields(
       context,
-      { roleAssignmentId, actorId: user.userId, fieldClasses: PT_CLASSES },
+      { roleAssignmentId, actorId: user.userId, fieldClasses: PT_FIELD_CLASSES },
       'view',
     );
     return new Set(restricted.masked);

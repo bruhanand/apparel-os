@@ -6,8 +6,10 @@
 -- A revision's decision is `access`'s; what it makes is kept here, each an append-only record written once:
 --   - its rejection, by whom and under which decision (the draft ends; goods-in 6.3);
 --   - a request to post an approved large revision, which a queued job posts, one at a time per book, naming the
---     decision and the accounting book (stock-ledger 10.6; access-and-approvals 9.8 step 1), and the failure of a job
---     that was refused under its locks, its decision left unused (9.8 step 4);
+--     decision, its approver and the accounting book (stock-ledger 10.6; access-and-approvals 9.8 step 1), and the
+--     failure of a job that was refused under its locks, its decision left unused (9.8 step 4); a failed revision is
+--     posted again by a further request naming the same decision, by whoever asks it (9.8 step 5; books-and-posting 10
+--     step 5);
 --   - the approval once posted, the PT's number from its series, the decision and its use (PRD-REC-018; DEC-097);
 --   - each new product the approval confirmed, by the proposal of the revision it confirms (PRD-MER-013);
 --   - each new receipt origin the identity step made for the pieces the PT covers, of one SKU at one P RATE, with the
@@ -61,6 +63,7 @@ create table merchandise.pt_post_request (
   legal_entity_id uuid not null,
   brand_id uuid not null references merchandise.brand (id),
   approval_decision_id uuid not null,
+  approved_by_user_id uuid not null,
   accounting_book_id uuid not null,
   requested_by_user_id uuid not null,
   role_assignment_id uuid not null,

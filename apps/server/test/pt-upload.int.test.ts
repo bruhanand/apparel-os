@@ -1144,19 +1144,47 @@ describe('products and barcodes (goods-in 12 test 10, the proposal part; 5.5; PR
 });
 
 describe('a row’s product found by its barcode first (goods-in 5.5; code review 6 of stage 2)', () => {
-  it('PRD-MER-007 takes the product the barcode maps to before the row identity, even of another style, showing the difference', async () => {
-    // Goods-in 5.5: "found by its barcode's external code mapping, or by brand, style, colour and size".
+  it('PRD-MER-007 refuses the whole file for a row whose barcode names a product of another style, naming the row (RR-608)', async () => {
+    // Goods-in 5.5: "found by its barcode's external code mapping, or by brand, style, colour and size"; style and size
+    // are the product's identity, so a barcode of another style is a problem of the row (code review 7).
     const fresh = syntheticCode('PTU-BARCODE-FIRST');
     const { grnId } = await issuedGrn([{ style: fresh, sizeAt: 0, counted: 1 }]);
     const { batchId, validated } = await uploaded(grnId, [ptRow(fresh, 0, { BARCODE: existing.barcode })]);
-    expect(validated).toBe('Validated');
+    expect(validated).toBe('Staged');
     const shown = await preview(batchId);
-    expect(shown.draft?.rows.map((row) => [row.rowNumber, row.product, row.repeated])).toEqual([
-      [2, 'existing', false],
+    expect(shown.draft).toBeNull();
+    expect(
+      shown.issues
+        .filter((issue) => issue.severity === 'Blocking')
+        .map((issue) => [issue.rowNumber ?? 0, issue.column ?? '', issue.code]),
+    ).toEqual([[2, 'J', 'merchandise.pt-barcode-of-other-product']]);
+  });
+});
+
+describe('a new style’s rows (goods-in 5.3, 5.6; code review 7)', () => {
+  it('PRD-MER-013 DEC-134 refuses the whole file whose rows of one new style disagree on a value the style holds, naming each row', async () => {
+    // A new style takes one season, gender, type, item, fit, Sub category and HSN: rows that disagree would make it
+    // take a value no one chose, so each is named on the column (RR-603).
+    const fresh = syntheticCode('PTU-NEW-STYLE');
+    const { grnId } = await issuedGrn([
+      { style: fresh, sizeAt: 0, counted: 1 },
+      { style: fresh, sizeAt: 1, counted: 1 },
     ]);
-    expect(shown.draft?.newProducts).toEqual([]);
-    expect(shown.draft?.differences).toEqual([
-      { rowNumber: 2, field: 'design', file: fresh, product: existing.styleCode },
+    const { batchId, validated } = await uploaded(grnId, [
+      ptRow(fresh, 0),
+      ptRow(fresh, 1, { GENDER: code.gender('KIDS') }),
+    ]);
+    expect(validated).toBe('Staged');
+    const shown = await preview(batchId);
+    expect(shown.draft).toBeNull();
+    expect(
+      shown.issues
+        .filter((issue) => issue.severity === 'Blocking')
+        .map((issue) => [issue.rowNumber ?? 0, issue.column ?? '', issue.code])
+        .sort((a, b) => Number(a[0]) - Number(b[0])),
+    ).toEqual([
+      [2, 'D', 'merchandise.pt-new-style-disagrees'],
+      [3, 'D', 'merchandise.pt-new-style-disagrees'],
     ]);
   });
 });

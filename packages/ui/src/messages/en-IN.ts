@@ -351,6 +351,7 @@ export const englishIndia = {
   'state.awaiting-approval': 'Awaiting approval',
   'state.awaiting-outcome': 'Awaiting outcome',
   'state.queued': 'Queued',
+  'state.posting': 'Posting',
   'state.recorded-manually': 'Recorded manually',
   'state.partly-received': 'Partly received',
   'state.in-transit': 'In transit',
@@ -3848,6 +3849,10 @@ export const englishIndia = {
   'issue.merchandise.pt-file-refused': 'The file cannot make a PT.',
   'issue.merchandise.pt-item-not-mapped': 'The item map gives this ITEM no SUB CATEGORY and TYPE.',
   'issue.merchandise.pt-item-map-disagrees': 'The item map gives this ITEM another value here.',
+  'issue.merchandise.pt-barcode-of-other-product':
+    'The barcode is mapped to a product of another style or size than this row names.',
+  'issue.merchandise.pt-new-style-disagrees':
+    'The rows of this new style give it different values here. Give every row of the style the same value.',
   'issue.merchandise.attribute-not-marked': 'A list of the template is not marked yet.',
   'issue.merchandise.record-not-found': 'The GRN is not found.',
   'error.merchandise.pt-held-lines-open':
@@ -3892,15 +3897,25 @@ export const englishIndia = {
   'pt.revision.pt-number': 'PT number',
   'pt.posting.failed':
     'The approval could not be posted. Nothing of the PT is posted and it has no number: the decision stays unused.',
+  'pt.review.bookings': 'Bookings',
+  'pt.review.bookings.none': 'No line of the GRN is linked to a booking.',
+  'pt.review.booking': 'Booking {booking}',
+  'pt.review.booking.line': '{style}, size {size}: booking line {line}',
+  'pt.post-again': 'Post again',
+  'pt.post-again.pending': 'Wait while the PT is sent to post again.',
+  'pt.posted-again': 'The PT is posting again. It shows Official once its job posts it.',
   'pt.download': 'Download the PT',
   'pt.download.pending': 'Wait while the PT file is made.',
-  'pt.download.failed': 'The PT could not be downloaded.',
   'error.merchandise.pt-grn-changed':
     'The GRN changed after the PT file was uploaded. Nothing is approved: reject this revision and upload the file again.',
   'error.merchandise.no-pt-series': 'No open number series for PTs is set up yet.',
   'error.merchandise.pt-series-paused': 'The number series for PTs is paused.',
   'error.merchandise.no-sku-code-series': 'No open number series for SKU codes is set up yet.',
   'error.merchandise.sku-code-series-paused': 'The number series for SKU codes is paused.',
+  'error.merchandise.pt-series-exhausted': 'The number series for PTs has no number left. Define a new series.',
+  'error.merchandise.sku-code-series-exhausted':
+    'The number series for SKU codes has no number left. Define a new series.',
+  'error.merchandise.pt-not-failed': 'Only a PT whose posting failed can be posted again.',
   'error.merchandise.pt-size-not-in-size-set':
     'A new product’s size is not in its category’s size set. Nothing is approved: reject this revision and correct the file.',
   'error.merchandise.pt-colour-not-identity':

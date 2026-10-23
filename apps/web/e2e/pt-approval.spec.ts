@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { Authenticator } from './support/authenticator';
 import { organisationToday, signIn } from './support/journey';
 import { readWorld, type EnrolledUser, type ReceivingOptions } from './support/world';
+import { anHourAgo } from './support/clock';
 
 // S2-F06-T01: the PT approval journey (goods-in 6.1 to 6.5, section 11; PRD-REC-017, PRD-REC-018, PRD-ACS-006,
 // POL-02.07; DEC-135, DEC-140; code-house-rules 10.1). Warehouse (P-WHS), also assigned to make PTs, counts two pieces
@@ -17,14 +18,6 @@ const INVOICE_PDF = {
   mimeType: 'application/pdf',
   buffer: Buffer.from('%PDF-1.4\n% SYNTHETIC invoice\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n', 'latin1'),
 };
-
-/**
- * An hour ago, as a `datetime-local` field takes it: the Organisation's wall clock, Etc/UTC on the journeys' server
- * (apps/server/test/browser/serve.ts), whatever the browser's time zone (code-house-rules 9).
- */
-function anHourAgo(): string {
-  return new Date(Date.now() - 3_600_000).toISOString().slice(0, 16);
-}
 
 async function signedIn(page: Page, code: string, user: EnrolledUser): Promise<Authenticator> {
   const app = new Authenticator(Buffer.from(user.factorSecretHex, 'hex'));
@@ -49,7 +42,7 @@ async function arrivalWithInvoice(page: Page, options: ReceivingOptions): Promis
   await form.getByLabel(/^Lorry receipt number/).fill('SYN-LR-APR');
   await form.getByLabel(/^Lorry receipt date/).fill(organisationToday());
   await form.getByLabel(/^Cartons/).fill('1');
-  await form.getByLabel(/^Arrived/).fill(anHourAgo());
+  await form.getByLabel(/^Arrived/).fill(await anHourAgo());
   await page.getByRole('dialog').getByRole('button', { name: 'Record the Arrival' }).click();
   await expect(page.getByRole('heading', { level: 2, name: `Arrival from ${options.supplier}` })).toBeVisible();
   const invoice = page.getByRole('form', { name: 'Add the invoice' });
@@ -107,9 +100,8 @@ test('PRD-REC-017 PRD-REC-018 POL-02.07 PRD-REC-021 a PT submitted for approval 
         .getByRole('navigation', { name: 'Main menu' })
         .getByRole('link', { name: /^My work/ })
         .click();
-      // The approval's item comes through the worker, which hands this Organisation's earlier events, the fixtures'
-      // approvals of the receiving worlds, to My work first (apps/server/test/browser/serve.ts), so it may take a while:
-      // over three minutes when this journey runs first.
+      // The approval's item comes through the worker; the server delivers its fixtures' events before the journeys start
+      // (apps/server/test/browser/serve.ts), so only the events of journeys running beside this one come first.
       // This maker's: the PT file journey submits a PT in this Organisation too.
       const item = approver
         .getByRole('listitem')
@@ -118,7 +110,7 @@ test('PRD-REC-017 PRD-REC-018 POL-02.07 PRD-REC-021 a PT submitted for approval 
       await expect(async () => {
         await approver.getByRole('button', { name: 'Refresh' }).click();
         await expect(item).toHaveCount(1, { timeout: 1_000 });
-      }).toPass({ timeout: 360_000 });
+      }).toPass({ timeout: 180_000 });
       await item.getByRole('button', { name: 'Open and decide' }).click();
       const drawer = approver.getByRole('dialog');
       await expect(drawer.getByRole('heading', { level: 2, name: 'PT approval', exact: true })).toBeVisible();

@@ -1,16 +1,20 @@
 import { PT_IMPORT_TARGET, type FieldClass } from '@apparel-os/schemas';
 import type { CommandRefusal, TransactionContext } from '../../../kernel/index.js';
 import type { AccessInterface, LatestRequest, RecordFacts } from '../../access/index.js';
-import type { AuditInterface } from '../../audit/index.js';
+import type { AuditActor, AuditInterface } from '../../audit/index.js';
 import type { ConfigurationInterface } from '../../configuration/index.js';
+import type { ExceptionsInterface } from '../../exceptions/index.js';
 import type { NumberingInterface } from '../../numbering/index.js';
 import type { StockLedgerInterface } from '../../stock/ledger/index.js';
 import type { FilesImportsInterface, HandlerBatch, ImportHandler } from '../../files-imports/index.js';
 import type { ReceivingInterface } from '../../receiving/index.js';
+import { downloadPt, type DownloadReader } from './commands/download-pt.js';
 import { ptImportHandler } from './commands/import-pt.js';
 import { withdrawPt, type Actor } from './commands/withdraw-pt.js';
+import { postAgain } from './commands/post-again.js';
 import { postRequested, type PtPostingPublisher, type PtPostingServices } from './commands/post-requested.js';
-import { ptDownloadOf } from './queries/download.js';
+import { raiseForFailure } from './commands/raise-posting-refused.js';
+import type { PtPosting } from './jobs/posting.js';
 import { grnPtView } from './queries/grn-pt.js';
 import { revisionReview, type RevisionPage } from './queries/revision.js';
 import { ptPreviewOf, type PreviewPage } from './queries/preview.js';
@@ -31,13 +35,15 @@ export interface PtDependencies {
   >;
   readonly receiving: Pick<
     ReceivingInterface,
-    'ptBasis' | 'grnForPt' | 'ptMark' | 'ptMarkLock' | 'setPtMark' | 'clearPtMark'
+    'ptBasis' | 'grnForPt' | 'ptMark' | 'ptMarkLock' | 'setPtMark' | 'clearPtMark' | 'grnBookingLinks'
   >;
   readonly files: Pick<FilesImportsInterface, 'handlerBatch' | 'blankTemplate' | 'filledTemplate'>;
   /** What a PT's approval posts through (goods-in 6.3; S2-F06-T01): the gate, the ledger and the number series. */
   readonly configuration: Pick<ConfigurationInterface, 'checkAvailability'>;
   readonly ledger: StockLedgerInterface;
   readonly numbering: Pick<NumberingInterface, 'liveSeries' | 'seriesLockTarget' | 'allocate'>;
+  /** Where a refused posting's unfinished-operation exception is raised (books-and-posting 10 step 3; code review 7). */
+  readonly exceptions: Pick<ExceptionsInterface, 'raiseInOwnCommand'>;
 }
 
 /**
@@ -48,7 +54,7 @@ export interface PtDependencies {
  * `access` through the composition root (ptApprovals; access-and-approvals 9.8b). It reads `receiving` through its
  * interface (goods-in 10.2) and the catalogue through its read functions.
  */
-export class Pt {
+export class Pt implements PtPosting {
   constructor(private readonly dependencies: PtDependencies) {}
 
   /** The PT import handler (imports-and-opening-data 13.2; goods-in 5). */
@@ -91,8 +97,8 @@ export class Pt {
    * root hands the decision's effect when it runs (ptApprovals).
    */
   decisionServices(): PtPostingServices {
-    const { audit, access, receiving, configuration, ledger, numbering } = this.dependencies;
-    return { audit, access, receiving, configuration, ledger, numbering };
+    const { audit, access, receiving, configuration, ledger, numbering, exceptions } = this.dependencies;
+    return { audit, access, receiving, configuration, ledger, numbering, exceptions };
   }
 
   /**
@@ -101,6 +107,19 @@ export class Pt {
    */
   postRequested(context: TransactionContext, publisher: PtPostingPublisher, postRequestId: string) {
     return postRequested(context, this.decisionServices(), publisher, postRequestId);
+  }
+
+  /** The unfinished-operation exception of a queued posting's failure, raised by its consumer (code review 7). */
+  raisePostingFailure(context: TransactionContext, raisedBy: AuditActor, failureId: string) {
+    return raiseForFailure(context, this.dependencies.exceptions, raisedBy, failureId);
+  }
+
+  /**
+   * Posts a failed PT again once its cause is fixed: a further request naming the same decision (goods-in 6.6;
+   * access-and-approvals 9.8 step 5; books-and-posting 10 step 5; commands/post-again.ts).
+   */
+  postAgain(context: TransactionContext, actor: Actor, revisionId: string) {
+    return postAgain(context, this.dependencies, actor, revisionId);
   }
 
   /** A PT revision as its approver reviews it and its GRN's screen shows it (goods-in 6.2, 6.6), or undefined. */
@@ -114,9 +133,12 @@ export class Pt {
     return revisionReview(context, this.dependencies.receiving, revisionId, request, page, masked);
   }
 
-  /** An Official PT as an XLSX file in its template's columns (goods-in 6.5), or the refusal. */
-  download(context: TransactionContext, revisionId: string) {
-    return ptDownloadOf(context, this.dependencies.files, revisionId);
+  /**
+   * An Official PT as an XLSX file in its template's columns, with the access record of each restricted class it
+   * carries, cost and margin left out where masked (goods-in 6.5, 6.6; numbering-and-audit 5.1), or the refusal.
+   */
+  download(context: TransactionContext, reader: DownloadReader, revisionId: string, masked: ReadonlySet<FieldClass>) {
+    return downloadPt(context, this.dependencies, reader, revisionId, masked);
   }
 
   /** Withdraws a draft PT revision (goods-in 5.7). */

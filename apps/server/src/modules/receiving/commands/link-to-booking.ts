@@ -3,6 +3,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import type { TransactionContext } from '../../../kernel/index.js';
 import type { BookingInterface, ReceiptsLater, ReceiptsLinked } from '../../booking/index.js';
 import { grnLine } from '../db/schema.js';
+import { GRN_LINE_TYPE } from '../domain/kinds.js';
 import { grnRow } from '../queries/grns.js';
 import { bookingOfArrival } from './booking-of-arrival.js';
 import { namedProductsOf } from '../queries/held-lines.js';
@@ -19,9 +20,6 @@ import { lockArrival, recordItem, recordNotFound, refusalOf, refused, type Actor
 export interface LinkToBookingDependencies {
   readonly booking: Pick<BookingInterface, 'bookingLockTarget' | 'receivableBooking' | 'linkReceiptsLater'>;
 }
-
-/** The record type a GRN line is named by in a refusal (PRD-UXP-003). */
-const GRN_LINE_TYPE = 'receiving.grn_line';
 
 /**
  * Links GRN lines of one GRN to the lines of the booking named (goods-in 3.7, 4.10). Takes, at step 1 in one call, the

@@ -75,6 +75,40 @@ async function bookingLinksOf(
   });
 }
 
+/** The bookings a GRN's lines are linked to, each with its lines (goods-in 6.2; code review 7 of stage 2). */
+export interface GrnBookingLinks {
+  readonly bookingId: string;
+  readonly lines: readonly {
+    readonly grnLineId: string;
+    readonly styleCode: string | null;
+    readonly size: string | null;
+    readonly lineKey: string;
+  }[];
+}
+
+/**
+ * The bookings a GRN's lines are linked to now, as far as the reader may see the bookings, from `booking`, each with
+ * the GRN lines linked to it, in the GRN's order: what the PT review shows of the booking (goods-in 6.2). A line linked
+ * to no booking, or to one the reader may not see, is left out.
+ */
+export async function grnBookingLinksOf(
+  context: TransactionContext,
+  grnId: string,
+  receipts: Receipts,
+): Promise<GrnBookingLinks[]> {
+  const lines = await linesOfGrn(context, grnId);
+  const now = await receipts(lines.map((line) => line.id));
+  const byBooking = new Map<string, GrnBookingLinks['lines'][number][]>();
+  for (const line of lines) {
+    const link = now.get(line.id)?.link;
+    if (link === null || link === undefined) continue;
+    const linked = byBooking.get(link.bookingId) ?? [];
+    linked.push({ grnLineId: line.id, styleCode: line.styleCode, size: line.sizeCode, lineKey: link.lineKey });
+    byBooking.set(link.bookingId, linked);
+  }
+  return [...byBooking].map(([bookingId, linked]) => ({ bookingId, lines: linked }));
+}
+
 /** The GRN as printed: quantities and findings only, never a value (goods-in 4.5). */
 async function grnView(
   context: TransactionContext,

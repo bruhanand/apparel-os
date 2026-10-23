@@ -12,6 +12,11 @@ export const SERVER_PORT = 3000;
  * service does (deployment.md section 3; code-house-rules 12.1; S1-F01-T27).
  */
 export const WEB_ORIGIN = `http://localhost:${String(SERVER_PORT)}`;
+/**
+ * The harness beside the server of the journeys, on its port + 11: `/ready` once its world is written and its
+ * fixtures' events delivered, `/now` its clock (apps/server/test/browser/serve.ts).
+ */
+export const HARNESS_ORIGIN = `http://127.0.0.1:${String(SERVER_PORT + 11)}`;
 /** Git ignores this folder. */
 export const WORLD_FILE = join(import.meta.dirname, '..', '.synthetic', 'world.json');
 

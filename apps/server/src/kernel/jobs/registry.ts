@@ -46,6 +46,13 @@ export interface ConsumerDefinition<Payload extends Record<string, unknown> = Re
   /** The action its steps need, authorised in each step and again before a redelivery is answered (RR-273; CH-14). */
   readonly authorises: JobAuthority;
   /**
+   * What else its identity holds so row-level security shows it the rows its steps read and write, such as view on
+   * the records another module's posting reads (code-house-rules 6.2; access-and-approvals 2.3). The setup step and
+   * `add-service-identities` give them with the action it declares; none is authorised in a step. Left out, it holds
+   * only that action (S2-F06-T01 code review 7).
+   */
+  readonly holds?: readonly JobAuthority[];
+  /**
    * Whether it delivers to a system outside the Organisation, such as Tally, GST, a bank or messaging. After a restore
    * such a consumer is never handed an event recorded at or before the recovery point, nor delivers one, until its
    * outcome is reconciled with that system, since it may already have reached it (backup-and-restore 4.5;

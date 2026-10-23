@@ -7,6 +7,8 @@ import {
   arrivalReadSchema,
   bookingReadSchema,
   myWorkSchema,
+  ptPreviewSchema,
+  ptRevisionReadSchema,
   reviewReasonSchema,
   type Arrival,
   type AssignmentScope,
@@ -22,6 +24,7 @@ import {
 import { NUMBERING, type NumberingInterface } from '../src/modules/numbering/index.js';
 import { defineSyntheticBookingSeries } from './fixtures/booking-series.js';
 import { defineSyntheticGrnSeries } from './fixtures/grn-series.js';
+import { syntheticPtFileName, syntheticPtWorkbook } from './fixtures/pt.js';
 import { syntheticCode, syntheticName } from './fixtures/synthetic.js';
 import {
   codeFor,
@@ -38,6 +41,9 @@ import {
 import { BOOKING_POLICY_CHECKS, bookingGateOpen } from './support/booking.js';
 import { defineSyntheticCodeSeries } from './support/exceptions.js';
 import { grantSynthetic, type SyntheticAuthority } from './support/grants.js';
+import { defineSyntheticImportBatchSeries } from './support/imports.js';
+import { ptWorld } from './support/pt.js';
+import { PT_MAKER_AUTHORITY } from './support/pt-approval.js';
 import { capturingLogger } from './support/jobs.js';
 import { writeSyntheticMarking } from './support/marked-attributes.js';
 import { startTestFileStore, type TestFileStore } from './support/minio.js';
@@ -923,4 +929,103 @@ describe('an Arrival against a booking (goods-in 3.7, 4.2, 4.10)', () => {
     expect(ids).toContain(approved.id);
     expect(ids).not.toContain(draft.bookingId);
   });
+});
+
+describe('the PT review of a GRN received against a booking (goods-in 6.2; code review 7)', () => {
+  it('PRD-BKG-007 PRD-REC-017 shows the booking the GRN lines are linked to, with each line linked, and none to a reader who may not see bookings', async () => {
+    // The PT template's lists, layout and mapping, and whoever makes PTs (goods-in 5.2; support/pt.ts).
+    const lists = await ptWorld(setup, database, 'RAB-PT', {
+      proposer: setup.preparer.id,
+      confirmer: setup.approver.id,
+    });
+    await api.app.get<CommandRunner>(COMMAND_RUNNER).run(
+      {
+        commandName: 'test.define-batch-series',
+        organisation,
+        correlationId: uuidv7(),
+        actor: { kind: 'actor', actorId: setup.preparer.id },
+      },
+      (context) => defineSyntheticImportBatchSeries(context, api.app.get<NumberingInterface>(NUMBERING)),
+    );
+    const maker = await enrolled('RAB-PT-MAKER', [...PT_MAKER_AUTHORITY, { recordType: BOOKING_TYPE, action: 'view' }]);
+    const unbooked = await enrolled('RAB-PT-READER', [
+      { recordType: 'merchandise.pt', action: 'view' },
+      { recordType: 'receiving.arrival', action: 'view' },
+    ]);
+    const style = 'SYN-RAB-PT';
+    const booking = await approvedBooking([line(style, 2, { size: size('M').code })]);
+    const { grnId, arrival } = await received(booking.id, [{ styleCode: style, size: 'M', quantity: 2 }]);
+    const grnLineId = arrival.grn?.lines[0]?.id ?? '';
+    // A PT file for the GRN, submitted (goods-in 5.6): two pieces of the style and size, each value on its list.
+    const value = (
+      list: { readonly values: Readonly<Record<string, { readonly code: string } | undefined>> },
+      name: string,
+    ) => list.values[name]?.code ?? '';
+    const bytes = await syntheticPtWorkbook({
+      rows: [
+        {
+          SEASON: value(lists.season, 'SPRING'),
+          BRAND: fixture.brand.code,
+          COLOR: value(lists.colour, 'NAVY'),
+          GENDER: value(lists.gender, 'MALE'),
+          'SUB CATEGORY': lists.categories.CASUAL?.code ?? '',
+          TYPE: value(lists.type, 'TOP'),
+          ITEM: value(lists.item, 'TSHIRT'),
+          FIT: value(lists.fit, 'SLIM'),
+          SIZE: size('M').code,
+          BARCODE: `89${String(randomInt(100_000_000_000, 999_999_999_999))}`,
+          DESIGN: style,
+          HSN: 61091000,
+          QTY: 2,
+          MRP: 1999,
+          BASIC: 700,
+          'P RATE': 945,
+          'INPUT TAX': value(lists.gstRate, 'GST-5'),
+          'OUTPUT TAX': value(lists.gstRate, 'GST-18'),
+          NAG: 2,
+          MARGIN: 52.7263,
+        },
+      ],
+      marker: 'RAB-PT',
+    });
+    const handed = ok(
+      await post(maker, '/api/files-imports/import-files', {
+        sourceSystem: 'manual-upload',
+        originalName: syntheticPtFileName('rab-pt'),
+        contentBase64: bytes.toString('base64'),
+      }),
+    );
+    const started = ok(
+      await post(maker, '/api/files-imports/batches', {
+        storedFileId: handed.storedFileId,
+        fileReceiptId: handed.receiptId,
+        kind: 'transaction',
+        target: 'merchandise.pt',
+        layoutVersionId: lists.layoutVersionId,
+        mappingVersionId: lists.mappingVersionId,
+        subject: { recordId: grnId },
+      }),
+    );
+    const batchId = started.batchId as string;
+    ok(await post(maker, `/api/files-imports/batches/${batchId}/validate`, {}));
+    const preview = ptPreviewSchema.parse(ok(await get(maker, `/api/merchandise/pt/uploads/${batchId}/preview`)));
+    expect(preview.issues.filter((issue) => issue.severity === 'Blocking')).toEqual([]);
+    ok(await post(maker, `/api/files-imports/batches/${batchId}/submit`, { versionId: preview.batchVersionId }));
+    ok(await post(maker, `/api/files-imports/batches/${batchId}/publish`, { versionId: preview.batchVersionId }));
+    const pt = ok(await get(maker, `/api/merchandise/pt/grns/${grnId}`)) as {
+      pt: { revisions: { revisionId: string }[] } | null;
+    };
+    const revisionId = pt.pt?.revisions[0]?.revisionId ?? '';
+    // The review shows the booking and the GRN line linked to it, as the approver may see bookings (goods-in 6.2).
+    const review = ptRevisionReadSchema.parse(ok(await get(maker, `/api/merchandise/pt/revisions/${revisionId}`)));
+    expect(review.bookings).toEqual([
+      {
+        bookingId: booking.id,
+        lines: [{ grnLineId, styleCode: style, size: size('M').code, lineKey: keyOf(booking, 'M') }],
+      },
+    ]);
+    // A reader who may not see bookings is shown none: a receipt link is scoped as its booking (goods-in 3.10).
+    const hidden = ptRevisionReadSchema.parse(ok(await get(unbooked, `/api/merchandise/pt/revisions/${revisionId}`)));
+    expect(hidden.bookings).toEqual([]);
+  }, 400_000);
 });

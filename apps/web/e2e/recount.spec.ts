@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { Authenticator } from './support/authenticator';
 import { organisationToday, signIn } from './support/journey';
 import { readWorld, type EnrolledUser, type ReceivingOptions } from './support/world';
+import { anHourAgo } from './support/clock';
 
 // S2-F02-T05: the recount journey (goods-in 4.7, 4.11, section 11; PRD-REC-019, POL-02.07; code-house-rules 10.1).
 // Warehouse (P-WHS) counts 4 of the 5 pieces the invoice lists and issues the GRN; finding the fifth piece, they propose
@@ -19,14 +20,6 @@ const INVOICE_PDF = {
 
 const STYLE = 'SYN-STYLE-RECOUNT';
 const REASON = 'SYNTHETIC fifth piece found in the second carton';
-
-/**
- * An hour ago, as a `datetime-local` field takes it: the Organisation's wall clock, Etc/UTC on the journeys' server
- * (apps/server/test/browser/serve.ts), whatever the browser's time zone (code-house-rules 9).
- */
-function anHourAgo(): string {
-  return new Date(Date.now() - 3_600_000).toISOString().slice(0, 16);
-}
 
 async function signedIn(page: Page, code: string, user: EnrolledUser): Promise<Authenticator> {
   const app = new Authenticator(Buffer.from(user.factorSecretHex, 'hex'));
@@ -51,7 +44,7 @@ async function arrivalWithInvoice(page: Page, options: ReceivingOptions): Promis
   await form.getByLabel(/^Lorry receipt number/).fill('SYN-LR-RECOUNT');
   await form.getByLabel(/^Lorry receipt date/).fill(organisationToday());
   await form.getByLabel(/^Cartons/).fill('2');
-  await form.getByLabel(/^Arrived/).fill(anHourAgo());
+  await form.getByLabel(/^Arrived/).fill(await anHourAgo());
   await page.getByRole('dialog').getByRole('button', { name: 'Record the Arrival' }).click();
   await expect(page.getByRole('heading', { level: 2, name: `Arrival from ${options.supplier}` })).toBeVisible();
   const invoice = page.getByRole('form', { name: 'Add the invoice' });
@@ -121,14 +114,13 @@ test('PRD-REC-019 POL-02.07 Warehouse proposes a recount of a GRN line, and the 
         .getByRole('navigation', { name: 'Main menu' })
         .getByRole('link', { name: /^My work/ })
         .click();
-      // The approval's item comes through the worker, which hands this Organisation's earlier events, the fixtures'
-      // approvals of the receiving worlds, to My work first (apps/server/test/browser/serve.ts), so it may take a while:
-      // about three minutes when this journey runs alone.
+      // The approval's item comes through the worker; the server delivers its fixtures' events before the journeys start
+      // (apps/server/test/browser/serve.ts), so only the events of journeys running beside this one come first.
       const request = approver.getByRole('listitem').filter({ hasText: 'Recount of a GRN' });
       await expect(async () => {
         await approver.getByRole('button', { name: 'Refresh' }).click();
         await expect(request).toHaveCount(1, { timeout: 1_000 });
-      }).toPass({ timeout: 300_000 });
+      }).toPass({ timeout: 180_000 });
       await request.getByRole('button', { name: 'Open and decide' }).click();
       const drawer = approver.getByRole('dialog');
       await expect(drawer.getByRole('heading', { level: 2, name: 'Recount of a GRN', exact: true })).toBeVisible();

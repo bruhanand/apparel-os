@@ -5,7 +5,7 @@ export { Receiving } from './receiving.js';
 export type { IssueNeeds, ReceivingDependencies, ReceivingInterface } from './receiving.js';
 export { GRN_KIND, GRN_SCOPE_KEY, receivingStockCaller } from './domain/kinds.js';
 export { HELD_LINE_DECISIONS, RECEIVE_GOODS, RECEIVE_GOODS_STATUTORY, RECEIVING_CAPABILITY } from './domain/gate.js';
-export { receivingApprovals } from './commands/approvals.js';
+export { receivingApprovals } from './approvals.js';
 export { receivingExceptionTypes } from './exception-types.js';
 export type { GoodPiecesPart, PtBasis, ReceiptProblem, ReceiptProblemsQuery } from './queries/held-lines.js';
 // The GRN's "PT attached" mark, which `merchandise` · PT reads, sets and clears (goods-in 5.8; S2-F04-T02).

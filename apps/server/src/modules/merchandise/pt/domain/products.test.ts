@@ -148,25 +148,48 @@ describe('the product of each PT row (goods-in 5.5)', () => {
     });
   });
 
-  it('PRD-MER-007 takes the product its barcode maps to first, even of another style or size, showing the difference', () => {
-    // Goods-in 5.5: "found by its barcode's external code mapping, or by brand, style, colour and size", in that order.
+  it('PRD-MER-007 refuses a row whose barcode names a product of another style or size: style and size are identity', () => {
+    // Goods-in 5.5: "found by its barcode's external code mapping, or by brand, style, colour and size", in that order;
+    // a barcode naming one product of another style or size is a problem naming the row (code review 7; RR-608).
     const found = productsOf([row(3, { styleCode: 'SYN-OTHER', sizeCode: 'S', barcode: '111' })], facts);
-    expect(found.rows[0]).toEqual({
-      rowNumber: 3,
-      product: { kind: 'existing', skuId: id(1), barcodeMapped: true },
-      repeated: false,
-      differences: [
-        { field: 'design', file: 'SYN-OTHER', product: 'SYN-OLD' },
-        { field: 'size', file: 'S', product: 'M' },
-      ],
-    });
+    expect(found.issues).toEqual([{ code: 'merchandise.pt-barcode-of-other-product', field: 'barcode', rowNumber: 3 }]);
     expect(found.proposals).toEqual([]);
-    // The barcode's mapping comes before the row's identity: a row of SKU 2's identity takes SKU 1 by its barcode.
-    expect(productsOf([row(4, { sizeCode: 'L' })], facts).rows[0]?.product).toEqual({
-      kind: 'existing',
-      skuId: id(1),
-      barcodeMapped: true,
+    // The barcode's mapping comes before the row's identity: a row of SKU 2's identity is refused by its barcode's SKU 1.
+    expect(productsOf([row(4, { sizeCode: 'L' })], facts).issues).toEqual([
+      { code: 'merchandise.pt-barcode-of-other-product', field: 'barcode', rowNumber: 4 },
+    ]);
+    // A row of the product its barcode names has no problem.
+    expect(productsOf([row(5)], facts).issues).toEqual([]);
+  });
+
+  it('PRD-MER-013 refuses the rows of one new style that disagree on a value the style holds, naming each row', () => {
+    // A new style holds one Sub category, HSN, season, gender, type, item and fit: rows of it that disagree name a
+    // value no one chose for it, so the file is refused (goods-in 5.3, 5.6; code review 7). An existing style's rows
+    // show a difference instead (5.5).
+    const kids = { gender: { code: 'SYN KIDS', valueId: id(52) } };
+    const found = productsOf(
+      [
+        row(3, { styleCode: 'SYN-NEW', barcode: '501' }),
+        row(4, { styleCode: 'SYN-NEW', sizeCode: 'L', barcode: '502', hsn: '61099000', styleValues: kids }),
+        row(5, { styleCode: 'SYN-NEW', sizeCode: 'XL', barcode: '503' }),
+        row(6, { styleCode: 'SYN-AGREES', barcode: '504' }),
+        row(7, { sizeCode: 'XL', barcode: '505', styleValues: kids }),
+      ],
+      facts,
+    );
+    const disagrees = (rowNumber: number, field: 'hsn' | 'gender') => ({
+      code: 'merchandise.pt-new-style-disagrees',
+      field,
+      rowNumber,
     });
+    expect(found.issues).toEqual([
+      disagrees(3, 'hsn'),
+      disagrees(3, 'gender'),
+      disagrees(4, 'hsn'),
+      disagrees(4, 'gender'),
+      disagrees(5, 'hsn'),
+      disagrees(5, 'gender'),
+    ]);
   });
 
   it('PRD-MER-007 DEC-135 narrows a barcode the brand repeats by style and size, then colour; with none left it proposes', () => {
