@@ -1,6 +1,7 @@
 import { uuidv7 } from '@apparel-os/domain';
 import {
   STOCK_BALANCE_TYPE,
+  STOCK_RECEIPT_ORIGIN_TYPE,
   STOCK_SEARCH_EXPORT_CAP,
   type StockSearchExport,
   type StockSearchFilters,
@@ -94,10 +95,10 @@ export async function exportStockSearch(
           throw error;
         }
         if (read.search.next !== null) return { kind: 'refusal', refusal: EXPORT_TOO_LARGE, causedBySecret: false };
-        const exportId = uuidv7();
-        // One record for each place and brand whose cost the file carries (numbering-and-audit 5.2).
+        // Each place and brand whose cost the file carries, once, with the assignment granting its cost.
         const scopes = new Map(
-          read.costFacts.map((facts) => {
+          read.costShown.map((each) => {
+            const { facts } = each;
             const scope: AuditScope = {
               ...(facts.legalEntityId === undefined ? {} : { legalEntityId: facts.legalEntityId }),
               ...(facts.siteId === undefined ? {} : { siteId: facts.siteId }),
@@ -105,10 +106,34 @@ export async function exportStockSearch(
               ...(facts.businessUnitId === undefined ? {} : { businessUnitId: facts.businessUnitId }),
               ...(facts.brandId === undefined ? {} : { brandId: facts.brandId }),
             };
-            return [JSON.stringify(scope), scope];
+            return [JSON.stringify(scope), { scope, facts, roleAssignmentId: each.roleAssignmentId }];
           }),
         );
-        for (const scope of scopes.values()) {
+        // Step 0 (code-house-rules 8.2): the authority to export cost at each of them, held and rechecked before the
+        // access records are written, as a PT's download holds its own (goods-in 6.6).
+        const [first, ...further] = [...scopes.values()].map((each) => ({
+          roleAssignmentId: each.roleAssignmentId,
+          need: {
+            action: 'view' as const,
+            recordType: STOCK_RECEIPT_ORIGIN_TYPE,
+            facts: each.facts,
+            fieldClasses: [{ fieldClass: 'cost' as const, use: 'view' as const }],
+          },
+        }));
+        if (first !== undefined) {
+          const held = await deps.access.holdAuthority(
+            context,
+            { kind: 'user', id: exporter.userId },
+            first.roleAssignmentId,
+            first.need,
+            [],
+            further,
+          );
+          if (held !== undefined) return { kind: 'refusal', refusal: held, causedBySecret: false };
+        }
+        // One sensitive-access record for each of them, naming the export (numbering-and-audit 5.1, 5.2).
+        const exportId = uuidv7();
+        for (const { scope } of scopes.values()) {
           await deps.audit.recordAccess(context, {
             kind: 'sensitive-access',
             outcome: 'succeeded',

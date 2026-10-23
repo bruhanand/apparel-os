@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { Authenticator } from './support/authenticator';
 import { organisationToday, signIn } from './support/journey';
 import { readWorld, type EnrolledUser, type ReceivingOptions } from './support/world';
-import { anHourAgo } from './support/clock';
+import { anHourAgo, serverNow } from './support/clock';
 
 // S2-F06-T01: the PT approval journey (goods-in 6.1 to 6.5, section 11; PRD-REC-017, PRD-REC-018, PRD-ACS-006,
 // POL-02.07; DEC-135, DEC-140; code-house-rules 10.1). Warehouse (P-WHS), also assigned to make PTs, counts two pieces
@@ -213,7 +213,9 @@ test('PRD-REC-017 PRD-REC-018 POL-02.07 PRD-REC-021 PRD-STK-006 a PT submitted f
       await expect(cells.nth(7)).toHaveText('₹1,890.00');
       const downloading = maker.waitForEvent('download');
       await maker.getByRole('button', { name: 'Export to XLSX' }).click();
-      expect((await downloading).suggestedFilename()).toBe(`stock-search-${organisationToday()}.xlsx`);
+      // Named by the business date, on the server's clock (Etc/UTC on the journeys' server).
+      const today = (await serverNow()).toISOString().slice(0, 10);
+      expect((await downloading).suggestedFilename()).toBe(`stock-search-${today}.xlsx`);
       // Damage reported on the product where it is, from its result (goods-in 8.1, 8.5): refused once with the reason
       // on screen, since no rule routes damage at this Site yet, so nothing is held.
       await row.getByRole('button', { name: 'Report damage' }).click();

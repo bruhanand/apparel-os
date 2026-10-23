@@ -362,7 +362,7 @@ describe('the export (goods-in 9.1)', () => {
     expect(line[header.indexOf('Style code')]).toBe(style);
     expect(line[header.indexOf('Physical')]).toBe('2');
     expect(line[header.indexOf('Waiting')]).toBe('2');
-    expect(line[header.indexOf('Cost (₹)')]).toBe('1890');
+    expect(line[header.indexOf('Cost (₹)')]).toBe('1890.00');
     const history = await w.get(auditor, '/api/access/history/sensitive-access-records');
     expect(history.status, JSON.stringify(history.body)).toBe(200);
     const records = accessHistoryPageSchema

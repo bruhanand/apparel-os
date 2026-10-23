@@ -1,18 +1,12 @@
+import { paise, rupeesText } from '@apparel-os/domain';
 import ExcelJS from 'exceljs';
 import type { Sheet } from '../domain/export.js';
 
 // A report or a search as an XLSX file (goods-in 9.1 "Any report or search result exports to XLSX as shown"; PRD Stack
 // row Documents: ExcelJS; code-house-rules 2 `writers/`; S2-F11-T01): one sheet a table, its lines of preface above the
-// header row, then the rows. A quantity is a whole number; an amount in paise is written in rupees with two decimals,
-// from the integer paise exactly, as the PT's download writes them (goods-in 6.6). It writes no formula, no link and no
-// macro. Pure: bytes in memory, no file, no network.
-
-/** An amount in paise as rupees with two decimals, from the integer paise exactly (PRD-MOD-014). */
-function rupees(amountPaise: number): number {
-  const whole = Math.trunc(amountPaise / 100);
-  const part = Math.abs(amountPaise % 100);
-  return Number(`${amountPaise < 0 && whole === 0 ? '-' : ''}${String(whole)}.${String(part).padStart(2, '0')}`);
-}
+// header row, then the rows. A quantity is a whole number; an amount in paise is written as its exact text in rupees
+// with two decimals, never through a binary fraction, as the PT's download writes its amounts (goods-in 6.6;
+// PRD-MOD-014). It writes no formula, no link and no macro. Pure: bytes in memory, no file, no network.
 
 export async function workbookOf(sheets: readonly Sheet[]): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
@@ -34,10 +28,7 @@ export async function workbookOf(sheets: readonly Sheet[]): Promise<Buffer> {
         const target = row.getCell(at + 1);
         if (cell.kind === 'text') target.value = cell.text;
         if (cell.kind === 'quantity') target.value = cell.quantity;
-        if (cell.kind === 'paise') {
-          target.value = rupees(cell.paise);
-          target.numFmt = '#,##0.00';
-        }
+        if (cell.kind === 'paise') target.value = rupeesText(paise(cell.paise));
       });
       row.commit();
     });
