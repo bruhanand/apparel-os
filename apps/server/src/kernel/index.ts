@@ -169,6 +169,7 @@ export {
   ReadModelGateway,
   serveReadModel,
 } from './read-models/read-model-gateway.js';
+export type { ReadModel, ReadModelAnswer, ServedReadModel } from './read-models/read-model-gateway.js';
 export { defineEvent } from './outbox/event-definition.js';
 export type {
   EventDefinition,

@@ -57,3 +57,13 @@ export function formatDate(date: string): string {
   const [year = '', month = '', day = ''] = date.split('-');
   return t('date.date', { day, month: t(`date.month.${String(Number(month))}` as MessageId), year });
 }
+
+const percent = new Intl.NumberFormat('en-IN', { style: 'percent', maximumFractionDigits: 1 });
+
+/**
+ * A rate of two whole numbers as a percentage, "91.7%" (design-language 8; goods-in 9.5; S2-F11-T02): shown to one
+ * decimal by `Intl`; the server sends the two whole numbers, so nothing is stored rounded.
+ */
+export function formatRate(numerator: number, denominator: number): string {
+  return percent.format(numerator / denominator);
+}

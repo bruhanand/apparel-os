@@ -80,6 +80,9 @@ const RUNTIME_FUNCTIONS: Record<MigrationSetName, readonly string[]> = {
     'finance.lines_hidden',
     // books-and-posting 9.1: every line of a journal for its reversal, whatever the reverser sees, SECURITY DEFINER.
     'finance.lines_to_reverse',
+    // goods-in 9.5: the MRP of the goods a PT established, by the receipt origin its approval made, whatever the
+    // reader sees, SECURITY DEFINER (DEC-117; S2-F11-T02).
+    'merchandise.pt_mrp_of_origins',
     // structure-and-masters 3.5: what a location version would break in the nesting of locations (S1-F02-T02 review).
     'organisation.location_nesting_broken',
     // structure-and-masters 3.4: whether an approved mapping is out of step with the State rule (GC2-1; S1-F02-T02).

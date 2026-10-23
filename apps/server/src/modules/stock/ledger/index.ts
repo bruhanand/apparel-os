@@ -65,6 +65,9 @@ export {
   stockLedgerReadModels,
 } from './queries/positions.js';
 export type { Position, PositionFilters, PositionKey, UnitPosition, UnitPositionsQuery } from './queries/positions.js';
+// The read model of the stage 2 stock report (stock-ledger 13.23; goods-in 9.5; S2-F11-T02).
+export { STOCK_HOLDINGS, stockReportReadModels } from './queries/holdings.js';
+export type { Holding, HoldingKey, HoldingOwner } from './queries/holdings.js';
 export { rebuildAndCompare } from './queries/rebuild.js';
 export { inventoryReconciliation, value } from './queries/value.js';
 export type { PoolValue, ReconciledMovement, TransitHeld, ValueLayer } from './queries/value.js';

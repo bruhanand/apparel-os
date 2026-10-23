@@ -15,6 +15,10 @@ import { BookingsScreen } from './booking/BookingsScreen';
 import { OpenToBuyScreen } from './booking/OpenToBuyScreen';
 import { ReceiveGoodsScreen } from './receiving/ReceiveGoodsScreen';
 import { StockSearchScreen } from './stock/StockSearchScreen';
+import { BookingStatusScreen } from './reports/BookingStatusReport';
+import { ReceiptProblemsScreen } from './reports/ReceiptProblemsReport';
+import { StockReportScreen } from './reports/StockReport';
+import { SupplierPerformanceScreen } from './reports/SupplierPerformanceReport';
 import { LedgerScreen } from './finance/LedgerScreen';
 import { PeriodCloseScreen } from './finance/PeriodCloseScreen';
 import { PostingMapsScreen } from './finance/PostingMapsScreen';
@@ -111,6 +115,14 @@ function ScreenPage({ id }: { id: ScreenId }) {
       return <ReceiveGoodsScreen />;
     case 'stock.search':
       return <StockSearchScreen />;
+    case 'reports.booking-status':
+      return <BookingStatusScreen />;
+    case 'reports.receipt-problems':
+      return <ReceiptProblemsScreen />;
+    case 'reports.supplier-performance':
+      return <SupplierPerformanceScreen />;
+    case 'reports.stock':
+      return <StockReportScreen />;
     case 'setup.users':
       return <UsersScreen />;
     case 'setup.roles':

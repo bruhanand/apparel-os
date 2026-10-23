@@ -34,6 +34,7 @@ import {
   CONFIGURATION,
   CONFIGURATION_ENVIRONMENT,
   type ConfigurationInterface,
+  type ValidityCheck,
 } from '../../src/modules/configuration/index.js';
 import { FILE_STORE_ENVIRONMENT, FILES_IMPORTS_ENVIRONMENT } from '../../src/modules/files-imports/index.js';
 import type { PtPostingQueue } from '../../src/modules/merchandise/pt/index.js';
@@ -204,6 +205,12 @@ export interface PtApprovalWorld {
       readonly world?: ReceivingFixture;
       /** The unit the goods arrive at: the first Store's, or the warehouse (goods-in 12 test 17). */
       readonly unit?: 'store' | 'warehouse';
+      /** The booking the goods come against, received by `by`, who may see it (goods-in 4.10; S2-F11-T02). */
+      readonly bookingId?: string;
+      /** When the goods arrived; an hour before the world's clock unless given. */
+      readonly arrivedAt?: Date;
+      /** Who receives, counts and issues; the world's receiver unless given. */
+      readonly by?: Person;
     },
   ): Promise<{ readonly arrivalId: string; readonly grnId: string }>;
   /** Hands a file of the rows in, starts its batch for the GRN, validates, submits and publishes it. */
@@ -250,7 +257,11 @@ function ok<A>(outcome: { kind: 'success'; answer: A } | { kind: 'refusal'; refu
 /** The world, its application started with the PT queue given, or posting every PT with its decision. */
 export async function ptApprovalWorld(
   label: string,
-  options: { readonly queue?: PtPostingQueue } = {},
+  options: {
+    readonly queue?: PtPostingQueue;
+    /** TEST-ONLY checks of further policies the application under test registers, such as a booking's (S2-F11-T02). */
+    readonly extraChecks?: readonly ValidityCheck[];
+  } = {},
 ): Promise<PtApprovalWorld> {
   const world = await createSyntheticOrganisations(label.toLowerCase());
   const database = world.organisations[0].database;
@@ -267,7 +278,7 @@ export async function ptApprovalWorld(
   const api = await startAccessApp(world, keys, {
     clock,
     fileStoreEnvironment: minio.environment,
-    validityChecks: PT_TEST_CHECKS,
+    validityChecks: [...PT_TEST_CHECKS, ...(options.extraChecks ?? [])],
     ...(options.queue === undefined ? {} : { ptPostingQueue: options.queue }),
   });
   const router = new OrganisationRouter(
@@ -616,7 +627,8 @@ export async function ptApprovalWorld(
     const place = at.world ?? fixture;
     const brandId = at.brandId ?? (at.brand === 'owned' ? ownedId : place.brand.id);
     const warehouse = at.unit === 'warehouse';
-    const made = await post(receiver, '/api/receiving/arrivals', {
+    const by = at.by ?? receiver;
+    const made = await post(by, '/api/receiving/arrivals', {
       businessUnitId: warehouse ? place.warehouse : place.wholeStore,
       receivingLocationId: warehouse ? place.warehouseLocation : place.storeLocation,
       supplierPartyId: at.brand === 'owned' || at.brandId !== undefined ? fixture.supplier.id : place.supplier.id,
@@ -624,19 +636,16 @@ export async function ptApprovalWorld(
       transporter: syntheticName('Transporter'),
       lorryReceipt: { number: 'SYN-LR-PTA', date: setup.today() },
       cartons: 2,
-      arrivedAt: new Date(clock.now().getTime() - 3_600_000).toISOString(),
+      arrivedAt: (at.arrivedAt ?? new Date(clock.now().getTime() - 3_600_000)).toISOString(),
+      ...(at.bookingId === undefined ? {} : { bookingId: at.bookingId }),
     });
     expect(made.status, JSON.stringify(made.body)).toBe(200);
     const arrivalId = (made.body as { arrivalId: string }).arrivalId;
     fileCount += 1;
-    const stored = await post(
-      receiver,
-      STORE_FILE_PATH,
-      syntheticPdfUpload('PT-APPROVAL', `FILE-${String(fileCount)}`),
-    );
+    const stored = await post(by, STORE_FILE_PATH, syntheticPdfUpload('PT-APPROVAL', `FILE-${String(fileCount)}`));
     expect(stored.status, JSON.stringify(stored.body)).toBe(200);
     const { storedFileId, receiptId } = stored.body as { storedFileId: string; receiptId: string };
-    const invoice = await post(receiver, `/api/receiving/arrivals/${arrivalId}/invoices`, {
+    const invoice = await post(by, `/api/receiving/arrivals/${arrivalId}/invoices`, {
       number: `SYN-INV-PTA-${String(randomInt(1_000_000))}`,
       date: setup.today(),
       file: { storedFileId, fileReceiptId: receiptId },
@@ -644,7 +653,7 @@ export async function ptApprovalWorld(
     expect(invoice.status, JSON.stringify(invoice.body)).toBe(200);
     for (const line of lines) {
       const unidentified = line.unidentified !== undefined;
-      const saved = await post(receiver, `/api/receiving/arrivals/${arrivalId}/count-lines`, {
+      const saved = await post(by, `/api/receiving/arrivals/${arrivalId}/count-lines`, {
         goods: unidentified ? 'unidentified' : 'on-invoice',
         styleCode: unidentified ? null : line.style,
         colour: unidentified ? null : 'SYNTHETIC NAVY',
@@ -662,9 +671,9 @@ export async function ptApprovalWorld(
       });
       expect(saved.status, JSON.stringify(saved.body)).toBe(200);
     }
-    const read = await get(receiver, `/api/receiving/arrivals/${arrivalId}`);
+    const read = await get(by, `/api/receiving/arrivals/${arrivalId}`);
     const { versionToken } = arrivalReadSchema.parse(read.body).arrival;
-    const issued = await post(receiver, `/api/receiving/arrivals/${arrivalId}/grn`, { versionToken });
+    const issued = await post(by, `/api/receiving/arrivals/${arrivalId}/grn`, { versionToken });
     expect(issued.status, JSON.stringify(issued.body)).toBe(200);
     return { arrivalId, grnId: (issued.body as { grnId: string }).grnId };
   };

@@ -146,9 +146,14 @@ const BOOKING_POLICIES: readonly PolicyNumber[] = [5, 1];
  * The booking gate open Organisation-wide (goods-in 10.5; module-map 4.4; DM-6), through configuration's commands as
  * labelled synthetic status (code-house-rules 12.14): the setup's preparer records policies 5 and 1 Signed; the
  * approver, who entered none of their values, validates them, each with a SYNTHETIC stored file as evidence; the
- * preparer switches the bookings capability on. The values validated are the TEST-ONLY checks' above.
+ * preparer switches the bookings capability on. The values validated are the TEST-ONLY checks' above. A world whose
+ * other gate opened policy 1 already, as the PT approval world's does, names policy 5 alone (S2-F11-T02).
  */
-export async function bookingGateOpen(setup: StructureSetup, database: string): Promise<void> {
+export async function bookingGateOpen(
+  setup: StructureSetup,
+  database: string,
+  policies: readonly PolicyNumber[] = BOOKING_POLICIES,
+): Promise<void> {
   const audit = new Audit(capturingLogger().logger);
   const configuration = new Configuration({ audit, environment: { name: 'local' }, evidence: policyEvidence(audit) });
   for (const check of BOOKING_POLICY_CHECKS) configuration.registerCheck(check, TEST_COMPOSITION);
@@ -165,7 +170,7 @@ export async function bookingGateOpen(setup: StructureSetup, database: string): 
   const ok = (outcome: { kind: string; refusal?: { code: string } }) => {
     if (outcome.kind !== 'success') throw new Error(`Refused: ${outcome.refusal?.code ?? outcome.kind}`);
   };
-  for (const policy of BOOKING_POLICIES) {
+  for (const policy of policies) {
     const signatureEvidence = await writeSyntheticStoredFile(database, signer.id);
     ok(
       await setup.run(signer.id, (context) =>

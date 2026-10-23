@@ -23,3 +23,6 @@ export { stockDocumentsApprovals } from './commands/effects.js';
 export type { EffectServices as DamageEffectServices } from './commands/effects.js';
 export { damageConfirmed, damageRejected, damageReported, damageReversed } from './events.js';
 export { stockDocumentsRestoreParticipant } from './restore-participant.js';
+// The damage reports' states, served through the read-model gateway for the stage 2 reports (goods-in 9.5; S2-F11-T02).
+export { STOCK_DAMAGE_REPORT_STATES, stockDocumentsReadModels } from './queries/report-states.js';
+export type { DamageReportStateRow } from './queries/report-states.js';
