@@ -231,7 +231,7 @@ export function peopleOf(arrival: Arrival): string[] {
  * 12.1; goods-in 7.5): a page may then hold fewer than asked, with its cursor where the next read starts. **Design
  * choice.**
  */
-export const INBOX_EXAMINED_CAP = 1_000;
+const INBOX_EXAMINED_CAP = 1_000;
 
 /**
  * The Receive Goods inbox of a Site (goods-in 4.1), newest recorded first, a page at a time (code-house-rules 12.1);

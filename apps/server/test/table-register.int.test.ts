@@ -796,6 +796,8 @@ describe('the references inside receiving (code-house-rules 3.2; S2-F02-T02)', (
       'recount_movement (grn_line_id) grn_line',
       'recount_movement (recount_id) recount',
       'recount_movement (recount_line_id) recount_line',
+      // A scan of the scan-in (goods-in 7.5; S2-F07-T01).
+      'scan (grn_id) grn',
     ]);
   });
 });

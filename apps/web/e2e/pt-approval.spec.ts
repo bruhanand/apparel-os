@@ -160,6 +160,8 @@ test('PRD-REC-017 PRD-REC-018 POL-02.07 PRD-REC-021 a PT submitted for approval 
       // The inbox now says the delivery waits for its scan-in (goods-in 7.1; RR-606).
       await maker.getByRole('button', { name: 'Back to the inbox' }).click();
       const row = maker.getByRole('row').filter({ hasText: grnNumber });
+      // The inbox was read before the approval, in another person's session: read it again.
+      await maker.getByRole('button', { name: 'Refresh' }).click();
       await expect(row).toContainText('Waiting for its scan-in', { timeout: 30_000 });
       // A phone, as a Store's staff scan with one (goods-in section 11; PRD-PRO-009).
       await maker.setViewportSize({ width: 375, height: 812 });

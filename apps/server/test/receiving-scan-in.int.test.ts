@@ -1,5 +1,11 @@
 import { uuidv7 } from '@apparel-os/domain';
-import { inboxSchema, scanAnsweredSchema, scanInReadSchema, type ScanInRead } from '@apparel-os/schemas';
+import {
+  inboxSchema,
+  scanAnsweredSchema,
+  scanInReadSchema,
+  scanRefusalSchema,
+  type ScanInRead,
+} from '@apparel-os/schemas';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { RECEIVING, type ReceivingInterface } from '../src/modules/receiving/index.js';
 import { availability, custody } from '../src/modules/stock/ledger/index.js';
@@ -7,6 +13,7 @@ import { syntheticCode, syntheticName } from './fixtures/synthetic.js';
 import { asUserIn, RECEIVER_REPORTER_AUTHORITY } from './support/damage.js';
 import { approved, decided } from './support/organisation.js';
 import { ptApprovalWorld, type Person, type PtApprovalWorld } from './support/pt-approval.js';
+import { allowVerifier, connect } from './support/postgres.js';
 import { agreementTerms, placeScope } from './support/receiving.js';
 
 // S2-F07-T01: the scan-in at the Site, through the whole application on real PostgreSQL (goods-in 7, 7.5, 10.3, 12
@@ -31,6 +38,7 @@ const SCANNER_AUTHORITY = [...RECEIVER_REPORTER_AUTHORITY, { recordType: 'receiv
 
 beforeAll(async () => {
   w = await ptApprovalWorld('SCN');
+  await allowVerifier(w.database);
   const { setup } = w;
   const location = async (businessUnitId: string, kind: 'floor' | 'backstore' | 'bin', name: string) =>
     (
@@ -427,6 +435,24 @@ describe('the scan-in at a Store (goods-in 7; 12 tests 13 and 14)', () => {
     const read = await scanIn(grnId);
     expect(read.scans).toEqual([]);
     expect(read.products[0]).toMatchObject({ accepted: 0, waiting: 1 });
+  });
+});
+
+describe('the scan-in record (goods-in 7.5)', () => {
+  it("PRD-REC-022 the database's check of a refused scan's reasons lists the shared schema's", async () => {
+    const verify = await connect(w.database, 'verify');
+    try {
+      const found = await verify.query<{ definition: string }>(
+        `select pg_catalog.pg_get_constraintdef(oid) as definition from pg_catalog.pg_constraint
+          where conname = 'scan_outcome'`,
+      );
+      const definition = found.rows[0]?.definition ?? '';
+      const listed = [...definition.matchAll(/'([a-z-]+)'::text/g)].map((match) => match[1]);
+      // The reasons a refused scan keeps, and the two outcomes the check names besides.
+      expect(new Set(listed)).toEqual(new Set([...scanRefusalSchema.options, 'accepted', 'refused']));
+    } finally {
+      await verify.end();
+    }
   });
 });
 
