@@ -1,12 +1,13 @@
-import type {
-  BookingStatusReport,
-  HoldKind,
-  ReceiptProblemsReport,
-  ReportNames,
-  ReportRate,
-  StockOwner,
-  StockReport,
-  SupplierPerformanceReport,
+import {
+  STOCK_OWNER_NAMES,
+  type BookingStatusReport,
+  type HoldKind,
+  type ReceiptProblemsReport,
+  type ReportNames,
+  type ReportRate,
+  type StockOwner,
+  type StockReport,
+  type SupplierPerformanceReport,
 } from '@apparel-os/schemas';
 import {
   emptyCell,
@@ -241,16 +242,9 @@ export function supplierPerformanceSheets(report: SupplierPerformanceReport, tim
 }
 
 function ownerCell(names: ReportNames, owner: StockOwner): Cell {
-  const named = (list: readonly { readonly id: string; readonly code: string; readonly name: string }[], id: string) =>
-    list.find((each) => each.id === id);
   if (owner.kind === 'unknown') return unknownCell();
-  const found =
-    owner.kind === 'organisation'
-      ? named(names.legalEntities, owner.legalEntityId)
-      : owner.kind === 'supplier'
-        ? named(names.suppliers, owner.partyId)
-        : named(names.brands, owner.brandId);
-  const name = found === undefined ? exportText('stock-search.unknown') : exportText('stock-search.named', found);
+  const found = names[STOCK_OWNER_NAMES[owner.kind]].find((each) => each.id === owner.partyId);
+  const name = found === undefined ? exportText('export.unknown') : exportText('export.named', found);
   return text(exportText(`stock-report.owner.${owner.kind}`, { name }));
 }
 

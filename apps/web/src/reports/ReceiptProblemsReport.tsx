@@ -10,6 +10,8 @@ import { api } from '../api';
 import { ApiFailure } from '../api/query';
 import { useBookingNames } from '../booking/names';
 import { Button } from '../components/Button';
+import { numberCell, UnknownInCell } from '../components/cells';
+import { DamageReportView } from '../stock/DamageReport';
 import { EmptyState } from '../components/StandardStates';
 import { StatusBadge } from '../components/StatusBadge';
 import { FormField } from '../forms/FormField';
@@ -21,7 +23,7 @@ import { formatDate, formatList, formatQuantity } from '../setup/format';
 import { inputClass, ListRead, Th, Toolbar } from '../setup/parts';
 import { stateIdOf } from '../setup/states';
 import { useTimeZone } from '../shell/session';
-import { ArrivalDrill, cell, ExportButton, FilterSelect, nameIn, personIn } from './parts';
+import { ArrivalDrill, cell, ExportButton, FilterSelect, GrnLinks, nameIn, personIn } from './parts';
 
 // Reports › Receipt problems (goods-in 4.4, 4.9, 9.3, 9.5, section 11; PRD-REC-006; S2-F11-T02): per GRN and line,
 // shortage, excess, wrong, unidentified and damage, each with its decision and who made it, by Site, supplier, brand
@@ -84,13 +86,33 @@ function HeldDecision({ row, names, timeZone }: { row: ReceiptProblemRow; names:
   );
 }
 
-function DamageDecision({ row, names, timeZone }: { row: ReceiptProblemRow; names: ReportNames; timeZone: string }) {
+function DamageDecision({
+  row,
+  names,
+  timeZone,
+  onReport,
+}: {
+  row: ReceiptProblemRow;
+  names: ReportNames;
+  timeZone: string;
+  onReport: (damageReportId: string) => void;
+}) {
   const report = row.damageReport;
   if (report === null) return null;
-  if (report.kind === 'unknown') return <span>{unknownText()}</span>;
+  // A report the reader may not see: a blank cell read as unknown (design-language 8; PRD-MOD-015).
+  if (report.kind === 'unknown') return <UnknownInCell />;
   return (
     <span className="flex flex-col gap-1">
-      <span>{report.number}</span>
+      {/* The figure drills down to its record: the damage report opens here (goods-in 9.1). */}
+      <button
+        type="button"
+        className="text-left text-accent underline"
+        onClick={() => {
+          onReport(report.damageReportId);
+        }}
+      >
+        {report.number}
+      </button>
       <StatusBadge state={stateIdOf(report.state)} />
       {report.decision !== null && (
         <span className="text-caption text-text-2">
@@ -107,21 +129,29 @@ function DamageDecision({ row, names, timeZone }: { row: ReceiptProblemRow; name
 /** The report's table and pages, for the filters given. */
 export function ReceiptProblemsTable({ filters }: { filters: ReceiptProblemsFilters }) {
   const timeZone = useTimeZone();
-  const [open, setOpen] = useState<ReportNames['grns'][number] | null>(null);
+  const [open, setOpen] = useState<
+    | { kind: 'grn'; grn: ReportNames['grns'][number]; places: ReportNames }
+    | { kind: 'damage'; damageReportId: string }
+    | null
+  >(null);
   const query = useInfiniteQuery({
     queryKey: ['readReceiptProblemsReport', 'pages', filters],
     queryFn: ({ pageParam }) => readPage(filters, pageParam),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last: Report) => last.next ?? undefined,
   });
-  if (open !== null) {
+  const back = () => {
+    setOpen(null);
+  };
+  if (open?.kind === 'grn') return <ArrivalDrill grn={open.grn} places={open.places} onBack={back} />;
+  if (open?.kind === 'damage') {
     return (
-      <ArrivalDrill
-        grn={open}
-        onBack={() => {
-          setOpen(null);
-        }}
-      />
+      <div className="flex flex-col gap-4">
+        <Toolbar>
+          <Button label="report.back" onClick={back} />
+        </Toolbar>
+        <DamageReportView reportId={open.damageReportId} />
+      </div>
     );
   }
   return (
@@ -153,20 +183,13 @@ export function ReceiptProblemsTable({ filters }: { filters: ReceiptProblemsFilt
                       <tr key={row.line.id}>
                         <td className={cell}>
                           <span className="flex flex-col">
-                            <button
-                              type="button"
-                              className="text-left text-accent underline"
-                              onClick={() => {
-                                setOpen({
-                                  grnId: row.grnId,
-                                  number: row.grnNumber,
-                                  arrivalId: row.arrivalId,
-                                  siteId: row.siteId,
-                                });
+                            <GrnLinks
+                              names={names}
+                              grnIds={[row.grnId]}
+                              onOpen={(grn) => {
+                                setOpen({ kind: 'grn', grn, places: names });
                               }}
-                            >
-                              {row.grnNumber}
-                            </button>
+                            />
                             <span className="text-caption text-text-2">
                               {t('report.problems.grn-of', {
                                 date: formatDate(row.businessDate),
@@ -182,7 +205,7 @@ export function ReceiptProblemsTable({ filters }: { filters: ReceiptProblemsFilt
                           </span>
                         </td>
                         <td className={cell}>{goodsText(row.line)}</td>
-                        <td className={`${cell} tabular-nums`}>
+                        <td className={`${cell} ${numberCell}`}>
                           {t('report.problems.counted', {
                             invoiced: formatQuantity(row.line.invoiceQuantity),
                             counted: formatQuantity(row.line.recounted?.countedQuantity ?? row.line.countedQuantity),
@@ -193,7 +216,14 @@ export function ReceiptProblemsTable({ filters }: { filters: ReceiptProblemsFilt
                           <HeldDecision row={row} names={names} timeZone={timeZone} />
                         </td>
                         <td className={cell}>
-                          <DamageDecision row={row} names={names} timeZone={timeZone} />
+                          <DamageDecision
+                            row={row}
+                            names={names}
+                            timeZone={timeZone}
+                            onReport={(damageReportId) => {
+                              setOpen({ kind: 'damage', damageReportId });
+                            }}
+                          />
                         </td>
                       </tr>
                     ))}

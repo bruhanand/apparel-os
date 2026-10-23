@@ -1,13 +1,15 @@
 import { z } from 'zod';
-import { bookingStatusSchema } from './booking.js';
-import { businessDateSchema, idSchema, paiseSchema } from './common.js';
+import { bookingLineStatusSchema, bookingStatusSchema } from './booking.js';
+import { businessDateSchema, idSchema, pageLimitSchema, paiseSchema } from './common.js';
 import { damageReportStateSchema } from './damage.js';
 import { grnLineSchema } from './receiving.js';
 import {
   heldByKindSchema,
+  namedRecordSchema,
   stockConditionSchema,
   stockCostSchema,
   stockProductSchema,
+  stockRecordGrnSchema,
   stockSearchCursorSchema,
 } from './stock-search.js';
 
@@ -26,21 +28,17 @@ export const RECEIPT_PROBLEMS_EXPORT_CAP = 10_000;
 /** The most rows one export of the stock report holds, a technical cap. */
 export const STOCK_REPORT_EXPORT_CAP = 10_000;
 /**
- * The most bookings and GRN lines the supplier report reads to work out its figures, technical caps: past either it is
- * refused as a whole (`reports.report-too-large`), so no figure is shown from part of its records (PRD-PRF-004); the
- * reader narrows it by supplier, brand or season.
+ * The most bookings and GRN lines one request of a report reads, those its reader may see and those hidden from them
+ * alike, technical caps (goods-in 9.5): the supplier report reads every one to work out its figures and is refused as a
+ * whole past either (`reports.report-too-large`), so no figure is shown from part of its records (PRD-PRF-004); an export
+ * of the booking status or the receipt problems reads its report to the end within them and is refused as too large
+ * past them (`reports.export-too-large`), as past its own cap of rows shown. The reader narrows the report.
  */
-export const SUPPLIER_REPORT_BOOKING_CAP = 10_000;
-export const SUPPLIER_REPORT_LINE_CAP = 100_000;
+export const REPORT_BOOKING_READ_CAP = 10_000;
+export const REPORT_LINE_READ_CAP = 100_000;
 
 /** A page size a report is read in: a whole number from 1 to the cap. */
-const limitSchema = z
-  .string()
-  .regex(/^[1-9]\d*$/)
-  .refine((limit) => Number(limit) <= REPORT_PAGE_CAP, { message: `At most ${String(REPORT_PAGE_CAP)}` })
-  .optional();
-
-const namedSchema = z.strictObject({ id: idSchema, code: z.string(), name: z.string() });
+const limitSchema = pageLimitSchema(REPORT_PAGE_CAP).optional();
 
 /**
  * The names of what a report shows, each as in force on the read's business date: places, legal entities, brands,
@@ -49,15 +47,15 @@ const namedSchema = z.strictObject({ id: idSchema, code: z.string(), name: z.str
  * (PRD-MOD-015).
  */
 export const reportNamesSchema = z.strictObject({
-  sites: z.array(namedSchema),
-  businessUnits: z.array(namedSchema),
-  locations: z.array(namedSchema),
-  legalEntities: z.array(namedSchema),
-  brands: z.array(namedSchema),
-  suppliers: z.array(namedSchema),
-  seasons: z.array(namedSchema),
+  sites: z.array(namedRecordSchema),
+  businessUnits: z.array(namedRecordSchema),
+  locations: z.array(namedRecordSchema),
+  legalEntities: z.array(namedRecordSchema),
+  brands: z.array(namedRecordSchema),
+  suppliers: z.array(namedRecordSchema),
+  seasons: z.array(namedRecordSchema),
   people: z.array(z.strictObject({ userId: idSchema, name: z.string() })),
-  grns: z.array(z.strictObject({ grnId: idSchema, number: z.string(), arrivalId: idSchema, siteId: idSchema })),
+  grns: z.array(stockRecordGrnSchema),
 });
 export type ReportNames = z.infer<typeof reportNamesSchema>;
 
@@ -102,7 +100,10 @@ export const bookingStatusRowSchema = z.strictObject({
   seasonValueId: idSchema,
   supplierPartyId: idSchema,
   destinationSiteId: idSchema,
-  status: bookingStatusSchema,
+  /** The status, each line without its indicative cost, which the report does not show (goods-in 9.1, 9.5). */
+  status: bookingStatusSchema.extend({
+    lines: z.array(bookingLineStatusSchema.omit({ indicativeCost: true })),
+  }),
   deliveries: z.array(
     z.strictObject({ lineKey: idSchema, grnId: idSchema, grnLineId: idSchema, quantity: z.int().min(1) }),
   ),
@@ -236,7 +237,19 @@ export const supplierPerformanceRowSchema = z.strictObject({
   damage: z.strictObject({
     counted: z.int().min(0),
     damaged: z.int().min(0),
+    /** Pieces counted on lines whose count's damage report the reader may not see, so neither damaged nor not. */
+    unknown: z.int().min(0),
     rate: reportRateSchema,
+  }),
+  /**
+   * The records each figure is worked from, which it drills down to (goods-in 9.1): the bookings of the fill rate, the
+   * GRNs whose pieces the on-time rate is over, and the GRNs whose lines the damage rate is over, as the reader may see
+   * them.
+   */
+  records: z.strictObject({
+    bookings: z.array(z.strictObject({ bookingId: idSchema, number: z.string() })),
+    timedGrnIds: z.array(idSchema),
+    countedGrnIds: z.array(idSchema),
   }),
 });
 export type SupplierPerformanceRow = z.infer<typeof supplierPerformanceRowSchema>;
@@ -274,12 +287,17 @@ export type StockReportQuery = z.infer<typeof stockReportQuerySchema>;
  * entity; a supplier; the brand; or Unknown until recorded (PRD-MOD-015).
  */
 export const stockOwnerSchema = z.discriminatedUnion('kind', [
-  z.strictObject({ kind: z.literal('organisation'), legalEntityId: idSchema }),
-  z.strictObject({ kind: z.literal('supplier'), partyId: idSchema }),
-  z.strictObject({ kind: z.literal('brand'), brandId: idSchema }),
+  z.strictObject({ kind: z.enum(['organisation', 'supplier', 'brand']), partyId: idSchema }),
   z.strictObject({ kind: z.literal('unknown') }),
 ]);
 export type StockOwner = z.infer<typeof stockOwnerSchema>;
+
+/**
+ * Who owns goods, by kind, and the list of a report's names its party is named from: the Organisation by its legal
+ * entity, a supplier, or a brand (goods-in 9.3; PRD-ORG-015). One map, which the screen and the export both name an
+ * owner by (code review 9 of stage 2).
+ */
+export const STOCK_OWNER_NAMES = { organisation: 'legalEntities', supplier: 'suppliers', brand: 'brands' } as const;
 
 /** The MRP value of the physical pieces: known, or Unknown while any piece has no MRP from its PT (goods-in 9.5). */
 export const mrpValueSchema = z.discriminatedUnion('kind', [

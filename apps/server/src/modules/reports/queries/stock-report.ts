@@ -1,13 +1,13 @@
 import { addPaise, isKnown, paise, type Paise } from '@apparel-os/domain';
 import type { StockCost, StockReport, StockReportFilters, StockReportRow } from '@apparel-os/schemas';
-import type { ReadModelGateway, TransactionContext } from '../../../kernel/index.js';
-import type { AccessInterface, RecordFacts } from '../../access/index.js';
 import { CATALOGUE_PRODUCT_FACTS } from '../../merchandise/catalogue/index.js';
 import { PT_ORIGIN_MRP } from '../../merchandise/pt/index.js';
 import { STOCK_BALANCE_COSTS, STOCK_HOLDINGS, type Holding, type HoldingKey } from '../../stock/ledger/index.js';
 import { holdingCursorOf, mrpValueOf } from '../domain/stock-report.js';
+import { factsOf, readerAuthority, type Shown } from './authority.js';
 import { namesOf } from './names.js';
-import { productOf, type Authority, type CostShown } from './stock-search.js';
+import type { Reading } from './reading.js';
+import { productOf } from './stock-search.js';
 
 // The stock report (goods-in 9.2, 9.3, 9.5; PRD-PRO-001, PRD-ORG-014, PRD-ORG-015, PRD-ACS-008, PRD-MOD-015;
 // S2-F11-T02): stock by product, size, location, condition and owner, with the quantities of stock search apart, the
@@ -21,40 +21,36 @@ export interface StockReportRequest {
   readonly filters: StockReportFilters;
   readonly after?: HoldingKey;
   readonly limit: number;
-  readonly today: string;
 }
 
-/** A page of the stock report, and each row whose cost it shows, for an export's access record. */
+/** A page of the stock report, and each row it shows with the grants that show it, for an export's step 0. */
 export interface StockReportAnswer {
   readonly report: StockReport;
-  readonly costShown: readonly CostShown[];
+  readonly shown: readonly Shown[];
 }
 
-const factsOf = (holding: Holding): RecordFacts => ({
-  siteId: holding.key.siteId,
-  ...(holding.storeId === null ? {} : { storeId: holding.storeId }),
-  businessUnitId: holding.key.businessUnitId,
-  legalEntityId: holding.key.legalEntityId,
-  brandId: holding.brandId,
-});
+/** The parties of the owners of one kind among the rows, which the names are read for. */
+const ownersOf = (rows: readonly Holding[], kind: 'organisation' | 'supplier' | 'brand') =>
+  rows.flatMap((each) => (each.owner.kind === kind ? [each.owner.partyId] : []));
 
-export async function stockReport(
-  gateway: ReadModelGateway,
-  access: AccessInterface,
-  context: TransactionContext,
-  request: StockReportRequest,
-  authority: Authority,
-): Promise<StockReportAnswer> {
+export async function stockReport(reading: Reading, request: StockReportRequest): Promise<StockReportAnswer> {
+  const { gateway, context } = reading;
+  const authority = readerAuthority(reading.access, context, reading.actorId);
   const read = await gateway.read(context, STOCK_HOLDINGS, {
     ...request.filters,
     ...(request.after === undefined ? {} : { after: request.after }),
     limit: request.limit,
   });
   const page = read.answer.holdings;
-  const pageFacts = page.map(factsOf);
+  const pageFacts = page.map((holding) => factsOf({ ...holding, ...holding.key }));
   const visible = await authority.visible(pageFacts);
-  const shown = page.filter((_, at) => visible[at] === true);
-  const shownFacts = pageFacts.filter((_, at) => visible[at] === true);
+  const shownRows = page.flatMap((holding, at) => {
+    const views = visible[at];
+    const facts = pageFacts[at];
+    return views === undefined || facts === undefined ? [] : [{ holding, facts, views }];
+  });
+  const shown = shownRows.map((each) => each.holding);
+  const shownFacts = shownRows.map((each) => each.facts);
 
   // Cost only where the reader's assignment grants the cost field class; otherwise masked (access-and-approvals 6).
   const costShown = await authority.cost(shownFacts);
@@ -95,28 +91,19 @@ export async function stockReport(
     await gateway.read(context, CATALOGUE_PRODUCT_FACTS, {
       skuIds: shown.flatMap((each) => (each.product.kind === 'sku' ? [each.product.skuId] : [])),
       brandIds: [],
-      date: request.today,
+      date: reading.today,
     })
   ).answer;
   const products = new Map(facts.products.map((each) => [each.skuId, each]));
-  const { names, sourceGrns } = await namesOf(
-    gateway,
-    access,
-    context,
-    {
-      siteIds: shown.map((each) => each.key.siteId),
-      businessUnitIds: shown.map((each) => each.key.businessUnitId),
-      locationIds: shown.map((each) => each.key.locationId),
-      legalEntityIds: shown.flatMap((each) => (each.owner.kind === 'organisation' ? [each.owner.legalEntityId] : [])),
-      brandIds: [
-        ...shown.map((each) => each.brandId),
-        ...shown.flatMap((each) => (each.owner.kind === 'brand' ? [each.owner.brandId] : [])),
-      ],
-      supplierIds: shown.flatMap((each) => (each.owner.kind === 'supplier' ? [each.owner.partyId] : [])),
-      sources: shown.flatMap((each) => each.sources),
-    },
-    request.today,
-  );
+  const { names, sourceGrns } = await namesOf(reading, {
+    siteIds: shown.map((each) => each.key.siteId),
+    businessUnitIds: shown.map((each) => each.key.businessUnitId),
+    locationIds: shown.map((each) => each.key.locationId),
+    legalEntityIds: ownersOf(shown, 'organisation'),
+    brandIds: [...shown.map((each) => each.brandId), ...ownersOf(shown, 'brand')],
+    supplierIds: ownersOf(shown, 'supplier'),
+    sources: shown.flatMap((each) => each.sources),
+  });
   const grnOf = (source: Holding['sources'][number]) =>
     sourceGrns.find(
       (each) =>
@@ -158,9 +145,6 @@ export async function stockReport(
       names,
       next: read.answer.next === null ? null : holdingCursorOf(read.answer.next),
     },
-    costShown: shownFacts.flatMap((facts, at) => {
-      const roleAssignmentId = costShown[at];
-      return roleAssignmentId === undefined ? [] : [{ facts, roleAssignmentId }];
-    }),
+    shown: shownRows.map(({ facts, views }, at) => ({ facts, views, costAssignmentId: costShown[at] })),
   };
 }

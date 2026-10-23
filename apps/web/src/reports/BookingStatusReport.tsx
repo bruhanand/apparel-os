@@ -11,6 +11,7 @@ import { ApiFailure } from '../api/query';
 import { BookingView } from '../booking/BookingView';
 import { useBookingNames } from '../booking/names';
 import { Button } from '../components/Button';
+import { numberCell } from '../components/cells';
 import { EmptyState } from '../components/StandardStates';
 import { StatusBadge } from '../components/StatusBadge';
 import { AsOf } from '../history/AsOf';
@@ -44,12 +45,12 @@ function BookingRows({
   booking: Report['bookings'][number];
   names: ReportNames;
   onBooking: () => void;
-  onGrn: (grn: ReportNames['grns'][number]) => void;
+  onGrn: (grn: ReportNames['grns'][number], places: ReportNames) => void;
 }) {
   return (
     <Fragment>
       <tr className="bg-sunken">
-        <td className={cell} colSpan={9}>
+        <td className={cell} colSpan={10}>
           <span className="flex flex-wrap items-center gap-3">
             <button type="button" className="font-semibold text-accent underline" onClick={onBooking}>
               {booking.number}
@@ -81,12 +82,16 @@ function BookingRows({
               size: line.size ?? t('report.none'),
             })}
           </td>
+          <td className={cell}>
+            {/* Its own delivery date, as extended, beside its due date (goods-in 3.10, 9.5). */}
+            {line.deliveryDate === null ? t('report.none') : formatDate(line.deliveryDate)}
+          </td>
           <td className={cell}>{formatDate(line.dueDate)}</td>
-          <td className={`${cell} tabular-nums`}>{formatQuantity(line.ordered)}</td>
-          <td className={`${cell} tabular-nums`}>{formatQuantity(line.delivered)}</td>
-          <td className={`${cell} tabular-nums`}>{formatQuantity(line.cancelled)}</td>
-          <td className={`${cell} tabular-nums`}>{formatQuantity(line.outstanding)}</td>
-          <td className={`${cell} tabular-nums`}>{formatQuantity(line.overDelivered)}</td>
+          <td className={`${cell} ${numberCell}`}>{formatQuantity(line.ordered)}</td>
+          <td className={`${cell} ${numberCell}`}>{formatQuantity(line.delivered)}</td>
+          <td className={`${cell} ${numberCell}`}>{formatQuantity(line.cancelled)}</td>
+          <td className={`${cell} ${numberCell}`}>{formatQuantity(line.outstanding)}</td>
+          <td className={`${cell} ${numberCell}`}>{formatQuantity(line.overDelivered)}</td>
           <td className={cell}>{line.overdue ? <StatusBadge state="overdue" /> : null}</td>
           <td className={cell}>
             <GrnLinks
@@ -96,7 +101,9 @@ function BookingRows({
                   booking.deliveries.filter((each) => each.lineKey === line.lineKey).map((each) => each.grnId),
                 ),
               ]}
-              onOpen={onGrn}
+              onOpen={(grn) => {
+                onGrn(grn, names);
+              }}
             />
           </td>
         </tr>
@@ -109,7 +116,9 @@ function BookingRows({
 export function BookingStatusTable({ filters }: { filters: BookingStatusFilters }) {
   const timeZone = useTimeZone();
   const [open, setOpen] = useState<
-    { kind: 'booking'; bookingId: string } | { kind: 'grn'; grn: ReportNames['grns'][number] } | null
+    | { kind: 'booking'; bookingId: string }
+    | { kind: 'grn'; grn: ReportNames['grns'][number]; places: ReportNames }
+    | null
   >(null);
   const query = useInfiniteQuery({
     queryKey: ['readBookingStatusReport', 'pages', filters],
@@ -121,7 +130,7 @@ export function BookingStatusTable({ filters }: { filters: BookingStatusFilters 
     setOpen(null);
   };
   if (open?.kind === 'booking') return <BookingView bookingId={open.bookingId} onBack={back} />;
-  if (open?.kind === 'grn') return <ArrivalDrill grn={open.grn} onBack={back} />;
+  if (open?.kind === 'grn') return <ArrivalDrill grn={open.grn} places={open.places} onBack={back} />;
   return (
     <ListRead query={query} what="report.booking-status.what">
       {({ pages }) => {
@@ -138,6 +147,7 @@ export function BookingStatusTable({ filters }: { filters: BookingStatusFilters 
                   <thead>
                     <tr>
                       <Th label="report.booking.column.line" />
+                      <Th label="report.booking.column.delivery-date" />
                       <Th label="report.booking.column.due" />
                       <Th label="report.booking.column.ordered" />
                       <Th label="report.booking.column.delivered" />
@@ -157,8 +167,8 @@ export function BookingStatusTable({ filters }: { filters: BookingStatusFilters 
                         onBooking={() => {
                           setOpen({ kind: 'booking', bookingId: booking.bookingId });
                         }}
-                        onGrn={(grn) => {
-                          setOpen({ kind: 'grn', grn });
+                        onGrn={(grn, places) => {
+                          setOpen({ kind: 'grn', grn, places });
                         }}
                       />
                     ))}

@@ -53,7 +53,16 @@ function booking(windowTo: string, lines: readonly BookingLineStatus[]): Booking
       overDelivered: sum('overDelivered'),
     },
   };
-  return { supplierPartyId: S, brandId: B, seasonValueId: SPRING, status, deliveries: [] };
+  const bookingId = id();
+  return {
+    bookingId,
+    number: `SYN-BKG-${bookingId.slice(-3)}`,
+    supplierPartyId: S,
+    brandId: B,
+    seasonValueId: SPRING,
+    status,
+    deliveries: [],
+  };
 }
 
 function delivered(of: BookingFacts, lineAt: number, quantity: number): string {
@@ -67,16 +76,40 @@ function delivered(of: BookingFacts, lineAt: number, quantity: number): string {
   return grnLineId;
 }
 
+/** The SYNTHETIC GRN of a line: one GRN per line, by the line's identifier. */
+const grnOf = (grnLineId: string) => `${grnLineId.slice(0, -3)}999`;
+
 const grnLine = (grnLineId: string, arrivalDate: string, counted: number, damaged?: number): GrnLineFacts => ({
   grnLineId,
+  grnId: grnOf(grnLineId),
   supplierPartyId: S,
   brandId: B,
   arrivalDate,
   counted,
-  countDamage: damaged === undefined ? null : { quantity: damaged, state: 'Confirmed' },
+  countDamage: damaged === undefined ? { kind: 'none' } : { kind: 'shown', quantity: damaged, state: 'Confirmed' },
 });
 
 describe('the supplier report (goods-in 9.3, 9.5)', () => {
+  it('PRD-EXC-011 each figure drills down to the records it is worked from: the fill rate to its bookings, the others to their GRNs', () => {
+    const ended = booking('2026-11-05', [line(4, 4, 0, '2026-11-05', null)]);
+    const open = booking('2026-11-30', [line(6, 2, 0, '2026-11-30', null)]);
+    const timed = delivered(ended, 0, 4);
+    delivered(open, 0, 2);
+    const unbooked = id();
+    const [row] = supplierPerformance(
+      [ended, open],
+      [grnLine(timed, '2026-11-04', 4), grnLine(unbooked, '2026-11-04', 1)],
+      TODAY,
+    ).filter((each) => each.season.kind === 'value');
+    // The fill rate is over the ended booking only; the on-time rate over the pieces of both bookings, of the one GRN
+    // the reader sees; the damage rate over the lines of the season, the unbooked line being of an Unknown season.
+    expect(row?.records).toEqual({
+      bookings: [{ bookingId: ended.bookingId, number: ended.number }],
+      timedGrnIds: [grnOf(timed)],
+      countedGrnIds: [grnOf(timed)],
+    });
+  });
+
   it('PRD-BKG-011 fill rate is delivered over ordered, over bookings whose window has ended or whose balance is closed', () => {
     // Ended: window to 9 Nov, before today; 8 of 10 delivered. Closed: 4 of 4. Open: 1 of 5, window to 30 Nov.
     const ended = booking('2026-11-09', [line(10, 8, 0, '2026-11-09', null)]);
@@ -149,7 +182,7 @@ describe('the supplier report (goods-in 9.3, 9.5)', () => {
     const unbooked = id();
     const submitted: GrnLineFacts = {
       ...grnLine(id(), '2026-11-05', 4),
-      countDamage: { quantity: 2, state: 'Submitted' },
+      countDamage: { kind: 'shown', quantity: 2, state: 'Submitted' },
     };
     const rows = supplierPerformance(
       [of],
@@ -161,6 +194,7 @@ describe('the supplier report (goods-in 9.3, 9.5)', () => {
     expect(rows.find((each) => each.season.kind === 'value')?.damage).toEqual({
       counted: 6,
       damaged: 1,
+      unknown: 0,
       rate: { kind: 'measured', numerator: 1, denominator: 6 },
     });
     expect(rows.find((each) => each.season.kind === 'unknown')).toMatchObject({
@@ -168,7 +202,19 @@ describe('the supplier report (goods-in 9.3, 9.5)', () => {
       brandId: B,
       fill: { bookings: 0, rate: { kind: 'unknown' } },
       timeliness: { delivered: 0, rate: { kind: 'unknown' } },
-      damage: { counted: 7, damaged: 0, rate: { kind: 'measured', numerator: 0, denominator: 7 } },
+      damage: { counted: 7, damaged: 0, unknown: 0, rate: { kind: 'measured', numerator: 0, denominator: 7 } },
     });
+  });
+
+  it('DEC-117 PRD-MOD-015 a damage report the reader may not see leaves the damage rate Unknown, never counted either way', () => {
+    const of = booking('2026-11-30', [line(10, 6, 0, '2026-11-30', null)]);
+    const seen = delivered(of, 0, 4);
+    const hidden = delivered(of, 0, 2);
+    const rows = supplierPerformance(
+      [of],
+      [grnLine(seen, '2026-11-05', 4, 1), { ...grnLine(hidden, '2026-11-05', 2), countDamage: { kind: 'unknown' } }],
+      TODAY,
+    );
+    expect(rows[0]?.damage).toEqual({ counted: 6, damaged: 1, unknown: 2, rate: { kind: 'unknown' } });
   });
 });
