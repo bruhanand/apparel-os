@@ -35,13 +35,14 @@ import { unknownText } from './names';
 /** The reads a scan makes stale. */
 const SCAN_READS = ['readScanIn', 'readReceivingInbox', 'readArrival'] as const;
 
-/** A product as the scan-in names it: its SKU code, style code and size, each Unknown while unread. */
+/** A product as the scan-in names it: its SKU code, style code and size, Unknown while unread (PRD-MOD-015). */
 function productText(product: ScanInProduct | undefined): string {
-  if (product === undefined) return unknownText();
+  if (product === undefined || product.name.kind === 'unknown') return unknownText();
+  const { name } = product;
   return t('scan.product', {
-    code: product.code ?? unknownText(),
-    style: product.styleCode ?? unknownText(),
-    size: product.size ?? unknownText(),
+    code: name.code,
+    style: name.styleCode,
+    size: name.size.kind === 'known' ? name.size.value : unknownText(),
   });
 }
 
@@ -194,6 +195,7 @@ function Progress({ read }: { read: ScanInRead }) {
                 accepted: formatQuantity(product.accepted),
                 covered: formatQuantity(product.covered),
                 waiting: formatQuantity(product.waiting),
+                damaged: formatQuantity(product.damaged),
                 held: formatQuantity(product.held),
               })}
             </span>

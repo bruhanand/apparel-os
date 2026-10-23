@@ -375,7 +375,9 @@ export class Receiving {
     grnId: string,
   ): Promise<readonly { readonly action: 'view'; readonly recordType: string; readonly facts: RecordFacts }[]> {
     const facts = await this.grnFacts(context, grnId);
-    return facts === undefined ? [] : PT_GOODS_READS.map((recordType) => ({ action: 'view' as const, recordType, facts }));
+    return facts === undefined
+      ? []
+      : PT_GOODS_READS.map((recordType) => ({ action: 'view' as const, recordType, facts }));
   }
 
   /**

@@ -1,6 +1,7 @@
 import { uuidv7 } from '@apparel-os/domain';
 import {
   inboxSchema,
+  RECEIVING_CAPS,
   scanAnsweredSchema,
   scanInReadSchema,
   scanRefusalSchema,
@@ -14,7 +15,8 @@ import { asUserIn, RECEIVER_REPORTER_AUTHORITY } from './support/damage.js';
 import { approved, decided } from './support/organisation.js';
 import { ptApprovalWorld, type Person, type PtApprovalWorld } from './support/pt-approval.js';
 import { allowVerifier, connect } from './support/postgres.js';
-import { agreementTerms, placeScope } from './support/receiving.js';
+import { RECEIVE_GOODS } from '../src/modules/receiving/domain/gate.js';
+import { agreementTerms, capabilitySwitched, placeScope, STOCK_VIEW } from './support/receiving.js';
 
 // S2-F07-T01: the scan-in at the Site, through the whole application on real PostgreSQL (goods-in 7, 7.5, 10.3, 12
 // tests 13, 14 and 17; PRD-REC-021, PRD-REC-022, PRD-STK-003, PRD-ACP-003, PRD-MER-007; DEC-135, DEC-141). The GRN, its
@@ -158,12 +160,12 @@ async function scanIn(grnId: string, person: Person = scanner): Promise<ScanInRe
 }
 
 /** What the delivery waits for in the Site's inbox, and in which view it is (goods-in 4.1; RR-606). */
-async function inboxOf(arrivalId: string) {
+async function inboxOf(arrivalId: string, person: Person = scanner) {
   for (const view of ['pending', 'history'] as const) {
     let after: string | null = null;
     do {
       const query: string = after === null ? `view=${view}` : `view=${view}&after=${after}`;
-      const read = await w.get(scanner, `/api/receiving/sites/${w.fixture.siteId}/inbox?${query}`);
+      const read = await w.get(person, `/api/receiving/sites/${w.fixture.siteId}/inbox?${query}`);
       expect(read.status, JSON.stringify(read.body)).toBe(200);
       const inbox = inboxSchema.parse(read.body);
       const entry = inbox.entries.find((each) => each.arrivalId === arrivalId);
@@ -207,7 +209,19 @@ describe('the scan-in at a Store (goods-in 7; 12 tests 13 and 14)', () => {
     const before = await scanIn(grnId);
     expect(before.state).toBe('scanning');
     expect(before.products).toEqual([
-      expect.objectContaining({ covered: 2, accepted: 0, waiting: 2, held: 0, styleCode: style, size: w.code.size(0) }),
+      expect.objectContaining({
+        covered: 2,
+        accepted: 0,
+        waiting: 2,
+        damaged: 0,
+        held: 0,
+        name: {
+          kind: 'known',
+          code: expect.any(String) as string,
+          styleCode: style,
+          size: { kind: 'known', value: w.code.size(0) },
+        },
+      }),
     ]);
     const skuId = before.products[0]?.skuId ?? '';
     expect((await stockOf(skuId)).available).toBe(0);
@@ -303,7 +317,13 @@ describe('the scan-in at a Store (goods-in 7; 12 tests 13 and 14)', () => {
       description: 'SYNTHETIC torn seam found while scanning',
     });
     expect(reported.status, JSON.stringify(reported.body)).toBe(200);
-    expect((await scanIn(grnId)).products[0]).toMatchObject({ covered: 2, accepted: 0, waiting: 1, held: 1 });
+    expect((await scanIn(grnId)).products[0]).toMatchObject({
+      covered: 2,
+      accepted: 0,
+      waiting: 1,
+      damaged: 1,
+      held: 0,
+    });
     await accepted(scanner, grnId, barcodes[0] ?? '', floor);
     // The held piece is never accepted: its barcode finds nothing left of the product (goods-in 7.2, 8.4).
     const held = await scan(scanner, grnId, barcodes[1] ?? '', floor);
@@ -311,7 +331,7 @@ describe('the scan-in at a Store (goods-in 7; 12 tests 13 and 14)', () => {
     expect(scanAnsweredSchema.parse(held.body)).toMatchObject({ outcome: 'refused', reason: 'nothing-left', skuId });
     const read = await scanIn(grnId);
     expect(read.state).toBe('complete');
-    expect(read.products[0]).toMatchObject({ accepted: 1, waiting: 0, held: 1 });
+    expect(read.products[0]).toMatchObject({ accepted: 1, waiting: 0, damaged: 1, held: 0 });
     const stock = await stockOf(skuId);
     expect(stock.available).toBe(1);
     expect(stock.at).toContainEqual({
@@ -413,15 +433,51 @@ describe('the scan-in at a Store (goods-in 7; 12 tests 13 and 14)', () => {
     expect(read.status, JSON.stringify(read.body)).toBe(404);
   });
 
-  it('DEC-117 the scan-in reads the same to a reader who may not see the stock rows', async () => {
-    const { grnId, barcodes } = await approvedPt('SCN-READER', [{ sizeAt: 0, counted: 2 }], () => [{}, {}]);
+  it('DEC-117 PRD-SEC-005 the stock of the goods stays hidden from whoever may not see it: no counts, Unknown in the inbox, and no refusal names a record of it', async () => {
+    const { arrivalId, grnId, barcodes } = await approvedPt('SCN-READER', [{ sizeAt: 0, counted: 2 }], () => [{}, {}]);
     await accepted(scanner, grnId, barcodes[0] ?? '', floor);
     const asScanner = await scanIn(grnId);
-    const asReader = await scanIn(grnId, w.people.ptReader);
-    expect(asReader.products.map(({ covered, accepted: a, waiting, held }) => ({ covered, a, waiting, held }))).toEqual(
-      asScanner.products.map(({ covered, accepted: a, waiting, held }) => ({ covered, a, waiting, held })),
+    const hiddenIds = [
+      ...asScanner.products.map((each) => each.skuId),
+      ...asScanner.scans.flatMap((each) => (each.skuId === null ? [] : [each.skuId])),
+    ];
+    // A reader of the Arrival with no view on the stock: the scan-in is refused, naming a permission only, never a
+    // product, an origin, a balance or a hold of the goods (code-house-rules 6.2, 12.3).
+    const refused = await w.get(w.people.ptReader, `/api/receiving/grns/${grnId}/scan-in`);
+    expect(refused.status, JSON.stringify(refused.body)).toBe(403);
+    expect(errorOf(refused)).toMatchObject({ kind: 'not-authorised', code: 'access.not-authorised' });
+    expect(errorOf(refused)?.missing?.map((each) => each.kind)).toEqual(['permission']);
+    for (const id of hiddenIds) expect(JSON.stringify(refused.body)).not.toContain(id);
+    // The inbox lists the delivery as Unknown to them: whether its scan-in is complete is read from the stock.
+    expect(await inboxOf(arrivalId, w.people.ptReader)).toEqual({ view: 'pending', waitingFor: 'unknown' });
+    expect(await inboxOf(arrivalId)).toEqual({ view: 'pending', waitingFor: 'scan-in' });
+    // A scanner without view on the stock is refused the scan, naming the permission, and nothing is recorded.
+    const blind = await w.enrol(
+      'SCN-NO-STOCK',
+      SCANNER_AUTHORITY.filter((each) => !STOCK_VIEW.some((stock) => stock.recordType === each.recordType)),
     );
-    expect(asReader.state).toBe('scanning');
+    const scanned = await scan(blind, grnId, barcodes[1] ?? '', floor);
+    expect(scanned.status, JSON.stringify(scanned.body)).toBe(403);
+    expect(errorOf(scanned)).toMatchObject({ kind: 'not-authorised', code: 'access.not-authorised' });
+    expect(errorOf(scanned)?.missing?.map((each) => each.kind)).toEqual(['permission']);
+    expect((await scanIn(grnId)).scans).toHaveLength(1);
+  });
+
+  it('PRD-SEC-017 goods-in 10.5 a scan is refused while the receiving activity is not available, and nothing is recorded', async () => {
+    const { grnId, barcodes } = await approvedPt('SCN-GATE', [{ sizeAt: 0, counted: 1 }], () => [{}]);
+    await capabilitySwitched(w.setup, w.database, RECEIVE_GOODS, false);
+    try {
+      const refused = await scan(scanner, grnId, barcodes[0] ?? '', floor);
+      expect(refused.status, JSON.stringify(refused.body)).toBe(403);
+      expect(errorOf(refused)?.code).toBe('configuration.operation-unavailable');
+      expect(errorOf(refused)?.missing).toContainEqual({ kind: 'capability', capability: RECEIVE_GOODS.capability });
+      const read = await scanIn(grnId);
+      expect(read.blocking).toContainEqual({ kind: 'capability', capability: RECEIVE_GOODS.capability });
+      expect(read.scans).toEqual([]);
+    } finally {
+      await capabilitySwitched(w.setup, w.database, RECEIVE_GOODS, true);
+    }
+    await accepted(scanner, grnId, barcodes[0] ?? '', floor);
   });
 
   it('DEC-141 POL-01.05 under an Agreement passing ownership at receipt and acceptance, the scan waits for SL-26 and changes nothing', async () => {
@@ -439,6 +495,20 @@ describe('the scan-in at a Store (goods-in 7; 12 tests 13 and 14)', () => {
 });
 
 describe('the scan-in record (goods-in 7.5)', () => {
+  it("PRD-REC-022 the database's cap on a scanned barcode is the shared schema's cap of a code", async () => {
+    const verify = await connect(w.database, 'verify');
+    try {
+      const found = await verify.query<{ definition: string }>(
+        `select pg_catalog.pg_get_constraintdef(oid) as definition from pg_catalog.pg_constraint
+          where conname = 'scan_barcode'`,
+      );
+      const cap = /length\(barcode\) <= (\d+)/.exec(found.rows[0]?.definition ?? '')?.[1];
+      expect(Number(cap)).toBe(RECEIVING_CAPS.codeText);
+    } finally {
+      await verify.end();
+    }
+  });
+
   it("PRD-REC-022 the database's check of a refused scan's reasons lists the shared schema's", async () => {
     const verify = await connect(w.database, 'verify');
     try {

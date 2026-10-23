@@ -93,8 +93,9 @@ describe('when the scan-in is complete (goods-in 7.3)', () => {
     expect(complete([row({ locationId: FLOOR, quantity: 2, accepted: 2 }), row({ quantity: 1, damageHeld: 1 })])).toBe(
       true,
     );
-    expect(complete([row({ locationId: FLOOR, quantity: 2, accepted: 2 }), row({ condition: 'damaged', quantity: 1 })]))
-      .toBe(true);
+    expect(
+      complete([row({ locationId: FLOOR, quantity: 2, accepted: 2 }), row({ condition: 'damaged', quantity: 1 })]),
+    ).toBe(true);
   });
 
   it('PRD-REC-022 not complete while a piece waits, or is under another hold, which no scan accepts', () => {
@@ -125,7 +126,8 @@ describe('which piece a scan takes (goods-in 7.2; PRD-STK-013)', () => {
 });
 
 describe('where a piece may go (goods-in 7.2)', () => {
-  const at = (atStore: boolean, kind: LocationKind, id = FLOOR) => destinationAllowed({ atStore }, { id, kind }, RECEIVING);
+  const at = (atStore: boolean, kind: LocationKind, id = FLOOR) =>
+    destinationAllowed({ atStore }, { id, kind }, RECEIVING);
 
   it('PRD-REC-021 at a Store the floor or the backstore; at a warehouse a bin', () => {
     expect(at(true, 'floor')).toBe(true);

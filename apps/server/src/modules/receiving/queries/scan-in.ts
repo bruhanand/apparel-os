@@ -62,7 +62,11 @@ export async function stockShown(
   const shown = facts.map(() => true);
   if (facts.length === 0) return shown;
   for (const recordType of PT_GOODS_READS) {
-    const checked = await reader.access.authoriseEach(context, { actorId: reader.actorId, action: 'view', recordType }, facts);
+    const checked = await reader.access.authoriseEach(
+      context,
+      { actorId: reader.actorId, action: 'view', recordType },
+      facts,
+    );
     if (checked.kind === 'refused') return facts.map(() => false);
     checked.each.forEach((each, at) => {
       if (each.kind !== 'allowed') shown[at] = false;
@@ -78,7 +82,12 @@ async function stockRefusal(
   facts: RecordFacts,
 ): Promise<CommandRefusal | undefined> {
   for (const recordType of PT_GOODS_READS) {
-    const checked = await reader.access.authorise(context, { actorId: reader.actorId, action: 'view', recordType, facts });
+    const checked = await reader.access.authorise(context, {
+      actorId: reader.actorId,
+      action: 'view',
+      recordType,
+      facts,
+    });
     if (checked.kind === 'refused') return checked.refusal;
   }
   return undefined;
@@ -288,7 +297,8 @@ export async function readScanIn(
   const stock = await stockRefusal(context, { access: dependencies.access, actorId }, facts);
   if (stock !== undefined) return { refused: stock };
   const view = await scanInView(context, dependencies, issued, row, query, today);
-  const names = (await dependencies.access.partyNames(context, [...new Set(view.scans.map((each) => each.scannedBy))], []))
-    .users;
+  const names = (
+    await dependencies.access.partyNames(context, [...new Set(view.scans.map((each) => each.scannedBy))], [])
+  ).users;
   return { read: { ...view, people: [...names].map(([userId, name]) => ({ userId, name })) } };
 }

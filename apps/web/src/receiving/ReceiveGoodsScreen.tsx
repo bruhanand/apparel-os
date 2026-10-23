@@ -8,6 +8,7 @@ import { api } from '../api';
 import { useSubmission } from '../api/command';
 import { readQuery } from '../api/query';
 import { Button } from '../components/Button';
+import { UnknownInCell } from '../components/cells';
 import { EmptyState } from '../components/StandardStates';
 import { StatusBadge } from '../components/StatusBadge';
 import { UnavailableState } from '../components/UnavailableState';
@@ -363,7 +364,12 @@ function InboxTable({ inbox, onOpen }: { inbox: Inbox; onOpen: (arrivalId: strin
                   <StatusBadge state={stateIdOf(entry.state)} />
                   {entry.grn !== null && <span className="text-body-sm">{entry.grn.number}</span>}
                   <span className="text-caption text-text-2">
-                    {t(entry.waitingFor === null ? 'receive.waiting.done' : `receive.waiting.${entry.waitingFor}`)}
+                    {entry.waitingFor === 'unknown' ? (
+                      // Unknown to a reader who may not see its stock: a blank a screen reader reads (goods-in 7.5).
+                      <UnknownInCell />
+                    ) : (
+                      t(entry.waitingFor === null ? 'receive.waiting.done' : `receive.waiting.${entry.waitingFor}`)
+                    )}
                   </span>
                 </span>
               </td>

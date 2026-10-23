@@ -1,4 +1,9 @@
-import { STOCK_BALANCE_TYPE, STOCK_HOLD_TYPE, STOCK_RECEIPT_ORIGIN_TYPE, stockConditionSchema } from '@apparel-os/schemas';
+import {
+  STOCK_BALANCE_TYPE,
+  STOCK_HOLD_TYPE,
+  STOCK_RECEIPT_ORIGIN_TYPE,
+  stockConditionSchema,
+} from '@apparel-os/schemas';
 import { sql } from 'drizzle-orm';
 import { CommandDefect, type TransactionContext } from '../../../../kernel/index.js';
 import type { Condition } from '../domain/request.js';
