@@ -17,6 +17,38 @@ export { SUPPLIER_ROLES } from './contracts/supplier-roles.js';
 export type { SupplierRoles } from './contracts/supplier-roles.js';
 // Read a SKU as of a date at a Site (structure-and-masters 4.7), for the stock ledger's SKU read (stock-ledger 13.9).
 export { skuOn } from './queries/sku.js';
+// The approved values of an attribute in force on a date (4.2), for `receiving`'s size of a count line (goods-in 4.3;
+// S2-F02-T02).
+export { vocabularyOn } from './queries/records.js';
+// The attribute marked as the season or the size list at the command's start, or not set with its refusal (4.2 "As
+// built"; RR-550, RR-556), for a budget's season and a count line's size (goods-in 3.3, 4.3).
+export { markedAttributeAt } from './queries/marks.js';
+export type { MarkedAttributeAt } from './queries/marks.js';
+// What `merchandise` · PT reads for a PT file (goods-in 5.2, 5.3, 5.5; S2-F04-T02): the brands and categories in force
+// by code, the item map of the item marking in force (RR-583), the brand's styles and SKUs the file names, and the
+// SKUs its barcodes name under the brand.
+export { barcodeSkusOn, brandProductsOn, brandsAndCategoriesOn, itemMapOf } from './queries/pt-file.js';
+export type { BarcodeSku, BrandSku, BrandStyle } from './queries/pt-file.js';
 export type { SiteChangeActor, SiteChangeRequest } from './commands/tracking.js';
 export { codeMappingChanged, productConfirmed, trackingProfileChanged } from './events.js';
 export { catalogueRestoreParticipant } from './restore-participant.js';
+// The tracking profiles as policy 4's values, for the policy gate (module-map 4.4; goods-in 10.5; RR-558).
+export { TRACKING_PROFILES_CHECK, trackingProfilesCheck } from './queries/validity.js';
+// The new products a PT approval confirms, with the barcodes of its rows, and the SKU code kind it draws their codes
+// from (goods-in 6.3 step 2, 6.6; structure-and-masters 4.2, 4.3 "As built with S2-F06-T01"; RR-585).
+export { checkPtProducts } from './queries/pt-products.js';
+export { confirmPtProducts } from './commands/confirm-pt-products.js';
+export { mapPtBarcodes } from './commands/map-pt-barcodes.js';
+export { ptProductLockTargets } from './commands/pt-barcode-keys.js';
+export type { CheckedPtProducts, PtConfirmer, PtProductRequest } from './domain/pt-products.js';
+export { SKU_CODE_KIND, SKU_CODE_SCOPE_KEY } from './domain/kinds.js';
+export { skuCodesOf } from './queries/sku.js';
+// Resolve a code (4.7; PRD-MER-006, PRD-MER-007; RR-554), for `receiving`'s scan-in, which resolves a scanned barcode
+// under the PT's brand (goods-in 7.2; S2-F07-T01).
+export { resolveCode } from './queries/codes.js';
+// The read models of stock search, served through the kernel's read-model gateway (goods-in 9.4; S2-F11-T01): the
+// products a search names and the facts of products and brands a result shows.
+export { CATALOGUE_PRODUCT_FACTS, CATALOGUE_PRODUCT_SEARCH, catalogueReadModels } from './queries/product-search.js';
+// The names of vocabulary values the stage 2 reports show, through the read-model gateway (goods-in 9.5; S2-F11-T02).
+export { CATALOGUE_VALUE_NAMES, catalogueNameReadModels } from './queries/value-names.js';
+export type { ProductFacts } from './queries/product-search.js';

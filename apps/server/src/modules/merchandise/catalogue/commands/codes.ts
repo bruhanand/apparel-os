@@ -4,11 +4,9 @@ import {
   type CodeMapped,
   type CodeMappingDraft,
   type CodeMappingEnd,
-  type CodeResolved,
   type MissingItem,
-  type ResolveCodeQuery,
 } from '@apparel-os/schemas';
-import { and, asc, eq, isNull, ne, not, or, sql } from 'drizzle-orm';
+import { and, eq, isNull, ne, not, or, sql } from 'drizzle-orm';
 import {
   CommandDefect,
   EXCLUSION_VIOLATION,
@@ -23,14 +21,20 @@ import type { AuditInterface } from '../../../audit/index.js';
 import type { Preparer } from '../../../organisation/index.js';
 import type { SupplierRoles } from '../contracts/supplier-roles.js';
 import { externalCode, externalCodeKey, pack } from '../db/schema.js';
+import { mayRepeat } from '../domain/codes.js';
 import { codeMappingChanged } from '../events.js';
 import { exists, inForceOn, recordItem, refused, today, type Outcome } from './common.js';
 
 // External codes (structure-and-masters 4.3, 4.7; PRD-MER-006 to PRD-MER-008; S1-F03-T02): a code kept exactly as
 // supplied, mapped to a SKU and a unit in one scope over its validity dates, as an active mapping or a historical
-// alias. The same-scope conflict is refused by the exclusion constraint; the cross-scope conflict by the service, under
+// alias. The same-scope conflict is refused by the exclusion constraints; the cross-scope conflict by the service, under
 // a lock on the code's row (`external_code_key`), so two mappings of one code never pass each other. Mappings take
 // effect when recorded, as no source names an approval for them (2.3). **Design choice.**
+//
+// A brand's barcode may repeat across products (PRD-MER-007; DEC-135; S2-F04-T01): a supplier barcode recorded under a
+// brand may name more than one SKU in that brand's scope, each mapping kept and flagged as repeated, and Resolve answers
+// every candidate for the person to choose from. It never names two units of one SKU. One recorded for a supplier or for
+// the whole Organisation, and every other kind, keeps one target (RR-554; 4.3 as built).
 
 /** The code's row, made the first time the code and kind are mapped; a race meets the unique constraint. */
 async function codeKey(context: TransactionContext, code: string, kind: CodeMappingDraft['kind']): Promise<string> {
@@ -102,7 +106,9 @@ async function namesRefusal(
 /**
  * The active mapping of the code in an overlapping scope, over overlapping dates, to another target, if any (4.3):
  * scopes overlap when they name the same supplier or brand, or when either is the whole Organisation. A supplier scope
- * and a brand scope are not compared here; Resolve refuses a request that matches both with different targets.
+ * and a brand scope are not compared here; Resolve refuses a request that matches both with different targets. Under
+ * one brand, a supplier barcode's mapping to another SKU is a repeat, so only the same SKU in another unit conflicts
+ * there; the whole Organisation's mapping to another target always conflicts (PRD-MER-007, DEC-135; RR-554).
  */
 async function crossScopeConflict(
   context: TransactionContext,
@@ -125,14 +131,22 @@ async function crossScopeConflict(
         not(externalCode.alias),
         sql`${externalCode.validDuring} && ${range}::daterange`,
         ne(externalCode.target, `${draft.skuId}/${draft.packId ?? ''}`),
-        scopeKind === 'organisation' ? undefined : or(eq(externalCode.scopeKind, 'organisation'), sameScope),
+        scopeKind === 'organisation'
+          ? undefined
+          : or(
+              eq(externalCode.scopeKind, 'organisation'),
+              mayRepeat(draft.kind, scopeKind) ? and(sameScope, eq(externalCode.skuId, draft.skuId)) : sameScope,
+            ),
       ),
     )
     .limit(1);
   return conflict?.id;
 }
 
-/** Map a code (4.3, 4.7): an active mapping that would make the code ambiguous is refused (PRD-MER-007). */
+/**
+ * Map a code (4.3, 4.7): an active mapping that would make the code ambiguous is refused, a supplier barcode recorded
+ * under a brand on another SKU of that brand's scope being a repeat, not an ambiguity (PRD-MER-007, DEC-135; RR-554).
+ */
 export async function mapCode(
   context: TransactionContext,
   dependencies: { readonly audit: AuditInterface; readonly suppliers: SupplierRoles },
@@ -164,6 +178,7 @@ export async function mapCode(
     context.tx.insert(externalCode).values({
       id: mappingId,
       codeKeyId: keyId,
+      kind: draft.kind,
       ...scopeColumns(draft.scope),
       skuId: draft.skuId,
       packId: draft.packId ?? null,
@@ -172,7 +187,7 @@ export async function mapCode(
       preparedByUserId: preparer.userId,
     }),
   );
-  // The same-scope conflict, held by the exclusion constraint behind the service (6.2).
+  // The same-scope conflict, held by the exclusion constraints behind the service (6.2).
   if (written.kind === 'caught') return refused('refused', 'merchandise.code-conflict');
   await dependencies.audit.record(context, {
     actor: { kind: 'user', id: preparer.userId },
@@ -249,72 +264,4 @@ export async function endCodeMapping(
     payload: { mappingId, skuId: head.skuId },
   });
   return { kind: 'success', answer: { mappingId } };
-}
-
-/**
- * Resolve a code (4.7; PRD-MER-006, PRD-MER-007): the mappings of the code and kind in force on the date whose scope is
- * the Organisation, or the supplier or brand given. Active mappings first: one target answers it, more than one is
- * ambiguous and refused. With no active match, historical aliases the same way. None matching is not found.
- * **Design choice:** an alias answers only where no active mapping does, so an old label still finds its SKU.
- */
-export async function resolveCode(
-  context: TransactionContext,
-  query: ResolveCodeQuery,
-): Promise<{ readonly resolved: CodeResolved } | { readonly refusal: CommandRefusal }> {
-  const rows = await context.tx
-    .select({
-      id: externalCode.id,
-      skuId: externalCode.skuId,
-      packId: externalCode.packId,
-      alias: externalCode.alias,
-      target: externalCode.target,
-    })
-    .from(externalCode)
-    .innerJoin(externalCodeKey, eq(externalCodeKey.id, externalCode.codeKeyId))
-    .where(
-      and(
-        eq(externalCodeKey.code, query.code),
-        eq(externalCodeKey.kind, query.kind),
-        sql`${externalCode.validDuring} @> ${query.date}::date`,
-        or(
-          eq(externalCode.scopeKind, 'organisation'),
-          query.supplierId === undefined
-            ? undefined
-            : and(eq(externalCode.scopeKind, 'supplier'), eq(externalCode.scopePartyId, query.supplierId)),
-          query.brandId === undefined
-            ? undefined
-            : and(eq(externalCode.scopeKind, 'brand'), eq(externalCode.scopeBrandId, query.brandId)),
-        ),
-      ),
-    )
-    .orderBy(asc(externalCode.id));
-  for (const alias of [false, true]) {
-    const matches = rows.filter((row) => row.alias === alias);
-    const targets = new Set(matches.map((row) => row.target));
-    if (targets.size > 1) {
-      return {
-        refusal: {
-          kind: 'refused',
-          code: 'merchandise.code-ambiguous',
-          missing: matches.map((row) => ({
-            kind: 'record',
-            recordType: 'merchandise.external_code',
-            recordId: row.id,
-          })),
-        },
-      };
-    }
-    const [match] = matches;
-    if (match !== undefined) {
-      return {
-        resolved: {
-          skuId: match.skuId,
-          ...(match.packId === null ? {} : { packId: match.packId }),
-          mappingId: match.id,
-          alias,
-        },
-      };
-    }
-  }
-  return { refusal: { kind: 'not-found', code: 'merchandise.code-not-found', missing: [] } };
 }

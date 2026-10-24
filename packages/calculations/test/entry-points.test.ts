@@ -1,4 +1,4 @@
-// The package's shape (shared-calculations 2.1, 2.3): two entry points, the selling one never reaching costing; only
+// The package's shape (shared-calculations 2.1, 2.3): three entry points, the selling one never reaching costing; only
 // @apparel-os/domain imported; no clock, randomness, environment or binary floating point in the calculations. This
 // proves at the source what the counter's build guard proves on the bundle (apps/counter/build-guard.ts). The module check enforces the import rules on every change too (`pnpm check:modules`).
 
@@ -6,6 +6,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import * as booking from '@apparel-os/calculations/booking';
 import * as costing from '@apparel-os/calculations/costing';
 import * as selling from '@apparel-os/calculations';
 
@@ -53,16 +54,25 @@ describe('entry points (shared-calculations 2.1, 2.3)', () => {
     expect(Object.keys(costing).sort()).toEqual(['costLine', 'matchCost', 'ticketMargin']);
   });
 
-  it('PRD-OFF-004 declares the two entry points in the package exports', () => {
+  it('PRD-BKG-003 DEC-130 the booking entry point holds a booking’s totals and its text comparison, apart from selling and costing', () => {
+    expect(Object.keys(booking).sort()).toEqual(['bookingTotals', 'textKey']);
+    const reached = [...graphFrom(join(src, 'booking/index.ts'))].map((f) => relative(src, f));
+    expect(reached.filter((f) => !f.startsWith('booking'))).toEqual([]);
+    const fromOthers = [...graphFrom(join(src, 'index.ts')), ...graphFrom(join(src, 'costing/index.ts'))];
+    expect(fromOthers.map((f) => relative(src, f)).filter((f) => f.startsWith('booking'))).toEqual([]);
+  });
+
+  it('PRD-OFF-004 declares the three entry points in the package exports', () => {
     const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as {
       name: string;
       exports: Record<string, { default: string }>;
       dependencies: Record<string, string>;
     };
     expect(manifest.name).toBe('@apparel-os/calculations');
-    expect(Object.keys(manifest.exports)).toEqual(['.', './costing']);
+    expect(Object.keys(manifest.exports)).toEqual(['.', './costing', './booking']);
     expect(manifest.exports['.']?.default).toBe('./dist/index.js');
     expect(manifest.exports['./costing']?.default).toBe('./dist/costing/index.js');
+    expect(manifest.exports['./booking']?.default).toBe('./dist/booking/index.js');
     expect(Object.keys(manifest.dependencies)).toEqual(['@apparel-os/domain']);
   });
 });

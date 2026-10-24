@@ -5,6 +5,7 @@ import { api } from '../api';
 import { useSubmission } from '../api/command';
 import { readQuery } from '../api/query';
 import { Button } from '../components/Button';
+import { FamilyBadge } from '../components/StatusBadge';
 import { EmptyState } from '../components/StandardStates';
 import { FormField } from '../forms/FormField';
 import { t } from '../messages/catalogue';
@@ -16,7 +17,9 @@ import { FormActions, RecordDrawer } from '../setup/RecordDrawer';
 
 // Setup › Products › Barcodes and aliases (structure-and-masters 4.3, 8; PRD-MER-006 to PRD-MER-008; S1-F03-T02):
 // each code exactly as supplied, leading zeros kept, mapped to a SKU and a unit in its scope over its dates, active or
-// a historical alias; a mapping that would make a code ambiguous is refused with its reason (PRD-MER-007).
+// a historical alias; a mapping that would make a code ambiguous is refused with its reason (PRD-MER-007). A supplier
+// barcode recorded under a brand whose tags repeat it on another product is kept and flagged as repeated (DEC-135;
+// S2-F04-T01; RR-554).
 
 const KINDS: readonly ExternalCodeKind[] = ['supplier-barcode', 'supplier-style-code', 'other', 'internal'];
 
@@ -295,6 +298,12 @@ export function CodesTab() {
                         {t(`products.codes.kind.${each.kind}`)}
                         {' · '}
                         {t(each.alias ? 'products.codes.alias' : 'products.codes.active')}
+                        {/* Each scan of it asks which product (PRD-MER-007, DEC-135). */}
+                        {each.repeated && (
+                          <div className="mt-1">
+                            <FamilyBadge family="attention" label={t('products.codes.repeated')} />
+                          </div>
+                        )}
                       </td>
                       <td className="px-3 py-2">{scopeText(each)}</td>
                       <td className="px-3 py-2">{skus.get(each.skuId) ?? each.skuId}</td>

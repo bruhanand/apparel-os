@@ -1328,3 +1328,166 @@
 - **Choice.** The first. Each book's cost formula is moving weighted average or FIFO (`PRD-LED-014`, `DEC-031`), and the product owner chooses it and the pool mode for each book, as the book's approved cost setting. KDPS's current CA-approved method is a fact Accounts and the CA supply; it informs the choice and does not bind it. Periodic average stays out.
 - **Why.** The policy must stay inside the PRD (rank 1), and the product owner decides (`DEC-125`). Both formulas and both pool modes are built and proved on synthetic data (`S1-F10`).
 - **Changed.** `POL-09.06` and `POL-09.21` reworded (IDs kept). books-and-posting 2 and stock-ledger 6 wording; `questions-for-kdps.md` Accounts 1 and CA 2; `docs/plan/open-items.md` §1 row 8 and §6 item 1; `docs/plan/kdps-values.md` RR-071, RR-072. Still OPEN: each book's actual formula and pool (V-08, V-09), chosen by the product owner before the first live valued movement.
+
+## DEC-128 — One delivery is an Arrival
+
+- **Date:** 20 Oct 2026 · **Decided by:** product owner · **Report item:** stage 2 grill, round 1 ([stage-2-grill-notes.md](plan/stage-2-grill-notes.md))
+- **Question.** The product owner called one delivery a "batch", but the PRD keeps batch for goods tracked by lot and expiry (`PRD-MER-010`, `PRD-MER-011`). The PRD names the arrival record (`PRD-REC-003`) but never defines it. What is one delivery called?
+- **Options.** Arrival · Delivery · Batch.
+- **Choice.** Arrival: one delivery of goods reaching a Site, recorded before it is counted. A supplier Arrival is counted once and gives one GRN. Batch keeps its lot-and-expiry meaning.
+- **Why.** The PRD and the earlier RetailsOps goods plan already use arrival; batch would clash with lot tracking.
+- **Changed.** PRD "Words used": new word Arrival. Whether an Arrival also gives exactly one PT (`PRD-REC-015` allows supplemental PTs) waits for the PT discussion the product owner will open.
+
+## DEC-129 — Booking terms come only from the Agreement
+
+- **Date:** 21 Oct 2026 · **Decided by:** product owner · **Report item:** stage 2 grill, rounds 3 and 4 ([stage-2-grill-notes.md](plan/stage-2-grill-notes.md))
+- **Question.** Policy 1 and `PRD-BKG-002` treat the brand's or supplier's terms as defaults that a single booking may change (its commercial model, return rights and payment terms). Should a booking be able to change them?
+- **Options.** Terms only from the Agreement · the Agreement's terms as defaults that a booking may change · terms typed into each booking from the signed MOU.
+- **Choice.** The first. The signed MOU with the supplier or brand is recorded once as its Agreement, with the signed copy attached. Every booking under it takes its terms and never differs. A change of terms is a new Agreement version.
+- **Why.** One signed source of terms: nothing is retyped, and no booking drifts from what was signed.
+- **Changed.** PRD "Words used": new word Agreement. `PRD-BKG-002` reworded. `POL-01.02`, `POL-01.03`, `POL-01.04`, `POL-01.08` and `POL-01.14` reworded (IDs kept). module-map 5 and 9, domain-model, structure-and-masters 5.2 and `coverage.md` wording. The Agreement's "default model for new bookings" term is retired; its field in code is removed by RR-545. Not changed: `POL-03.06` (the costing profile is not an Agreement term). Still OPEN: which Agreement a booking takes when both its supplier and its brand have one (RR-543), and which Agreement version a booking follows when the terms are revised after it is approved (RR-544); product owner, before the stage 2 booking design is approved.
+
+## DEC-130 — Booking lines, their prices and their match to the GRN
+
+- **Date:** 21 Oct 2026 · **Decided by:** product owner · **Report item:** stage 2 grill, rounds 3 to 5 ([stage-2-grill-notes.md](plan/stage-2-grill-notes.md))
+- **Question.** Which fields must a booking line have, does it carry a price, and how does a counted GRN line find its booking line?
+- **Options.** Lines: style code and quantity required, colour and size optional · every line by style, colour and size, as the size-colour grid implied. Price: an indicative cost and MRP per line · open-to-buy checked on pieces only. Match: at GRN issue, on the booking line's own fields · in a separate, dated linking step afterwards (the earlier RetailsOps plan).
+- **Choice.** Style code and quantity are required; colour and size are optional, for orders placed at style level. Each line carries an indicative cost and an MRP, used only for the booking's totals and the open-to-buy check; they never become the receipt cost. At GRN issue, a counted line links to the one booking line that matches its style code, and its colour and size where the booking line gives them; any other line goes to Booking for review. One booking can arrive over several Arrivals.
+- **Why.** The product owner's description of a booking; the open-to-buy check and the booking totals need a value (`PRD-BKG-003`, `PRD-BKG-004`).
+- **Changed.** `PRD-BKG-001`, `PRD-BKG-003` and `PRD-BKG-007` reworded.
+
+## DEC-131 — A booking is read from a photo or PDF of its document
+
+- **Date:** 21 Oct 2026 · **Decided by:** product owner · **Report item:** stage 2 grill, round 4 ([stage-2-grill-notes.md](plan/stage-2-grill-notes.md))
+- **Question.** How does a booking get into the system?
+- **Options.** AI reads a photo or PDF of the booking document into a draft, with manual entry kept open · one fixed booking template · manual entry only.
+- **Choice.** The first; there is no fixed template. AI reads the document into a draft booking with its lines, and a person reviews and saves it; AI never saves anything by itself (`PRD-SEC-003`, `PRD-SEC-004`). Manual entry stays available. The AI gateway therefore serves bookings in stage 2 too, switched off by default like every capability (`PRD-SEC-017`, `DEC-105`).
+- **Why.** Booking documents come as photos or PDFs in no fixed layout.
+- **Changed.** New `PRD-BKG-015`. `phases.md` stage 2 and `roadmap.md` `S2-F01`, `S2-F05` wording; module-map 9 range; `coverage.md`.
+
+## DEC-132 — A booking takes its brand's Agreement, in the version it was approved under
+
+- **Date:** 21 Oct 2026 · **Decided by:** product owner · **Report item:** RR-543, RR-544; stage 2 grill, round 6 ([stage-2-grill-notes.md](plan/stage-2-grill-notes.md))
+- **Question.** A booking names a supplier and a brand, and each may have an Agreement: whose terms does it take? And when the Agreement gets a new version after the booking is approved, does the booking follow it?
+- **Options.** Brand's Agreement · supplier's Agreement · a choice per booking. Keep the version approved under · follow the newest version.
+- **Choice.** The brand's Agreement; separate supplier terms for bookings are not needed now. A booking's terms are fixed at its approval: it keeps the Agreement version in force when it was approved, and takes a later version only when it is approved again.
+- **Why.** The product owner's answer; approval binds to the exact version of what was approved (`PRD-ACS-007`).
+- **Changed.** PRD "Words used" Agreement and `PRD-BKG-002` reworded. `POL-01.02`, `POL-01.04`, `POL-01.08` and `POL-01.14` reworded (IDs kept). structure-and-masters 5.2, domain-model, module-map 5, `roadmap.md` `S2-F01`. RR-543 and RR-544 closed. Not changed: a supplier's own Agreement and its cash-discount and interest terms (`PRD-PAY-015`).
+
+## DEC-133 — Every Arrival records its supplier invoice before the count
+
+- **Date:** 21 Oct 2026 · **Decided by:** product owner · **Report item:** stage 2 grill, round 7 ([stage-2-grill-notes.md](plan/stage-2-grill-notes.md))
+- **Question.** `PRD-REC-005` lets goods be counted with no invoice. The product owner says every delivery comes with its invoice. Must an Arrival have one?
+- **Options.** At least one supplier invoice recorded before the count starts · count without an invoice and add it later.
+- **Choice.** The first. An Arrival records at least one supplier invoice, and may record several, before its count starts; the count is matched against the invoice by hand. A missing booking or PT still does not stop the count.
+- **Why.** Every delivery arrives with its invoice, and the count is checked against it.
+- **Changed.** `PRD-REC-005` reworded. `roadmap.md` `S2-F02` and the count step of `ui-blueprint.html`.
+
+## DEC-134 — The first version of goods-in makes a PT only by uploading the fixed PT template
+
+- **Date:** 21 Oct 2026 · **Decided by:** product owner · **Report item:** stage 2 grill, round 9 ([stage-2-grill-notes.md](plan/stage-2-grill-notes.md))
+- **Question.** Stage 2 plans the PT workbench (preparation from the GRN count, supplier-file conversion, mapping rules), readers for vendor PT files in XLS, XLSB and CSV with their layouts, and AI reading of PT files. What does the first version build?
+- **Options.** PT only by uploading the Organisation's fixed PT template for a GRN, the rest after the first version · the whole stage 2 PT scope at once.
+- **Choice.** The first. Whoever is assigned makes the PT file by hand in the Organisation's fixed PT template (for KDPS, its 20-column template with the values of its master sheet, [pt-file-layouts.md](data-notes/pt-file-layouts.md) section 1) and uploads it for a GRN; the template is read as XLSX. The master sheet's lists are set up once as the Organisation's approved vocabularies, each confirmed by a second person (`PRD-IMP-008`); the upload refuses a cell whose value is not on its list and names the cell. The upload makes a draft PT; a different person approves it (`PRD-REC-017`), and the approval makes the stock real and sellable at the GRN's Site (round 1). The file's quantities must match the GRN count (`PRD-REC-016`). The PT workbench, the vendor-file readers and their layouts, and AI reading of PT files follow after the first version; AI reading of booking documents stays (`DEC-131`).
+- **Why.** The product owner designs the PT workbench later; the KDPS format is fixed, so the first version needs only its upload.
+- **Changed.** `phases.md` stage 2 and `roadmap.md` stage 2 (first version); `coverage.md` note. No PRD rule changes: the deferred parts keep their IDs. Still OPEN: where the deferred parts are placed (RR-546; product owner, when the PT workbench is designed).
+
+## DEC-135 — PT upload checks, repeated brand barcodes and the scan-in after approval
+
+- **Date:** 21 Oct 2026 · **Decided by:** product owner · **Report item:** stage 2 grill, round 10 ([stage-2-grill-notes.md](plan/stage-2-grill-notes.md))
+- **Question.** For the first-version PT upload: how strictly does the file match the GRN, are its price and tax columns calculated, how do new products enter, may a barcode repeat, and when do the goods become sellable?
+- **Options.** Match per style, colour and size · match the total only. Price and tax as the file gives them · calculated from costing profiles. A repeated barcode refused · flagged and resolved at the scan. Sellable at PT approval · after a scan-in at the Site.
+- **Choice.**
+  - The file must match the GRN's good counted pieces per style (DESIGN), colour and size; otherwise the whole upload is refused, with the differences listed (`PRD-REC-016`).
+  - BASIC, P RATE, INPUT TAX and OUTPUT TAX are taken as the file gives them, marked as supplied values (`PRD-IMP-006`), and the approver checks them. The system checks NAG equals QTY and MARGIN by `PRD-PTW-011`.
+  - Rows for products not yet set up are proposed by the upload and confirmed by the PT approver in the same approval (`PRD-MER-013`).
+  - A barcode may repeat: brand-tagged items sometimes carry one barcode across products. A repeated barcode is flagged, never refused, and at each scan the person confirms which product it is; nothing is chosen silently.
+  - PT approval makes the PT official and values the stock. The goods then are scanned and inwarded at the Site: at a Store into the floor or backstore, at a warehouse into a bin. Only then are they sellable at a Store (`PRD-REC-021`, `PRD-REC-022`, `PRD-STK-003` stand). This corrects round 1 answer 2 and the words "the approval makes the stock real and sellable" in `DEC-134`.
+- **Why.** The product owner's description of the flow, which matches the earlier RetailsOps system document ([system-dumb.md](history/system-dumb.md) sections 6.1, 13.3, 13.8, 18.6).
+- **Changed.** `PRD-MER-007` reworded. `roadmap.md` stage 2 first version. Not changed: `PRD-PTW-007` (fields calculated from a costing profile) waits for the PT workbench (RR-546). The stage 1 code that refuses an ambiguous barcode mapping is changed by RR-547.
+
+## DEC-136 — The first version records bookings and GRNs by hand; AI reading and labels come later
+
+- **Date:** 21 Oct 2026 · **Decided by:** product owner · **Report item:** stage 2 grill, round 11 ([stage-2-grill-notes.md](plan/stage-2-grill-notes.md))
+- **Question.** Does the first version keep AI reading of booking documents (`DEC-131`) and labels and barcodes for goods that arrive without a brand barcode?
+- **Options.** Both after the first version · either one now.
+- **Choice.** Both after the first version. A booking is recorded by uploading its document (photo or PDF, kept as evidence) and entering the booking by hand; AI reading of booking documents follows later, like the PT workbench. The GRN is all manual entry: the count is entered by hand, and the invoice, other documents and photos are uploaded. The uploaded PT carries every barcode already sorted; generating barcodes and printing labels for goods without a brand barcode follow later.
+- **Why.** The product owner keeps the first version to the manual flow.
+- **Changed.** `phases.md` stage 2 and `roadmap.md` stage 2 (first version); `coverage.md` note; RR-546 widened. No PRD rule changes: `PRD-BKG-015` (AI part), `PRD-MER-008` and `PRD-REC-020` keep their IDs and wait for their placement (RR-546).
+
+## DEC-137 — First-version PT corrections, held lines, quantity tracking; invoice matching moves to stage 5
+
+- **Date:** 21 Oct 2026 · **Decided by:** product owner · **Report item:** stage 2 grill, round 12 ([stage-2-grill-notes.md](plan/stage-2-grill-notes.md))
+- **Question.** In the first version: how is a wrong PT fixed, when is the PT uploaded if some GRN lines are still held, are any products piece-tracked, and does supplier invoice matching stay in stage 2?
+- **Options.** Corrections: reverse and re-upload before scan-in · full linked corrections now. Held lines: the PT waits until every held line is decided · supplemental PTs for lines released later. Piece tracking: none in the first version · piece-tracked profiles now. Invoice matching: stage 5 with supplier payments · stage 2.
+- **Choice.**
+  - A wrong PT is reversed and a corrected file uploaded and approved again by a different person, only while none of its goods is scanned in. Corrections after scan-in follow later (`PRD-REC-019`).
+  - The PT is uploaded only once every held line of its GRN is decided (damage confirmed or rejected; excess, wrong or unidentified taken in or not). It covers all the GRN's good pieces; confirmed-damaged pieces stay held without a PT. One PT per GRN; `PRD-REC-011` (clean lines go ahead while others are disputed) and the supplemental PTs of `PRD-REC-015` wait until after the first version.
+  - No product is piece-tracked in the first version; every product is tracked by quantity per SKU (`PRD-MER-014`). Piece IDs and their labels (`PRD-MER-003`, `PRD-MER-015`, `PRD-MER-016`, `PRD-MER-018`) follow later.
+  - Supplier invoice matching (`PRD-REC-010`) moves to stage 5, with supplier payments (`S5-F04`). In the first version the invoice is an uploaded file, with its number, date and quantities entered at the GRN.
+- **Why.** The product owner keeps the first version to the manual flow; matching needs the invoice's values, which the first version does not capture.
+- **Changed.** `phases.md` stage 2 goal and scope, stage 5 scope; `roadmap.md` `S2-F10` and first version; `coverage.md` note. No PRD rule changes: the deferred parts keep their IDs and wait for their placement (RR-546).
+
+## DEC-138 — A GRN line carries the invoice's colour; grade tags are for the PT file only
+
+- **Date:** 21 Oct 2026 · **Decided by:** product owner · **Report item:** stage 2 grill, round 13 ([stage-2-grill-notes.md](plan/stage-2-grill-notes.md))
+- **Question.** What colour does a GRN line carry, and are the tags ECONOMY, MEDIUM and PREMIUM, which KDPS's colour list holds, used on the GRN?
+- **Options.** The colour as the invoice names it, none if it names none · a value from the PT colour list, tags included.
+- **Choice.** The first. A GRN line carries the colour the supplier invoice names, or no colour when the invoice names none. ECONOMY, MEDIUM and PREMIUM are tags for the PT file only. So the PT file matches the GRN per style and size, with the same quantity for each; colour is kept on both but not compared. This amends the match of `DEC-135` (per style, colour and size).
+- **Why.** The product owner's baseline: the GRN copies the invoice, and the PT may carry a grade tag where the colour is unclear.
+- **Changed.** No PRD rule changes. `roadmap.md` stage 2 first version; grill notes.
+
+## DEC-139 — Goods owned before they arrive follow after the first version
+
+- **Date:** 21 Oct 2026 · **Decided by:** product owner · **Report item:** stage 2 grill, round 13 ([stage-2-grill-notes.md](plan/stage-2-grill-notes.md))
+- **Question.** The first-version flow starts at the Arrival. Is inbound ownership (goods owned under the brand's Agreement before they arrive, `PRD-ORG-017` to `PRD-ORG-019`) built in the first version?
+- **Options.** After the first version · in the first version.
+- **Choice.** After the first version. Until then nothing is recorded before the goods and their invoice reach the Site; a brand whose Agreement passes ownership at dispatch shows nothing until the Arrival.
+- **Why.** The product owner keeps the first version to the operational flow from booking to scan-in.
+- **Changed.** `phases.md` stage 2 and `roadmap.md` stage 2 first version; `coverage.md` note; RR-546 widened. No PRD rule changes; the stage 2 exit check on inbound ownership (`PRD-ACP-020`) waits for its placement (RR-546).
+
+## DEC-140 — P RATE includes handling and transportation; every template column is filled
+
+- **Date:** 21 Oct 2026 · **Decided by:** product owner · **Report item:** goods-in design section 5 ([goods-in.md](design/goods-in/goods-in.md))
+- **Question.** What does P RATE hold beyond BASIC, and which columns of KDPS's PT template must be filled?
+- **Options.** P RATE as the actual purchase rate with handling and transportation · P RATE as the supplier's rate only. All 20 columns required · some optional.
+- **Choice.** BASIC is the basic rate; P RATE is the actual purchase rate of the piece, including handling and transportation, and is the cost the PT approval establishes. All 20 columns of KDPS's template must be filled; the two `SUGGESTED` columns are optional.
+- **Why.** The product owner's description of the template.
+- **Changed.** PRD "Words used": P RATE reworded. goods-in design 5.2 and 6.
+
+## DEC-141 — Who owns counted goods follows the brand Agreement's ownership event
+
+- **Date:** 21 Oct 2026 · **Decided by:** product owner · **Report item:** RR-557; goods-in 4.8, GI-4
+- **Question.** A GRN records an owner for each receipt count. How does the brand Agreement's ownership-transfer event (`POL-01.05`) decide it, and when does "receipt and acceptance" pass ownership?
+- **Options.** By the event as built, with receipt and acceptance at the scan-in · the same, with receipt and acceptance at the GRN · Unknown until the Agreement names the owner outright.
+- **Choice.** The first. Ownership at the supplier's dispatch: the Organisation (the receiving unit's legal entity) owns the goods when they are counted. Ownership at the sale to the customer: the brand owns them until they are sold. Receipt and acceptance: the brand owns them at the count, and ownership passes to the Organisation at the scan-in at the receiving Site, which is the acceptance (goods-in section 7). Another event described in words, or no event recorded: Unknown until recorded.
+- **Why.** It follows the brand's own signed Agreement (`DEC-129`, `DEC-132`); acceptance in the PRD is the scan-in (`PRD-REC-021`, `PRD-REC-022`).
+- **Changed.** `POL-01.05` (a sentence added; ID kept). goods-in 4.5 and 4.8; RR-557 closed. The scan-in ticket (`S2-F07-T01`) posts the ownership change.
+
+## DEC-142 — An open-to-buy budget needs three different people and stays outside policy 5's validation
+
+- **Date:** 21 Oct 2026 · **Decided by:** product owner · **Report item:** RR-548, RR-549; goods-in 3.3
+- **Question.** May the person who records Accounts' check also approve the same budget version, is the approval limited by value, and does approving a new budget version end policy 5's validation?
+- **Options.** Checker barred, no value limit, no reset · checker allowed · a value limit · reset at each new version.
+- **Choice.** The first. Booking prepares, Accounts checks and the Owner approves, three different people for each version; the approval has no value limit. A budget's own check and approval are its control: approving a new version does not end policy 5's validation.
+- **Why.** `POL-05.09` names three roles, and a budget changes often; resetting policy 5 each time would stop every booking approval.
+- **Changed.** `POL-05.09` (a sentence added; ID kept). goods-in 3.3; RR-548 and RR-549 closed.
+
+## DEC-143 — The seed gives finished synthetic Organisations the GRN series
+
+- **Date:** 21 Oct 2026 · **Decided by:** product owner · **Report item:** code review 2 of stage 2; `DEC-118`, RR-330
+- **Question.** `DEC-118` leaves a finished seed Organisation as it is. The GRN series came after `dev`'s synthetic Organisations finished setup. May the seed add it to them?
+- **Options.** Add the series once to a finished synthetic Organisation that lacks it · leave them without it, so `dev` cannot issue a GRN.
+- **Choice.** The first. The seed adds the labelled synthetic GRN series to a finished synthetic Organisation that lacks it; a rerun adds nothing. Everything else of a finished Organisation stays as it is.
+- **Why.** Without it `dev` could never issue a GRN.
+- **Changed.** `AGENTS.md` "Code workspace" `pnpm seed` line; code-house-rules 11.2 as built.
+
+## DEC-144 — The seed gives finished synthetic Organisations the booking and damage-report series and marks the season and size attributes
+
+- **Date:** 22 Oct 2026 · **Decided by:** product owner · **Report items:** RR-562, RR-564, RR-568; `DEC-143`, `DEC-118`
+- **Question.** `DEC-143` lets the seed add only the GRN series to a finished synthetic Organisation. The booking series, the damage-report series and the season and size attributes came after `dev`'s synthetic Organisations finished setup. May the seed add the two series and mark a labelled synthetic season attribute and size attribute, as it does the GRN series?
+- **Options.** Add the two series and mark the two attributes once, only where missing · leave them without, so that on `dev` a person marks the attributes and a second approves, and no booking or damage report can be numbered until a screen sets up a series (RR-449).
+- **Choice.** The first. The seed gives each of its Organisations, finished ones included, the labelled synthetic booking series and damage-report series where it has none, and marks a labelled synthetic list attribute as the season and another as the size list where none is marked in force; a rerun adds nothing. Everything else of a finished Organisation stays as it is.
+  - **How, answered by the product owner the same day.** Each attribute is recorded through the catalogue's command as the first Admin. Each marking is written as a labelled synthetic setting under the `setup` identity, the first Admin its preparer, with no approval request, as the setup step writes its settings. The marked synthetic attribute also gets a few labelled synthetic values (two seasons, three sizes; codes and names plainly SYNTHETIC, never defaults), each where missing, written the same way: a proposal written Confirmed, the first Admin its proposer and the `setup` identity its decider, with no approval request.
+- **Why.** Without them `dev` cannot approve a booking, number a damage report, or record budgets and count lines. The markings and values are written rather than approved because neither first user holds the right to approve them or the seed their authenticator, and the product owner wants budgets and count lines on `dev` without first setting up roles.
+- **Changed.** `AGENTS.md` "Code workspace" `pnpm seed` line; code-house-rules 11.2 as built; structure-and-masters 4.1 and 4.2 as built; goods-in 3.9 and 8.5 (the booking and damage-report numbers); open items RR-562, RR-564 and RR-568 closed. Extended the same way in code review 6 of stage 2 (22 Oct 2026), as ticket `S2-F04-T02` asks ("both from labelled synthetic replicas in tests and on `dev`"): the seed also marks the PT template's six other lists, each with a few synthetic values, and writes the item map of its synthetic items and the PT template's synthetic layout and mapping, Confirmed, each only where missing (goods-in 5.8; structure-and-masters 4.2 as built; code-house-rules 11.2 as built; RR-582's seed half closed).

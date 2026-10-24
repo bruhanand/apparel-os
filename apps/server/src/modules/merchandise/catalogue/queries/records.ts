@@ -156,6 +156,7 @@ async function versionFields(
           requiredIdentifiers: row.requiredIdentifiers,
           ...(row.receivingShelfLifeDays == null ? {} : { receivingShelfLifeDays: row.receivingShelfLifeDays }),
           ...(row.sellingShelfLifeDays == null ? {} : { sellingShelfLifeDays: row.sellingShelfLifeDays }),
+          origin: row.origin,
         });
       }
       return fields;

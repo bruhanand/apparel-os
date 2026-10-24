@@ -3,6 +3,7 @@ import {
   deviceProofMessage,
   devicePublicKeySchema,
   routes,
+  type ApiClient,
   type DeviceProofPurpose,
   type DevicePublicKey,
 } from '@apparel-os/schemas';
@@ -11,8 +12,11 @@ import {
 // challenge and sign it, with the purpose, the Organisation and the device, using the device's private key. The key
 // signs inside WebCrypto; no script ever reads it.
 
-/** The typed client of the API, on the page's own origin (code-house-rules 12.1, 12.2; deployment.md section 3). */
-export const api = createApiClient(routes, { baseUrl: '' });
+/**
+ * The typed client of the API, on the page's own origin (code-house-rules 12.1, 12.2; deployment.md section 3), named
+ * by its type, which the route table has grown too long for the compiler to write out by inference.
+ */
+export const api: ApiClient<typeof routes> = createApiClient(routes, { baseUrl: '' });
 
 /** The public key of a pair as the server takes it: a P-256 JWK holding the public part only. */
 export async function publicKeyOf(pair: CryptoKeyPair): Promise<DevicePublicKey> {

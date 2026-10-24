@@ -1,16 +1,18 @@
 import { known, paise, uuidv7 } from '@apparel-os/domain';
 import { and, eq, gt, inArray, sql } from 'drizzle-orm';
-import type { TransactionContext } from '../../../kernel/index.js';
+import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
 import type { ItemCheck, PostItem } from '../../finance/books/index.js';
 import {
   balance,
   coverage,
   hold,
   holdClaim,
+  holdRelease,
   movement,
   movementLeg,
   piece,
   receiptOrigin,
+  receiptOriginState,
   reservationClaim,
   transitValue,
   transitValueLayer,
@@ -18,12 +20,14 @@ import {
 import { STOCK_POSTING_EVENT_KINDS } from './domain/event-kinds.js';
 import { skuKey, unitKey, type UnitKey } from './domain/keys.js';
 import {
+  countedBrandRefused,
   postedRecordType,
   refusalOf,
   StockRefused,
   type Goods,
   type LedgerItem,
   type LedgerRequest,
+  type NamedGoods,
 } from './domain/request.js';
 import type { Formula, PoolMode } from './domain/valuation.js';
 import type { TransitKind } from './domain/working.js';
@@ -122,9 +126,16 @@ export interface AnchorTarget {
   readonly mode: 'exclusive' | 'shared';
 }
 
+/**
+ * A SKU balance a request locks at step 3 (10.3): of a SKU at a unit, or of the goods of Unknown SKU there of one brand,
+ * which share one row, in pieces, of the brand they were counted under (14.1, 14.2; 13.14; RR-555).
+ */
 export interface SkuBalanceTarget {
   readonly unit: UnitFacts;
-  readonly sku: SkuFacts;
+  readonly skuId: string | null;
+  readonly stockUnit: SkuFacts['stockUnit'];
+  /** The SKU's brand; for the goods of Unknown SKU, the brand they were counted under, which they always name. */
+  readonly brandId: string;
 }
 
 /** What Plan reads from: the declared reads of `organisation` and `merchandise` (13.9). */
@@ -155,8 +166,22 @@ export async function planRequest(
   const quantityGoods = new Map<string, { unit: UnitFacts; sku: SkuFacts }>();
   const coverageOrigins = new Set<string>();
   const reservedSkus = new Set<string>();
+  /**
+   * The origins an identity step of this request makes, by the identifier the caller gave (13.14): later items of the
+   * request may name them, as PT approval records their coverage and cost (goods-in 6.3 steps 4 and 5).
+   */
+  const madeInRequest = new Map<string, { at: UnitFacts; receiving: UnitFacts; sku: SkuFacts }>();
+  /**
+   * The origins a receipt count of this request makes, by the identifier the caller gave (13.16): later items of the
+   * request may name their goods, as a GRN's holds do (goods-in 4.5). New rows no other command can be writing, so
+   * nothing of them is read or locked (14.3 "Missing rows"); their SKU balance the count already names.
+   */
+  const countedInRequest = new Map<string, { unit: UnitFacts; brandId: string | null }>();
+  /** The line of the count that names each such origin, which a refusal of an identifier already written names. */
+  const countedLines = new Map<string, string>();
 
   const shared = (originId: string) => {
+    if (countedInRequest.has(originId)) return;
     if (!originIds.has(originId)) originIds.set(originId, 'shared');
   };
   const unitOf = async (lineId: string, siteId: string, businessUnitId: string): Promise<UnitFacts> => {
@@ -193,7 +218,23 @@ export async function planRequest(
     return sku;
   };
   const balanceOf = (unit: UnitFacts, sku: SkuFacts) =>
-    skuBalances.set(skuKey(unit.siteId, unit.businessUnitId, sku.skuId), { unit, sku });
+    skuBalances.set(skuKey(unit.siteId, unit.businessUnitId, sku.skuId, sku.brandId), {
+      unit,
+      skuId: sku.skuId,
+      stockUnit: sku.stockUnit,
+      brandId: sku.brandId,
+    });
+  /**
+   * The SKU balance of the goods of Unknown SKU of one brand at a unit (13.14): one row, in pieces, of the brand they
+   * were counted under (14.1; RR-555).
+   */
+  const unknownBalanceOf = (unit: UnitFacts, brandId: string) =>
+    skuBalances.set(skuKey(unit.siteId, unit.businessUnitId, null, brandId), {
+      unit,
+      skuId: null,
+      stockUnit: 'piece',
+      brandId,
+    });
   const goodsAt = async (lineId: string, unit: UnitFacts, goods: Goods, reserving = false) => {
     const sku = await skuOf(lineId, goods.skuId, unit.siteId);
     balanceOf(unit, sku);
@@ -202,10 +243,45 @@ export async function planRequest(
       shared(goods.receiptOriginId);
       if (reserving && !sku.pieceTracked) coverageOrigins.add(goods.receiptOriginId);
     } else if (!sku.pieceTracked) {
-      const at = skuKey(unit.siteId, unit.businessUnitId, sku.skuId);
+      const at = skuKey(unit.siteId, unit.businessUnitId, sku.skuId, sku.brandId);
       quantityGoods.set(at, { unit, sku });
       if (reserving) reservedSkus.add(at);
     }
+  };
+  /**
+   * Goods of a product not yet set up, named by their receipt origin (13.15; S2-F08-T01): an origin of Unknown SKU, whose
+   * balances at the unit are those of the SKU balance of the brand it was counted under (13.14; RR-555). The origin is
+   * read, so it is locked shared at step 2, and only its balances under that row are read under the locks.
+   */
+  const unknownOriginAt = async (lineId: string, unit: UnitFacts, originId: string) => {
+    const counted = countedInRequest.get(originId);
+    if (counted !== undefined) {
+      // Counted earlier in the request (13.16): of Unknown SKU only if the count named none, of the brand it named.
+      if (counted.brandId === null) {
+        throw new StockRefused(
+          refusalOf('invalid-item', lineId, [{ kind: 'receipt-origin', receiptOriginId: originId }]),
+        );
+      }
+      unknownBalanceOf(unit, counted.brandId);
+      return;
+    }
+    const [origin] = await context.tx
+      .select({ skuId: receiptOrigin.skuId, brandId: receiptOrigin.brandId })
+      .from(receiptOrigin)
+      .where(eq(receiptOrigin.id, originId));
+    if (origin?.skuId !== null) {
+      throw new StockRefused(
+        refusalOf('invalid-item', lineId, [{ kind: 'receipt-origin', receiptOriginId: originId }]),
+      );
+    }
+    if (origin.brandId === null) throw new CommandDefect('An origin of goods of Unknown SKU names no brand');
+    shared(originId);
+    unknownBalanceOf(unit, origin.brandId);
+  };
+  /** Goods a hold, a condition change or its reversal names: of a SKU, or of Unknown SKU by their origin (13.15). */
+  const namedGoodsAt = async (lineId: string, unit: UnitFacts, goods: NamedGoods) => {
+    if (goods.skuId === null) await unknownOriginAt(lineId, unit, goods.receiptOriginId);
+    else await goodsAt(lineId, unit, goods);
   };
   /** Adds the SKU balances of the claims a release or end will end, so it locks their balances and pieces (13.5). */
   const claimsOf = async (lineId: string, claims: readonly { balanceId: string | null; pieceId: string | null }[]) => {
@@ -214,6 +290,11 @@ export async function planRequest(
         const [row] = await context.tx.select().from(balance).where(eq(balance.id, claim.balanceId));
         if (row?.skuId != null)
           balanceOf(await unitOf(lineId, row.siteId, row.businessUnitId), await skuOf(lineId, row.skuId, row.siteId));
+        // A claim on goods of Unknown SKU: their brand's SKU balance, and the origin, so its balance is read (13.15).
+        else if (row?.brandId != null) {
+          unknownBalanceOf(await unitOf(lineId, row.siteId, row.businessUnitId), row.brandId);
+          shared(row.receiptOriginId);
+        }
       }
       if (claim.pieceId !== null) {
         const [row] = await context.tx.select({ code: piece.code }).from(piece).where(eq(piece.id, claim.pieceId));
@@ -312,6 +393,35 @@ export async function planRequest(
     transits.set(key, target);
     return target;
   };
+  /**
+   * The pool of goods valued for their approval, as a reservation is (13.10 "Value for approval"): a reservation, a
+   * damage hold, a condition change and its reversal (13.15; domain-model 5, DM-8). Named for step 6 when the book has a
+   * cost setting, so the value is read under the pool's lock; goods of Unknown SKU have no pool and no cost (13.14). For
+   * a hold, a condition change or its reversal, only while some unit of the SKU at the unit has its cost established:
+   * otherwise every unit's value is Unknown, and no empty pool is made for them (7.6; G2). One established after Plan is
+   * `plan-stale` under the locks (13.1).
+   */
+  const valuedPoolOf = async (lineId: string, unit: UnitFacts, goods: NamedGoods, always = false) => {
+    if (goods.skuId === null || (await settingIfAny(unit.bookId)) === undefined) return;
+    if (!always) {
+      const [valued] = await context.tx
+        .select({ id: balance.id })
+        .from(balance)
+        .innerJoin(receiptOriginState, eq(receiptOriginState.receiptOriginId, balance.receiptOriginId))
+        .where(
+          and(
+            eq(balance.siteId, unit.siteId),
+            eq(balance.businessUnitId, unit.businessUnitId),
+            eq(balance.skuId, goods.skuId),
+            gt(balance.quantity, 0),
+            eq(receiptOriginState.valueKnown, true),
+          ),
+        )
+        .limit(1);
+      if (valued === undefined) return;
+    }
+    await poolOf(lineId, unit, await skuOf(lineId, goods.skuId, unit.siteId));
+  };
   /** Check postable is asked about each valued item before any lock, with every component of its kind (13.1). */
   const probe = (lineId: string, eventKind: string, unit: UnitFacts, sku: SkuFacts) => {
     const kind = STOCK_POSTING_EVENT_KINDS.find((each) => each.kind === eventKind);
@@ -338,6 +448,15 @@ export async function planRequest(
    * transit values its units are in, and under FIFO those its cost layers' lineage reached, locked at step 6.
    */
   const costOrigin = async (lineId: string, originId: string, adjusting: boolean) => {
+    // An origin the identity step makes earlier in the request (13.14): a new row, so nothing of it is locked; its
+    // units are at the identity step's unit, whose pool is locked at step 6, and it keeps its parent's receiving unit.
+    const madeHere = madeInRequest.get(originId);
+    if (madeHere !== undefined) {
+      if (adjusting) throw new StockRefused(refusalOf('exceeds-source', lineId, [{ kind: 'cost-established' }]));
+      await poolOf(lineId, madeHere.at, madeHere.sku);
+      await settingOf(lineId, madeHere.receiving.bookId);
+      return { unit: madeHere.receiving, sku: madeHere.sku };
+    }
     const [origin] = await context.tx.select().from(receiptOrigin).where(eq(receiptOrigin.id, originId));
     if (origin?.skuId == null) {
       throw new StockRefused(
@@ -391,6 +510,60 @@ export async function planRequest(
 
   const planItem = async (item: LedgerItem) => {
     switch (item.kind) {
+      case 'identity-resolved': {
+        // The approved identity route (13.4, 13.14; PRD-DMG-005, POL-17.02): the request carries the approval it runs
+        // under, the PT approval's. Whether that decision holds is `access`'s Verify under lock (13.1).
+        if (request.approval === undefined) {
+          throw new StockRefused(refusalOf('condition-route', item.lineId, [{ kind: 'route', route: 'identity' }]));
+        }
+        if (item.parts.length === 0)
+          throw new StockRefused(refusalOf('invalid-item', item.lineId, [{ kind: 'parts' }]));
+        const at = await unitOf(item.lineId, item.at.siteId, item.at.businessUnitId);
+        anchor(at, 'shared');
+        const made: string[] = [];
+        for (const part of item.parts) {
+          const [origin] = await context.tx
+            .select()
+            .from(receiptOrigin)
+            .where(eq(receiptOrigin.id, part.receiptOriginId));
+          if (origin === undefined) {
+            throw new StockRefused(
+              refusalOf('invalid-item', item.lineId, [
+                { kind: 'receipt-origin', receiptOriginId: part.receiptOriginId },
+              ]),
+            );
+          }
+          // The origin's identity is what changes, so it is locked exclusively (14.3), with the SKU balances its units
+          // leave and enter at the unit (10.3 steps 2 and 3).
+          originIds.set(origin.id, 'exclusive');
+          const receiving = await unitOf(item.lineId, origin.siteId, origin.businessUnitId);
+          if (origin.skuId === null) {
+            // Goods of Unknown SKU keep the brand they were counted under: their origin names it, as its check holds
+            // (14.1; RR-555; migration stock.ledger__described_goods_by_brand).
+            if (origin.brandId === null) throw new CommandDefect('An origin of goods of Unknown SKU names no brand');
+            unknownBalanceOf(at, origin.brandId);
+          } else balanceOf(at, await skuOf(item.lineId, origin.skuId, at.siteId));
+          const sku = await skuOf(item.lineId, part.skuId, at.siteId);
+          balanceOf(at, sku);
+          if (part.newReceiptOriginId !== undefined) {
+            made.push(part.newReceiptOriginId);
+            madeInRequest.set(part.newReceiptOriginId, { at, receiving, sku });
+          }
+        }
+        // A new origin's identifier is the caller's (13.14): one already written is no new origin.
+        if (made.length > 0) {
+          const [taken] = await context.tx
+            .select({ id: receiptOrigin.id })
+            .from(receiptOrigin)
+            .where(inArray(receiptOrigin.id, made));
+          if (taken !== undefined) {
+            throw new StockRefused(
+              refusalOf('invalid-item', item.lineId, [{ kind: 'receipt-origin', receiptOriginId: taken.id }]),
+            );
+          }
+        }
+        return;
+      }
       case 'receipt-count':
       case 'opening-count': {
         // An opening count comes from an opening batch only (13.4; S1-F13-T03).
@@ -404,9 +577,28 @@ export async function planRequest(
             throw new StockRefused(refusalOf('invalid-item', item.lineId, [{ kind: 'reason' }]));
         }
         const unit = await place(item.lineId, item.to.siteId, item.to.businessUnitId, item.to.locationId);
-        const sku = await skuOf(item.lineId, item.skuId, unit.siteId);
         if (!Number.isInteger(item.quantity) || item.quantity <= 0)
           throw new StockRefused(refusalOf('invalid-item', item.lineId, [{ kind: 'quantity' }]));
+        if (item.kind === 'receipt-count' && item.receiptOriginId !== undefined) {
+          // The origin the caller names is a new one, named by one count of the request only (13.16).
+          const named = item.receiptOriginId;
+          if (countedInRequest.has(named) || madeInRequest.has(named) || originIds.has(named)) {
+            throw new StockRefused(
+              refusalOf('invalid-item', item.lineId, [{ kind: 'receipt-origin', receiptOriginId: named }]),
+            );
+          }
+          countedInRequest.set(named, { unit, brandId: item.skuId === null ? item.brandId : null });
+          countedLines.set(named, item.lineId);
+        }
+        if (item.skuId === null) {
+          // Goods of a product not yet set up (13.14; GI-1): their SKU balance is of the brand they are counted under,
+          // which they must name before anything is locked (RR-555); the Recheck checks their identity as described.
+          if (countedBrandRefused(item))
+            throw new StockRefused(refusalOf('invalid-item', item.lineId, [{ kind: 'brand' }]));
+          unknownBalanceOf(unit, item.brandId);
+          return;
+        }
+        const sku = await skuOf(item.lineId, item.skuId, unit.siteId);
         if (sku.batchTracked !== (item.batch !== undefined))
           throw new StockRefused(refusalOf('invalid-item', item.lineId, [{ kind: 'batch' }]));
         const codes = item.pieceCodes ?? [];
@@ -447,28 +639,71 @@ export async function planRequest(
         }
         return;
       }
-      case 'condition-change':
+      case 'condition-change': {
+        const unit = await place(item.lineId, item.at.siteId, item.at.businessUnitId, item.at.locationId);
+        await namedGoodsAt(item.lineId, unit, item.goods);
+        await valuedPoolOf(item.lineId, unit, item.goods);
+        // A change to damaged carries the excess holds and quarantines of the units it takes (13.17; RR-571): their
+        // claims change only under their hold's lock (14.3), so the holds claiming the goods at the place are locked.
+        if (item.to === 'damaged') {
+          const goods = item.goods;
+          const rows = await context.tx
+            .selectDistinct({ id: holdClaim.holdId })
+            .from(holdClaim)
+            .innerJoin(balance, eq(balance.id, holdClaim.balanceId))
+            .innerJoin(hold, eq(hold.id, holdClaim.holdId))
+            .where(
+              and(
+                eq(balance.siteId, unit.siteId),
+                eq(balance.businessUnitId, unit.businessUnitId),
+                eq(balance.locationId, item.at.locationId),
+                eq(balance.condition, item.from),
+                goods.skuId === null
+                  ? eq(balance.receiptOriginId, goods.receiptOriginId)
+                  : and(
+                      eq(balance.skuId, goods.skuId),
+                      goods.receiptOriginId === undefined
+                        ? undefined
+                        : eq(balance.receiptOriginId, goods.receiptOriginId),
+                    ),
+                inArray(hold.kind, ['excess', 'quarantine']),
+                gt(holdClaim.quantity, 0),
+              ),
+            );
+          for (const row of rows) holdIds.add(row.id);
+        }
+        return;
+      }
       case 'record-acceptance': {
         const unit = await place(item.lineId, item.at.siteId, item.at.businessUnitId, item.at.locationId);
         await goodsAt(item.lineId, unit, item.goods);
         return;
       }
-      case 'place-hold':
+      case 'place-hold': {
+        const unit = await place(item.lineId, item.at.siteId, item.at.businessUnitId, item.at.locationId);
+        for (const goods of item.goods) {
+          await namedGoodsAt(item.lineId, unit, goods);
+          if (item.holdKind === 'damage') await valuedPoolOf(item.lineId, unit, goods);
+        }
+        if (item.withinReservationId !== undefined) reservationIds.add(item.withinReservationId);
+        return;
+      }
       case 'reserve': {
         const unit = await place(item.lineId, item.at.siteId, item.at.businessUnitId, item.at.locationId);
-        for (const goods of item.goods) await goodsAt(item.lineId, unit, goods, item.kind === 'reserve');
-        if (item.kind === 'place-hold' && item.withinReservationId !== undefined)
-          reservationIds.add(item.withinReservationId);
+        for (const goods of item.goods) await goodsAt(item.lineId, unit, goods, true);
         // A reservation is valued for its approval at its pool's cost of the units (13.10 "Value for approval";
         // product owner, 11 Oct 2026): the pool is locked at step 6 and read under the lock. A book with no cost
         // setting has no pool, and the reservation's value is Unknown.
-        if (item.kind === 'reserve' && (await settingIfAny(unit.bookId)) !== undefined) {
-          for (const goods of item.goods)
-            await poolOf(item.lineId, unit, await skuOf(item.lineId, goods.skuId, unit.siteId));
-        }
+        for (const goods of item.goods) await valuedPoolOf(item.lineId, unit, goods, true);
         return;
       }
       case 'record-coverage': {
+        // An origin the identity step makes earlier in the request (13.14): a new row, nothing of it to read or lock.
+        if (madeInRequest.has(item.receiptOriginId)) {
+          if (item.pieceCodes !== undefined)
+            throw new StockRefused(refusalOf('invalid-item', item.lineId, [{ kind: 'piece-codes' }]));
+          return;
+        }
         const [origin] = await context.tx
           .select()
           .from(receiptOrigin)
@@ -637,6 +872,27 @@ export async function planRequest(
         probe(item.lineId, 'stock.count-loss', unit, sku);
         return;
       }
+      case 'ownership-change': {
+        // The owner on the origin changes, so it is locked exclusively at step 2 (14.3), and its units at the place
+        // with their SKU balance at step 3 (13.4, 13.20; POL-01.05).
+        const unit = await place(item.lineId, item.at.siteId, item.at.businessUnitId, item.at.locationId);
+        const [origin] = await context.tx
+          .select()
+          .from(receiptOrigin)
+          .where(eq(receiptOrigin.id, item.receiptOriginId));
+        if (origin?.skuId == null) {
+          throw new StockRefused(
+            refusalOf('invalid-item', item.lineId, [{ kind: 'receipt-origin', receiptOriginId: item.receiptOriginId }]),
+          );
+        }
+        originIds.set(item.receiptOriginId, 'exclusive');
+        await goodsAt(item.lineId, unit, {
+          skuId: origin.skuId,
+          quantity: item.quantity,
+          receiptOriginId: item.receiptOriginId,
+        });
+        return;
+      }
       case 'reversal': {
         const [reversed] = await context.tx.select().from(movement).where(eq(movement.id, item.movementId));
         if (reversed === undefined) {
@@ -644,20 +900,61 @@ export async function planRequest(
             refusalOf('invalid-item', item.lineId, [{ kind: 'movement', movementId: item.movementId }]),
           );
         }
-        // Built for a receipt count made in error and a count loss (13.4 "Reversal"; S1-F10-T06).
-        if (reversed.kind !== 'receipt-count' && reversed.kind !== 'count-difference') {
+        // Built for a receipt count made in error and a count loss (13.4 "Reversal"; S1-F10-T06), a condition change
+        // made in error (13.15; S2-F08-T01), and a cost established made in error (13.21; S2-F09-T01).
+        if (
+          reversed.kind !== 'receipt-count' &&
+          reversed.kind !== 'count-difference' &&
+          reversed.kind !== 'condition-change' &&
+          reversed.kind !== 'cost-established'
+        ) {
           throw new StockRefused(
             refusalOf('invalid-item', item.lineId, [{ kind: 'reversal-of', movementKind: reversed.kind }]),
           );
         }
         reversedIds.add(reversed.id);
         const unit = await place(item.lineId, item.at.siteId, item.at.businessUnitId, item.at.locationId);
-        const sku = await skuOf(item.lineId, item.goods.skuId, unit.siteId);
         const legs = await context.tx
           .select({ originId: movementLeg.receiptOriginId })
           .from(movementLeg)
           .where(eq(movementLeg.movementId, reversed.id));
-        await poolOf(item.lineId, unit, sku);
+        if (reversed.kind === 'cost-established') {
+          // Value only (7.5; 13.21): the origin the item names, of a SKU, is locked exclusively with every balance it
+          // has and the pools its units are in, as a cost item's; its units entering pools are counted (7.7). It posts
+          // the reversal kind at the place named, where every unit of the origin is, while its cost is known.
+          if (item.goods.skuId === null || item.goods.receiptOriginId === undefined) {
+            throw new StockRefused(refusalOf('invalid-item', item.lineId, [{ kind: 'receipt-origin' }]));
+          }
+          const origin = await costOrigin(item.lineId, item.goods.receiptOriginId, false);
+          enteredOrigins.add(item.goods.receiptOriginId);
+          const [state] = await context.tx
+            .select({ valueKnown: receiptOriginState.valueKnown })
+            .from(receiptOriginState)
+            .where(eq(receiptOriginState.receiptOriginId, item.goods.receiptOriginId));
+          if (state?.valueKnown === true) {
+            await poolOf(item.lineId, unit, origin.sku);
+            probe(item.lineId, 'stock.cost-established-reversal', unit, origin.sku);
+          }
+          return;
+        }
+        if (reversed.kind === 'condition-change') {
+          // Damaged goods never become good but by this linked reversal, under the approval the request carries,
+          // whose decision `access` verifies under the lock (PRD-DMG-010, PRD-STK-017; 13.15). Its origins are only
+          // read; the units return to the condition they left at the place named, valued for the approval.
+          if (request.approval === undefined) {
+            throw new StockRefused(refusalOf('condition-route', item.lineId, [{ kind: 'route', route: 'reversal' }]));
+          }
+          for (const leg of legs) shared(leg.originId);
+          await namedGoodsAt(item.lineId, unit, item.goods);
+          await valuedPoolOf(item.lineId, unit, item.goods);
+          // The holds the change carried with its goods, whose claims its reversal carries back (13.17).
+          const carried = await context.tx
+            .selectDistinct({ id: holdRelease.holdId })
+            .from(holdRelease)
+            .where(and(eq(holdRelease.releaseEvent, 'moved'), eq(holdRelease.movementId, reversed.id)));
+          for (const row of carried) holdIds.add(row.id);
+          return;
+        }
         if (reversed.kind === 'receipt-count') {
           // An inflow made in error: its origin's established value changes, so the origin is locked exclusively
           // (10.3 step 2); its units leave from the place named (7.5).
@@ -665,20 +962,57 @@ export async function planRequest(
             originIds.set(leg.originId, 'exclusive');
             enteredOrigins.add(leg.originId);
           }
+          const [counted] = legs;
+          // A receipt count has its one leg into the origin it made (13.4): one without is a defect, never a blank origin.
+          if (counted === undefined) throw new CommandDefect(`Receipt count ${reversed.id} has no leg`);
+          if (item.goods.skuId === null) {
+            // Goods of a product not yet set up, named by the origin the count made (13.18; goods-in 4.11): no cost is
+            // ever established on an origin of Unknown SKU (13.14), so nothing values or posts.
+            if (counted.originId !== item.goods.receiptOriginId) {
+              throw new StockRefused(
+                refusalOf('invalid-item', item.lineId, [
+                  { kind: 'receipt-origin', receiptOriginId: item.goods.receiptOriginId },
+                ]),
+              );
+            }
+            await unknownOriginAt(item.lineId, unit, item.goods.receiptOriginId);
+            return;
+          }
+          const sku = await skuOf(item.lineId, item.goods.skuId, unit.siteId);
           await goodsAt(item.lineId, unit, {
             ...item.goods,
-            ...(sku.pieceTracked ? {} : { receiptOriginId: legs[0]?.originId ?? '' }),
+            ...(sku.pieceTracked ? {} : { receiptOriginId: counted.originId }),
           });
-          probe(item.lineId, 'stock.cost-established-reversal', unit, sku);
+          // The pool and Check postable only while the origin's cost is established: before it, the units take no value
+          // and nothing posts (7.6; 13.18), as a hold names a pool only then (13.15). A cost established between Plan and
+          // the locks finds no pool locked, `plan-stale`.
+          const [state] = await context.tx
+            .select({ valueKnown: receiptOriginState.valueKnown })
+            .from(receiptOriginState)
+            .where(eq(receiptOriginState.receiptOriginId, counted.originId));
+          if (state?.valueKnown === true) {
+            await poolOf(item.lineId, unit, sku);
+            probe(item.lineId, 'stock.cost-established-reversal', unit, sku);
+          }
           return;
         }
+        if (item.goods.skuId === null) {
+          throw new StockRefused(
+            refusalOf('invalid-item', item.lineId, [
+              { kind: 'receipt-origin', receiptOriginId: item.goods.receiptOriginId },
+            ]),
+          );
+        }
+        const goods: Goods = item.goods;
+        const sku = await skuOf(item.lineId, goods.skuId, unit.siteId);
+        await poolOf(item.lineId, unit, sku);
         // An outflow brought back (7.5, 8.4): its origins only read; the units come back at the place named.
         for (const leg of legs) shared(leg.originId);
         await unitOf(item.lineId, reversed.siteId, reversed.businessUnitId);
         balanceOf(unit, sku);
-        for (const code of item.goods.pieceCodes ?? []) pieceCodes.set(code, item.lineId);
+        for (const code of goods.pieceCodes ?? []) pieceCodes.set(code, item.lineId);
         if (item.replacesOriginId !== undefined) {
-          await goodsAt(item.lineId, unit, { ...item.goods, receiptOriginId: item.replacesOriginId });
+          await goodsAt(item.lineId, unit, { ...goods, receiptOriginId: item.replacesOriginId });
         }
         await poolOf(item.lineId, await unitOf(item.lineId, reversed.siteId, reversed.businessUnitId), sku);
         probe(item.lineId, 'stock.count-loss-reversal', unit, sku);
@@ -743,7 +1077,22 @@ export async function planRequest(
       }
     }
   };
+  // SKUs the caller's command makes, which no read answers yet (13.19): Plan takes their facts as given.
+  for (const made of request.madeSkus ?? []) skus.set(made.skuId, { ...made });
   for (const item of request.items) await planItem(item);
+
+  // A counted origin's identifier is the caller's (13.16): one already written is no new origin.
+  if (countedLines.size > 0) {
+    const [taken] = await context.tx
+      .select({ id: receiptOrigin.id })
+      .from(receiptOrigin)
+      .where(inArray(receiptOrigin.id, [...countedLines.keys()]));
+    if (taken !== undefined) {
+      throw new StockRefused(
+        refusalOf('invalid-item', countedLines.get(taken.id), [{ kind: 'receipt-origin', receiptOriginId: taken.id }]),
+      );
+    }
+  }
 
   // Plan staleness (13.1): every origin with stock of an unnamed quantity-tracked SKU at the unit is locked shared.
   const originsSeen = new Map<string, Set<string>>();

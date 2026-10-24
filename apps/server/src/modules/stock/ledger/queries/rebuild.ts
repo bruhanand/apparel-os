@@ -67,24 +67,25 @@ const CHECKS: readonly RebuildCheck[] = [
       where k.quantity <> 0 and not exists (select 1 from stock.balance b where ${BALANCE_KEY})`,
   },
   {
+    // By SKU at a unit; the goods of Unknown SKU there by the brand they were counted under too (14.2; RR-555).
     table: 'sku_balance',
     column: 'quantity',
     query: sql`
       with k as (
-        select l.site_id, l.business_unit_id, l.sku_id,
+        select l.site_id, l.business_unit_id, l.sku_id, l.brand_id,
                sum(case l.direction when 'in' then l.quantity else -l.quantity end)::integer as quantity
-        from stock.movement_leg l group by 1, 2, 3)
+        from stock.movement_leg l group by 1, 2, 3, 4)
       select s.id, s.quantity as stored, coalesce(k.quantity, 0) as rebuilt
       from stock.sku_balance s
       left join k on k.site_id = s.site_id and k.business_unit_id = s.business_unit_id
-        and k.sku_id is not distinct from s.sku_id
+        and k.sku_id is not distinct from s.sku_id and k.brand_id is not distinct from s.brand_id
       where s.quantity <> coalesce(k.quantity, 0)
       union all
       select null, null, k.quantity from k
       where k.quantity <> 0 and not exists (
         select 1 from stock.sku_balance s
         where s.site_id = k.site_id and s.business_unit_id = k.business_unit_id
-          and s.sku_id is not distinct from k.sku_id)`,
+          and s.sku_id is not distinct from k.sku_id and s.brand_id is not distinct from k.brand_id)`,
   },
   {
     // Accepted units: what the acceptance records accepted at the balance's key, and what the legs carried in and out

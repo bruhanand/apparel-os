@@ -11,12 +11,15 @@ import {
 } from './availability.js';
 import { compareCodeUnits, skuKey, unitKey } from './keys.js';
 import {
+  countedBrandRefused,
   refuse,
   type Condition,
+  type DescribedIdentity,
   type FreezeScope,
-  type Goods,
+  type IdentityPart,
   type ItemValue,
   type LedgerItem,
+  type NamedGoods,
   type Owner,
   type Place,
 } from './request.js';
@@ -27,6 +30,35 @@ import {
 // database, no clock, and the identifiers of new rows come from the caller (code-house-rules 2). What it decides is
 // written by Write; what it cannot see, the holds, reservations and freezes hidden from the actor, the command asks the
 // narrowly authorised function about (DEC-117), with what this state collects for it.
+
+/**
+ * The location of a balance held in custody: `balance_location` gives every balance not in transit one (14.2), so a
+ * custody balance without one is a defect, never an empty identifier (PRD-MOD-015).
+ */
+function custodyLocation(row: BalanceState): string {
+  if (row.locationId === null) throw new Error(`A custody balance without its location: ${row.id}`);
+  return row.locationId;
+}
+
+/**
+ * Whether the goods a receipt count names pair a SKU and an identity as described wrongly (13.14, 13.16): goods of a
+ * product not yet set up need an identity as described, with a style code and no empty text; unidentified goods have
+ * none (`described` null); a SKU is the goods' identity and takes none (14.2). The item's type holds the pairing
+ * (`CountedGoods`); the ledger still checks every request it is given, as the design says.
+ */
+function describedIdentityRefused(goods: {
+  readonly skuId: string | null;
+  readonly described?: DescribedIdentity | null | undefined;
+}): boolean {
+  const { described } = goods;
+  if (goods.skuId !== null) return described !== undefined;
+  if (described === null) return false;
+  return (
+    described === undefined ||
+    described.styleCode.trim() === '' ||
+    [described.colour, described.size].some((text) => text?.trim() === '')
+  );
+}
 
 export interface Scope {
   readonly siteId: string;
@@ -41,6 +73,8 @@ export interface SkuBalanceState {
   readonly siteId: string;
   readonly businessUnitId: string;
   readonly skuId: string | null;
+  /** The SKU's brand; for the goods of Unknown SKU, the brand they were counted under (14.1; RR-555). */
+  readonly brandId: string | null;
   quantity: number;
   changed: boolean;
 }
@@ -100,10 +134,13 @@ export interface OriginState {
   readonly isNew: boolean;
   /**
    * How a new origin came to be (14.2 `origin_kind`): counted at a receipt, at an opening (stock-ledger 9; S1-F13-T03),
-   * or a count surplus (8.4); receipt if absent.
+   * a count surplus (8.4), or made by the identity step from its parent (13.14; GI-1); receipt if absent.
    */
-  readonly originKind?: 'receipt' | 'opening' | 'surplus';
+  readonly originKind?: 'receipt' | 'opening' | 'surplus' | 'identity-resolved';
+  /** The SKU, or null while Unknown (2.2; PRD-DMG-005). */
   readonly skuId: string | null;
+  /** Its stock unit (PRD-MER-010): its SKU's, or a piece for goods of a product not yet set up (13.14). */
+  readonly stockUnit: 'piece' | 'pair' | 'pack';
   readonly pieceTracked: boolean;
   readonly batchCode: string | null;
   readonly expiryDate: string | null;
@@ -113,6 +150,17 @@ export interface OriginState {
   readonly stateId: string;
   /** The owner's kind on the origin, or null while Unknown (PRD-ORG-014). */
   readonly ownerKind: 'organisation' | 'supplier' | 'brand' | null;
+  /** The owner in full, which an origin the identity step makes from this one keeps (PRD-ORG-014; 13.14). */
+  readonly owner: Owner;
+  /** The mapping version and book of its receiving unit, which an origin made from it keeps too (14.2). */
+  readonly mappingVersionId: string;
+  readonly bookId: string;
+  /** The origin it was made from, for the identity step's origins (14.2 `parent_origin_id`; 13.14). */
+  readonly parentOriginId: string | null;
+  /** For goods of a product not yet set up, the identity as described (13.14; GI-1); none otherwise. */
+  readonly described: DescribedIdentity | null;
+  /** For a new origin, the movement that made it, whose source line it keeps (14.2); none for one already written. */
+  readonly madeByMovementId: string | null;
   /** Whether its cost is established, its P RATE and the exact value its cost items added (14.2; 7.6, 7.7). */
   valueKnown: boolean;
   pRatePaise: Paise | null;
@@ -169,6 +217,8 @@ export interface Entries {
   readonly acceptances: AcceptanceEntry[];
   readonly holds: HoldEntry[];
   readonly holdReleases: HoldReleaseEntry[];
+  /** Units of a hold's claim carried with its goods by a movement to another balance (13.17). */
+  readonly holdMoves: HoldMoveEntry[];
   readonly reservations: ReservationEntry[];
   readonly reservationEvents: ReservationEventEntry[];
 }
@@ -187,12 +237,12 @@ export interface MovementEntry {
   readonly brandIds: (string | null)[];
   readonly legs: LegEntry[];
   readonly pieceIds: string[];
-  owner?: Owner;
 }
 
 /** The movement kinds of stock-ledger 2.3 this ledger writes so far. */
 export type MovementKind =
   | 'receipt-count'
+  | 'identity-resolved'
   | 'opening-count'
   | 'location-move'
   | 'condition-change'
@@ -276,6 +326,22 @@ export interface HoldReleaseEntry {
   readonly scope: Scope;
 }
 
+/**
+ * Units of one hold claim carried with their goods to another balance by a movement (13.17; 6.2 "A hold moves with its
+ * goods"): the claim ends there by `moved`, written as a `hold_release` row naming the movement, and the hold claims
+ * the same units at the balance they move to by a new claim. The hold itself goes on: nothing releases it.
+ */
+export interface HoldMoveEntry {
+  readonly id: string;
+  readonly lineId: string;
+  readonly holdId: string;
+  readonly holdKind: string;
+  readonly claimId: string;
+  readonly quantity: number;
+  readonly movementId: string;
+  readonly scope: Scope;
+}
+
 export interface ReservationEntry {
   readonly id: string;
   readonly lineId: string;
@@ -354,8 +420,33 @@ const RESERVATION_EVENTS: Readonly<Record<string, readonly string[]>> = {
   'offline-protected': ['released'],
 };
 
-/** Conditions goods may change to by a condition change, always from good (2.3; PRD-DMG-010, POL-17.02). */
+/**
+ * The conditions of the units the identity step takes, in the order it takes them (13.14): good, then wrong and
+ * unidentified, which return to good only through it (POL-17.02). Never damaged (PRD-DMG-010).
+ */
+const IDENTITY_CONDITIONS: readonly Condition[] = ['good', 'wrong', 'unidentified'];
+
+/** Conditions goods may change to by a condition change from good (2.3; PRD-DMG-010, POL-17.02). */
 const CHANGED_CONDITIONS: readonly Condition[] = ['damaged', 'wrong', 'unidentified'];
+
+/** Conditions of held goods that may become damaged too (2.3; 13.17; PRD-REC-006; RR-571). */
+const HELD_CONDITIONS: readonly Condition[] = ['wrong', 'unidentified'];
+
+/**
+ * The hold kinds a condition change to damaged carries with the units it takes (13.17; RR-571): the excess hold and the
+ * quarantine of what a count found, which stay on the goods as they become damaged. A damage hold is never carried: it
+ * ends by its own event first (6.1), and any other hold keeps its units where they are, `held` (6.2).
+ */
+const CARRIED_TO_DAMAGED: readonly string[] = ['excess', 'quarantine'];
+
+/**
+ * Which hold claims an item may carry with the units it takes, and how many units of each (13.17): `allows` answers
+ * the units of the claim's hold still carriable, zero for a hold it never carries; `use` counts units carried.
+ */
+export interface Carry {
+  readonly allows: (claim: ClaimState) => number;
+  readonly use: (claim: ClaimState, quantity: number) => void;
+}
 
 /** What the state needs that Plan read before the locks (13.1). */
 export interface WorkingInputs {
@@ -375,16 +466,23 @@ export interface WorkingInputs {
   readonly usedCodes: ReadonlySet<string>;
   /** The reservations the command locked at step 5, whose claims it may change (14.3). */
   readonly lockedReservations: ReadonlySet<string>;
+  /** The holds the command locked at step 5, whose claims it may change or carry (14.3; 13.17). */
+  readonly lockedHolds: ReadonlySet<string>;
   /** A new row's identifier, a UUIDv7 the caller makes (PRD-MOD-008). */
   readonly newId: () => string;
 }
 
-/** What one take found at a balance: free units, reserved units moved with their claims, and pieces. */
+/**
+ * What one take found at a balance: free units, reserved units moved with their claims, held units carried with their
+ * holds' claims (13.17), and pieces.
+ */
 interface Taken {
   readonly balance: BalanceState;
   quantity: number;
   reserved: number;
   readonly pieces: PieceState[];
+  /** The hold claims carried with held units, and how many units of each. */
+  carried?: { readonly claim: ClaimState; readonly quantity: number }[];
 }
 
 type ItemOf<K extends LedgerItem['kind']> = Extract<LedgerItem, { kind: K }>;
@@ -397,6 +495,7 @@ export class Working {
     acceptances: [],
     holds: [],
     holdReleases: [],
+    holdMoves: [],
     reservations: [],
     reservationEvents: [],
   };
@@ -436,6 +535,8 @@ export class Working {
     switch (item.kind) {
       case 'receipt-count':
         return this.receiptCount(item);
+      case 'identity-resolved':
+        return this.identityResolved(item);
       case 'opening-count':
         return this.openingCount(item);
       case 'location-move':
@@ -483,9 +584,44 @@ export class Working {
     ];
     const brands = (skuIds: readonly string[]) => skuIds.map((skuId) => this.sku(skuId).brandId);
     switch (item.kind) {
-      case 'receipt-count':
+      case 'receipt-count': {
+        // Goods of Unknown SKU touch their location and the brand they are counted under: no SKU scope names them
+        // (14.1; 13.14; RR-555).
+        if (item.skuId === null) {
+          return at(item.to.siteId, item.to.businessUnitId, [item.to.locationId], [], [item.brandId]);
+        }
+        return at(item.to.siteId, item.to.businessUnitId, [item.to.locationId], [item.skuId], brands([item.skuId]));
+      }
       case 'opening-count':
         return at(item.to.siteId, item.to.businessUnitId, [item.to.locationId], [item.skuId], brands([item.skuId]));
+      case 'identity-resolved': {
+        // The locations of the named origins' units there, the SKUs they leave and take, and their brands (8.1).
+        const named = new Set(item.parts.map((part) => part.receiptOriginId));
+        const rows = [...this.balances.values()].filter(
+          (row) =>
+            named.has(row.receiptOriginId) &&
+            row.siteId === item.at.siteId &&
+            row.businessUnitId === item.at.businessUnitId &&
+            row.quantity > 0,
+        );
+        const skuIds = [
+          ...new Set([
+            ...item.parts.map((part) => part.skuId),
+            ...rows.flatMap((row) => (row.skuId === null ? [] : [row.skuId])),
+          ]),
+        ];
+        // Goods of Unknown SKU are of the brand they were counted under (RR-555).
+        const counted = rows.flatMap((row) =>
+          row.skuId === null && row.scope.brandId !== null ? [row.scope.brandId] : [],
+        );
+        return at(
+          item.at.siteId,
+          item.at.businessUnitId,
+          [...new Set(rows.flatMap((row) => (row.locationId === null ? [] : [row.locationId])))],
+          skuIds,
+          [...new Set([...brands(skuIds), ...counted])],
+        );
+      }
       case 'location-move': {
         const skuIds = [item.goods.skuId];
         if (item.to.businessUnitId === item.from.businessUnitId) {
@@ -502,14 +638,12 @@ export class Working {
           ...at(item.from.siteId, item.to.businessUnitId, [item.to.locationId], skuIds, brands(skuIds)),
         ];
       }
-      case 'condition-change':
-        return at(
-          item.at.siteId,
-          item.at.businessUnitId,
-          [item.at.locationId],
-          [item.goods.skuId],
-          brands([item.goods.skuId]),
-        );
+      case 'condition-change': {
+        // Goods of Unknown SKU touch their location and the brand they were counted under (13.15; 14.1; RR-555).
+        const skuIds = item.goods.skuId === null ? [] : [item.goods.skuId];
+        const brand = this.goodsBrand(item.goods);
+        return at(item.at.siteId, item.at.businessUnitId, [item.at.locationId], skuIds, brand === null ? [] : [brand]);
+      }
       case 'reserve': {
         const skuIds = item.goods.map((goods) => goods.skuId);
         return at(item.at.siteId, item.at.businessUnitId, [item.at.locationId], skuIds, brands(skuIds));
@@ -563,12 +697,27 @@ export class Working {
     return { siteId, storeId: unit.storeId, businessUnitId, legalEntityId: unit.legalEntityId };
   }
 
-  protected skuBalanceOf(siteId: string, businessUnitId: string, skuId: string | null): SkuBalanceState {
-    const wanted = skuKey(siteId, businessUnitId, skuId);
+  /**
+   * The SKU balance of a SKU at a unit, or of the goods of Unknown SKU there of the brand they were counted under (14.2;
+   * 13.14; RR-555): the row of the same unit and SKU, and for goods of Unknown SKU of the same brand.
+   */
+  protected skuBalanceOf(
+    siteId: string,
+    businessUnitId: string,
+    skuId: string | null,
+    brandId: string | null,
+  ): SkuBalanceState {
     for (const row of this.skuBalances.values()) {
-      if (skuKey(row.siteId, row.businessUnitId, row.skuId) === wanted) return row;
+      if (
+        row.siteId === siteId &&
+        row.businessUnitId === businessUnitId &&
+        row.skuId === skuId &&
+        (skuId !== null || row.brandId === brandId)
+      ) {
+        return row;
+      }
     }
-    throw new Error(`SKU balance not locked: ${wanted}`);
+    throw new Error(`SKU balance not locked: ${unitKey(siteId, businessUnitId)}|${skuId ?? 'Unknown SKU'}`);
   }
 
   protected activeClaims(filter: (claim: ClaimState) => boolean): ClaimState[] {
@@ -619,7 +768,7 @@ export class Working {
    * then the receipt origin made first, whose UUIDv7 sorts first (PRD-MOD-008). The origin, not the balance row,
    * breaks a tie, so a sale's legs are read back in the order it took them (S1-F10-T06, G9).
    */
-  protected balancesAt(place: Place, condition: Condition, goods: Goods): BalanceState[] {
+  protected balancesAt(place: Place, condition: Condition, goods: NamedGoods): BalanceState[] {
     return [...this.balances.values()]
       .filter(
         (row) =>
@@ -640,9 +789,11 @@ export class Working {
   }
 
   /** Plan staleness (13.1): every origin with stock here was one Plan found and locked. */
-  protected checkNotStale(lineId: string, place: Place, goods: Goods, candidates: readonly BalanceState[]): void {
-    if (goods.receiptOriginId !== undefined || goods.pieceCodes !== undefined) return;
-    const seen = this.inputs.originsSeen.get(skuKey(place.siteId, place.businessUnitId, goods.skuId));
+  protected checkNotStale(lineId: string, place: Place, goods: NamedGoods, candidates: readonly BalanceState[]): void {
+    if (goods.skuId === null || goods.receiptOriginId !== undefined || goods.pieceCodes !== undefined) return;
+    const seen = this.inputs.originsSeen.get(
+      skuKey(place.siteId, place.businessUnitId, goods.skuId, this.sku(goods.skuId).brandId),
+    );
     if (candidates.some((row) => row.quantity > 0 && seen?.has(row.receiptOriginId) !== true)) {
       refuse('plan-stale', lineId);
     }
@@ -676,7 +827,7 @@ export class Working {
     const created: BalanceState = {
       id: this.newId(),
       isNew: true,
-      skuBalanceId: this.skuBalanceOf(siteId, businessUnitId, origin.skuId).id,
+      skuBalanceId: this.skuBalanceOf(siteId, businessUnitId, origin.skuId, origin.scope.brandId).id,
       siteId,
       businessUnitId,
       locationId: transit === undefined ? locationId : null,
@@ -702,7 +853,7 @@ export class Working {
     balance.quantity += quantity;
     balance.accepted += accepted;
     balance.changed = true;
-    const total = this.skuBalanceOf(balance.siteId, balance.businessUnitId, balance.skuId);
+    const total = this.skuBalanceOf(balance.siteId, balance.businessUnitId, balance.skuId, balance.scope.brandId);
     total.quantity += quantity;
     total.changed = true;
   }
@@ -721,6 +872,15 @@ export class Working {
 
   protected brandOf(skuId: string | null): string | null {
     return skuId === null ? null : this.sku(skuId).brandId;
+  }
+
+  /**
+   * The brand of goods an item names: the SKU's, or for goods of Unknown SKU named by their origin, the brand they
+   * were counted under, which their origin keeps (13.14, 13.15; RR-555).
+   */
+  protected goodsBrand(goods: NamedGoods): string | null {
+    if (goods.skuId !== null) return this.sku(goods.skuId).brandId;
+    return this.origins.get(goods.receiptOriginId)?.scope.brandId ?? null;
   }
 
   /** Why free units fall short (13.8): held or reserved by what the actor can see, or simply not there. */
@@ -745,23 +905,25 @@ export class Working {
   /**
    * Takes units of goods at a place for a movement or a reservation (6.2, 6.3): the pieces named, or a quantity
    * oldest first. Free units only, unless `moveReserved`: a location move inside one unit may then take reserved units
-   * too, whose claims move with them (13.9; product owner, 8 Oct 2026). Held units are never taken. Refuses
-   * `piece-not-at-place`, `held`, `reserved` or `insufficient-available`; a reservation names `reservation-overlap` for
-   * reserved units.
+   * too, whose claims move with them (13.9; product owner, 8 Oct 2026); or `carry`: a condition change may then take
+   * held units too, by quantity, whose holds' claims it carries with them (13.17). Other held units are never taken.
+   * Refuses `piece-not-at-place`, `held`, `reserved` or `insufficient-available`; a reservation names
+   * `reservation-overlap` for reserved units.
    */
   protected take(
     lineId: string,
     place: Place,
     condition: Condition,
-    goods: Goods,
+    goods: NamedGoods,
     options: {
       readonly reservation?: boolean;
       readonly moveReserved?: boolean;
       readonly fits?: (balance: BalanceState) => number;
+      readonly carry?: Carry;
     } = {},
   ): Taken[] {
-    const sku = this.sku(goods.skuId);
-    if (sku.pieceTracked) {
+    // Goods of Unknown SKU are counted by quantity (13.14, 13.15; DEC-137).
+    if (goods.skuId !== null && this.sku(goods.skuId).pieceTracked) {
       const taken = new Map<string, Taken>();
       for (const code of goods.pieceCodes ?? []) {
         const piece = this.piece(lineId, code);
@@ -833,11 +995,83 @@ export class Working {
         left -= take;
       }
     }
+    if (left > 0 && options.carry !== undefined)
+      left = this.takeCarried(lineId, candidates, taken, left, options.carry);
     if (left > 0) this.shortfall(lineId, candidates, goods.quantity, options.reservation);
     for (const each of taken) {
-      this.leaveSpare(each.balance, freeUnits(this.claimsOn(each.balance)) - (each.quantity - each.reserved));
+      const carried = (each.carried ?? []).reduce((sum, move) => sum + move.quantity, 0);
+      this.leaveSpare(each.balance, freeUnits(this.claimsOn(each.balance)) - (each.quantity - each.reserved - carried));
     }
     return taken;
+  }
+
+  /**
+   * Takes held units, after the free ones, whose holds' claims the item carries with them (13.17; 6.2 "A hold moves with
+   * its goods"; RR-571): at each balance, the units held by holds it carries alone, other holds taken to fall on held
+   * units first (availability.ts `heldOnce`), each carried hold's claim moving as many units as are taken of it, in the
+   * order of the claims, and further where holds overlap, so no claim is left on more units than stay. A carried
+   * claim is changed only under its hold's lock (14.3), so one of a hold Plan did not lock is `plan-stale`. Answers the
+   * units still wanted.
+   */
+  protected takeCarried(
+    lineId: string,
+    candidates: readonly BalanceState[],
+    taken: Taken[],
+    wanted: number,
+    carry: Carry,
+  ): number {
+    let left = wanted;
+    for (const balance of candidates) {
+      if (left === 0) break;
+      const claims = this.claimsOn(balance);
+      const carriable = claims.holds
+        .filter((claim) => carry.allows(claim) > 0)
+        .sort((a, b) => compareCodeUnits(a.id, b.id));
+      if (carriable.length === 0) continue;
+      const others = claims.holds
+        .filter((claim) => carry.allows(claim) <= 0)
+        .reduce((sum, claim) => sum + claim.quantity, 0);
+      const carriedUnits = carriable.reduce((sum, claim) => sum + Math.min(claim.quantity, carry.allows(claim)), 0);
+      const held = heldOnce(claims);
+      const units = Math.max(0, Math.min(carriedUnits, held - Math.min(held, others)));
+      const take = Math.min(left, units);
+      if (take <= 0) continue;
+      const unlocked = carriable.find((claim) => !this.inputs.lockedHolds.has(claim.headerId));
+      if (unlocked !== undefined) refuse('plan-stale', lineId);
+      const entry = taken.find((each) => each.balance === balance);
+      const freeTaken = entry === undefined ? 0 : entry.quantity - entry.reserved;
+      const moves = new Map<ClaimState, number>();
+      const carryOf = (claim: ClaimState, quantity: number) => {
+        if (quantity <= 0) return;
+        moves.set(claim, (moves.get(claim) ?? 0) + quantity);
+        carry.use(claim, quantity);
+      };
+      let rest = take;
+      for (const claim of carriable) {
+        if (rest === 0) break;
+        const quantity = Math.min(rest, claim.quantity, carry.allows(claim));
+        carryOf(claim, quantity);
+        rest -= quantity;
+      }
+      // Holds overlapping on the same units: no claim stays on more units than stay outside reservations (6.2).
+      const stay = Math.max(0, balance.quantity - claims.reserved - freeTaken - take);
+      for (const claim of carriable) {
+        const over = claim.quantity - (moves.get(claim) ?? 0) - stay;
+        if (over <= 0) continue;
+        if (over > carry.allows(claim)) {
+          refuse('held', lineId, [{ kind: 'hold', holdKind: claim.headerKind, holdId: claim.headerId }]);
+        }
+        carryOf(claim, over);
+      }
+      const carried = [...moves].map(([claim, quantity]) => ({ claim, quantity }));
+      if (entry === undefined) taken.push({ balance, quantity: take, reserved: 0, pieces: [], carried });
+      else {
+        entry.quantity += take;
+        entry.carried = [...(entry.carried ?? []), ...carried];
+      }
+      left -= take;
+    }
+    return left;
   }
 
   /**
@@ -863,10 +1097,21 @@ export class Working {
     );
   }
 
-  protected checkGoodsShape(lineId: string, goods: Goods): void {
-    const sku = this.sku(goods.skuId);
+  protected checkGoodsShape(lineId: string, goods: NamedGoods): void {
     if (!Number.isInteger(goods.quantity) || goods.quantity <= 0)
       refuse('invalid-item', lineId, [{ kind: 'quantity' }]);
+    if (goods.skuId === null) {
+      // Goods of Unknown SKU are named by an origin of Unknown SKU, by quantity, with no piece codes (13.15). The type
+      // holds it; the ledger still checks every request it is given.
+      if ('pieceCodes' in goods && (goods as { readonly pieceCodes?: unknown }).pieceCodes !== undefined) {
+        refuse('invalid-item', lineId, [{ kind: 'piece-codes' }]);
+      }
+      if (this.origin(lineId, goods.receiptOriginId).skuId !== null) {
+        refuse('invalid-item', lineId, [{ kind: 'receipt-origin', receiptOriginId: goods.receiptOriginId }]);
+      }
+      return;
+    }
+    const sku = this.sku(goods.skuId);
     if (sku.pieceTracked !== (goods.pieceCodes !== undefined))
       refuse('invalid-item', lineId, [{ kind: 'piece-codes' }]);
     if (goods.pieceCodes !== undefined && new Set(goods.pieceCodes).size !== goods.quantity) {
@@ -874,19 +1119,21 @@ export class Working {
     }
   }
 
+  /** A new movement; its brand set is its SKUs' brands, or the brands given for goods of Unknown SKU (14.1; RR-555). */
   protected newMovement(
     kind: MovementEntry['kind'],
     lineId: string,
     siteId: string,
     businessUnitId: string,
     skuIds: readonly (string | null)[],
+    brandIds?: readonly string[],
   ): MovementEntry {
     const movement: MovementEntry = {
       id: this.newId(),
       kind,
       lineId,
       scope: this.headerScopeAt(siteId, businessUnitId),
-      brandIds: [...new Set(skuIds.map((skuId) => this.brandOf(skuId)))],
+      brandIds: [...new Set(brandIds ?? skuIds.map((skuId) => this.brandOf(skuId)))],
       legs: [],
       pieceIds: [],
     };
@@ -916,18 +1163,44 @@ export class Working {
 
   // --- movement items (13.4) -----------------------------------------------------------------------------------
 
-  /** Receipt count (13.4; PRD-REC-008, PRD-MER-015, PRD-ORG-019): a new receipt origin, its custody and pieces. */
+  /**
+   * Receipt count (13.4; PRD-REC-008, PRD-MER-015, PRD-ORG-019): a new receipt origin, its custody and pieces. Goods of
+   * a product not yet set up are counted with their SKU Unknown and their identity as described, in good condition and
+   * not quarantined, by quantity in pieces, with no batch (13.14; goods-in 4.3, 4.5; PRD-DMG-005, DEC-137; GI-1). They
+   * have no coverage and no acceptance, so nothing of them is sellable (6.3) until the identity step gives them a SKU
+   * and the PT route follows.
+   */
   protected receiptCount(item: ItemOf<'receipt-count'>): ItemValue {
-    const movement = this.newMovement('receipt-count', item.lineId, item.to.siteId, item.to.businessUnitId, [
-      item.skuId,
-    ]);
-    movement.owner = item.owner;
+    if (describedIdentityRefused(item)) refuse('invalid-item', item.lineId, [{ kind: 'described-identity' }]);
+    if (countedBrandRefused(item)) refuse('invalid-item', item.lineId, [{ kind: 'brand' }]);
+    if (item.skuId === null) {
+      // Goods of a product not yet set up are in good condition, not quarantined (13.14); unidentified goods, with no
+      // identity at all, in the unidentified condition, quarantined in the same request (13.16; goods-in 4.4).
+      if (item.condition !== (item.described === null ? 'unidentified' : 'good'))
+        refuse('invalid-item', item.lineId, [{ kind: 'condition', condition: item.condition }]);
+      if (item.pieceCodes !== undefined) refuse('invalid-item', item.lineId, [{ kind: 'piece-codes' }]);
+      if (item.batch !== undefined) refuse('invalid-item', item.lineId, [{ kind: 'batch' }]);
+    }
+    // An origin the caller names is new and made by this count alone (13.16): Plan refused one already written.
+    if (item.receiptOriginId !== undefined && this.origins.has(item.receiptOriginId)) {
+      refuse('invalid-item', item.lineId, [{ kind: 'receipt-origin', receiptOriginId: item.receiptOriginId }]);
+    }
+    const movement = this.newMovement(
+      'receipt-count',
+      item.lineId,
+      item.to.siteId,
+      item.to.businessUnitId,
+      [item.skuId],
+      item.skuId === null ? [item.brandId] : undefined,
+    );
     this.countedOrigin(item.lineId, movement, 'receipt', item.to, item.condition, {
       skuId: item.skuId,
       quantity: item.quantity,
       ...(item.pieceCodes === undefined ? {} : { pieceCodes: item.pieceCodes }),
-      ownerKind: item.owner.kind === 'unknown' ? null : item.owner.kind,
+      owner: item.owner,
       ...(item.batch === undefined ? {} : { batch: item.batch }),
+      ...(item.skuId === null ? { described: item.described, brandId: item.brandId } : {}),
+      ...(item.receiptOriginId === undefined ? {} : { originId: item.receiptOriginId }),
     });
     return { kind: 'unknown' };
   }
@@ -943,7 +1216,6 @@ export class Working {
     const movement = this.newMovement('opening-count', item.lineId, item.to.siteId, item.to.businessUnitId, [
       item.skuId,
     ]);
-    movement.owner = item.owner;
     const excess = item.withoutValuationEvidence;
     const counted = this.countedOrigin(
       item.lineId,
@@ -955,7 +1227,7 @@ export class Working {
         skuId: item.skuId,
         quantity: item.quantity,
         ...(item.pieceCodes === undefined ? {} : { pieceCodes: item.pieceCodes }),
-        ownerKind: item.owner.kind === 'unknown' ? null : item.owner.kind,
+        owner: item.owner,
         ...(item.batch === undefined ? {} : { batch: item.batch }),
       },
     );
@@ -1011,14 +1283,23 @@ export class Working {
     to: Place,
     condition: Condition,
     counted: {
-      readonly skuId: string;
+      /** The SKU, or null for goods of a product not yet set up, by quantity in pieces (13.14). */
+      readonly skuId: string | null;
       readonly quantity: number;
       readonly pieceCodes?: readonly string[];
-      readonly ownerKind: OriginState['ownerKind'];
+      readonly owner: Owner;
       readonly batch?: { readonly code: string; readonly expiryDate: string };
+      readonly described?: DescribedIdentity | null;
+      /** For goods of a product not yet set up, the brand they are counted under (14.1; RR-555). */
+      readonly brandId?: string;
+      /** The new origin's identifier the caller made, so later items of the request name it (13.16). */
+      readonly originId?: string;
     },
   ): { origin: OriginState; balance: BalanceState; pieces: PieceState[] } {
-    const sku = this.sku(counted.skuId);
+    const sku =
+      counted.skuId === null
+        ? { pieceTracked: false, brandId: counted.brandId ?? null, stockUnit: 'piece' as const }
+        : this.sku(counted.skuId);
     const codes = counted.pieceCodes ?? [];
     for (const code of codes) {
       if (this.usedCodes.has(code)) refuse('invalid-item', lineId, [{ kind: 'piece-code-used', code }]);
@@ -1026,7 +1307,7 @@ export class Working {
     }
     const unit = this.unit(to.siteId, to.businessUnitId);
     const origin: OriginState = {
-      id: this.newId(),
+      id: counted.originId ?? this.newId(),
       isNew: true,
       originKind,
       skuId: counted.skuId,
@@ -1037,7 +1318,14 @@ export class Working {
       quantity: counted.quantity,
       scope: this.scopeAt(to.siteId, to.businessUnitId, sku.brandId),
       stateId: this.newId(),
-      ownerKind: counted.ownerKind,
+      ownerKind: counted.owner.kind === 'unknown' ? null : counted.owner.kind,
+      owner: counted.owner,
+      stockUnit: sku.stockUnit,
+      mappingVersionId: unit.mappingVersionId,
+      bookId: unit.bookId,
+      parentOriginId: null,
+      described: counted.described ?? null,
+      madeByMovementId: movement.id,
       valueKnown: false,
       pRatePaise: null,
       establishedValuePaise: null,
@@ -1084,6 +1372,187 @@ export class Working {
   }
 
   /**
+   * Identity resolved (2.3, 13.4, 13.14; goods-in 6.3 step 4; PRD-DMG-005, POL-17.02; GI-1): the free units of each
+   * origin named, at the unit, in good, wrong or unidentified condition and in custody, take the SKUs of its parts,
+   * every unit exactly one: more than are free is refused as any take is, fewer is `invalid-item`. A part that keeps its
+   * origin takes good units first, which stay as they are, then returns wrong or unidentified ones to good; a part that
+   * names a new origin moves its units into it, a new receipt origin of the kind identity-resolved with the named one as
+   * parent, the part's SKU, the parent's receiving place, count date and owner, in good condition. One movement records
+   * every change, out of the parent's balances and into the new ones; the parent stays as it was, its quantity and its
+   * facts. Damaged goods never take this route (PRD-DMG-010), held or reserved units are not free, and goods already
+   * covered, valued or accepted keep their identity: identity comes before the PT route (6.3, 7.6). The first version
+   * tracks every product by quantity (DEC-137), so a piece-tracked or batch-tracked origin or SKU, or a SKU of another
+   * stock unit, is `invalid-item`, never combined silently (PRD-MER-012).
+   */
+  protected identityResolved(item: ItemOf<'identity-resolved'>): ItemValue {
+    const { lineId, at } = item;
+    const byOrigin = new Map<string, IdentityPart[]>();
+    const made = new Set<string>();
+    for (const part of item.parts) {
+      if (!Number.isInteger(part.quantity) || part.quantity <= 0)
+        refuse('invalid-item', lineId, [{ kind: 'quantity' }]);
+      const newId = part.newReceiptOriginId;
+      if (newId !== undefined) {
+        if (made.has(newId) || this.origins.has(newId)) {
+          refuse('invalid-item', lineId, [{ kind: 'receipt-origin', receiptOriginId: newId }]);
+        }
+        made.add(newId);
+      }
+      byOrigin.set(part.receiptOriginId, [...(byOrigin.get(part.receiptOriginId) ?? []), part]);
+    }
+    const movementId = this.newId();
+    const legs: LegEntry[] = [];
+    const moved = new Map<BalanceState, number>();
+    const free = new Map<BalanceState, number>();
+    const move = (from: BalanceState, to: BalanceState, quantity: number) => {
+      this.addTo(from, -quantity, 0);
+      this.addTo(to, quantity, 0);
+      legs.push(this.leg('out', from, quantity, 0), this.leg('in', to, quantity, 0));
+      moved.set(from, (moved.get(from) ?? 0) + quantity);
+    };
+    for (const [originId, parts] of byOrigin) {
+      const origin = this.origin(lineId, originId);
+      const candidates = [...this.balances.values()]
+        .filter(
+          (row) =>
+            row.receiptOriginId === origin.id &&
+            row.siteId === at.siteId &&
+            row.businessUnitId === at.businessUnitId &&
+            row.heldAs === 'custody' &&
+            IDENTITY_CONDITIONS.includes(row.condition) &&
+            row.quantity > 0,
+        )
+        .sort(
+          (a, b) =>
+            IDENTITY_CONDITIONS.indexOf(a.condition) - IDENTITY_CONDITIONS.indexOf(b.condition) ||
+            compareCodeUnits(custodyLocation(a), custodyLocation(b)) ||
+            compareCodeUnits(a.id, b.id),
+        );
+      for (const row of candidates) free.set(row, freeUnits(this.claimsOn(row)));
+      const units = candidates.reduce((sum, row) => sum + (free.get(row) ?? 0), 0);
+      const named = parts.reduce((sum, part) => sum + part.quantity, 0);
+      if (named > units) this.shortfall(lineId, candidates, named);
+      if (named < units) {
+        refuse('invalid-item', lineId, [
+          { kind: 'identity-units', receiptOriginId: origin.id, units: String(units), named: String(named) },
+        ]);
+      }
+      /** Takes units from the candidates in their order, good first, as far as each has free units left. */
+      const take = (quantity: number): [BalanceState, number][] => {
+        const taken: [BalanceState, number][] = [];
+        let left = quantity;
+        for (const row of candidates) {
+          if (left === 0) break;
+          const units = Math.min(left, free.get(row) ?? 0);
+          if (units <= 0) continue;
+          free.set(row, (free.get(row) ?? 0) - units);
+          taken.push([row, units]);
+          left -= units;
+        }
+        return taken;
+      };
+      const keeping = parts.filter((part) => part.newReceiptOriginId === undefined);
+      for (const part of keeping) {
+        if (origin.skuId === null || part.skuId !== origin.skuId) {
+          refuse('invalid-item', lineId, [{ kind: 'identity-keeps', receiptOriginId: origin.id, skuId: part.skuId }]);
+        }
+      }
+      const kept = take(keeping.reduce((sum, part) => sum + part.quantity, 0));
+      const changes =
+        kept.some(([row]) => row.condition !== 'good') || parts.some((part) => part.newReceiptOriginId !== undefined);
+      if (changes) this.checkIdentityChange(lineId, origin, candidates);
+      // Kept units held wrong or unidentified return to good on their own origin (POL-17.02).
+      for (const [row, units] of kept) {
+        if (row.condition === 'good') continue;
+        move(row, this.balanceFor(row.siteId, row.businessUnitId, custodyLocation(row), 'good', origin), units);
+      }
+      for (const part of parts) {
+        if (part.newReceiptOriginId === undefined) continue;
+        const sku = this.sku(part.skuId);
+        if (sku.pieceTracked || sku.batchTracked || sku.stockUnit !== origin.stockUnit) {
+          refuse('invalid-item', lineId, [{ kind: 'tracking', skuId: part.skuId }]);
+        }
+        const child = this.identityOrigin(part.newReceiptOriginId, origin, sku, part.quantity, movementId);
+        for (const [row, units] of take(part.quantity)) {
+          move(row, this.balanceFor(row.siteId, row.businessUnitId, custodyLocation(row), 'good', child), units);
+        }
+      }
+    }
+    // What each balance the units left still has free, for the claims the actor cannot see (DEC-117).
+    for (const row of moved.keys()) this.leaveSpare(row, freeUnits(this.claimsOn(row)));
+    if (legs.length > 0) {
+      this.entries.movements.push({
+        id: movementId,
+        kind: 'identity-resolved',
+        lineId,
+        scope: this.headerScopeAt(at.siteId, at.businessUnitId),
+        brandIds: [...new Set(legs.map((leg) => leg.scope.brandId))],
+        legs,
+        pieceIds: [],
+      });
+    }
+    return { kind: 'unknown' };
+  }
+
+  /**
+   * Whether an origin's units may change identity (13.14): tracked by quantity, with no batch (DEC-137), not yet covered
+   * or valued, and none of its units there accepted, since the identity step comes before the PT route (goods-in 6.3).
+   */
+  protected checkIdentityChange(lineId: string, origin: OriginState, at: readonly BalanceState[]): void {
+    if (origin.pieceTracked || origin.batchCode !== null) {
+      refuse('invalid-item', lineId, [{ kind: 'tracking', receiptOriginId: origin.id }]);
+    }
+    if (origin.coveredQuantity > 0 || origin.ptRevisionId !== null) {
+      refuse('invalid-item', lineId, [{ kind: 'covered', receiptOriginId: origin.id }]);
+    }
+    if (origin.valueKnown) refuse('invalid-item', lineId, [{ kind: 'cost-established', receiptOriginId: origin.id }]);
+    if (at.some((row) => row.accepted > 0)) {
+      refuse('invalid-item', lineId, [{ kind: 'accepted', receiptOriginId: origin.id }]);
+    }
+  }
+
+  /** A new receipt origin the identity step makes from its parent (13.14; 14.2): the parent's facts, the SKU given. */
+  protected identityOrigin(
+    id: string,
+    parent: OriginState,
+    sku: SkuFacts,
+    quantity: number,
+    movementId: string,
+  ): OriginState {
+    const origin: OriginState = {
+      id,
+      isNew: true,
+      originKind: 'identity-resolved',
+      skuId: sku.skuId,
+      stockUnit: sku.stockUnit,
+      pieceTracked: false,
+      batchCode: null,
+      expiryDate: null,
+      countDate: parent.countDate,
+      quantity,
+      scope: { ...parent.scope, brandId: sku.brandId },
+      stateId: this.newId(),
+      ownerKind: parent.ownerKind,
+      owner: parent.owner,
+      mappingVersionId: parent.mappingVersionId,
+      bookId: parent.bookId,
+      parentOriginId: parent.id,
+      described: null,
+      madeByMovementId: movementId,
+      valueKnown: false,
+      pRatePaise: null,
+      establishedValuePaise: null,
+      ptRevisionId: null,
+      coveredQuantity: 0,
+      lastStateMovementId: movementId,
+      stateChanged: true,
+    };
+    this.origins.set(origin.id, origin);
+    this.entries.origins.push(origin);
+    return origin;
+  }
+
+  /**
    * Moves units between two balance keys at one Site in one movement: an out leg and an in leg per origin.
    * Acceptance moves with the goods, accepted units first (13.4 "Keeps condition and acceptance"; S1-F10-T02), and so
    * do the claims of reserved units it carries, by a `moved` event on the claim it leaves and a new claim of the same
@@ -1095,7 +1564,7 @@ export class Working {
     taken: readonly Taken[],
     to: { readonly businessUnitId: string; readonly locationId: string; readonly condition: Condition },
   ): void {
-    for (const { balance, quantity, reserved, pieces } of taken) {
+    for (const { balance, quantity, reserved, pieces, carried } of taken) {
       const origin = this.origins.get(balance.receiptOriginId);
       if (origin === undefined) throw new Error('origin not loaded');
       const target = this.balanceFor(balance.siteId, to.businessUnitId, to.locationId, to.condition, origin);
@@ -1107,6 +1576,7 @@ export class Working {
       this.addTo(target, quantity, accepted);
       movement.legs.push(this.leg('out', balance, quantity, accepted), this.leg('in', target, quantity, accepted));
       if (reserved > 0) this.moveClaims(lineId, movement, balance, target, reserved);
+      for (const move of carried ?? []) this.carryHoldClaim(lineId, movement, move.claim, target, move.quantity);
       const unit = this.unit(balance.siteId, to.businessUnitId);
       for (const piece of pieces) {
         piece.businessUnitId = to.businessUnitId;
@@ -1156,6 +1626,34 @@ export class Working {
   }
 
   /**
+   * Carries `quantity` units of a hold's claim with its goods to the balance they move to (13.17; 6.2 "A hold moves with
+   * its goods"; POL-17.01): the claim there ends by `moved`, naming the movement, and the hold claims the same units at
+   * the target by a new claim, so it holds them still and is released only by its own event (6.1).
+   */
+  protected carryHoldClaim(
+    lineId: string,
+    movement: MovementEntry,
+    claim: ClaimState,
+    to: BalanceState,
+    quantity: number,
+  ): void {
+    if (quantity > claim.quantity) throw new Error('A hold claim carried beyond what it holds');
+    claim.quantity -= quantity;
+    claim.changed = true;
+    this.entries.holdMoves.push({
+      id: this.newId(),
+      lineId,
+      holdId: claim.headerId,
+      holdKind: claim.headerKind,
+      claimId: claim.id,
+      quantity,
+      movementId: movement.id,
+      scope: claim.scope,
+    });
+    this.newClaim('hold', claim.headerId, claim.headerKind, claim.withinReservationId, to.id, null, quantity, to.scope);
+  }
+
+  /**
    * Location move (13.4; PRD-STK-005): inside one Site; between two units only when book, legal entity and tax
    * registration are unchanged (7.1, DEC-066; MM-13). Held goods move only under their own authority, so they are
    * refused (6.2). Inside one unit a move may carry reserved units with their claims, so it never breaks a reservation
@@ -1186,21 +1684,38 @@ export class Working {
   }
 
   /**
-   * Condition change (2.3, 13.4; PRD-DMG-003, PRD-DMG-010, POL-17.02): only good to damaged, wrong or unidentified.
-   * Damaged goods never become good, and wrong or unidentified goods return to good only through the identity route, so
-   * every change from another condition is `condition-route`. Takes free units; the hold the new condition raises is
-   * its own item in the same request (13.5).
+   * Condition change (2.3, 13.4, 13.17; PRD-DMG-003, PRD-DMG-010, POL-17.02, PRD-REC-006): good to damaged, wrong or
+   * unidentified, and wrong or unidentified to damaged. Damaged goods never become good, and wrong or unidentified goods
+   * return to good only through the identity route, so every other change is `condition-route`. Takes free units; a
+   * change to damaged then takes units held by an excess hold or a quarantine too, carrying those holds' claims with
+   * them, so the goods stay held as they were besides their damage (13.17; RR-571); a damage hold ends first, by its
+   * own event. The hold the new condition raises is its own item in the same request (13.5). Goods of Unknown SKU are
+   * named by their origin, and the movement records the brand they were counted under (13.15).
    */
   protected conditionChange(item: ItemOf<'condition-change'>): ItemValue {
     this.checkGoodsShape(item.lineId, item.goods);
     if (item.from === item.to) refuse('invalid-item', item.lineId, [{ kind: 'same-condition' }]);
-    if (item.from !== 'good' || !CHANGED_CONDITIONS.includes(item.to)) {
-      refuse('condition-route', item.lineId, [{ kind: 'condition', from: item.from, to: item.to }]);
-    }
-    const taken = this.take(item.lineId, item.at, item.from, item.goods);
-    const movement = this.newMovement('condition-change', item.lineId, item.at.siteId, item.at.businessUnitId, [
-      item.goods.skuId,
-    ]);
+    const allowed =
+      (item.from === 'good' && CHANGED_CONDITIONS.includes(item.to)) ||
+      (HELD_CONDITIONS.includes(item.from) && item.to === 'damaged');
+    if (!allowed) refuse('condition-route', item.lineId, [{ kind: 'condition', from: item.from, to: item.to }]);
+    const carry: Carry | undefined =
+      item.to === 'damaged'
+        ? {
+            allows: (claim) => (CARRIED_TO_DAMAGED.includes(claim.headerKind) ? claim.quantity : 0),
+            use: () => undefined,
+          }
+        : undefined;
+    const taken = this.take(item.lineId, item.at, item.from, item.goods, carry === undefined ? {} : { carry });
+    const brand = this.goodsBrand(item.goods);
+    const movement = this.newMovement(
+      'condition-change',
+      item.lineId,
+      item.at.siteId,
+      item.at.businessUnitId,
+      [item.goods.skuId],
+      item.goods.skuId === null && brand !== null ? [brand] : undefined,
+    );
     this.moveUnits(item.lineId, movement, taken, {
       businessUnitId: item.at.businessUnitId,
       locationId: item.at.locationId,
@@ -1217,6 +1732,9 @@ export class Working {
    */
   protected recordCoverage(item: ItemOf<'record-coverage'>): ItemValue {
     const origin = this.origin(item.lineId, item.receiptOriginId);
+    // Goods whose SKU is Unknown take the identity route before the PT route (2.3, 13.14; PRD-DMG-005, POL-17.02).
+    if (origin.skuId === null)
+      refuse('invalid-item', item.lineId, [{ kind: 'identity-unknown', receiptOriginId: origin.id }]);
     if (origin.ptRevisionId !== null && origin.ptRevisionId !== item.ptRevisionId) {
       refuse('coverage-overlap', item.lineId, [{ kind: 'coverage', ptRevisionId: origin.ptRevisionId }]);
     }
@@ -1308,7 +1826,7 @@ export class Working {
   /**
    * Record acceptance (13.5; PRD-REC-021, PRD-REC-022, PRD-STK-003): barcode verified and physically accepted at the
    * Site, of units in custody there and not yet accepted: a piece elsewhere is `piece-not-at-place`; more units than
-   * are unaccepted there is `exceeds-source`.
+   * are unaccepted there, in the condition named where one is (13.20), is `exceeds-source`.
    */
   protected recordAcceptance(item: ItemOf<'record-acceptance'>): ItemValue {
     this.checkGoodsShape(item.lineId, item.goods);
@@ -1320,7 +1838,8 @@ export class Working {
           !piece.inCustody ||
           piece.siteId !== item.at.siteId ||
           piece.businessUnitId !== item.at.businessUnitId ||
-          piece.locationId !== item.at.locationId
+          piece.locationId !== item.at.locationId ||
+          (item.condition !== undefined && piece.condition !== item.condition)
         ) {
           refuse('piece-not-at-place', item.lineId, [{ kind: 'piece', code }]);
         }
@@ -1348,6 +1867,7 @@ export class Working {
           row.businessUnitId === item.at.businessUnitId &&
           row.locationId === item.at.locationId &&
           row.skuId === item.goods.skuId &&
+          (item.condition === undefined || row.condition === item.condition) &&
           (item.goods.receiptOriginId === undefined || row.receiptOriginId === item.goods.receiptOriginId),
       )
       .sort((a, b) => compareCodeUnits(a.countDate, b.countDate) || compareCodeUnits(a.id, b.id));
@@ -1399,13 +1919,14 @@ export class Working {
       evidenceFileId: item.evidenceFileId ?? null,
       withinReservationId: item.withinReservationId ?? null,
       scope: this.headerScopeAt(item.at.siteId, item.at.businessUnitId),
-      brandIds: [...new Set(item.goods.map((goods) => this.brandOf(goods.skuId)))],
+      brandIds: [...new Set(item.goods.map((goods) => this.goodsBrand(goods)))],
       freezeScope: [],
       claims: [],
     };
     for (const goods of item.goods) {
       this.checkGoodsShape(item.lineId, goods);
-      if (this.sku(goods.skuId).pieceTracked) {
+      // Goods of Unknown SKU are named by their origin and counted by quantity (13.15; DEC-137).
+      if (goods.skuId !== null && this.sku(goods.skuId).pieceTracked) {
         for (const code of goods.pieceCodes ?? []) {
           const piece = this.piece(item.lineId, code);
           if (
@@ -1451,7 +1972,13 @@ export class Working {
         left -= take;
         if (left === 0) break;
       }
-      if (left > 0) refuse('not-in-custody', item.lineId, [{ kind: 'quantity', skuId: goods.skuId }]);
+      if (left > 0) {
+        refuse('not-in-custody', item.lineId, [
+          goods.skuId === null
+            ? { kind: 'quantity', receiptOriginId: goods.receiptOriginId }
+            : { kind: 'quantity', skuId: goods.skuId },
+        ]);
+      }
     }
     this.entries.holds.push(hold);
     return { kind: 'unknown' };

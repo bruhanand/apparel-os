@@ -603,10 +603,17 @@ describe('receipt origins, balances and pieces (stock-ledger 4, 5, 14.2)', () =>
     ).toBe('23503');
   });
 
-  it('PRD-STK-002 one SKU balance per Site, unit and SKU, an Unknown SKU included, and never below zero', async () => {
-    const row = { stock_unit: 'piece', quantity: 1, ...scope(AT_WAREHOUSE_1, null) };
+  it('PRD-STK-002 RR-555 one SKU balance per Site, unit and SKU, an Unknown SKU once per brand, and never below zero', async () => {
+    const row = { stock_unit: 'piece', quantity: 1, ...scope(AT_WAREHOUSE_1) };
     await insert(owner, 'sku_balance', { id: uuidv7(), sku_id: null, ...row });
     expect(await sqlState(insert(owner, 'sku_balance', { id: uuidv7(), sku_id: null, ...row }))).toBe('23505');
+    // Goods of Unknown SKU of another brand at the unit have their own row; goods of Unknown SKU have a brand (13.14).
+    await insert(owner, 'sku_balance', { id: uuidv7(), sku_id: null, ...row, ...scope(AT_WAREHOUSE_1, BRAND_B) });
+    expect(
+      await sqlState(
+        insert(owner, 'sku_balance', { id: uuidv7(), sku_id: null, ...row, ...scope(AT_WAREHOUSE_1, null) }),
+      ),
+    ).toBe('23514');
     expect(await sqlState(insert(owner, 'sku_balance', { id: uuidv7(), sku_id: uuidv7(), ...row, quantity: -1 }))).toBe(
       '23514',
     );

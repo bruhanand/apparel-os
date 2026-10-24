@@ -272,6 +272,10 @@ export const accessApprovalCodes = declareCodes({
   // A grant is approved by someone other than its preparer, the stand-in and the person stood in for (product owner,
   // 9 Oct 2026); `missing` names the person as `stand-in-party`.
   'access.stand-in-party': 'refused',
+  // A document decided in two steps is decided at its second by none who decided its first, such as Accounts' check
+  // of an open-to-buy budget version and its approval (access-and-approvals 9.8b; DEC-142); `missing` names the person
+  // as `earlier-step-decider`.
+  'access.earlier-step-decider': 'refused',
   'access.stand-in-wider-than-authority': 'refused',
   'access.stand-in-grant-not-found': 'not-found',
   // An approved grant of the same stand-in, person stood in for and exact scope overlaps its dates (code-house-rules 7.3).
@@ -571,6 +575,15 @@ export const inboxCodes = declareCodes({
  * - `files-imports.publish-request-not-found`, `files-imports.publish-request-answered`,
  *   `files-imports.publish-request-superseded`: a queued publish's job finds its request gone, answered already, or
  *   followed by a later one.
+ * A batch about one record (imports-and-opening-data 13.1, 13.2; S2-F04-T02), such as the GRN a PT file is for:
+ *
+ * - `files-imports.subject-required`: the target's handler imports a file for one record, and the request names
+ *   none; `files-imports.subject-not-taken`: it names one for a handler that takes none.
+ * - `files-imports.subject-not-found`: no record of the handler's type the person may see has that identifier.
+ * - `files-imports.subject-refused`: the handler refuses a file for the record now; `missing` names its reason as a
+ *   code (`import-subject`) and what it names, as `files-imports.document-refused` does.
+ * - `files-imports.header-rows-not-allowed`: the layout looks for the header on a row the target's files never have
+ *   it on, such as a PT file's, on row 1 or row 2 (goods-in 5.2); `missing` names each row the target allows.
  */
 export const filesImportsCodes = declareCodes({
   'files-imports.type-not-allowed': 'refused',
@@ -643,6 +656,12 @@ export const filesImportsCodes = declareCodes({
   'files-imports.publish-request-not-found': 'not-found',
   'files-imports.publish-request-answered': 'refused',
   'files-imports.publish-request-superseded': 'refused',
+  // A batch about one record (imports-and-opening-data 13.1, 13.2 "As built"; S2-F04-T02).
+  'files-imports.subject-required': 'refused',
+  'files-imports.subject-not-taken': 'refused',
+  'files-imports.subject-not-found': 'not-found',
+  'files-imports.subject-refused': 'refused',
+  'files-imports.header-rows-not-allowed': 'refused',
 });
 
 /**
@@ -725,7 +744,8 @@ export const stockLedgerCodes = declareCodes({
  * - `organisation.mapping-not-approved`: only an approved mapping version is verified (3.4).
  * - `organisation.verifier-made-mapping`: the verifier is the person who made the mapping (3.4; GC2-2, DEC-105).
  * - `organisation.mapping-already-verified`: a mapping version has its one verification (3.4).
- * - `organisation.mapping-incomplete`: a unit version names some of a mapping's three fields, not all (3.4).
+ * - `organisation.mapping-incomplete`: a unit version names some of a mapping's three fields and its origin, not all
+ *   (3.4; RR-558).
  * - `organisation.mapping-through-mapping-change`: a unit version of a unit with an approved version names a mapping;
  *   its mapping changes only through a mapping version (3.4; product owner, 8 Oct 2026).
  * - `organisation.location-nesting-cycle`: the parent is nested under the location already (3.5).
@@ -873,11 +893,15 @@ export const exceptionsCodes = declareCodes({
  *   or a brand it names is retired then (2.2, 2.5).
  * - `merchandise.parent-cycle`: the parent brand or category is nested under the record already (4.1).
  * - `merchandise.size-set-of-another-category`: a category names a size set fixed to another category (4.1).
- * - `merchandise.attribute-not-list`: a value is proposed for an attribute that is not list-type (4.2; GC2-9).
+ * - `merchandise.attribute-not-list`: a value is proposed for an attribute that is not list-type, or such an
+ *   attribute is marked as the season or the size list (4.2; GC2-9).
  * - `merchandise.office-unit-has-no-brand`: an office unit operates without a brand (3.3; PRD-ORG-006).
  * - `merchandise.brand-counter-one-brand`: a brand-counter unit covers at most one brand (3.3; PRD-ORG-006).
  * - `merchandise.proposal-not-found`: no proposal has that identifier.
  * - `merchandise.proposal-not-open`: the proposal is already confirmed or rejected (4.2).
+ * - `merchandise.attribute-not-marked`: no attribute is marked as the season, or as the size list, in force now, so a
+ *   budget's season or a count line's size cannot be read (4.2 "As built"; RR-550, RR-556); `missing` names the
+ *   setting, `merchandise.season-attribute` or `merchandise.size-attribute`.
  */
 export const merchandiseCodes = declareCodes({
   'merchandise.code-taken': 'refused',
@@ -892,6 +916,7 @@ export const merchandiseCodes = declareCodes({
   'merchandise.brand-counter-one-brand': 'refused',
   'merchandise.proposal-not-found': 'not-found',
   'merchandise.proposal-not-open': 'refused',
+  'merchandise.attribute-not-marked': 'unavailable',
   ...merchandisePartiesCodes(),
   ...merchandiseProductCodes(),
 });
@@ -912,8 +937,12 @@ export const merchandiseCodes = declareCodes({
  *   while a Site holds pieces of the goods (4.6; PRD-MER-018; product owner, 10 Oct 2026).
  * - `merchandise.not-a-piece-tracking-change`: the profile version is not a change from quantity to piece-tracked.
  * - `merchandise.pack-of-another-sku`: the pack named is not one of the SKU's (4.3).
- * - `merchandise.code-conflict`: an active mapping of the code in an overlapping scope names another target (4.3).
- * - `merchandise.code-ambiguous`: more than one target matches the code (4.7; PRD-MER-007).
+ * - `merchandise.code-conflict`: an active mapping of the code in an overlapping scope names another target; between
+ *   two mappings of a supplier barcode under one brand, which may name more than one SKU, the same SKU in another unit
+ *   (4.3; PRD-MER-007, DEC-135; RR-554).
+ * - `merchandise.code-ambiguous`: more than one target matches the code, other than SKUs each named by a barcode
+ *   recorded under the brand given, or under any brand where none is given, which are answered as candidates (4.7;
+ *   PRD-MER-007, DEC-135; RR-554).
  * - `merchandise.code-not-found`: no mapping of the code matches (4.7).
  * - `merchandise.no-version-in-force`: the SKU has no approved version in force on the date (4.7).
  * - `merchandise.end-not-allowed`: a mapping's end is before today, not after its start, or later than its end.
@@ -1027,6 +1056,336 @@ export const deviceCodes = declareCodes({
   'pos.change-not-awaiting': 'refused',
 });
 
+/**
+ * `booking`'s codes (goods-in 3.3, 10.3; S2-F01-T02):
+ *
+ * - `booking.record-not-found`: no open-to-buy budget, or no version of one, has that identifier.
+ * - `booking.brand-not-in-force`: the brand has no approved version in force today that does not retire it
+ *   (structure-and-masters 2.5).
+ * - `booking.season-not-in-vocabulary`: the season is not an approved value of its attribute in force today
+ *   (structure-and-masters 4.2; goods-in 3.1).
+ * - `booking.budget-exists`: the brand and season have a budget already; a change is its next version (3.3).
+ * - `booking.version-not-awaiting`: the version is decided already, or a newer version replaced it.
+ * - `booking.budget-not-checked`: the version's approval is refused until Accounts' check is recorded (POL-05.09).
+ *
+ * A booking's own (goods-in 3.1 to 3.4, 10.3; S2-F01-T03):
+ *
+ * - `booking.record-not-found` also: no booking has that identifier, or none the reader may see.
+ * - `booking.site-not-in-force`: the destination is not a Site in force today (goods-in 3.1).
+ * - `booking.supplier-not-linked`: the supplier is not linked to the brand, or holds no supplier role, on the booking's
+ *   date (PRD-MER-021).
+ * - `booking.not-draft`: the booking takes no such change now: its version waits for a decision, or, for booking
+ *   documents, it has been approved (goods-in 3.4, 3.5).
+ * - `booking.no-document`: a booking is submitted only with at least one booking document attached (goods-in 3.1).
+ * - `booking.no-lines`: a booking is submitted only with at least one line (goods-in 3.1).
+ * - `booking.no-agreement-in-force`: the brand has no Agreement version in force on the approval's date; `missing`
+ *   names the brand (goods-in 3.2; DEC-129).
+ * - `booking.open-to-buy-missing`: the brand and season have no approved open-to-buy budget (goods-in 3.3;
+ *   PRD-SEC-017).
+ * - `booking.open-to-buy-short`: the booking's value at cost is more than the remaining open-to-buy; `missing` names
+ *   the brand and season, and the screen shows the amounts from the booking's and the budget's reads (goods-in 3.3,
+ *   3.9).
+ * - `booking.no-booking-series`, `booking.booking-series-paused`: no Open booking number series
+ *   (numbering-and-audit 3.2; goods-in 3.1).
+ *
+ * An approved booking's lifecycle (goods-in 3.4 to 3.8, 3.10; S2-F01-T04):
+ *
+ * - `booking.not-approved`: the booking has no approved version yet, so it is not issued, confirmed, cancelled,
+ *   extended or received against (goods-in 3.4).
+ * - `booking.already-issued`, `booking.already-confirmed`: the version in force is recorded as Issued, or Confirmed,
+ *   already (POL-05.01).
+ * - `booking.not-issued`: Confirmed is recorded only once the version in force is Issued (POL-05.01).
+ * - `booking.date-in-future`: the date given is later than today (code-house-rules 9).
+ * - `booking.date-too-early`: Issued is dated before the approval's date, or Confirmed before the issue's date.
+ * - `booking.no-change`: an approved booking is submitted again only with a newer version, a change (goods-in 3.5).
+ * - `booking.communication-required`: after issue, a change, a cancellation or an extension carries the supplier's
+ *   communication (POL-05.04).
+ * - `booking.line-not-found`: no line of the booking, or of its version in force, has that key.
+ * - `booking.line-repeated`: one version names a line's key twice.
+ * - `booking.line-below-received`: a change lowers a line, or leaves it out, below what is delivered and cancelled of
+ *   it (PRD-BKG-013, POL-05.04).
+ * - `booking.line-received`: a change alters the style code, colour or size of a line with goods linked to it.
+ * - `booking.nothing-outstanding`: a cancellation names a line, or a booking, with nothing outstanding (goods-in 3.6).
+ * - `booking.balance-changed`: the outstanding balance changed since the cancellation was proposed; propose it again.
+ * - `booking.version-not-in-force`: the cancellation or extension amends a version a change has since replaced.
+ * - `booking.not-an-extension`: a date given is not later than the one it replaces, or nothing is extended.
+ * - `booking.receipt-already-linked`: the GRN line is linked to a booking line already (goods-in 3.7; PRD-BKG-008).
+ * - `booking.amendment-pending`: a cancellation, or an extension, of the booking waits for its decision already;
+ *   `missing` names it, to decide first, so no proposal is dropped unseen (goods-in 3.10).
+ * - `booking.goods-not-of-line`: a later receipt link names a booking line the GRN line's goods do not match: its
+ *   style code, and its colour and size where the booking line gives them (goods-in 3.7, 3.10; PRD-BKG-008).
+ * - `booking.receipt-link-proposed`: the GRN line waits in a proposal to link it into a booking already; that proposal
+ *   is decided first (goods-in 4.10; POL-05.08).
+ * - `booking.link-proposal-pending`: a proposal to link late or excess goods into the booking waits for its decision
+ *   already; `missing` names it, to decide first, so no proposal is dropped unseen (goods-in 4.10).
+ */
+export const bookingCodes = declareCodes({
+  'booking.record-not-found': 'not-found',
+  'booking.brand-not-in-force': 'refused',
+  'booking.season-not-in-vocabulary': 'refused',
+  'booking.budget-exists': 'refused',
+  'booking.version-not-awaiting': 'refused',
+  'booking.budget-not-checked': 'refused',
+  'booking.site-not-in-force': 'refused',
+  'booking.supplier-not-linked': 'refused',
+  'booking.not-draft': 'refused',
+  'booking.no-document': 'refused',
+  'booking.no-lines': 'refused',
+  'booking.no-agreement-in-force': 'refused',
+  'booking.open-to-buy-missing': 'refused',
+  'booking.open-to-buy-short': 'refused',
+  'booking.no-booking-series': 'unavailable',
+  'booking.booking-series-paused': 'unavailable',
+  'booking.not-approved': 'refused',
+  'booking.already-issued': 'refused',
+  'booking.already-confirmed': 'refused',
+  'booking.not-issued': 'refused',
+  'booking.date-in-future': 'refused',
+  'booking.date-too-early': 'refused',
+  'booking.no-change': 'refused',
+  'booking.communication-required': 'refused',
+  'booking.line-not-found': 'refused',
+  'booking.line-repeated': 'refused',
+  'booking.line-below-received': 'refused',
+  'booking.line-received': 'refused',
+  'booking.nothing-outstanding': 'refused',
+  'booking.balance-changed': 'refused',
+  'booking.version-not-in-force': 'refused',
+  'booking.not-an-extension': 'refused',
+  'booking.receipt-already-linked': 'refused',
+  'booking.amendment-pending': 'refused',
+  'booking.goods-not-of-line': 'refused',
+  'booking.receipt-link-proposed': 'refused',
+  'booking.link-proposal-pending': 'refused',
+});
+
+/**
+ * `receiving`'s codes (goods-in 4.1 to 4.5, 10.3; S2-F02-T02):
+ *
+ * - `receiving.record-not-found`: no Arrival, or no count line of it, has that identifier.
+ * - `receiving.unit-not-at-site`: the business unit is not in force today, or not at a Site.
+ * - `receiving.location-not-of-unit`: the receiving location is not a location of the unit in force today
+ *   (structure-and-masters 3.5).
+ * - `receiving.brand-not-in-force`: the brand has no approved version in force on the arrival date.
+ * - `receiving.supplier-not-linked`: the supplier is not linked to the brand, or holds no supplier role, on the arrival
+ *   date (PRD-MER-021).
+ * - `receiving.arrival-in-future`: the arrival time is later than now (PRD-MOD-009).
+ * - `receiving.grn-issued`: the Arrival's GRN is issued; it is never changed or issued again (goods-in 4.5, 4.7).
+ * - `receiving.invoice-number-repeated`: the Arrival holds an invoice with that number already.
+ * - `receiving.possible-duplicate-invoice`: another Arrival of the supplier holds the number; `missing` names those
+ *   the receiver may see, and the receiver confirms or corrects it (goods-in 4.2).
+ * - `receiving.invoice-required`: the count starts, and the GRN is issued, only once an invoice is recorded (DEC-133).
+ * - `receiving.size-not-on-list`: the size is not an approved value of its attribute in force today (goods-in 4.3).
+ * - `receiving.line-repeated`: another line of the count counts the same style, colour and size; `missing` names it,
+ *   the line to change instead (goods-in 4.3, one line per style, colour and size).
+ * - `receiving.sku-not-of-line`: the product named is not in force at the Site today, is of another brand, or of
+ *   another style code than the line's (goods-in 4.3).
+ * - `receiving.no-lines`: a GRN with no counted line is not issued (goods-in 4.5).
+ * - `receiving.extra-not-recorded`: a line has extra pieces the count does not record as received or not received
+ *   (goods-in 4.4); the line is saved again saying which (S2-F02-T03).
+ * - `receiving.batch-required`: the product's tracking profile requires a batch and expiry the line lacks
+ *   (PRD-MER-011).
+ * - `receiving.batch-not-tracked`: the line gives a batch its product's profile does not track, or has no product.
+ * - `receiving.no-grn-series`, `receiving.grn-series-paused`: no Open GRN number series (numbering-and-audit 3.2).
+ * - `receiving.held-line-decided`: the held line is decided already; a decision is made once (goods-in 4.6).
+ * - `receiving.not-unidentified`: only unidentified goods are named a product before they are taken in (4.6).
+ * - `receiving.product-not-named`: unidentified goods are taken in only once Booking names their product (4.6), and
+ *   linked to a booking line only then (3.7, 4.10).
+ * - `receiving.booking-not-of-arrival`: the booking is of another brand, or its version in force of another supplier,
+ *   than the Arrival's; `missing` names it (goods-in 3.7, 4.2, 4.10; S2-F02-T04).
+ * - `receiving.nothing-received`: the GRN line received no piece, so it delivers nothing to link (goods-in 4.10).
+ * - `receiving.size-required`: a line of goods on the invoice, or of wrong goods named by their product, has no size
+ *   recorded; `missing` names each such line, which is saved again with its size before the GRN is issued (goods-in
+ *   4.3, 5.4; the product owner, 22 Oct 2026, RR-586).
+ * - `receiving.pt-attached`: the GRN has its PT attached; a recount waits until it is withdrawn, rejected or reversed
+ *   (goods-in 4.7, 5.8); `missing` names the GRN and the PT revision.
+ *
+ * A recount (goods-in 4.7, 4.11; PRD-REC-019; S2-F02-T05):
+ *
+ * - `receiving.recount-pending`: another recount of the GRN waits for its decision; `missing` names it.
+ * - `receiving.recount-decided`: the recount is decided already; a decision is made once.
+ * - `receiving.recount-unchanged`: a line is recounted at the pieces it counts now.
+ * - `receiving.recount-held-line`: the line's extra pieces are held as a held line, whose hold only the PT route or its
+ *   decision ends; `missing` names the held line.
+ * - `receiving.recount-not-on-invoice`: the line counts wrong or unidentified goods, which a recount does not change.
+ * - `receiving.recount-adds-extra`: the recount would count pieces beyond the invoice on a line whose count recorded
+ *   none, so what happens to them is not recorded.
+ * - `receiving.recount-below-damage`: the recount would count fewer pieces than the count found damaged.
+ * - `receiving.recount-linked`: the line delivers its pieces to a booking, linked or proposed (goods-in 3.7, 4.10).
+ *
+ * The scan-in (goods-in 7, 7.5; PRD-REC-021, PRD-REC-022, PRD-MER-007; S2-F07-T01):
+ *
+ * - `receiving.pt-not-official`: the GRN's PT is not approved yet, so nothing of it is scanned in (goods-in 7.1);
+ *   `missing` names the GRN.
+ * - `receiving.destination-not-allowed`: the location is not one a piece of the GRN may go to: at a Store its floor or
+ *   backstore, at a warehouse a bin, of the GRN's unit, in force today and not retired (goods-in 7.2); `missing` names it.
+ * - `receiving.barcode-repeated`: the barcode is on more than one of the PT's products; `missing` names each, and the
+ *   person chooses which the piece is, nothing chosen for them (PRD-MER-007, DEC-135).
+ * - `receiving.product-not-of-barcode`: the product chosen is not one of the PT's products the barcode is on; `missing`
+ *   names it.
+ */
+export const receivingCodes = declareCodes({
+  'receiving.record-not-found': 'not-found',
+  'receiving.unit-not-at-site': 'refused',
+  'receiving.location-not-of-unit': 'refused',
+  'receiving.brand-not-in-force': 'refused',
+  'receiving.supplier-not-linked': 'refused',
+  'receiving.arrival-in-future': 'refused',
+  'receiving.grn-issued': 'refused',
+  'receiving.invoice-number-repeated': 'refused',
+  'receiving.possible-duplicate-invoice': 'refused',
+  'receiving.invoice-required': 'refused',
+  'receiving.size-not-on-list': 'refused',
+  'receiving.line-repeated': 'refused',
+  'receiving.sku-not-of-line': 'refused',
+  'receiving.no-lines': 'refused',
+  'receiving.extra-not-recorded': 'refused',
+  'receiving.batch-required': 'refused',
+  'receiving.batch-not-tracked': 'refused',
+  'receiving.no-grn-series': 'unavailable',
+  'receiving.grn-series-paused': 'unavailable',
+  'receiving.held-line-decided': 'refused',
+  'receiving.not-unidentified': 'refused',
+  'receiving.product-not-named': 'refused',
+  'receiving.booking-not-of-arrival': 'refused',
+  'receiving.nothing-received': 'refused',
+  'receiving.size-required': 'refused',
+  // The GRN's "PT attached" mark (goods-in 5.8; S2-F04-T02).
+  'receiving.pt-attached': 'refused',
+  'receiving.pt-not-attached': 'refused',
+  // A recount (goods-in 4.7, 4.11; S2-F02-T05).
+  'receiving.recount-pending': 'refused',
+  'receiving.recount-decided': 'refused',
+  'receiving.recount-unchanged': 'refused',
+  'receiving.recount-held-line': 'refused',
+  'receiving.recount-not-on-invoice': 'refused',
+  'receiving.recount-adds-extra': 'refused',
+  'receiving.recount-below-damage': 'refused',
+  'receiving.recount-linked': 'refused',
+  // The scan-in (goods-in 7; S2-F07-T01).
+  'receiving.pt-not-official': 'refused',
+  'receiving.destination-not-allowed': 'refused',
+  'receiving.barcode-repeated': 'refused',
+  'receiving.product-not-of-barcode': 'refused',
+});
+
+/**
+ * `merchandise` · PT's codes (goods-in 5, 10.3; S2-F04-T02). A PT file for a GRN is refused, before a batch starts, by
+ * the handler's reasons that `files-imports.subject-refused` names, and, at its submit, by those that
+ * `files-imports.document-refused` names (imports-and-opening-data 13.1):
+ *
+ * - `merchandise.pt-held-lines-open`: a held line or a damage report on the GRN's lines, or a recount of the GRN, waits
+ *   for its decision (goods-in 5.1, 4.6, 4.11; DEC-137); `missing` names each.
+ * - `merchandise.pt-already-attached`: the GRN has a PT revision waiting for approval, or approved and not reversed
+ *   (goods-in 5.1; one PT per GRN); `missing` names it.
+ * - `merchandise.pt-file-refused`: at submit, the file no longer passes the checks of 5.3 and 5.4 against the GRN as it
+ *   stands; `missing` names every problem, each by its code, row and field, as the validation report lists them
+ *   (goods-in 5.6; PRD-IMP-007).
+ * - `merchandise.pt-not-a-draft`: the revision is withdrawn, decided, or not the PT's newest (goods-in 5.7).
+ *
+ * Its approval (goods-in 6.3, 6.6; S2-F06-T01) is refused under the locks, besides the gate, `access`'s and the
+ * ledger's own refusals, by:
+ *
+ * - `merchandise.pt-grn-changed`: the GRN's good pieces per style and size are no longer those the PT covers, as after
+ *   a recount, a held line or a damage report decided since the upload; `missing` names the style and size.
+ * - `merchandise.no-pt-series`, `merchandise.pt-series-paused`, `merchandise.pt-series-exhausted`: no Open PT number
+ *   series, or one used up when the PT's number is drawn (goods-in 10.4; numbering-and-audit 3.5; code review 7).
+ * - `merchandise.no-sku-code-series`, `merchandise.sku-code-series-paused`, `merchandise.sku-code-series-exhausted`: no
+ *   Open SKU code series, or one used up, while the PT proposes new products, whose codes it draws (RR-585;
+ *   numbering-and-audit 2).
+ * - `merchandise.pt-size-not-in-size-set`: a new product's size, the row's size code, is not in its category's size set
+ *   in force; `missing` names the row, the category and the size.
+ * - `merchandise.pt-colour-not-identity`: a new product's category does not hold the colour list among its identity
+ *   attributes, so the SKU could not keep the row's colour; `missing` names the row and the category.
+ * - `merchandise.pt-tracking-unknown`: a new product's category has no tracking profile in force at the GRN's Site, so
+ *   how its goods are tracked is Unknown (structure-and-masters 4.6); `missing` names the row and the category.
+ *
+ * - `merchandise.pt-not-official`: a revision not Official is not downloaded (goods-in 6.5), nor reversed (6.4).
+ * - `merchandise.pt-not-failed`: only a revision whose latest queued posting failed is posted again (goods-in 6.6;
+ *   access-and-approvals 9.8 step 5; code review 7).
+ *
+ * Its reversal before the scan-in (goods-in 6.4, 6.7; DEC-137, PRD-REC-019; S2-F09-T01) is refused, at its proposal and
+ * again under the locks at its approval, besides the gate, `access`'s and the ledger's own refusals, by:
+ *
+ * - `merchandise.pt-scanned-in`: a piece of the GRN is scanned in, so the PT is no longer reversed (DEC-137); `missing`
+ *   names the GRN.
+ * - `merchandise.pt-goods-held`: a piece the PT covers is held, damaged or accepted since its approval, as by a damage
+ *   report, so its corrected PT could not cover it (goods-in 6.7, 8.4); `missing` names each receipt origin the actor
+ *   may see, or, when only goods they may not see block it, the PT revision alone, nothing of those goods (DEC-117).
+ * - `merchandise.pt-reversal-open`: a reversal of the revision waits for its approval already; `missing` names it.
+ * - `merchandise.pt-reversal-decided`: the reversal is decided already, or its revision is no longer the PT's newest
+ *   Official one.
+ *
+ * The problems of a file are the issues of its validation report, by row and column (goods-in 5.3, 5.4, 5.6): a value
+ * off its list, a brand not the GRN's, a barcode not digits, an HSN not of six or eight digits, a quantity not whole
+ * pieces above zero, an amount not above zero, P RATE above MRP, NAG not QTY, MARGIN that disagrees, a style and size
+ * whose quantity differs from the GRN's good pieces, one the GRN lacks and one the file misses, and an ITEM the
+ * master sheet's item map does not give that SUB CATEGORY and TYPE (RR-583).
+ */
+export const ptCodes = declareCodes({
+  'merchandise.pt-held-lines-open': 'refused',
+  'merchandise.pt-already-attached': 'refused',
+  'merchandise.pt-file-refused': 'refused',
+  'merchandise.pt-not-a-draft': 'refused',
+  'merchandise.pt-grn-changed': 'refused',
+  'merchandise.no-pt-series': 'unavailable',
+  'merchandise.pt-series-paused': 'unavailable',
+  'merchandise.pt-series-exhausted': 'unavailable',
+  'merchandise.no-sku-code-series': 'unavailable',
+  'merchandise.sku-code-series-paused': 'unavailable',
+  'merchandise.sku-code-series-exhausted': 'unavailable',
+  'merchandise.pt-size-not-in-size-set': 'refused',
+  'merchandise.pt-colour-not-identity': 'refused',
+  'merchandise.pt-tracking-unknown': 'refused',
+  'merchandise.pt-not-official': 'refused',
+  'merchandise.pt-not-failed': 'refused',
+  'merchandise.pt-scanned-in': 'refused',
+  'merchandise.pt-goods-held': 'refused',
+  'merchandise.pt-reversal-open': 'refused',
+  'merchandise.pt-reversal-decided': 'refused',
+});
+
+/**
+ * `stock` · documents' codes (goods-in 8, 10.3; S2-F08-T01):
+ *
+ * - `stock.record-not-found`: no damage report, or no reversal of one, has that identifier, or none the reader may see.
+ * - `stock.goods-not-found`: the GRN line names no counted goods, or the product is not in force at the Site today.
+ * - `stock.location-not-found`: no location has that identifier (structure-and-masters 3.5).
+ * - `stock.report-decided`: the report's decision is made already; a mistaken confirmation is reversed instead (8.3).
+ * - `stock.report-not-confirmed`: only a confirmation the report stands on is reversed (8.3; PRD-STK-017).
+ * - `stock.reversal-open`: a reversal of the confirmation waits for its approval already.
+ * - `stock.no-damage-report-series`, `stock.damage-report-series-paused`: no Open damage-report number series
+ *   (numbering-and-audit 3.2; goods-in 10.4).
+ */
+export const stockDocumentsCodes = declareCodes({
+  'stock.record-not-found': 'not-found',
+  'stock.goods-not-found': 'refused',
+  'stock.location-not-found': 'refused',
+  'stock.report-decided': 'refused',
+  'stock.report-not-confirmed': 'refused',
+  'stock.reversal-open': 'refused',
+  'stock.no-damage-report-series': 'unavailable',
+  'stock.damage-report-series-paused': 'unavailable',
+});
+
+/**
+ * `reports`' codes (goods-in 9.1, 9.4, 9.5; S2-F11-T01, S2-F11-T02):
+ *
+ * - `reports.record-not-found`: no figure of stock search or the stock report has the key asked for its records, or
+ *   none the reader may see (code-house-rules 12.3); `missing` names the stock balances asked by their place.
+ * - `reports.export-too-large`: the search or report finds more results than one export holds
+ *   (`STOCK_SEARCH_EXPORT_CAP` and the reports' export caps, technical caps); `missing` is empty. Narrow the search
+ *   or the report.
+ * - `reports.report-too-large`: the supplier report would read more bookings or GRN lines than it reads to work out
+ *   its figures (`REPORT_BOOKING_READ_CAP`, `REPORT_LINE_READ_CAP`, technical caps), so it shows none from
+ *   part of its records (PRD-PRF-004). Narrow it by supplier, brand or season.
+ */
+export const reportsCodes = declareCodes({
+  'reports.record-not-found': 'not-found',
+  'reports.export-too-large': 'refused',
+  'reports.report-too-large': 'refused',
+});
+
 /** Every declared code, of every unit. A unit adds its own here as it declares them (code-house-rules 12.3). */
 export const errorCodes = {
   ...kernelCodes,
@@ -1049,6 +1408,11 @@ export const errorCodes = {
   ...financePeriodCodes,
   ...deviceCodes,
   ...eboImportsCodes,
+  ...bookingCodes,
+  ...receivingCodes,
+  ...ptCodes,
+  ...stockDocumentsCodes,
+  ...reportsCodes,
 } as const;
 export type ErrorCode = keyof typeof errorCodes;
 

@@ -1,21 +1,12 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { Authenticator } from './support/authenticator';
-import { signIn } from './support/journey';
-import { readWorld, type EnrolledUser } from './support/world';
+import { signedIn } from './support/journey';
+import { readWorld } from './support/world';
 
 // S1-F01-T25: changing an essential security setting after setup (design-language 10.19; access-and-approvals 3.3,
 // 9.11; POL-02.06, POL-02.07; DEC-118, RR-334). The Admin prepares a new version of the office session limits on Setup ›
 // Security settings; the approver opens it from My work, reads the proposed values on the approval panel and approves
 // it with a listed reason and a fresh code; the screen then shows the new version in force. Each holds only the role
 // the setup step gives the first Admin or the first approver (DEC-120, RR-402). Every value is SYNTHETIC.
-
-async function signedIn(page: Page, code: string, user: EnrolledUser): Promise<Authenticator> {
-  const app = new Authenticator(Buffer.from(user.factorSecretHex, 'hex'));
-  await page.goto('/');
-  await signIn(page, { code, login: user.login, password: user.password, totp: await app.nextCode() });
-  await expect(page.getByLabel('Profile')).toHaveText(user.displayName);
-  return app;
-}
 
 function sessionLimits(page: Page): Locator {
   return page.getByRole('region', { name: 'Office session limits' });

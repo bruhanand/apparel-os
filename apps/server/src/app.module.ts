@@ -1,20 +1,40 @@
 import { Global, Module } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import {
   CommandRunnerModule,
   idempotencyModuleWith,
   KernelModule,
   LiveUpdatesModule,
   OrganisationRoutingModule,
+  READ_MODEL_GATEWAY,
+  ReadModelGateway,
 } from './kernel/index.js';
 import {
+  ACCESS,
   AccessContractsModule,
   AccessModule,
   DECISION_EVIDENCE,
   MODULE_APPROVALS,
   SCOPE_MEMBERS,
+  type AccessInterface,
   type ModuleApprovals,
   type ScopeMembers,
 } from './modules/access/index.js';
+import {
+  BOOKING,
+  BookingModule,
+  bookingApprovals,
+  bookingReadModels,
+  overdueExceptionType,
+  type BookingInterface,
+} from './modules/booking/index.js';
+import {
+  ReceivingModule,
+  receivingApprovals,
+  receivingExceptionTypes,
+  receivingReadModels,
+  receivingStockCaller,
+} from './modules/receiving/index.js';
 import { AUDIT, AuditModule, type AuditInterface } from './modules/audit/index.js';
 import { composedNumbering, numberedKinds } from './numbered-kinds.js';
 import {
@@ -30,8 +50,10 @@ import {
 } from './modules/files-imports/index.js';
 import {
   EXCEPTION_TYPES,
+  EXCEPTIONS,
   ExceptionsModule,
   routingApprovals,
+  type ExceptionsInterface,
   type ExceptionTypeRegistration,
 } from './modules/exceptions/index.js';
 import { InboxModule, workItemRoutingApprovals } from './modules/inbox/index.js';
@@ -49,29 +71,64 @@ import { EboImportsModule } from './modules/ebo-imports/index.js';
 import {
   CatalogueModule,
   catalogueApprovals,
+  catalogueNameReadModels,
+  catalogueReadModels,
   catalogueScopeMembers,
   STOCK_PRESENCE,
   SUPPLIER_ROLES,
   type StockPresence,
   type SupplierRoles,
 } from './modules/merchandise/catalogue/index.js';
-import { PartiesModule, partiesApprovals, partiesSupplierRoles } from './modules/merchandise/parties/index.js';
+import {
+  PartiesModule,
+  partiesApprovals,
+  partiesReadModels,
+  partiesSupplierRoles,
+} from './modules/merchandise/parties/index.js';
+import {
+  PT,
+  PT_POSTED_WITH_DECISION_ROWS,
+  PT_POSTING_QUEUE,
+  PtModule,
+  ptApprovals,
+  ptExceptionTypes,
+  ptReadModels,
+  ptStockCaller,
+  type PtInterface,
+  type PtPostingQueue,
+} from './modules/merchandise/pt/index.js';
 import {
   LOCATION_IN_USE,
   OrganisationModule,
   organisationApprovals,
+  organisationReadModels,
   organisationScopeMembers,
   type LocationInUse,
 } from './modules/organisation/index.js';
 import { TaxRulesModule, taxRulesApprovals } from './modules/finance/tax-rules/index.js';
+import { ReportsModule } from './modules/reports/index.js';
 import {
   BookStockHistory,
   LedgerCountSet,
   LocationStock,
   SkuStockPresence,
+  STOCK_CALLERS,
+  STOCK_LEDGER,
   STOCK_POSTING_EVENT_KINDS,
   StockLedgerModule,
+  stockLedgerReadModels,
+  stockRecordsReadModels,
+  stockReportReadModels,
+  type CallerRegistration,
+  type StockLedgerInterface,
 } from './modules/stock/ledger/index.js';
+import {
+  damageExceptionType,
+  StockDocumentsModule,
+  stockDocumentsApprovals,
+  stockDocumentsReadModels,
+  stockDocumentsStockCaller,
+} from './modules/stock/documents/index.js';
 import {
   BOOK_HELD_STOCK,
   BooksModule,
@@ -126,14 +183,17 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
         configuration: ConfigurationInterface,
         bookHeldStock: BookHeldStock,
         importHandlers: ImportHandlers,
+        modules: ModuleRef,
+        ptQueue: PtPostingQueue,
       ) =>
         bothApprovals(
           organisationApprovals(audit, locationInUse),
           routingApprovals(audit),
           // Task and approval routing (access-and-approvals 9.4, 11.3; S1-F05-T02).
           workItemRoutingApprovals(audit),
-          // Brand coverage and vocabulary confirmation (structure-and-masters 3.3, 4.2; S1-F03-T01).
-          catalogueApprovals(audit),
+          // Brand coverage and vocabulary confirmation (structure-and-masters 3.3, 4.2; S1-F03-T01), and the season and
+          // size attributes, whose origin `configuration` rechecks (4.2 "As built"; RR-550, RR-556).
+          catalogueApprovals(audit, configuration),
           // Bank-detail changes and agreement versions (structure-and-masters 5.1, 5.2; S1-F03-T03).
           partiesApprovals(audit),
           // Tax-rule versions, decided by a different Accounts user with the CA's evidence (shared-calculations 10.1;
@@ -157,8 +217,62 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
           posApprovals({ audit, numbering: composedNumbering(), origins: configuration }),
           // Layout, mapping and mapping rule versions (imports-and-opening-data 6.4; S1-F06-T03).
           filesImportsApprovals(audit, importHandlers),
+          // An open-to-buy budget version's check and approval (goods-in 3.3; S2-F01-T02). The check's effect requests
+          // the approval in the decision's transaction through `access`, which is built with these effects, so it
+          // reaches `access` when it runs, never at start (access-and-approvals 9.8b "As built for a document decided
+          // in two steps").
+          // A booking version's approval asks the policy gate and draws its number from the booking series through
+          // `numbering` built with every declared kind (goods-in 3.4, 10.5; S2-F01-T03); a cancellation's and an
+          // extension's ask the gate too (goods-in 3.5; S2-F01-T04).
+          bookingApprovals({
+            audit,
+            configuration,
+            numbering: composedNumbering(),
+            requests: () => modules.get<AccessInterface>(ACCESS, { strict: false }),
+          }),
+          // A damage report's decision and a reversal's approval (goods-in 8.3; S2-F08-T01), which post through the
+          // stock ledger and verify and use the decision under its locks; `access` and the ledger are built after
+          // these effects, so they reach them when they run, never at start (access-and-approvals 9.8b).
+          stockDocumentsApprovals({
+            audit,
+            services: () => ({
+              access: modules.get<AccessInterface>(ACCESS, { strict: false }),
+              ledger: modules.get<StockLedgerInterface>(STOCK_LEDGER, { strict: false }),
+              configuration,
+            }),
+          }),
+          // A held line's decision, taking excess, wrong or unidentified goods in or leaving them held, which asks the
+          // policy gate under the held line's lock (goods-in 4.6, 10.5; S2-F02-T03); and a recount's approval, which
+          // posts its receipt counts and reversals through the stock ledger, verifying and using the decision under its
+          // locks, raises a shortage it finds and reads which GRN lines deliver to a booking (goods-in 4.11;
+          // S2-F02-T05); `access`, the ledger, exceptions and bookings reach it when it runs, never at start (9.8b).
+          receivingApprovals({
+            audit,
+            services: () => ({
+              configuration,
+              access: modules.get<AccessInterface>(ACCESS, { strict: false }),
+              ledger: modules.get<StockLedgerInterface>(STOCK_LEDGER, { strict: false }),
+              exceptions: modules.get<ExceptionsInterface>(EXCEPTIONS, { strict: false }),
+              booking: modules.get<BookingInterface>(BOOKING, { strict: false }),
+            }),
+          }),
+          // A PT revision's approval on its total proposed acquisition cost, requested when a PT file is submitted
+          // (goods-in 5.6, 6.1; S2-F04-T02), and its decision's effect, which posts the PT through the stock ledger,
+          // verifying and using the decision under its locks, or ends the draft (goods-in 6.3; S2-F06-T01); `merchandise`
+          // · PT, with `access` and the ledger it posts through, reaches it when it runs, never at start (9.8b).
+          ptApprovals({
+            services: () => modules.get<PtInterface>(PT, { strict: false }).decisionServices(),
+            queue: ptQueue,
+          }),
         ),
-      inject: [AUDIT, LOCATION_IN_USE, CONFIGURATION, BOOK_HELD_STOCK, IMPORT_HANDLERS],
+      inject: [AUDIT, LOCATION_IN_USE, CONFIGURATION, BOOK_HELD_STOCK, IMPORT_HANDLERS, ModuleRef, PT_POSTING_QUEUE],
+    },
+    // How a PT's approval posts (goods-in 6.6; stock-ledger 10.6; module-map 6.2 flow E): with its decision up to
+    // PT_POSTED_WITH_DECISION_ROWS rows, a technical cap, and above it through the queued job the worker composes
+    // (worker.module.ts; code review 7, RR-602).
+    {
+      provide: PT_POSTING_QUEUE,
+      useValue: { kind: 'queued-above', rows: PT_POSTED_WITH_DECISION_ROWS } satisfies PtPostingQueue,
     },
     // The scope contract `access` defines: `organisation` answers legal entities and places (S1-F02-T03), and
     // `merchandise` · catalogue brands (S1-F03-T01).
@@ -179,8 +293,33 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
       provide: POSTING_EVENT_KINDS,
       useFactory: () => checkEventKinds(STOCK_POSTING_EVENT_KINDS satisfies readonly PostingEventKind[]),
     },
-    // The exception types the raising modules register (access-and-approvals 12.1): none yet beside the module's own.
-    { provide: EXCEPTION_TYPES, useValue: [] satisfies readonly ExceptionTypeRegistration[] },
+    // The modules that post stock, registered with the ledger at start, none synthetic (stock-ledger 13.2): `receiving`'s
+    // receipt counts from a GRN and the holds of what its count found (goods-in 4.5, 4.9; stock-ledger 13.16;
+    // S2-F02-T02, S2-F02-T03), and `stock` · documents' damage holds, decisions and reversals (goods-in 8;
+    // stock-ledger 13.15; S2-F08-T01).
+    {
+      provide: STOCK_CALLERS,
+      useValue: [
+        receivingStockCaller,
+        stockDocumentsStockCaller,
+        // A PT's approval: the holds the PT route ends, the identity step, coverage and cost (goods-in 6.3; S2-F06-T01).
+        ptStockCaller,
+      ] satisfies readonly CallerRegistration[],
+    },
+    // The exception types the raising modules register (access-and-approvals 12.1): the damage a report raises, to
+    // Operations as its routing says (goods-in 8.2; S2-F08-T01), the shortage and held lines a GRN's count finds, to
+    // Booking (goods-in 4.5; S2-F02-T03), the overdue balance of a booking, also to Booking (goods-in 3.8;
+    // S2-F01-T04), and the unfinished operation of a refused posting of a PT or a recount, to whoever their routing
+    // names (books-and-posting 10 step 3; goods-in 4.11, 6.6; code review 7).
+    {
+      provide: EXCEPTION_TYPES,
+      useValue: [
+        damageExceptionType,
+        ...receivingExceptionTypes,
+        overdueExceptionType,
+        ...ptExceptionTypes,
+      ] satisfies readonly ExceptionTypeRegistration[],
+    },
     // The decision-evidence contract of `access`, which files-imports' Attach implements (9.5; S1-F08-T03).
     { provide: DECISION_EVIDENCE, useFactory: (audit: AuditInterface) => decisionEvidence(audit), inject: [AUDIT] },
     // The policy-evidence contract of `configuration`, which files-imports' Attach implements (module-map 4.4;
@@ -198,26 +337,69 @@ function bothApprovals(...modules: readonly ModuleApprovals[]): ModuleApprovals 
     SCOPE_MEMBERS,
     NUMBERED_KINDS,
     POSTING_EVENT_KINDS,
+    STOCK_CALLERS,
     EXCEPTION_TYPES,
     DECISION_EVIDENCE,
     POLICY_EVIDENCE,
+    PT_POSTING_QUEUE,
   ],
 })
 export class ModuleApprovalsModule {}
 
-// House rule: every constructor injection names its token with @Inject(...), so nothing depends on decorator metadata.
+/**
+ * The kernel's read-model gateway, in a module of its own, apart from the approval effects (module-map 4.1, section 3
+ * rule 5; code review 8 of stage 2): global, so `reports` reaches it without importing the composition root.
+ */
+@Global()
+@Module({
+  providers: [
+    // The read-model gateway, with the read models each module serves (module-map 4.1, section 3 rule 5; goods-in 9.4;
+    // S2-F11-T01): the stock of products at places from `stock` · ledger, the products and brands from `merchandise` ·
+    // catalogue, the places from `organisation`; fixed once the application has started.
+    // And those of the stage 2 reports (goods-in 9.5; S2-F11-T02): the booking status from `booking`; the receipt
+    // problems, a supplier's GRN lines and the GRNs' numbers from `receiving`, which reads through `access` when a read
+    // runs, never at start; the damage reports' states and pieces from `stock` · documents, as the reader may see them; stock by
+    // condition and owner from `stock` · ledger; the MRP of a PT's goods from `merchandise` · PT, as the reader may see the PT; the names of values
+    // and parties from `merchandise`.
+    {
+      provide: READ_MODEL_GATEWAY,
+      useFactory: (modules: ModuleRef) =>
+        new ReadModelGateway([
+          ...stockLedgerReadModels,
+          ...catalogueReadModels,
+          ...organisationReadModels,
+          ...bookingReadModels,
+          ...receivingReadModels(() => ({ access: modules.get<AccessInterface>(ACCESS, { strict: false }) })),
+          ...stockDocumentsReadModels,
+          ...stockReportReadModels,
+          ...stockRecordsReadModels,
+          ...ptReadModels,
+          ...catalogueNameReadModels,
+          ...partiesReadModels,
+        ]),
+      inject: [ModuleRef],
+    },
+  ],
+  exports: [READ_MODEL_GATEWAY],
+})
+export class ReadModelsModule {}
+
+/**
+ * The application's modules with the contracts between them (module-map section 2), which `app` serves and `worker`
+ * runs the jobs of: the same composition in both, so a job such as a large PT's posting works through the
+ * application's own modules, with every registration they make at start (deployment.md section 2; code review 7 of
+ * stage 2). It reads the variables those modules read at start; neither the HTTP layer nor live updates is in it.
+ */
 @Module({
   imports: [
-    KernelModule,
     OrganisationRoutingModule,
     // configuration supplies the Organisation's timezone to the command runner (RR-231, RR-250).
     ConfigurationTimezoneModule,
     CommandRunnerModule,
-    // Live updates and the operations view (code-house-rules 12.9, 12.12; S1-F08-T04).
-    LiveUpdatesModule,
     // The idempotency helper with the contracts access implements (RR-248), global for every module's commands.
     idempotencyModuleWith(AccessContractsModule),
     ModuleApprovalsModule,
+    ReadModelsModule,
     // The policy gate, with the policy status, capabilities and activity grants (module-map 4.4; S1-F04-T01).
     ConfigurationModule,
     OrganisationModule,
@@ -240,6 +422,29 @@ export class ModuleApprovalsModule {}
     // The historical-reference handler for the earlier POS's SOH and daily sales, which never moves stock (module-map
     // section 5, 11.1; imports-and-opening-data 4.1; DEC-116; S1-F13-T01).
     EboImportsModule,
+    // Bookings: in the first piece of stage 2, the open-to-buy budgets (module-map section 5; goods-in 3.3; S2-F01-T02).
+    BookingModule,
+    // Receive Goods: the inbox, the Arrival, the count and the GRN (module-map section 5; goods-in 4; S2-F02-T02).
+    ReceivingModule,
+    // Damage reports (module-map section 5; goods-in 8; S2-F08-T01).
+    StockDocumentsModule,
+    // PT files uploaded for a GRN, as drafts a different person approves (module-map section 5; goods-in 5; S2-F04-T02).
+    PtModule,
+    // Stock search, through the read-model gateway (module-map section 5 `reports`; goods-in 9.2; S2-F11-T01).
+    ReportsModule,
+  ],
+  // The PT, whose posting consumers the worker binds to it (worker.module.ts).
+  exports: [PtModule],
+})
+export class ApplicationModulesModule {}
+
+// House rule: every constructor injection names its token with @Inject(...), so nothing depends on decorator metadata.
+@Module({
+  imports: [
+    KernelModule,
+    // Live updates and the operations view (code-house-rules 12.9, 12.12; S1-F08-T04).
+    LiveUpdatesModule,
+    ApplicationModulesModule,
   ],
 })
 export class AppModule {}

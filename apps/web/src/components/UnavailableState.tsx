@@ -1,6 +1,9 @@
 import type { MissingItem } from '@apparel-os/schemas';
+import { fieldName } from '../files/import-text';
 import { isMessageId, t } from '../messages/catalogue';
+import { formatQuantity } from '../setup/format';
 import { Banner } from './Banner';
+import { codeText } from './StandardStates';
 
 /**
  * The text of one missing item, by its kind (code-house-rules 12.3 "What is missing"). A missing permission names its
@@ -124,6 +127,11 @@ function importText(item: MissingItem): string | undefined {
   if (item.kind === 'number-series' && isMessageId(series)) return t(series);
   if (item.kind === 'layout-sheet' && item.sheet !== undefined)
     return t('missing.layout-sheet.named', { sheet: item.sheet });
+  // A sheet not imported, by the rows it holds (imports-and-opening-data 8.1; S2-F04-T02).
+  const rows = Number(item.rows);
+  if (item.kind === 'sheet-rows' && Number.isInteger(rows) && rows >= 0) {
+    return t('missing.sheet-rows.named', { count: rows });
+  }
   if (item.kind === 'layout-column' && item.column !== undefined) {
     return t('missing.layout-column.named', { column: item.column });
   }
@@ -131,7 +139,56 @@ function importText(item: MissingItem): string | undefined {
   if (item.kind === 'import-batch' && item.code !== undefined && item.state !== undefined) {
     return t('missing.import-batch.named', { code: item.code, state: item.state });
   }
-  return intakeText(item);
+  return ptText(item) ?? intakeText(item);
+}
+
+/** What a refusal of a PT file names (goods-in 5.1, 5.4, 5.6; imports-and-opening-data 13.1; S2-F04-T02). */
+function ptText(item: MissingItem): string | undefined {
+  // The reason the PT's handler refuses a file for its GRN, as its own refusal says it.
+  if (item.kind === 'import-subject' && item.reason !== undefined) {
+    return t('missing.import-subject.reason', { reason: codeText(item.reason) });
+  }
+  // A problem of the file, by its row and column where it has them (goods-in 5.6; PRD-IMP-007).
+  const issue = `issue.${item.code ?? ''}`;
+  if (item.kind === 'pt-issue' && item.code !== undefined) {
+    const problem = isMessageId(issue) ? t(issue) : codeText(item.code);
+    const row = Number(item.row);
+    if (item.row === undefined || !Number.isInteger(row)) return t('missing.pt-issue.named', { problem });
+    if (item.field === undefined) return t('missing.pt-issue.row', { row: formatQuantity(row), problem });
+    return t('missing.pt-issue.cell', { row: formatQuantity(row), column: fieldName(item.field), problem });
+  }
+  if (item.kind === 'layout-sheet-matched' && item.sheet !== undefined) {
+    return t('missing.layout-sheet-matched.named', { sheet: item.sheet });
+  }
+  if (item.kind === 'header-row' && item.row !== undefined) {
+    return t('missing.header-row.named', { row: item.row });
+  }
+  if (item.kind === 'pt-style-size' && item.styleCode !== undefined) return styleSizeText(item, item.styleCode);
+  // A row of the PT a refusal of its approval names, and a size not in the size set (goods-in 6.3; S2-F06-T01).
+  const row = Number(item.rowNumber);
+  if (item.kind === 'pt-row' && Number.isInteger(row)) return t('missing.pt-row.named', { row: formatQuantity(row) });
+  if (item.kind === 'size' && item.size !== undefined) return t('missing.size.named', { size: item.size });
+  return undefined;
+}
+
+/**
+ * A style and size of a PT file or its GRN, with the quantities where the item gives them (goods-in 5.4). A GRN line
+ * counted with no size names none: its text says so, never an empty size (PRD-MOD-015).
+ */
+function styleSizeText(item: MissingItem, style: string): string {
+  const file = item.fileQuantity === undefined ? undefined : formatQuantity(Number(item.fileQuantity));
+  const grn = item.grnQuantity === undefined ? undefined : formatQuantity(Number(item.grnQuantity));
+  if (item.size === undefined) {
+    if (grn === undefined) return t('missing.pt-style-size.unsized.named', { style });
+    return file === undefined
+      ? t('missing.pt-style-size.unsized.grn', { style, grn })
+      : t('missing.pt-style-size.unsized.both', { style, file, grn });
+  }
+  const named = { style, size: item.size };
+  if (file !== undefined && grn !== undefined) return t('missing.pt-style-size.both', { ...named, file, grn });
+  if (file !== undefined) return t('missing.pt-style-size.file', { ...named, file });
+  if (grn !== undefined) return t('missing.pt-style-size.grn', { ...named, grn });
+  return t('missing.pt-style-size.named', named);
 }
 
 /** What an intake refusal names (imports-and-opening-data 9.3, 11; PRD-UXP-003; S1-F06-T02). */

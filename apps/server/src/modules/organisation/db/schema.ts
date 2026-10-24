@@ -5,6 +5,7 @@ import type {
   OperatingModel,
   PhysicalKind,
   PlaceStatus,
+  SettingOrigin,
   StoreFormat,
 } from '@apparel-os/schemas';
 import { boolean, customType, date, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
@@ -174,6 +175,8 @@ export const businessUnitMapping = organisation.table('business_unit_mapping', {
   taxRegistrationId: uuid('tax_registration_id').notNull(),
   accountingBookId: uuid('accounting_book_id').notNull(),
   preparedWithVersionId: uuid('prepared_with_version_id'),
+  /** Where the mapping came from, as policy 10's value (code-house-rules 12.14; migration 0093; RR-558). */
+  origin: text('origin').$type<SettingOrigin>().notNull(),
 });
 
 export const businessUnitMappingVerification = organisation.table('business_unit_mapping_verification', {

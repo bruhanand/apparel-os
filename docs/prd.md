@@ -92,6 +92,8 @@ Business words:
 | Acceptance | Confirmation that goods meet the applicable identity, count, condition, policy and destination checks |
 | Accrual | Recording income, expense, assets or obligations when their applicable recognition event occurs, rather than only when cash moves |
 | Ageing | How long stock has been held, or how long a due has been unpaid |
+| Agreement | The signed commercial terms with a supplier or brand (its MOU), recorded once with the signed copy attached and revised only by a new version. Every booking of a brand takes the terms of that brand's Agreement |
+| Arrival | One delivery of goods reaching a Site, recorded before it is counted. A supplier Arrival is counted once and gives one GRN. Not a batch, which means goods tracked by lot and expiry |
 | AS, Ind AS | Indian Accounting Standards; Ind AS is the framework notified under the applicable company-law rules |
 | BASIC | In the KDPS PT layout, the cost base of a piece before the additions set by the costing profile |
 | Bank transfer | A customer payment sent directly between bank accounts, confirmed by bank/provider evidence |
@@ -151,7 +153,7 @@ Business words:
 | Open-to-buy | The budget still free to commit to new bookings, by brand and season |
 | Organisation | An independent retail business group containing its legal entities and operating network, with data isolated from other Organisations |
 | Outright | Commercial terms where goods are bought with no agreed right to return unsold pieces |
-| P RATE | Purchase rate: in the KDPS PT layout, the approved cost of a piece at receipt |
+| P RATE | Purchase rate: in the KDPS PT layout, the actual purchase cost of a piece, including handling and transportation; the approved cost of the piece at receipt |
 | P&L | Profit and loss statement |
 | PAN | Permanent Account Number: the income-tax identity number |
 | Persona | One of the 14 kinds of work listed in People, access and approvals, each with a short ID. A person can hold several; a persona grants no access |
@@ -323,7 +325,7 @@ The product is delivered in six stages. Each stage completes one workflow end to
 - `PRD-MER-004` Maintain season, collection, launch date, gender, fabric, fit, category, HSN and applicable merchandise attributes.
 - `PRD-MER-005` Preserve unknown values. Missing size is distinct from an explicitly supplied Free Size.
 - `PRD-MER-006` Map external barcodes and supplier codes to the correct SKU and unit, with scope and validity dates. Identical pieces may share an external barcode; their internal piece IDs remain distinct.
-- `PRD-MER-007` Reject ambiguous active mappings; preserve leading zeros and historical aliases.
+- `PRD-MER-007` Allow a brand's external barcode to map to more than one SKU where the brand's tags repeat it. Flag such a barcode and resolve it at each scan by the person's confirmed choice, never silently. Preserve leading zeros and historical aliases.
 - `PRD-MER-008` Print internal barcode labels when appropriate identifiers are absent.
 - `PRD-MER-009` Keep purchase cost, price-ticket maximum retail price (MRP), selling price, tax and discount separate; retain transaction-time snapshots.
 - `PRD-MER-010` Support packaged-goods units of measure, packs and conversions, and batch/expiry tracking where the merchandise profile requires them.
@@ -357,13 +359,13 @@ The product is delivered in six stages. Each stage completes one workflow end to
 
 ## Booking and buying
 
-- `PRD-BKG-001` Create bookings by brand, season and destination, using style/size quantities and a size-colour grid.
-- `PRD-BKG-002` Record booking-specific terms with effective brand/supplier terms as defaults.
-- `PRD-BKG-003` Show total pieces, indicative cost and MRP values. Indicative booking cost does not replace approved receipt cost.
+- `PRD-BKG-001` Create bookings by brand, season and destination. Each line has a style code and a quantity; colour and size are optional, for orders placed at style level. Lines with colour and size are entered through a size-colour grid.
+- `PRD-BKG-002` Take a booking's terms from its brand's Agreement, in the version in force when the booking is approved. A booking records no terms of its own and cannot change the Agreement's; it takes a later version only when it is approved again.
+- `PRD-BKG-003` Give each booking line an indicative cost and an MRP. Show total pieces, indicative cost and MRP values. Indicative booking cost serves only these totals and the open-to-buy check; it never replaces approved receipt cost.
 - `PRD-BKG-004` Control booking approval against the open-to-buy budget by brand and season.
 - `PRD-BKG-005` Track ordered, delivered, outstanding and cancelled quantities separately from invoice discrepancies.
 - `PRD-BKG-006` Derive delivered quantities from retained receipt links rather than a manually maintained counter.
-- `PRD-BKG-007` At GRN issue against a booking, link a counted line only when it has one exact style-and-size match. Preserve actor and date; ambiguous lines require buyer review.
+- `PRD-BKG-007` At GRN issue against a booking, link a counted line only when exactly one booking line matches its style code, and its colour and size where the booking line gives them. Preserve actor and date; any other line goes to Booking for review.
 - `PRD-BKG-008` Support deliveries without a booking and subsequent authorised linking.
 - `PRD-BKG-009` Record expected delivery dates, transporter and lorry receipt references; notify responsible users of late deliveries.
 - `PRD-BKG-010` Compare supplier order confirmations with bookings and show differences for review.
@@ -371,6 +373,7 @@ The product is delivered in six stages. Each stage completes one workflow end to
 - `PRD-BKG-012` Suggest buying and size quantities from qualified sales history, with human approval.
 - `PRD-BKG-013` Configure commitment, amendment and cancellation rules; cancellation cannot erase quantities already physically received.
 - `PRD-BKG-014` Each booking names its actual supplier.
+- `PRD-BKG-015` Create a booking from a photo or PDF of the booking document: AI reads it into a draft booking with its lines, which a person reviews and saves. Manual entry stays available.
 
 ## Receiving and price tickets
 
@@ -380,7 +383,7 @@ A goods receipt note (GRN) records the goods physically counted at the receiving
 - `PRD-REC-002` Start supplier receiving through Goods arrived or Receive against booking; both open the same guided workflow.
 - `PRD-REC-003` Keep arrival, count, GRN, discrepancy, PT revision, approval, label job and acceptance records distinct within the workflow.
 - `PRD-REC-004` Receive directly at a Store or warehouse, by barcode scan or controlled count; record the actual Site even when another Site prepares the PT.
-- `PRD-REC-005` Count goods despite missing booking, invoice or PT. Capture actual quantity, identity evidence and condition.
+- `PRD-REC-005` Record at least one supplier invoice for each Arrival before its count starts; count goods despite a missing booking or PT. Capture actual quantity, identity evidence and condition.
 - `PRD-REC-006` Record shortage, excess, wrong, unidentified and damage observations separately; conditions can coexist.
 - `PRD-REC-007` Preserve carton, seal and damage photographs, transporter references and inbound e-way evidence.
 - `PRD-REC-008` Create physical custody only from the actual count. Invoice or PT quantities cannot manufacture stock.

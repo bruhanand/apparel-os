@@ -295,7 +295,8 @@ export async function stagedRowCounts(
  */
 export async function documentsOf(
   context: TransactionContext,
-  batch: Pick<BatchRow, 'id' | 'kind' | 'legalEntityId' | 'siteId' | 'storeId' | 'businessUnitId'>,
+  batch: Pick<BatchRow, 'id' | 'kind' | 'legalEntityId' | 'siteId' | 'storeId' | 'businessUnitId'> &
+    Partial<Pick<BatchRow, 'subjectRecordType' | 'subjectRecordId'>>,
   dataRows?: readonly StagedRow[],
 ): Promise<LoadedDocument[]> {
   const place = scopeFactsOf({
@@ -320,11 +321,19 @@ export async function documentsOf(
     list.push(row);
     rowsOf.set(row.documentId, list);
   }
+  const subject =
+    batch.subjectRecordType === undefined ||
+    batch.subjectRecordType === null ||
+    batch.subjectRecordId === undefined ||
+    batch.subjectRecordId === null
+      ? undefined
+      : { recordType: batch.subjectRecordType, recordId: batch.subjectRecordId };
   return documents.map((document) => ({
     documentId: document.id,
     reference: document.reference,
     kind: batch.kind,
     place,
+    ...(subject === undefined ? {} : { subject }),
     state: document.state,
     excluded: document.excluded,
     revisesDocumentId: document.revisesDocumentId,
@@ -385,8 +394,10 @@ export async function previewOf(
       .filter((field) => field.required && (row.values[field.name] ?? { kind: 'unknown' }).kind === 'unknown')
       .map((field) => ({ code: 'files-imports.required-value-unknown', field: field.name, rowNumber: row.rowNumber })),
   );
-  if (issues.length > 0) return { kind: 'issues', issues };
-  return handler.preview(context, document);
+  if (issues.length === 0) return handler.preview(context, document);
+  // A handler that checks what it can of a row with an Unknown field lists every problem at once (PRD-IMP-007).
+  if (handler.checksUnknown === undefined) return { kind: 'issues', issues };
+  return { kind: 'issues', issues: [...issues, ...(await handler.checksUnknown(context, document))] };
 }
 
 /** The handler of a batch's target and kind; a batch is started only with one, so none here is a defect. */

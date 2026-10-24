@@ -16,6 +16,7 @@ import {
   PinoLoggerService,
   refuseInsideCommand,
   timezoneNotConfigured,
+  withSavepoint,
   type ActorSetting,
   type Clock,
   type CommandRequest,
@@ -535,6 +536,48 @@ describe('one transaction per command (code-house-rules 8.1; module-map section 
     });
     expect(result).toBe('committed');
     expect(await entriesWrittenBy(writtenBy)).toHaveLength(1);
+  });
+
+  it('PRD-INT-004 a savepoint whose work answers what is not to be kept rolls its writes back; the command goes on', async () => {
+    // As Decide writes a decision before an effect that may refuse (access-and-approvals 9.8b): the work's answer says
+    // whether its writes stay.
+    const writtenBy = `kept savepoint ${newCorrelationId()}`;
+    const insert = (context: TransactionContext, suffix: string) =>
+      context.tx.execute(
+        sql`insert into syn_command.entry (written_by, txid, pid) values (${`${writtenBy} ${suffix}`}, 0, 0)`,
+      );
+    const kept = (answer: string) => answer !== 'refused';
+    const result = await runner().run(request(routedA), async (context) => {
+      await insert(context, 'before');
+      const refused = await withSavepoint(
+        context,
+        'syn_refused',
+        [],
+        async () => {
+          await insert(context, 'refused');
+          return 'refused';
+        },
+        kept,
+      );
+      const done = await withSavepoint(
+        context,
+        'syn_done',
+        [],
+        async () => {
+          await insert(context, 'done');
+          return 'done';
+        },
+        kept,
+      );
+      return [refused, done];
+    });
+    expect(result).toEqual([
+      { kind: 'rolled-back', value: 'refused' },
+      { kind: 'done', value: 'done' },
+    ]);
+    expect(await entriesWrittenBy(`${writtenBy} before`)).toHaveLength(1);
+    expect(await entriesWrittenBy(`${writtenBy} refused`)).toEqual([]);
+    expect(await entriesWrittenBy(`${writtenBy} done`)).toHaveLength(1);
   });
 
   it('PRD-INT-006 refuses an outside call inside the transaction and allows it outside (code-house-rules 8.3)', async () => {

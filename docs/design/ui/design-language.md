@@ -234,12 +234,12 @@ Rules:
 
 ### All states
 
-Names follow the PRD and the KDPS policies. The state names for Site, Store and business unit, master version, user, import batch, proposal, financial period, number series, exception and approval request are the baseline set by `DEC-105` (DM-4): states 50 to 63 are new, and the "Where it appears" cells of Closed, Ended, Confirmed, Paused, Reopened, Rejected and Failed are extended. Design review confirms the names. The product owner approved on 6 Oct 2026 state 64, Withdrawn (RR-202, code-house-rules CH-11; its Neutral family, like Cancelled and Superseded, confirmed by the product owner, `DEC-117`), and the billing-device states Setting up, Active, Ended and Revoked ([offline-counter.md](../pos/offline-counter.md) 3.1, GC8-7).
+Names follow the PRD and the KDPS policies. The state names for Site, Store and business unit, master version, user, import batch, proposal, financial period, number series, exception and approval request are the baseline set by `DEC-105` (DM-4): states 50 to 63 are new, and the "Where it appears" cells of Closed, Ended, Confirmed, Paused, Reopened, Rejected and Failed are extended. Design review confirms the names. The product owner approved on 6 Oct 2026 state 64, Withdrawn (RR-202, code-house-rules CH-11; its Neutral family, like Cancelled and Superseded, confirmed by the product owner, `DEC-117`), and the billing-device states Setting up, Active, Ended and Revoked ([offline-counter.md](../pos/offline-counter.md) 3.1, GC8-7). State 65, Posting, is the name the approved [stock-ledger.md](../stock/stock-ledger.md) 10.6 gives a document waiting for its queued posting job, which a large PT's revision shows (code review 7 of stage 2).
 
 | # | State | Family | Glyph | Where it appears |
 |---|---|---|---|---|
 | 1 | Draft | Neutral | ○ | Booking, PT, adjustment, offer, count, transfer request, supplier return |
-| 2 | Cancelled | Neutral | ○ | Booking, transfer before dispatch, held cart, refund request |
+| 2 | Cancelled | Neutral | ○ | Transfer before dispatch, held cart, refund request |
 | 3 | Cancelled before departure | Neutral | ○ | Supplier return |
 | 4 | Closed | Neutral | ○ | Booking, count, exception; Site, Store and business unit; number series |
 | 5 | Closed—partially returned | Neutral | ○ | Supplier return |
@@ -276,7 +276,7 @@ Names follow the PRD and the KDPS policies. The state names for Site, Store and 
 | 36 | Reopened | Attention | ! | Exception, financial period |
 | 37 | Reversed | Stopped | ✕ | PT, adjustment, posted entry |
 | 38 | Rejected | Stopped | ✕ | PT, damage report, transfer, adjustment, offer, master version, proposal, period reopening |
-| 39 | Failed | Stopped | ✕ | Sync, export, delivery, refund, payment, import batch |
+| 39 | Failed | Stopped | ✕ | Sync, export, delivery, refund, payment, import batch, an approved PT whose posting job was refused (goods-in 6.6) |
 | 40 | Refused | Stopped | ✕ | Offline bill refused on upload |
 | 41 | Conflict | Stopped | ✕ | Offline bill that conflicts on upload |
 | 42 | Connection lost | Stopped | ✕ | Online till |
@@ -302,6 +302,7 @@ Names follow the PRD and the KDPS policies. The state names for Site, Store and 
 | 62 | Unresolved | Attention | ! | Exception raised and not yet resolved |
 | 63 | Superseded | Neutral | ○ | Approval request ended by a material change |
 | 64 | Withdrawn | Neutral | ○ | A Scheduled master version or dated row, such as a role assignment, withdrawn before its start through an approved change, or a request withdrawn before approval, such as a rejected user's pending assignments; the record keeps which and why; never in force ([code-house-rules.md](../platform/code-house-rules.md) 7.3; `DEC-117`); a period reopening withdrawn before its approval (product owner, 20 Oct 2026; RR-490) |
+| 65 | Posting | Pending | ◔ | An approved document waiting for its queued posting job, as stock-ledger 10.6 names it: a PT approved above the rows posted with their decision (goods-in 6.6; code review 7 of stage 2) |
 
 Rules:
 
@@ -309,6 +310,7 @@ Rules:
 - A record shows **one** status badge: its lifecycle state. Line-level conditions (short, excess, damaged, wrong, unidentified) appear as chips in the line’s Disposition cell, with counts beside the badge, because conditions can coexist (`PRD-REC-006`). Short and excess are never a record's status. A delivery record never takes Damaged, Wrong or Unidentified as its badge.
 - A written-off piece that is still present keeps its Quarantine or Damaged state (`PRD-DMG-011`, `POL-17.05`). A write-off record itself uses Draft, Awaiting approval, Approved or Rejected.
 - A completed bill is never Cancelled or Reversed. A return is its own record, and a tax-invoice cancellation is a separate tax-document state, names **OPEN** (`PRD-TAX-004`, see Proposed states).
+- A booking is never Cancelled: `POL-05.01` names its states Draft, Approved, Issued and Confirmed, so a booking whose every balance is cancelled keeps its state, its lines showing what is cancelled (product owner, 22 Oct 2026; RR-578; goods-in 3.10).
 - Unknown is for a value. Outcome unknown is for a result from an outside system: payment provider, GST, Tally or bank.
 - New states must join an existing family. Adding a family needs a design review.
 

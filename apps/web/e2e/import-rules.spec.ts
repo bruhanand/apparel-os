@@ -1,7 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
-import { Authenticator } from './support/authenticator';
-import { signIn } from './support/journey';
-import { readWorld, type EnrolledUser } from './support/world';
+import { signedIn } from './support/journey';
+import { readWorld } from './support/world';
 
 // S1-F06-T03: the mapping rule journey (imports-and-opening-data 6.3, 6.4, 14, 16; PRD-IMP-008, POL-02.07; DEC-112
 // GC6-4). A Booking user (P-BKG) proposes a mapping rule on Setup › File intake and saved layouts › Mapping rules; their
@@ -10,14 +9,6 @@ import { readWorld, type EnrolledUser } from './support/world';
 
 const suffix = String(Date.now()).slice(-6);
 const WORD = `synthetic journey word ${suffix}`;
-
-async function signedIn(page: Page, code: string, user: EnrolledUser): Promise<Authenticator> {
-  const app = new Authenticator(Buffer.from(user.factorSecretHex, 'hex'));
-  await page.goto('/');
-  await signIn(page, { code, login: user.login, password: user.password, totp: await app.nextCode() });
-  await expect(page.getByLabel('Profile')).toHaveText(user.displayName);
-  return app;
-}
 
 async function openRules(page: Page): Promise<void> {
   await page

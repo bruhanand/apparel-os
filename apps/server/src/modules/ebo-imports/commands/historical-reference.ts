@@ -122,7 +122,12 @@ function paiseOf(row: HandlerRow): number | null {
   return text !== undefined && PAISE.test(text) ? Number(text) : null;
 }
 
-/** The SKU a barcode names on a date, or null: not found, or two SKUs (structure-and-masters 4.7). */
+/**
+ * The SKU a barcode names on a date, or null: not found, or two SKUs, whose choice is the person's, never this
+ * handler's. It names no brand, so every brand's mappings answer it: a PT barcode recorded under its product's brand
+ * names that product, and one a brand repeats across products names several, left unresolved (structure-and-masters
+ * 4.7; PRD-MER-007, DEC-135; RR-554).
+ */
 async function skuOfBarcode(
   context: TransactionContext,
   catalogue: Pick<CatalogueInterface, 'resolveCode'>,
@@ -133,7 +138,7 @@ async function skuOfBarcode(
   const found = new Set<string>();
   for (const kind of BARCODE_KINDS) {
     const resolved = await catalogue.resolveCode(context, { code: barcode, kind, date });
-    if ('resolved' in resolved) found.add(resolved.resolved.skuId);
+    if ('resolved' in resolved) for (const candidate of resolved.resolved.candidates) found.add(candidate.skuId);
   }
   const [only] = found;
   return found.size === 1 && only !== undefined ? only : null;

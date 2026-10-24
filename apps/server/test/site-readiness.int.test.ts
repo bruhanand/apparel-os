@@ -28,6 +28,8 @@ import { grantSynthetic, type SyntheticAuthority } from './support/grants.js';
 import { approved, approvedGeography, structureSetup, type StructureSetup } from './support/organisation.js';
 import { createSyntheticOrganisations, type SyntheticWorld } from './support/organisations.js';
 import { connect } from './support/postgres.js';
+import { RECEIVING_POLICY_CHECKS } from './support/receiving.js';
+import { reportedValues, signedFixture } from './support/signed-policies.js';
 
 // S1-F04-T02: readiness checks and unit activation through the whole application, on real PostgreSQL (module-map
 // 4.16; domain-model 3.6, section 5, section 6 "Granting an activity", invariant 7; stage 1 exit check 6; PRD-LIF-001
@@ -46,6 +48,17 @@ const MOVE = `${GATE}.move-synthetic`;
 /** The policies the synthetic operations name, chosen for the test only: 4 for receiving, 6 for movement. */
 const RECEIVE_POLICY = 4;
 const MOVE_POLICY = 6;
+/**
+ * The policy `receiving`'s own operations name beside 4, which the receiving activity needs too since S2-F02-T02
+ * (goods-in 10.5): Signed and validated as a fixture, as policy 4 is.
+ */
+const RECEIVING_STATUTORY_POLICY = 10;
+/** The people `receiving`'s own operations need at a unit (goods-in 10.5; PRD-ACS-006), held by a SYNTHETIC receiver. */
+const RECEIVING_PEOPLE: readonly SyntheticAuthority[] = [
+  { recordType: 'receiving.arrival', action: 'create' },
+  { recordType: 'receiving.arrival', action: 'edit' },
+  { recordType: 'receiving.grn', action: 'create' },
+];
 
 /** One SYNTHETIC value of each policy the operations name, so a validation has something to cover (RR-480). */
 const VALUES_CHECK = `${GATE}.synthetic-values`;
@@ -275,30 +288,19 @@ async function verifyFixture(database: string, unitId: string): Promise<void> {
 }
 
 /**
- * Writes a SYNTHETIC Signed record and validation of a policy, covering the value its synthetic check reports, as
- * fixtures (module-map 4.4; DM-6).
+ * A SYNTHETIC Signed record and validation of a policy, covering the value its synthetic check reports (RR-480) and
+ * the values the modules report for it, such as the verified mappings of policy 10 (RR-558).
  */
-async function signedFixture(database: string, policy: number): Promise<void> {
-  const owner = await connect(database, 'migration');
-  try {
-    await owner.query(
-      `insert into configuration.policy_signature (id, policy_number, signatory, signed_on, origin,
-         evidence_attachment_ids, recorded_by_user_id, role_assignment_id, recorded_at)
-       values ($1, $2, 'SYNTHETIC signatory', current_date, 'synthetic', array[$3::uuid], $4, $5, now())`,
-      [uuidv7(), policy, uuidv7(), uuidv7(), uuidv7()],
-    );
-    await owner.query(
-      `insert into configuration.policy_validation (id, policy_number, origin, validated_values,
-         evidence_attachment_ids, validated_by_user_id, role_assignment_id, validated_at)
-       values ($1, $2, 'synthetic', array[$6], array[$3::uuid], $4, $5, now())`,
-      [uuidv7(), policy, uuidv7(), uuidv7(), uuidv7(), `${VALUES_CHECK}-${String(policy)}:syn-value@v1`],
-    );
-  } finally {
-    await owner.end();
-  }
-}
+const signed = async (database: string, policy: number) =>
+  signedFixture(database, policy, [
+    `${VALUES_CHECK}-${String(policy)}:syn-value@v1`,
+    ...(await reportedValues(
+      (work) => setup.run(setup.preparer.id, work),
+      RECEIVING_POLICY_CHECKS.filter((check) => check.policy === policy),
+    )),
+  ]);
 
-let mapping: { legalEntityId: string; taxRegistrationId: string; accountingBookId: string };
+let mapping: { legalEntityId: string; taxRegistrationId: string; accountingBookId: string; origin: 'synthetic' };
 let siteId: string;
 let storeId: string;
 
@@ -380,6 +382,7 @@ beforeAll(async () => {
     legalEntityId: legalEntity.recordId,
     taxRegistrationId: registration.recordId,
     accountingBookId: book.recordId,
+    origin: 'synthetic',
   };
   siteId = (
     await approved(setup, (c, p) =>
@@ -417,7 +420,8 @@ beforeAll(async () => {
   counterUnit = await unit({ kind: 'brand-counter', storeId });
   await verifyFixture(a.database, counterUnit.id);
   await location(counterUnit);
-  await signedFixture(a.database, RECEIVE_POLICY);
+  await signed(a.database, RECEIVE_POLICY);
+  await signed(a.database, RECEIVING_STATUTORY_POLICY);
   approveReason = await writeSyntheticReason(a.database, 'approve');
   // The SYNTHETIC essential security settings sign-in reads (access-and-approvals 3.3), in both Organisations.
   for (const organisation of world.organisations) {
@@ -435,12 +439,13 @@ beforeAll(async () => {
   api = await startAccessApp(world, keys, {
     clock,
     gatedOperations: operations,
-    validityChecks: [valuesCheck(RECEIVE_POLICY), valuesCheck(MOVE_POLICY)],
+    validityChecks: [valuesCheck(RECEIVE_POLICY), valuesCheck(MOVE_POLICY), valuesCheck(RECEIVING_STATUTORY_POLICY)],
     locationInUse,
   });
   operationsUser = await enrolled(a.database, a.code, 'READY-OPS', READINESS_AUTHORITY);
   approver = await enrolled(a.database, a.code, 'READY-APPROVER', APPROVER_AUTHORITY);
   otherOperations = await enrolled(b.database, b.code, 'READY-OTHER', READINESS_AUTHORITY);
+  await enrolled(a.database, a.code, 'READY-RECEIVER', RECEIVING_PEOPLE);
 });
 
 afterAll(async () => {

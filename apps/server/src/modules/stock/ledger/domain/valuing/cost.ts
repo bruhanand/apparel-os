@@ -139,6 +139,29 @@ export abstract class CostItems extends ValuingCore {
   }
 
   /**
+   * Ownership change (2.3, 7.2, 13.4, 13.20; PRD-ORG-014, POL-01.05; DEC-141): at the Agreement's ownership event the
+   * origin's units pass from the brand or supplier that owns them to the Organisation. Units enter a pool at the later
+   * of ownership and cost established (7.2), so units whose cost is established would enter one now, and no posting
+   * event kind exists for that yet: `rule-not-set` naming SL-26, until the product owner settles which event kind posts
+   * it and what it recognises (books-and-posting 7.2). An owner other than a brand or supplier, or a new owner other than
+   * the Organisation, is `invalid-item`. **Not built:** the change of goods whose cost is still Unknown, which no caller
+   * sends in stage 2, since the scan-in accepts covered goods only, whose cost the PT established: `invalid-item`.
+   */
+  protected ownershipChange(item: ItemOf<'ownership-change'>): ItemValue {
+    const origin = this.origin(item.lineId, item.receiptOriginId);
+    if (
+      (origin.ownerKind !== 'brand' && origin.ownerKind !== 'supplier') ||
+      item.owner.kind !== 'organisation' ||
+      !Number.isSafeInteger(item.quantity) ||
+      item.quantity <= 0
+    ) {
+      refuse('invalid-item', item.lineId, [{ kind: 'owner', receiptOriginId: origin.id }]);
+    }
+    if (origin.valueKnown) refuse('rule-not-set', item.lineId, SL('SL-26'));
+    return refuse('invalid-item', item.lineId, [{ kind: 'not-built', item: 'ownership-change-unknown-cost' }]);
+  }
+
+  /**
    * Cost adjustment (7.7, 13.4; PRD-LED-006, PRD-LED-016): the change, shared equally among the units the origin's
    * cost put into pools, follows its goods. Moving average: through the origin's own units; FIFO: through its cost
    * layer's lineage. Units still held change the pool or dispatch that holds them; units gone carry their share to

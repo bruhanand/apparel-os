@@ -1,8 +1,10 @@
 import type {
+  AttributeMark,
   AttributeValueKind,
   CodeScope,
   ExternalCodeKind,
   ProposalState,
+  SettingOrigin,
   SkuPurpose,
   StockUnit,
 } from '@apparel-os/schemas';
@@ -10,8 +12,8 @@ import { sql } from 'drizzle-orm';
 import { boolean, customType, date, integer, jsonb, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import type { StoredProposal } from '../domain/products.js';
 
-// Drizzle definitions of the merchandise catalogue's tables (code-house-rules 3.4). They mirror the reviewed migration
-// (migrations/organisation/0045) and never create or change a table; an integration test compares each with the
+// Drizzle definitions of the merchandise catalogue's tables (code-house-rules 3.4). They mirror the reviewed migrations
+// (migrations/organisation/0045 and later) and never create or change a table; an integration test compares each with the
 // migrated database. Never exported from the unit's index.ts, so no other unit can name these tables
 // (code-house-rules 2).
 
@@ -145,6 +147,8 @@ export const trackingProfileVersion = merchandise.table('tracking_profile_versio
   requiredIdentifiers: text('required_identifiers').array().notNull(),
   receivingShelfLifeDays: integer('receiving_shelf_life_days'),
   sellingShelfLifeDays: integer('selling_shelf_life_days'),
+  /** Where the version came from, as policy 4's value (code-house-rules 12.14; migration 0092; RR-558). */
+  origin: text('origin').$type<SettingOrigin>().notNull(),
 });
 export const trackingProfileSiteChange = merchandise.table('tracking_profile_site_change', {
   id: uuid('id').primaryKey(),
@@ -253,6 +257,8 @@ export const externalCodeKey = merchandise.table('external_code_key', {
 export const externalCode = merchandise.table('external_code', {
   id: uuid('id').primaryKey(),
   codeKeyId: uuid('code_key_id').notNull(),
+  /** Its code row's kind, held equal by a foreign key, so a constraint can tell a supplier barcode apart (4.3). */
+  kind: text('kind').$type<ExternalCodeKind>().notNull(),
   scopeKind: text('scope_kind').$type<CodeScope['kind']>().notNull(),
   scopePartyId: uuid('scope_party_id'),
   scopeBrandId: uuid('scope_brand_id'),
@@ -267,5 +273,38 @@ export const externalCode = merchandise.table('external_code', {
   alias: boolean('alias').notNull(),
   validDuring: daterange('valid_during').notNull(),
   preparedByUserId: uuid('prepared_by_user_id').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+
+/** A half-open range of instants, `[start, end)`, read and written as PostgreSQL's text form (7.3). */
+const tstzrange = customType<{ data: string; driverData: string }>({ dataType: () => 'tstzrange' });
+
+/** A marking: the season or the size list, each once (4.2 "As built"; migration 0091). */
+export const markedAttribute = merchandise.table('marked_attribute', {
+  id: uuid('id').primaryKey(),
+  mark: text('mark').$type<AttributeMark>().notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+/** A marking's version: the attribute it marks, its origin, its decision and, once approved, the instants in force. */
+export const markedAttributeVersion = merchandise.table('marked_attribute_version', {
+  id: uuid('id').primaryKey(),
+  markedAttributeId: uuid('marked_attribute_id').notNull(),
+  attributeId: uuid('attribute_id').notNull(),
+  origin: text('origin').$type<SettingOrigin>().notNull(),
+  decision: text('decision').$type<Decision>().notNull(),
+  validDuring: tstzrange('valid_during'),
+  preparedByUserId: uuid('prepared_by_user_id').notNull(),
+  recordedAt: at('recorded_at').notNull().defaultNow(),
+});
+/**
+ * The master sheet's item map (goods-in 5.2, 5.3; RR-583): each item's sub category and type, kept with the version of
+ * the item marking it belongs to (migration `merchandise.catalogue__template_list_marks`).
+ */
+export const itemMapEntry = merchandise.table('item_map_entry', {
+  id: uuid('id').primaryKey(),
+  markedAttributeVersionId: uuid('marked_attribute_version_id').notNull(),
+  itemValueId: uuid('item_value_id').notNull(),
+  categoryId: uuid('category_id').notNull(),
+  typeValueId: uuid('type_value_id').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
 });

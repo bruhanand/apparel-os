@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { Authenticator } from './support/authenticator';
-import { signIn } from './support/journey';
-import { readWorld, type EnrolledUser } from './support/world';
+import { signedIn } from './support/journey';
+import { readWorld } from './support/world';
 
 // S1-F03-T03: the bank details journey (structure-and-masters 5.1, 8; access-and-approvals 3.3, 6; POL-02.07,
 // PRD-ACS-008, PRD-SEC-001; DEC-114). A person prepares a SYNTHETIC supplier's bank-detail change on Setup › Suppliers
@@ -16,14 +16,6 @@ const BANK = {
   ifsc: 'SYNJ0000099',
   bank: 'SYNTHETIC Journey Bank',
 };
-
-async function signedIn(page: Page, code: string, user: EnrolledUser): Promise<Authenticator> {
-  const app = new Authenticator(Buffer.from(user.factorSecretHex, 'hex'));
-  await page.goto('/');
-  await signIn(page, { code, login: user.login, password: user.password, totp: await app.nextCode() });
-  await expect(page.getByLabel('Profile')).toHaveText(user.displayName);
-  return app;
-}
 
 async function openSupplier(page: Page, supplierCode: string) {
   await page

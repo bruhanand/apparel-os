@@ -102,9 +102,51 @@ export interface DocumentEffect {
    * type too, each through an assignment of its own or the same one (access-and-approvals 9.3).
    */
   decidesWith?(context: TransactionContext, versionId: string): Promise<readonly string[]>;
+  /**
+   * The people who decided an earlier step of the document version, such as Accounts' check of an open-to-buy budget
+   * version, who may not decide this one besides its preparers (access-and-approvals 9.3, 9.8b; DEC-142).
+   */
+  earlierStepDeciders?(context: TransactionContext, versionId: string): Promise<readonly string[]>;
+  /**
+   * A check of the document's own under the locks, before anything of the decision is written, for either outcome,
+   * such as the policy gate of the operation the decision makes (access-and-approvals 7.1 step 2, 9.8b; S2-F08-T01).
+   */
+  precheck?(context: TransactionContext, versionId: string): Promise<CommandRefusal | undefined>;
+  /**
+   * When Decide writes an approval's decision, against the effect (access-and-approvals 9.8b): `after-effect`, the
+   * default, once the effect has rechecked its record and taken effect, so a refusal leaves nothing written;
+   * `before-effect` for an effect that posts the document through the stock ledger in the decision's transaction,
+   * verifying and using the decision under its locks as any posting does (9.7; stock-ledger 13.1; S2-F08-T01): the
+   * decision is written first, under a savepoint, so Verify under lock and Record use find it, and is rolled back with
+   * the effect when the effect refuses, so nothing of either is written.
+   */
+  readonly decisionWritten?: DecisionWritten;
   approve(context: TransactionContext, decider: EffectDecider, versionId: string): Promise<EffectOutcome>;
   reject(context: TransactionContext, decider: EffectDecider, versionId: string): Promise<EffectOutcome>;
+  /**
+   * What the owning module does once a decision its effect refused has rolled back, in a command of its own so the
+   * rollback does not lose it: the unfinished-operation exception a posting refused under the locks raises
+   * (books-and-posting 10 step 3; PRD-EXC-001; S2-F06-T01 code review 7). Decide's route calls it after the refusal is
+   * kept, and again for each replay of it; the module keys what it writes by the raising event, so a replay writes
+   * nothing more (PRD-INT-008). The effect looks at the refusal and does nothing for one it does not follow.
+   */
+  refused?(context: TransactionContext, versionId: string, decision: RefusedDecision): Promise<void>;
 }
+
+/** A decision its effect refused, as the effect's follow-up is given it (access-and-approvals 9.8b). */
+export interface RefusedDecision {
+  /** Who decided: the approver. */
+  readonly actor: { readonly kind: 'user'; readonly id: string };
+  /**
+   * Unique to the decision's command: its operation, its actor and its idempotency key, so a replay of the same
+   * request names the same event (code-house-rules 12.4).
+   */
+  readonly raisingEvent: string;
+  readonly refusal: CommandRefusal<string>;
+}
+
+/** When Decide writes an approval's decision, against its effect (access-and-approvals 9.8b). */
+export type DecisionWritten = 'after-effect' | 'before-effect';
 
 /** The approver making a decision take effect, the assignment relied on and the decision (access-and-approvals 9.5). */
 export interface EffectDecider {

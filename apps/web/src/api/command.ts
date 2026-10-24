@@ -1,4 +1,4 @@
-import type { CallInput, ErrorBody, routes } from '@apparel-os/schemas';
+import type { CallInput, CallResult, ErrorBody, routes } from '@apparel-os/schemas';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { api } from '../api';
@@ -30,6 +30,17 @@ export function stateAfterRefusal(refusal: ErrorBody): SubmissionState {
   return sessionRefusal(refusal) === null ? { kind: 'refused', refusal } : { kind: 'ready' };
 }
 
+/** The success answer of a command. */
+type AnswerOf<K extends CommandName> = Extract<CallResult<Table[K]>, { ok: true }>['data'];
+
+/** A submission of one command, as a screen holds it. */
+export interface Submission<K extends CommandName> {
+  readonly state: SubmissionState;
+  /** Sends the command, answering its success answer, or undefined when it was refused or no answer came. */
+  submit(input: Omit<CallInput<Table[K]>, 'idempotencyKey'>): Promise<AnswerOf<K> | undefined>;
+  reset(): void;
+}
+
 /**
  * Submits a command under an idempotency key kept until the outcome is known: after a lost answer, `timed-out`,
  * `kernel.outcome-unknown` or `kernel.request-in-progress` the next press resends the same key, so the command never
@@ -37,7 +48,7 @@ export function stateAfterRefusal(refusal: ErrorBody): SubmissionState {
  * says is locked or over goes to the lock screen or to sign-in, the screen's input kept (access-and-approvals 3.3). On
  * success the reads named in `invalidates` are read again.
  */
-export function useSubmission<K extends CommandName>(name: K, invalidates: readonly (keyof Table)[]) {
+export function useSubmission<K extends CommandName>(name: K, invalidates: readonly (keyof Table)[]): Submission<K> {
   const key = useRef<string | undefined>(undefined);
   const [state, setState] = useState<SubmissionState>({ kind: 'ready' });
   const { session, setSession } = useSession();

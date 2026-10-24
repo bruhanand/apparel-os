@@ -1,7 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
-import { Authenticator } from './support/authenticator';
-import { signIn } from './support/journey';
-import { readWorld, type EnrolledUser } from './support/world';
+import { signedIn } from './support/journey';
+import { readWorld } from './support/world';
 
 // S1-F09-T03: the period close journey (books-and-posting 4.2, 4.3, 14; PRD-LED-009, PRD-LED-019, PRD-LED-020;
 // DEC-106, DEC-107). An Accounts user locks a SYNTHETIC book's two periods in order on Money › Period close and asks
@@ -9,14 +8,6 @@ import { readWorld, type EnrolledUser } from './support/world';
 // Accounts user approves it from My work; the correction posts, as the module owning it would, and the period shows
 // Locked again. Each step is visible on Period close. Every value is SYNTHETIC; who may lock, request and approve is
 // KDPS's (V-01).
-
-async function signedIn(page: Page, code: string, user: EnrolledUser): Promise<Authenticator> {
-  const app = new Authenticator(Buffer.from(user.factorSecretHex, 'hex'));
-  await page.goto('/');
-  await signIn(page, { code, login: user.login, password: user.password, totp: await app.nextCode() });
-  await expect(page.getByLabel('Profile')).toHaveText(user.displayName);
-  return app;
-}
 
 async function openPeriodClose(page: Page, bookOption: string) {
   await page

@@ -9,7 +9,9 @@ export {
   idSchema,
   loginSchema,
   maybeKnownPaiseSchema,
+  maybeKnownTextSchema,
   organisationCodeSchema,
+  pageLimitSchema,
   paiseSchema,
   personaIdSchema,
   personasHeldSchema,
@@ -18,7 +20,7 @@ export {
   setupPageQuerySchema,
   totpCodeSchema,
 } from './common.js';
-export type { PersonaId, RecordVersionRef, SetupPageQuery } from './common.js';
+export type { MaybeKnownText, PersonaId, RecordVersionRef, SetupPageQuery } from './common.js';
 
 export {
   databaseNameSchema,
@@ -527,6 +529,8 @@ export type {
 
 // The merchandise catalogue (structure-and-masters 4; S1-F03-T01).
 export * from './catalogue.js';
+// Its season attribute and size attribute, two Organisation settings (structure-and-masters 4.2; RR-550, RR-556).
+export * from './marked-attributes.js';
 
 // The parties part of merchandise (structure-and-masters 5; S1-F03-T03).
 export * from './parties.js';
@@ -552,3 +556,21 @@ export * from './posting.js';
 // Imports: the import upload, layouts, batches, staged rows, preview and publish (imports-and-opening-data 13;
 // S1-F06-T01).
 export * from './imports.js';
+
+// `booking`'s open-to-buy budgets (goods-in 3.3; S2-F01-T02).
+export * from './booking.js';
+
+// `receiving`'s Arrival, count and GRN (goods-in 4.1 to 4.5; S2-F02-T02).
+export * from './receiving.js';
+
+// `stock` · documents' damage reports (goods-in 8; S2-F08-T01).
+export * from './damage.js';
+
+// `merchandise` · PT: a PT file uploaded for a GRN (goods-in 5; S2-F04-T02).
+export * from './pt.js';
+
+// `reports`' stock search (goods-in 9.1, 9.2; S2-F11-T01).
+export * from './stock-search.js';
+
+// `reports`' stage 2 reports (goods-in 9.1, 9.3, 9.5; S2-F11-T02).
+export * from './reports.js';

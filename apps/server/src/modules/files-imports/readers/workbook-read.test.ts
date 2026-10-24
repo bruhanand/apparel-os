@@ -24,7 +24,13 @@ async function workbookOf(rows: number): Promise<Buffer> {
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }
 
-describe('readWorkbook', () => {
+/**
+ * Each read starts a worker of its own and writes its SYNTHETIC workbook first, so a test takes seconds, not the
+ * default's few: a loaded machine took 3 to 4.5 seconds for the row cap's two reads (code review 6 of stage 2).
+ */
+const READER_TEST_TIMEOUT_MS = 30_000;
+
+describe('readWorkbook', { timeout: READER_TEST_TIMEOUT_MS }, () => {
   it('PRD-IMP-001 reads a safe workbook within the caps into the grid', async () => {
     const read = await readWorkbook(await workbookOf(3), SYNTHETIC_CAPS);
     if (read.kind !== 'read') throw new Error(`Refused: ${JSON.stringify(read)}`);

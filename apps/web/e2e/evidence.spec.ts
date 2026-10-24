@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { Authenticator } from './support/authenticator';
-import { signIn } from './support/journey';
+import type { Authenticator } from './support/authenticator';
+import { signedIn } from './support/journey';
 import { readWorld } from './support/world';
 import type { EnrolledUser } from './support/world';
 
@@ -20,16 +20,9 @@ const PDF = Buffer.from(
   'latin1',
 );
 
-async function signedIn(page: Page, organisationCode: string, user: EnrolledUser): Promise<Authenticator> {
-  const app = new Authenticator(Buffer.from(user.factorSecretHex, 'hex'));
-  await page.goto('/');
-  await signIn(page, {
-    code: organisationCode,
-    login: user.login,
-    password: user.password,
-    totp: await app.nextCode(),
-  });
-  await expect(page.getByLabel('Profile')).toHaveText(user.displayName);
+/** Signs the user in and opens My work. */
+async function signedInToMyWork(page: Page, organisationCode: string, user: EnrolledUser): Promise<Authenticator> {
+  const app = await signedIn(page, organisationCode, user);
   await page
     .getByRole('link', { name: /^My work/ })
     .first()
@@ -53,7 +46,7 @@ test('POL-03.05 PRD-SEC-005 the owner adds a photograph to an exception, and it 
 }) => {
   test.setTimeout(120_000);
   const world = readWorld().evidence;
-  await signedIn(page, world.organisationCode, world.operations);
+  await signedInToMyWork(page, world.organisationCode, world.operations);
   await page.getByRole('button', { name: 'Open', exact: true }).click();
   const drawer = page.getByRole('dialog');
   await expect(drawer.getByText(world.code).first()).toBeVisible();
@@ -89,7 +82,7 @@ test('PRD-ACS-010 POL-02.23 the approver attaches a PDF to a decision, and it op
 }) => {
   test.setTimeout(120_000);
   const world = readWorld().evidence;
-  const app = await signedIn(page, world.organisationCode, world.approver);
+  const app = await signedInToMyWork(page, world.organisationCode, world.approver);
   // The worker publishes the request to My work (module-map 4.8); Refresh reads it again until it is there.
   await expect(async () => {
     await page.getByRole('button', { name: 'Refresh' }).click();

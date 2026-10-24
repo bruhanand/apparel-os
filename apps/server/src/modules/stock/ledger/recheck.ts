@@ -1,6 +1,6 @@
 import { uuidv7 } from '@apparel-os/domain';
 import { and, eq, gt, inArray, notInArray, or, sql } from 'drizzle-orm';
-import type { TransactionContext } from '../../../kernel/index.js';
+import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
 import {
   balance,
   costLayer,
@@ -27,7 +27,7 @@ import { Valuing, type SaleState, type TransitState, type ValuingInputs } from '
 import type { PoolState } from './domain/valuation.js';
 import { paise } from '@apparel-os/domain';
 import { recheckHidden, type HiddenAnswer } from './db/recheck-hidden.js';
-import { refusalOf, StockRefused, type Condition, type ItemValue } from './domain/request.js';
+import { refusalOf, StockRefused, type Condition, type ItemValue, type Owner } from './domain/request.js';
 import {
   Working,
   type BalanceState,
@@ -161,6 +161,37 @@ const headerScope = (row: {
   legalEntityId: row.legalEntityId,
 });
 
+/**
+ * The owner column an origin's state holds for its owner kind: `receipt_origin_state_owner` holds exactly that one
+ * (14.2), so a null there is a defect, never an empty identifier standing for Unknown (PRD-MOD-015).
+ */
+function ownerColumn(value: string | null, kind: string): string {
+  if (value === null) throw new CommandDefect(`A receipt origin's ${kind} owner without its identifier`);
+  return value;
+}
+
+/** The owner an origin's state records (14.2; PRD-ORG-014), as the request names one (13.3). */
+function ownerOf(state: typeof receiptOriginState.$inferSelect): Owner {
+  const agreement = state.agreementVersionId;
+  switch (state.ownerKind) {
+    case 'organisation':
+      return {
+        kind: 'organisation',
+        legalEntityId: ownerColumn(state.ownerLegalEntityId, 'organisation'),
+        ...(agreement === null ? {} : { agreementVersionId: agreement }),
+      };
+    case 'supplier':
+    case 'brand':
+      // Written only with its agreement version (13.3; write.ts).
+      if (agreement === null) throw new CommandDefect('A supplier or brand owner without its agreement version');
+      return state.ownerKind === 'supplier'
+        ? { kind: 'supplier', partyId: ownerColumn(state.ownerPartyId, 'supplier'), agreementVersionId: agreement }
+        : { kind: 'brand', brandId: ownerColumn(state.ownerBrandId, 'brand'), agreementVersionId: agreement };
+    default:
+      return { kind: 'unknown' };
+  }
+}
+
 /** The rows read under the locks (code-house-rules 8.1): every one locked, or changed only under a lock held. */
 async function load(context: TransactionContext, locked: LockedPlan): Promise<ValuingInputs> {
   const { plan } = locked;
@@ -182,12 +213,20 @@ async function load(context: TransactionContext, locked: LockedPlan): Promise<Va
     if (elsewhere.length > 0) throw new StockRefused(refusalOf('plan-stale', plan.request.items[0]?.lineId));
   }
   const freezeUnits = [...plan.freezeUnits].map((at) => at.split('|'));
+  // The goods of Unknown SKU of one brand at a unit share one SKU balance (14.2; 13.14; RR-555): of its balances only
+  // those of the origins the request names are read, since no item takes such goods but by naming their origin.
+  const unknownTotals = totals.filter((row) => row.skuId === null).map((row) => row.id);
+  const knownTotals = totalIds.filter((id) => !unknownTotals.includes(id));
+  const namedOrigins = [...plan.originIds.keys()];
   const balanceRows = await context.tx
     .select()
     .from(balance)
     .where(
       or(
-        totalIds.length === 0 ? sql`false` : inArray(balance.skuBalanceId, totalIds),
+        knownTotals.length === 0 ? sql`false` : inArray(balance.skuBalanceId, knownTotals),
+        unknownTotals.length === 0 || namedOrigins.length === 0
+          ? sql`false`
+          : and(inArray(balance.skuBalanceId, unknownTotals), inArray(balance.receiptOriginId, namedOrigins)),
         ...freezeUnits.map(([siteId, unitId]) =>
           and(eq(balance.siteId, siteId ?? ''), eq(balance.businessUnitId, unitId ?? '')),
         ),
@@ -280,6 +319,7 @@ async function load(context: TransactionContext, locked: LockedPlan): Promise<Va
       siteId: row.siteId,
       businessUnitId: row.businessUnitId,
       skuId: row.skuId,
+      brandId: row.brandId,
       quantity: row.quantity,
       changed: false,
     })),
@@ -308,6 +348,16 @@ async function load(context: TransactionContext, locked: LockedPlan): Promise<Va
       id: origin.id,
       isNew: false,
       skuId: origin.skuId,
+      stockUnit: origin.stockUnit as OriginState['stockUnit'],
+      owner: ownerOf(state),
+      mappingVersionId: origin.mappingVersionId,
+      bookId: origin.bookId,
+      parentOriginId: origin.parentOriginId,
+      described:
+        origin.describedStyleCode === null
+          ? null
+          : { styleCode: origin.describedStyleCode, colour: origin.describedColour, size: origin.describedSize },
+      madeByMovementId: null,
       pieceTracked: origin.pieceTracked,
       batchCode: origin.batchCode,
       expiryDate: origin.expiryDate,
@@ -405,6 +455,7 @@ async function load(context: TransactionContext, locked: LockedPlan): Promise<Va
     originsSeen: plan.originsSeen,
     usedCodes: plan.usedCodes,
     lockedReservations: plan.reservationIds,
+    lockedHolds: plan.holdIds,
     newId: uuidv7,
     ...(await loadValuing(context, locked)),
   };
@@ -610,7 +661,12 @@ async function loadSale(context: TransactionContext, saleId: string, back: 'retu
   // In the order the outflow took them, oldest origin first (PRD-STK-013; working.ts `balancesAt`): UUIDv7s made in
   // one millisecond are not ordered (PRD-MOD-008), so the legs' own identifiers cannot say (S1-F10-T06, G9).
   const legs = await context.tx
-    .select({ originId: movementLeg.receiptOriginId, quantity: movementLeg.quantity, direction: movementLeg.direction })
+    .select({
+      originId: movementLeg.receiptOriginId,
+      quantity: movementLeg.quantity,
+      direction: movementLeg.direction,
+      condition: movementLeg.condition,
+    })
     .from(movementLeg)
     .innerJoin(receiptOrigin, eq(receiptOrigin.id, movementLeg.receiptOriginId))
     .where(eq(movementLeg.movementId, saleId))
@@ -715,13 +771,31 @@ async function loadSale(context: TransactionContext, saleId: string, back: 'retu
       returnedFromLayer.set(row.from, sum);
     }
   }
+  // The holds a condition change carried with its goods, less what its reversals carried back (13.17). Moved rows are
+  // written under the hold's lock, which Plan took for each hold the change carried (14.3).
+  const carried = new Map<string, number>();
+  if (sale.kind === 'condition-change') {
+    const moved = await context.tx
+      .select({ holdId: holdRelease.holdId, quantity: holdRelease.quantity, movementId: holdRelease.movementId })
+      .from(holdRelease)
+      .where(and(eq(holdRelease.releaseEvent, 'moved'), inArray(holdRelease.movementId, [saleId, ...returnIds])));
+    for (const row of moved) {
+      const sign = row.movementId === saleId ? 1 : -1;
+      carried.set(row.holdId, (carried.get(row.holdId) ?? 0) + sign * (row.quantity ?? 0));
+    }
+  }
   return {
     id: sale.id,
     kind: sale.kind,
     direction,
     siteId: sale.siteId,
     businessUnitId: sale.businessUnitId,
-    legs: legs.map((leg) => ({ originId: leg.originId, quantity: leg.quantity })),
+    legs: legs.map((leg) => ({
+      originId: leg.originId,
+      quantity: leg.quantity,
+      direction: leg.direction as 'in' | 'out',
+      condition: leg.condition as Condition,
+    })),
     pieceIds: new Set(pieces.map((row) => row.pieceId)),
     valued,
     layers: layers.map((row) => ({
@@ -735,5 +809,6 @@ async function loadSale(context: TransactionContext, saleId: string, back: 'retu
     returnedFromLayer,
     valuedTotal: valuations.length === 0 ? null : valuedTotal,
     returnedTotal,
+    carried,
   };
 }

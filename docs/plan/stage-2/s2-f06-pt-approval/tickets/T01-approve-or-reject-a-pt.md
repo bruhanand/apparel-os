@@ -1,0 +1,33 @@
+# S2-F06-T01 — Approve or reject a PT
+
+Status: done
+Blocked by: S2-F04-T02
+Feature: [Stage 2 first version](../../spec.md)
+
+## Build
+
+- The PT review in My work ([goods-in.md](../../../../design/goods-in/goods-in.md) 6.1, 6.2): routed to approvers whose limit covers `P RATE` times `QTY`; rows, totals, BASIC beside `P RATE`, margins, the GRN's invoices and photos, new products, repeated barcodes, differences.
+- Approve, in one transaction with the stock ledger's lock order (6.3; module-map 6.2 flow C): verify the approval under the lock (the uploader cannot approve); confirm the new products; freeze the revision and number it from the PT series; give the GRN's goods their SKUs through the identity step (`S2-F02-T01`); record coverage and establish cost at `P RATE`; release the excess holds and quarantine of goods Booking took in; post owned goods under `stock.cost-established` against the receipt account of the posting map (synthetic in tests; `DEC-140`), consignment goods recording cost only; audit and outbox.
+- Refusals under the locks: the GRN changed after the upload, overlapping coverage, a missing posting map, a locked period, a missing series. A large PT posts through the queued job (flow E). Reject: the draft ends and the mark clears.
+- Download an approved PT as XLSX in the template's columns (6.5). Policy gate: policies 1, 3, 9 and 10.
+
+## Expected outputs
+
+`merchandise` · PT changes; the posting job registration; routes, schemas, OpenAPI; the review screen; integration tests.
+
+## Done when
+
+Design tests 11 and 12 pass, with the approval part of 21 posting through the job; after approval nothing is sellable (part of test 13); every check passes.
+
+## Notes
+
+- Built (22 Oct 2026, branch `s2/f06-t01-pt-approval`; `Status:` unchanged): migration `0109__merchandise.pt__pt_approval.sql`; the decision's effect (approve, reject), the posting in the decision's transaction and through the queued job, the review and download routes, the PT review in My work and the PT file's number, download and failure, and the browser journey `apps/web/e2e/pt-approval.spec.ts`. As built: goods-in 6.6; stock-ledger 13.19; structure-and-masters 4.2 and 4.3 as built with `S2-F06-T01`; access-and-approvals 9.8b; imports-and-opening-data 13.1; module-map section 5; design-language 7 (Queued and Failed for a PT).
+- RR-585 decided by the product owner (22 Oct 2026) and built: SKU code generated from the SKU code series, stock unit Piece, purpose Merchandise. The size of a new product is the size list value's code, which must be in the category's size set (a design choice, RR-603).
+- Measured (SYNTHETIC, local test container, 22 Oct 2026): a 10,000-line PT approval (100 styles of two sizes, 200 new products) answered the click in 0.5 seconds; the queued job had posted it 6.6 seconds after the click.
+- Beyond the ticket: the stock ledger's `madeSkus` and the identity step's new origin for each SKU and `P RATE` (stock-ledger 13.19, for review, RR-601); `merchandise` · catalogue's `checkPtProducts`, `confirmPtProducts`, `mapPtBarcodes`, `skuCodesOf` and the SKU code kind; `files-imports`' `filledTemplate` (imports-and-opening-data 13.1); `receiving`'s held-lines read gives each good part its SKU (`GoodPiecesPart.skuId`); the interim refusal `merchandise.pt-decision-not-available` removed; the Arrival's Refresh reads the GRN's PT again; the test supports `support/pt-gate.ts` (the book and the gate, shared by the integration tests and the journeys' server) and `ptWorld`'s size sets; the journeys' server gives the PT file journey's world a book, a tracking profile link, the PT and SKU code series, policies 3 and 9 and a PT approver.
+- Not built, each an open item: an exception for a refused posting and posting a failed one again (RR-604); the posting job in a worker composition (RR-602); the inbox's next step after approval (RR-606, `S2-F07-T01`); the seed's PT and SKU code series on `dev` (RR-607).
+- Open, for the product owner: RR-600, RR-601, RR-603, RR-605, RR-607.
+- Built and merged 22 Oct 2026 (commits c163a838, 0e9db5cb, f5c452fa, 5cf3bef0, merged in 67c653a8); every check and 47 browser journeys pass. Awaiting code review with `S2-F02-T05` (wave D); `Status:` stays in-progress until then.
+- Beyond the ticket, refusals the approval meets that the ticket does not list: `merchandise.code-conflict` (a barcode the whole Organisation maps to another product), `merchandise.pt-colour-not-identity` (a new product's category does not hold the colour list among its identity attributes) and `merchandise.pt-tracking-unknown` (a new product's category has no tracking profile in force at the Site); each named in goods-in 6.6.
+- **Review 7 changes** (code review 7 of stage 2, 23 Oct 2026; `Status:` unchanged): the download is a command writing a sensitive-access record for each restricted class it exports, cost and margin left out for a reader without them, every amount its exact text (`rupeesText`, `decimalText` in `@apparel-os/domain`); the worker composes the application's modules and the PT's posting consumers, the application queues above `PT_POSTED_WITH_DECISION_ROWS` rows, the consumer declares what its identity holds (`holds`), RR-602 closed; a refused posting raises `merchandise.pt-posting-refused` (through `access`'s new follow-up of a refused decision, or a consumer of `merchandise.pt-posting-failed`) and is posted again by approving again or by Post again (`POST /api/merchandise/pt/revisions/{revisionId}/post-again`), RR-604 closed; a queued PT shows Posting (design-language 7, state 65); `postApproval` split into goods-in 6.3's steps; the allocator's own refusal answered (`merchandise.pt-series-exhausted`, `merchandise.sku-code-series-exhausted` added); placeholders removed; the catalogue's PT products split one file per command, its check a read; `index.ts` exports only what another module or a composition uses; the PT review shows the bookings the GRN's lines are linked to; rows of one new style must agree on the style's values, and a barcode of another style or size refuses the file (RR-608 closed; RR-620 for a colour); a line naming a SKU takes its size at the GRN's issue; migration 0109 gains the post request's approver; tests at the HTTP seam for each, the 10,000-row PT posted through the worker as the application composes it; the journeys' My work wait back to 180 seconds.
+- Done 23 Oct 2026: reviewed (code review 7) with its fixes in; every check and 47 browser journeys pass on the integration branch. Commits c163a838, 0e9db5cb, f5c452fa, 5cf3bef0, merged in 67c653a8; review 7 fixes f28a52bf, 19d05264, 0edc87ec, e27a6942, merged in 29e69bf8.

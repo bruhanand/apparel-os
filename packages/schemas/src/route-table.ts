@@ -2,6 +2,121 @@ import { z } from 'zod';
 import { errorCodes, type ErrorCode } from './errors.js';
 import { healthResponseSchema } from './health.js';
 import {
+  grnPtReadSchema,
+  PT_TYPE,
+  ptDownloadSchema,
+  ptPreviewQuerySchema,
+  ptPreviewSchema,
+  ptRevisionParamsSchema,
+  ptRevisionReadSchema,
+  ptReversalDraftSchema,
+  ptReversalParamsSchema,
+  ptReversalProposedSchema,
+  ptReversalReadSchema,
+  ptTemplateQuerySchema,
+  ptTemplateSchema,
+  ptWithdrawalSchema,
+  ptWithdrawnSchema,
+  ptPostedAgainSchema,
+} from './pt.js';
+import {
+  BOOKING_DRAFT_BODY_LIMIT_BYTES,
+  BOOKING_TYPE,
+  bookingAmendmentProposedSchema,
+  bookingCancellationDraftSchema,
+  bookingConfirmationDraftSchema,
+  bookingDocumentsAttachedSchema,
+  bookingDocumentsDraftSchema,
+  bookingDraftChangeSchema,
+  bookingDraftSchema,
+  bookingExtensionDraftSchema,
+  bookingIssueDraftSchema,
+  bookingListSchema,
+  bookingPageQuerySchema,
+  bookingReadSchema,
+  bookingRecordedSchema,
+  bookingSavedSchema,
+  bookingSubmissionSchema,
+  bookingSubmittedSchema,
+  OPEN_TO_BUY_BUDGET_TYPE,
+  openToBuyBudgetDraftSchema,
+  openToBuyBudgetListSchema,
+  openToBuyBudgetPageQuerySchema,
+  openToBuyBudgetPreparedSchema,
+  openToBuyBudgetReadSchema,
+  openToBuyBudgetVersionDraftSchema,
+} from './booking.js';
+import {
+  ARRIVAL_TYPE,
+  GRN_TYPE,
+  arrivalDraftSchema,
+  arrivalReadSchema,
+  arrivalRecordedSchema,
+  countLineDraftSchema,
+  countLineRemovalSchema,
+  countLineSavedSchema,
+  grnBookingLinkedSchema,
+  grnBookingLinksDraftSchema,
+  grnIssueSchema,
+  grnIssuedSchema,
+  grnParamsSchema,
+  HELD_LINE_TYPE,
+  heldLineParamsSchema,
+  heldLineProductDraftSchema,
+  heldLineProductNamedSchema,
+  heldLineReadSchema,
+  inboxParamsSchema,
+  inboxQuerySchema,
+  inboxSchema,
+  invoiceDraftSchema,
+  invoiceRecordedSchema,
+  photosAttachedSchema,
+  photosDraftSchema,
+  RECOUNT_TYPE,
+  recountDraftSchema,
+  recountParamsSchema,
+  recountProposedSchema,
+  recountReadSchema,
+  SCAN_TYPE,
+  scanAnsweredSchema,
+  scanDraftSchema,
+  scanInQuerySchema,
+  scanInReadSchema,
+} from './receiving.js';
+import {
+  DAMAGE_REPORT_TYPE,
+  DAMAGE_REVERSAL_TYPE,
+  damageDecisionRenewalSchema,
+  damageDecisionRenewedSchema,
+  damageReportDraftSchema,
+  damageReportedSchema,
+  damageReportReadSchema,
+  damageReversalDraftSchema,
+  damageReversalProposedSchema,
+} from './damage.js';
+import {
+  stockSearchExportSchema,
+  stockSearchFiltersSchema,
+  stockSearchQuerySchema,
+  stockSearchSchema,
+  stockRecordsQuerySchema,
+  stockRecordsSchema,
+} from './stock-search.js';
+import {
+  bookingStatusFiltersSchema,
+  bookingStatusQuerySchema,
+  bookingStatusReportSchema,
+  receiptProblemsFiltersSchema,
+  receiptProblemsQuerySchema,
+  receiptProblemsReportSchema,
+  reportExportSchema,
+  stockReportFiltersSchema,
+  stockReportQuerySchema,
+  stockReportSchema,
+  supplierPerformanceFiltersSchema,
+  supplierPerformanceReportSchema,
+} from './reports.js';
+import {
   demoSignInListSchema,
   demoSignInRequestSchema,
   enrolmentConfirmRequestSchema,
@@ -121,6 +236,7 @@ import {
 } from './exceptions.js';
 import { attachedFileSchema, storedFileSchema, storeFileRequestSchema, STORE_FILE_BODY_LIMIT_BYTES } from './files.js';
 import {
+  STOCK_BALANCE_TYPE,
   COMPARISON_RUN_TYPE,
   comparisonRunListQuerySchema,
   comparisonRunListSchema,
@@ -294,6 +410,16 @@ import {
   packReadSchema,
   packVersionDraftSchema,
 } from './catalogue.js';
+import {
+  attributeMarkSchema,
+  MARKED_ATTRIBUTE_TYPE,
+  markedAttributeListSchema,
+  markedAttributePreparedSchema,
+  markedAttributeVersionDraftSchema,
+  markedAttributeVersionListSchema,
+  markedAttributeVersionPageQuerySchema,
+  markedAttributeVersionReadSchema,
+} from './marked-attributes.js';
 import {
   codeMappedSchema,
   codeMappingDraftSchema,
@@ -716,6 +842,15 @@ const ORGANISATION_UNIT_PREPARE_CODES = [
   ...ORGANISATION_STRUCTURE_RULE_CODES,
 ] as const satisfies readonly ErrorCode[];
 
+/**
+ * The codes a preparation of a unit or a mapping can answer: those of 3.3 to 3.6, and a mapping's origin this
+ * environment does not accept (code-house-rules 12.14; 3.4 "As built"; RR-558).
+ */
+const ORGANISATION_MAPPING_PREPARE_CODES = [
+  ...ORGANISATION_UNIT_PREPARE_CODES,
+  'configuration.origin-not-allowed',
+] as const satisfies readonly ErrorCode[];
+
 /** The codes a read of one catalogue master can answer (structure-and-masters 4.7; S1-F03-T01). */
 const CATALOGUE_READ_CODES = [...HISTORY_CODES, 'merchandise.record-not-found'] as const satisfies readonly ErrorCode[];
 
@@ -746,6 +881,15 @@ const CATALOGUE_CHANGE_CODES = [
   'merchandise.labelling-count-not-planned',
   'merchandise.stock-presence-unanswered',
   'merchandise.pieces-held',
+] as const satisfies readonly ErrorCode[];
+
+/**
+ * The codes a tracking profile change can answer: a catalogue change's, and a version's origin this environment does
+ * not accept (code-house-rules 12.14; 4.6 "As built"; RR-558).
+ */
+const TRACKING_PROFILE_CHANGE_CODES = [
+  ...CATALOGUE_CHANGE_CODES,
+  'configuration.origin-not-allowed',
 ] as const satisfies readonly ErrorCode[];
 
 /** The codes proposing a product can answer (4.2; S1-F03-T02), and its confirmation under the proposal's lock. */
@@ -815,6 +959,24 @@ const CATALOGUE_DECISION_CODES = [
   'merchandise.party-not-supplier',
   // A product proposal's confirmation (4.2; S1-F03-T02).
   ...PRODUCT_RULE_CODES,
+  // The season or size attribute's approval: its origin and its attribute rechecked under the lock (4.2 "As built";
+  // RR-550, RR-556); a version decided or superseded meanwhile is stale.
+  'configuration.origin-not-allowed',
+  'kernel.stale-version',
+] as const satisfies readonly ErrorCode[];
+
+/**
+ * The codes preparing the season or size attribute can answer (structure-and-masters 4.2 "As built"; RR-550, RR-556):
+ * the attribute it names, the origin and the version token (code-house-rules 12.7, 12.14).
+ */
+const MARKED_ATTRIBUTE_CHANGE_CODES = [
+  ...HISTORY_CODES,
+  'kernel.cross-site-request',
+  'kernel.stale-version',
+  'configuration.origin-not-allowed',
+  'merchandise.record-not-found',
+  'merchandise.reference-not-in-force',
+  'merchandise.attribute-not-list',
 ] as const satisfies readonly ErrorCode[];
 
 /** The codes every change of the parties part can answer (structure-and-masters 2, 5; S1-F03-T03). */
@@ -913,6 +1075,343 @@ const TAX_RULE_CA_EVIDENCE_CODES = [
   'kernel.cross-site-request',
   'finance.record-not-found',
   'finance.version-not-awaiting',
+] as const satisfies readonly ErrorCode[];
+
+/**
+ * The codes preparing an open-to-buy budget or its version can answer (goods-in 3.3; S2-F01-T02): the budget carries
+ * its brand, so each route authorises in its command with the brand's facts (access-and-approvals 5.3).
+ */
+const OPEN_TO_BUY_CHANGE_CODES = [
+  ...HISTORY_CODES,
+  'kernel.cross-site-request',
+  'configuration.origin-not-allowed',
+] as const satisfies readonly ErrorCode[];
+
+/** A new budget's own: its brand, its season and its pair (3.3). */
+const OPEN_TO_BUY_NEW_BUDGET_CODES = [
+  ...OPEN_TO_BUY_CHANGE_CODES,
+  'booking.brand-not-in-force',
+  'booking.season-not-in-vocabulary',
+  'booking.budget-exists',
+  // No attribute is marked as the season (structure-and-masters 4.2 "As built"; RR-550).
+  'merchandise.attribute-not-marked',
+] as const satisfies readonly ErrorCode[];
+
+/** A budget's next version's own: the budget, and the version token (code-house-rules 12.7). */
+const OPEN_TO_BUY_VERSION_CODES = [
+  ...OPEN_TO_BUY_CHANGE_CODES,
+  'booking.record-not-found',
+  'kernel.stale-version',
+] as const satisfies readonly ErrorCode[];
+
+/** The codes the check or the approval of a budget version can answer under Decide's locks (3.3; POL-05.09). */
+const OPEN_TO_BUY_DECISION_CODES = [
+  'booking.record-not-found',
+  'booking.version-not-awaiting',
+  'booking.budget-not-checked',
+] as const satisfies readonly ErrorCode[];
+
+/**
+ * The codes a booking version's approval can answer under Decide's locks (goods-in 3.4, 10.3, 10.5; S2-F01-T03): the
+ * policy gate under policies 5 and 1, the supplier's link, the Agreement in force, open-to-buy and the booking series.
+ * The version and its booking are `OPEN_TO_BUY_DECISION_CODES`' own.
+ */
+const BOOKING_DECISION_CODES = [
+  'configuration.operation-unavailable',
+  'booking.supplier-not-linked',
+  'booking.no-agreement-in-force',
+  'booking.open-to-buy-missing',
+  'booking.open-to-buy-short',
+  'booking.no-booking-series',
+  'booking.booking-series-paused',
+  // A change after approval, rechecked against what is received and cancelled (goods-in 3.5, 3.10; S2-F01-T04).
+  'booking.line-below-received',
+  'booking.line-received',
+  // A cancellation or an extension (goods-in 3.5, 3.10; S2-F01-T04).
+  'booking.version-not-in-force',
+  'booking.balance-changed',
+  'booking.not-an-extension',
+  // A proposal to link late or excess goods, rechecked under the booking's lock (goods-in 4.10; S2-F02-T04).
+  'booking.line-not-found',
+  'booking.goods-not-of-line',
+  'booking.receipt-already-linked',
+] as const satisfies readonly ErrorCode[];
+
+/**
+ * The codes every command on an existing booking can answer (goods-in 3.1, 3.4, 3.10; S2-F01-T03, S2-F01-T04): the
+ * booking not found, and the version token's, which holding the actor's authority answers too when their role changed
+ * under the lock (code-house-rules 8.2, 12.7).
+ */
+const BOOKING_COMMAND_CODES = [
+  ...HISTORY_CODES,
+  'kernel.cross-site-request',
+  'kernel.stale-version',
+  'booking.record-not-found',
+] as const satisfies readonly ErrorCode[];
+
+/**
+ * The codes every change to a booking's Draft can answer (goods-in 3.1, 3.4; S2-F01-T03): those of a command on a
+ * booking, and the booking no longer a Draft. Saving a Draft is not policy-gated (DEC-116; goods-in 10.5).
+ */
+const BOOKING_CHANGE_CODES = [...BOOKING_COMMAND_CODES, 'booking.not-draft'] as const satisfies readonly ErrorCode[];
+
+/** What a Draft's content can answer: the brand, the destination, the supplier's link and the season (3.1). */
+const BOOKING_CONTENT_CODES = [
+  'booking.brand-not-in-force',
+  'booking.site-not-in-force',
+  'booking.supplier-not-linked',
+  'booking.season-not-in-vocabulary',
+  // No attribute is marked as the season (structure-and-masters 4.2 "As built"; RR-550).
+  'merchandise.attribute-not-marked',
+  // A line naming a line it continues, which a new booking has none of (3.10; S2-F01-T04).
+  'booking.line-not-found',
+] as const satisfies readonly ErrorCode[];
+
+/** What a booking's next Draft can answer besides: its lines against what is received and cancelled (3.5, 3.10). */
+const BOOKING_NEXT_DRAFT_CODES = [
+  ...BOOKING_CONTENT_CODES,
+  'booking.line-repeated',
+  'booking.line-below-received',
+  'booking.line-received',
+] as const satisfies readonly ErrorCode[];
+
+/**
+ * What every change of an approved booking's lifecycle can answer (goods-in 3.4, 3.5, 3.10; S2-F01-T04): those of a
+ * command on a booking, and the booking not approved. Recording Issued or Confirmed, and proposing a cancellation or an
+ * extension, record no business effect, so they are not policy-gated; the decisions are (DEC-116; goods-in 10.5).
+ */
+const BOOKING_LIFECYCLE_CODES = [
+  ...BOOKING_COMMAND_CODES,
+  'booking.not-approved',
+] as const satisfies readonly ErrorCode[];
+
+/**
+ * What proposing a cancellation or an extension can answer besides (3.5, 3.10): its lines, the communication, and one
+ * of its kind waiting for its decision already.
+ */
+const BOOKING_AMENDMENT_CODES = [
+  ...BOOKING_LIFECYCLE_CODES,
+  'booking.line-not-found',
+  'booking.communication-required',
+  'booking.amendment-pending',
+] as const satisfies readonly ErrorCode[];
+
+/**
+ * The codes every change to an Arrival before its GRN can answer (goods-in 4.1 to 4.3; S2-F02-T02): the Arrival not
+ * found or its GRN issued, and the version token's, which holding the actor's authority answers too when their role
+ * changed under the lock (code-house-rules 8.2, 12.7). Recording invoices and photos and the count is not gated
+ * (goods-in 4.8): only recording the Arrival and issuing its GRN add the gate's code.
+ */
+const RECEIVING_CHANGE_CODES = [
+  ...HISTORY_CODES,
+  'kernel.cross-site-request',
+  'kernel.stale-version',
+  'receiving.record-not-found',
+  'receiving.grn-issued',
+] as const satisfies readonly ErrorCode[];
+
+/**
+ * The codes of issuing a GRN (goods-in 4.5, 4.9, 10.3; S2-F02-T02, S2-F02-T03), with the stock ledger's refusals of its
+ * receipt counts and holds, the damage reports' gate and series, and the exceptions' series and routing of the
+ * follow-ups the findings raise (access-and-approvals 12.1).
+ */
+const GRN_ISSUE_CODES = [
+  ...RECEIVING_CHANGE_CODES,
+  'configuration.operation-unavailable',
+  'receiving.invoice-required',
+  'receiving.no-lines',
+  'receiving.extra-not-recorded',
+  'receiving.batch-required',
+  'receiving.batch-not-tracked',
+  'receiving.sku-not-of-line',
+  // A line of goods on the invoice, or of wrong goods, counted without a size (goods-in 4.3; RR-586).
+  'receiving.size-required',
+  'receiving.no-grn-series',
+  'receiving.grn-series-paused',
+  'stock.invalid-item',
+  'stock.place-invalid',
+  'stock.plan-stale',
+  'stock.not-in-custody',
+  'stock.rule-not-set',
+  'stock.count-freeze-active',
+  'stock.blocked',
+  'stock.no-damage-report-series',
+  'stock.damage-report-series-paused',
+  'exceptions.no-exception-code-series',
+  'exceptions.exception-code-series-paused',
+  'exceptions.exception-code-series-exhausted',
+  'exceptions.no-routing',
+  // An Arrival against a booking the issuer may not see (goods-in 4.10; S2-F02-T04).
+  'booking.record-not-found',
+] as const satisfies readonly ErrorCode[];
+
+/**
+ * The codes of a held line's decision (goods-in 4.6, 10.3; S2-F02-T03): the policy gate, the held line not found or
+ * decided already, and unidentified goods taken in before their product is named.
+ */
+const HELD_LINE_DECISION_CODES = [
+  'configuration.operation-unavailable',
+  'receiving.record-not-found',
+  'receiving.held-line-decided',
+  'receiving.product-not-named',
+] as const satisfies readonly ErrorCode[];
+
+/**
+ * The stock ledger's refusals a recount's receipt counts and reversals can meet (stock-ledger 13.4, 13.8, 13.18;
+ * goods-in 4.11; S2-F02-T05): read for its proposal's value and posted at its approval. A reversal takes free units
+ * only, so held, reserved or hidden units, a count freeze and more than the count moved refuse it; goods whose cost is
+ * established need their book's cost setting and posting map, and a value that does not divide (SL-2).
+ */
+const RECOUNT_LEDGER_CODES = [
+  'stock.invalid-item',
+  'stock.place-invalid',
+  'stock.plan-stale',
+  'stock.rule-not-set',
+  'stock.insufficient-available',
+  'stock.held',
+  'stock.reserved',
+  'stock.blocked',
+  'stock.count-freeze-active',
+  'stock.exceeds-source',
+  'stock.no-cost-setting',
+  'stock.posting-refused',
+] as const satisfies readonly ErrorCode[];
+
+/**
+ * The refusals of a recount's lines (goods-in 4.7, 4.11; PRD-REC-019; S2-F02-T05), at its proposal and again under the
+ * locks at its approval: the GRN's PT attached, another recount waiting, and each line a recount does not change.
+ */
+const RECOUNT_LINE_CODES = [
+  'receiving.record-not-found',
+  'receiving.pt-attached',
+  'receiving.recount-unchanged',
+  'receiving.recount-held-line',
+  'receiving.recount-not-on-invoice',
+  'receiving.recount-adds-extra',
+  'receiving.recount-below-damage',
+  'receiving.recount-linked',
+  ...RECOUNT_LEDGER_CODES,
+] as const satisfies readonly ErrorCode[];
+
+/**
+ * The codes of a PT revision's decision (goods-in 6.3, 6.6; S2-F06-T01): the policy gate; the GRN changed since the
+ * upload, a held line, damage report or recount waiting again, or the revision no longer the one waiting; a series
+ * missing, paused or used up, as its allocation answers (code review 7); a new product the catalogue refuses under the locks; the decision verified under the ledger's
+ * locks on the PT's cost (access-and-approvals 9.7); and the ledger's refusals of the identity step, the holds the PT
+ * route ends, the coverage and the cost established: overlapping coverage, units held, reserved or taken by a claim the
+ * approver cannot see, a count freeze, a missing cost setting or posting map, or a locked period (stock-ledger 13.8;
+ * books-and-posting 10).
+ */
+const PT_DECISION_CODES = [
+  'configuration.operation-unavailable',
+  'merchandise.record-not-found',
+  'merchandise.pt-not-a-draft',
+  'merchandise.pt-held-lines-open',
+  'merchandise.pt-grn-changed',
+  'merchandise.no-pt-series',
+  'merchandise.pt-series-paused',
+  'merchandise.pt-series-exhausted',
+  'merchandise.no-sku-code-series',
+  'merchandise.sku-code-series-paused',
+  'merchandise.sku-code-series-exhausted',
+  'merchandise.pt-size-not-in-size-set',
+  'merchandise.pt-colour-not-identity',
+  'merchandise.pt-tracking-unknown',
+  'merchandise.code-taken',
+  'merchandise.sku-exists',
+  'merchandise.code-conflict',
+  'merchandise.reference-not-in-force',
+  'merchandise.value-not-in-vocabulary',
+  'access.approval-value-exceeded',
+  'stock.invalid-item',
+  'stock.place-invalid',
+  'stock.plan-stale',
+  'stock.held',
+  'stock.reserved',
+  'stock.blocked',
+  'stock.insufficient-available',
+  'stock.count-freeze-active',
+  'stock.condition-route',
+  'stock.coverage-overlap',
+  'stock.not-covered',
+  'stock.exceeds-source',
+  'stock.wrong-release-event',
+  'stock.no-cost-setting',
+  'stock.posting-refused',
+  'stock.rule-not-set',
+] as const satisfies readonly ErrorCode[];
+
+/**
+ * The codes of a PT reversal's approval besides those a PT's decision answers (goods-in 6.4, 6.7, 10.3; DEC-137,
+ * PRD-REC-019; S2-F09-T01): the reversal decided already or its revision no longer the PT's newest Official one, a
+ * piece scanned in or held since the approval, and the GRN's mark no longer the revision's.
+ */
+const PT_REVERSAL_DECISION_CODES = [
+  'merchandise.pt-reversal-decided',
+  'merchandise.pt-scanned-in',
+  'merchandise.pt-goods-held',
+  'receiving.pt-not-attached',
+] as const satisfies readonly ErrorCode[];
+
+/**
+ * The codes of a recount's approval (goods-in 4.7, 4.11, 10.3; S2-F02-T05): the receiving gate at the unit, the recount
+ * decided already, its lines checked again under the locks, the decision verified under the ledger's locks on the
+ * goods' cost then (access-and-approvals 9.7), and the shortage follow-up a recount raises (goods-in 4.9).
+ */
+const RECOUNT_DECISION_CODES = [
+  'configuration.operation-unavailable',
+  'receiving.recount-decided',
+  'access.approval-value-exceeded',
+  ...RECOUNT_LINE_CODES,
+  'exceptions.no-exception-code-series',
+  'exceptions.exception-code-series-paused',
+  'exceptions.exception-code-series-exhausted',
+  'exceptions.no-routing',
+] as const satisfies readonly ErrorCode[];
+
+/**
+ * The stock ledger's refusals a damage hold can meet, placed by a report or read for a request's value (stock-ledger
+ * 13.8, 13.15; goods-in 8.2, 8.5; S2-F08-T01): the goods not of the line or not in custody, a cost pool that appeared
+ * after Plan, and a cost that does not divide into whole paise (SL-2). A hold is stopped by no count freeze (13.9).
+ */
+const DAMAGE_HOLD_CODES = [
+  'stock.invalid-item',
+  'stock.place-invalid',
+  'stock.plan-stale',
+  'stock.not-in-custody',
+  'stock.rule-not-set',
+] as const satisfies readonly ErrorCode[];
+
+/**
+ * The codes of a damage report's decision and a reversal's approval (goods-in 8.3; S2-F08-T01): the policy gate, the
+ * report already decided or its confirmation no longer the one it stands on, the decision verified under the ledger's
+ * locks on the goods' cost then (access-and-approvals 9.7), and the ledger's refusals of the condition change and its
+ * reversal: units held, reserved or taken by a claim the decider cannot see, a count freeze over them, more than the
+ * change moved (stock-ledger 13.8, 13.15).
+ */
+const DAMAGE_DECISION_CODES = [
+  'configuration.operation-unavailable',
+  'stock.record-not-found',
+  'stock.report-decided',
+  'stock.report-not-confirmed',
+  'access.approval-value-exceeded',
+  ...DAMAGE_HOLD_CODES,
+  'stock.insufficient-available',
+  'stock.held',
+  'stock.reserved',
+  'stock.blocked',
+  'stock.count-freeze-active',
+  'stock.exceeds-source',
+] as const satisfies readonly ErrorCode[];
+
+/** The codes every change of a damage report can answer (goods-in 8.5; S2-F08-T01). */
+const DAMAGE_CHANGE_CODES = [
+  ...HISTORY_CODES,
+  'kernel.cross-site-request',
+  'kernel.stale-version',
+  'configuration.operation-unavailable',
+  'stock.record-not-found',
+  ...DAMAGE_HOLD_CODES,
 ] as const satisfies readonly ErrorCode[];
 
 export const routes = {
@@ -1485,6 +1984,8 @@ export const routes = {
       'access.not-eligible',
       'access.self-preparation',
       'access.stand-in-party',
+      // A second step decided by none who decided the first (access-and-approvals 9.8b; DEC-142).
+      'access.earlier-step-decider',
       'access.authenticator-code-refused',
       'access.enrolment-not-started',
       'access.approval-not-open',
@@ -1513,6 +2014,20 @@ export const routes = {
       ...CATALOGUE_DECISION_CODES,
       // Account and book-setting versions (books-and-posting 6.3; S1-F09-T01).
       ...FINANCE_DECISION_CODES,
+      // An open-to-buy budget version's check and approval (goods-in 3.3; POL-05.09; S2-F01-T02).
+      ...OPEN_TO_BUY_DECISION_CODES,
+      // A booking version's approval (goods-in 3.4, 10.3; S2-F01-T03).
+      ...BOOKING_DECISION_CODES,
+      // A damage report's decision and a reversal's approval (goods-in 8.3; S2-F08-T01).
+      ...DAMAGE_DECISION_CODES,
+      // A held line's decision (goods-in 4.6; S2-F02-T03).
+      ...HELD_LINE_DECISION_CODES,
+      // A recount's approval (goods-in 4.7, 4.11; S2-F02-T05).
+      ...RECOUNT_DECISION_CODES,
+      // A PT revision's approval or rejection (goods-in 6.3, 6.6; S2-F06-T01).
+      ...PT_DECISION_CODES,
+      // A PT's reversal before the scan-in (goods-in 6.4, 6.7; S2-F09-T01).
+      ...PT_REVERSAL_DECISION_CODES,
       // Layout, mapping and mapping rule versions (imports-and-opening-data 6.4; S1-F06-T03).
       'files-imports.proposal-not-found',
       'files-imports.proposal-not-open',
@@ -1931,6 +2446,13 @@ export const routes = {
       'files-imports.file-store-not-configured',
       // An opening batch for a unit whose cutover is complete (imports-and-opening-data 10.1; PRD-LIF-011; S1-F13-T03).
       'files-imports.cutover-complete',
+      // A batch about one record, such as the GRN a PT file is for (13.1, 13.2; S2-F04-T02).
+      'files-imports.subject-required',
+      'files-imports.subject-not-taken',
+      'files-imports.subject-not-found',
+      'files-imports.subject-refused',
+      // A layout looking for the header where the target's files never have it (6.5; goods-in 5.2).
+      'files-imports.header-rows-not-allowed',
     ],
   }),
   readImportBatch: defineRoute({
@@ -2091,6 +2613,8 @@ export const routes = {
       'files-imports.publish-queued',
       'files-imports.nothing-to-publish',
       'files-imports.several-books',
+      // A batch about one record the person may no longer see (13.1, 13.2; S2-F04-T02).
+      'files-imports.subject-not-found',
     ],
   }),
   // Withdraw a batch, which becomes Failed (3.2, 13.1; S1-F06-T04).
@@ -2755,7 +3279,7 @@ export const routes = {
     restrictedFields: [],
     shows: 'nothing',
     response: masterPreparedSchema,
-    codes: ORGANISATION_UNIT_PREPARE_CODES,
+    codes: ORGANISATION_MAPPING_PREPARE_CODES,
   }),
   prepareBusinessUnitVersion: defineRoute({
     method: 'POST',
@@ -2768,7 +3292,7 @@ export const routes = {
     restrictedFields: [],
     shows: 'nothing',
     response: masterPreparedSchema,
-    codes: ORGANISATION_UNIT_PREPARE_CODES,
+    codes: ORGANISATION_MAPPING_PREPARE_CODES,
   }),
   listBusinessUnitMappings: defineRoute({
     method: 'GET',
@@ -2814,7 +3338,7 @@ export const routes = {
     restrictedFields: [],
     shows: 'nothing',
     response: masterPreparedSchema,
-    codes: ORGANISATION_UNIT_PREPARE_CODES,
+    codes: ORGANISATION_MAPPING_PREPARE_CODES,
   }),
   verifyBusinessUnitMapping: defineRoute({
     method: 'POST',
@@ -3380,6 +3904,50 @@ export const routes = {
     response: vocabularyProposedSchema,
     codes: CATALOGUE_PROPOSE_CODES,
   }),
+  // The season attribute and the size attribute (structure-and-masters 4.2 "As built"; goods-in GI-2, GI-3; RR-550,
+  // RR-556): two Organisation settings, each marking one list-type attribute, prepared by one person and approved by a
+  // different one through My work; every version kept. The record type carries no scope fact (access-and-approvals 5.3).
+  listMarkedAttributes: defineRoute({
+    method: 'GET',
+    path: '/api/merchandise/marked-attributes',
+    access: { kind: 'action', action: 'view', recordType: MARKED_ATTRIBUTE_TYPE },
+    command: false,
+    response: markedAttributeListSchema,
+    codes: HISTORY_CODES,
+  }),
+  // A marking's versions, newest first, a page at a time (code-house-rules 12.1 "Reads").
+  listMarkedAttributeVersions: defineRoute({
+    method: 'GET',
+    path: '/api/merchandise/marked-attributes/{mark}/versions',
+    params: z.strictObject({ mark: attributeMarkSchema }),
+    query: markedAttributeVersionPageQuerySchema,
+    access: { kind: 'action', action: 'view', recordType: MARKED_ATTRIBUTE_TYPE },
+    command: false,
+    response: markedAttributeVersionListSchema,
+    codes: HISTORY_CODES,
+  }),
+  // One version with its marking, for the approval panel in My work.
+  readMarkedAttributeVersion: defineRoute({
+    method: 'GET',
+    path: '/api/merchandise/marked-attributes/versions/{versionId}',
+    params: z.strictObject({ versionId: idSchema }),
+    access: { kind: 'action', action: 'view', recordType: MARKED_ATTRIBUTE_TYPE },
+    command: false,
+    response: markedAttributeVersionReadSchema,
+    codes: [...HISTORY_CODES, 'merchandise.record-not-found'],
+  }),
+  prepareMarkedAttributeVersion: defineRoute({
+    method: 'POST',
+    path: '/api/merchandise/marked-attributes/versions',
+    access: { kind: 'action', action: 'edit', recordType: MARKED_ATTRIBUTE_TYPE },
+    command: true,
+    body: markedAttributeVersionDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: markedAttributePreparedSchema,
+    codes: MARKED_ATTRIBUTE_CHANGE_CODES,
+  }),
   // Tracking profiles, a category's profile link, styles, SKUs and packs (structure-and-masters 4.1, 4.4 to 4.7, 8;
   // S1-F03-T02): each master's list, one record, a new record where it has one and a new version, taking effect when
   // recorded (2.3). A style and its SKUs enter the catalogue only when a different person confirms their product
@@ -3412,7 +3980,7 @@ export const routes = {
     restrictedFields: [],
     shows: 'nothing',
     response: catalogueChangedSchema,
-    codes: CATALOGUE_CHANGE_CODES,
+    codes: TRACKING_PROFILE_CHANGE_CODES,
   }),
   prepareTrackingProfileVersion: defineRoute({
     method: 'POST',
@@ -3425,7 +3993,7 @@ export const routes = {
     restrictedFields: [],
     shows: 'nothing',
     response: catalogueChangedSchema,
-    codes: CATALOGUE_CHANGE_CODES,
+    codes: TRACKING_PROFILE_CHANGE_CODES,
   }),
   listCategoryTrackingProfiles: defineRoute({
     method: 'GET',
@@ -4529,6 +5097,836 @@ export const routes = {
     shows: 'nothing',
     response: numberingChangeWithdrawnSchema,
     codes: [...HISTORY_CODES, 'kernel.cross-site-request', 'pos.change-not-found', 'pos.change-not-awaiting'],
+  }),
+  // Booking › Open-to-buy (goods-in 3.3, section 11; PRD-BKG-004; POL-05.09; S2-F01-T02): budgets by brand and season,
+  // each version prepared by Booking, checked by Accounts and approved by the Owner, or whoever holds the approval,
+  // through My work. A budget carries its brand, so each route authorises in its command with the brand's facts
+  // (access-and-approvals 5.3). Not policy-gated: a budget's own check and approval are its control (DEC-142).
+  listOpenToBuyBudgets: defineRoute({
+    method: 'GET',
+    path: '/api/booking/open-to-buy-budgets',
+    query: openToBuyBudgetPageQuerySchema,
+    access: { kind: 'action', action: 'view', recordType: OPEN_TO_BUY_BUDGET_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: openToBuyBudgetListSchema,
+    codes: HISTORY_CODES,
+  }),
+  readOpenToBuyBudget: defineRoute({
+    method: 'GET',
+    path: '/api/booking/open-to-buy-budgets/{budgetId}',
+    params: z.strictObject({ budgetId: idSchema }),
+    access: { kind: 'action', action: 'view', recordType: OPEN_TO_BUY_BUDGET_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: openToBuyBudgetReadSchema,
+    codes: [...HISTORY_CODES, 'booking.record-not-found'],
+  }),
+  prepareOpenToBuyBudget: defineRoute({
+    method: 'POST',
+    path: '/api/booking/open-to-buy-budgets',
+    access: { kind: 'action', action: 'create', recordType: OPEN_TO_BUY_BUDGET_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: openToBuyBudgetDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: openToBuyBudgetPreparedSchema,
+    codes: OPEN_TO_BUY_NEW_BUDGET_CODES,
+  }),
+  prepareOpenToBuyBudgetVersion: defineRoute({
+    method: 'POST',
+    path: '/api/booking/open-to-buy-budgets/{budgetId}/versions',
+    params: z.strictObject({ budgetId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: OPEN_TO_BUY_BUDGET_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: openToBuyBudgetVersionDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: openToBuyBudgetPreparedSchema,
+    codes: OPEN_TO_BUY_VERSION_CODES,
+  }),
+  // Booking › Bookings and the booking form (goods-in 3.1 to 3.4, section 11; PRD-BKG-001 to PRD-BKG-004; DEC-129,
+  // DEC-130, DEC-132, DEC-136; S2-F01-T03): Booking records a booking as a Draft, attaches its documents and submits
+  // it; a different person approves or rejects it through `access`'s decision route from My work. A booking carries its
+  // destination and brand, so each route authorises in its command with the booking's facts (access-and-approvals
+  // 5.3). Only the approval is policy-gated, under policies 5 and 1 (goods-in 10.5).
+  listBookings: defineRoute({
+    method: 'GET',
+    path: '/api/booking/bookings',
+    query: bookingPageQuerySchema,
+    access: { kind: 'action', action: 'view', recordType: BOOKING_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: bookingListSchema,
+    codes: HISTORY_CODES,
+  }),
+  readBooking: defineRoute({
+    method: 'GET',
+    path: '/api/booking/bookings/{bookingId}',
+    params: z.strictObject({ bookingId: idSchema }),
+    access: { kind: 'action', action: 'view', recordType: BOOKING_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: bookingReadSchema,
+    codes: [...HISTORY_CODES, 'booking.record-not-found'],
+  }),
+  recordBooking: defineRoute({
+    method: 'POST',
+    path: '/api/booking/bookings',
+    access: { kind: 'action', action: 'create', recordType: BOOKING_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: bookingDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    bodyLimitBytes: BOOKING_DRAFT_BODY_LIMIT_BYTES,
+    response: bookingSavedSchema,
+    codes: [...HISTORY_CODES, 'kernel.cross-site-request', ...BOOKING_CONTENT_CODES],
+  }),
+  saveBookingDraft: defineRoute({
+    method: 'POST',
+    path: '/api/booking/bookings/{bookingId}/drafts',
+    params: z.strictObject({ bookingId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: BOOKING_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: bookingDraftChangeSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    bodyLimitBytes: BOOKING_DRAFT_BODY_LIMIT_BYTES,
+    response: bookingSavedSchema,
+    codes: [...BOOKING_CHANGE_CODES, ...BOOKING_NEXT_DRAFT_CODES],
+  }),
+  attachBookingDocuments: defineRoute({
+    method: 'POST',
+    path: '/api/booking/bookings/{bookingId}/documents',
+    params: z.strictObject({ bookingId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: BOOKING_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: bookingDocumentsDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: bookingDocumentsAttachedSchema,
+    codes: BOOKING_CHANGE_CODES,
+  }),
+  submitBooking: defineRoute({
+    method: 'POST',
+    path: '/api/booking/bookings/{bookingId}/submission',
+    params: z.strictObject({ bookingId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: BOOKING_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: bookingSubmissionSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: bookingSubmittedSchema,
+    codes: [
+      ...BOOKING_CHANGE_CODES,
+      'booking.no-document',
+      'booking.no-lines',
+      // A change after approval (goods-in 3.5; S2-F01-T04).
+      'booking.no-change',
+      'booking.communication-required',
+    ],
+  }),
+  // An approved booking's lifecycle (goods-in 3.4 to 3.8, 3.10; PRD-BKG-005, PRD-BKG-013; POL-05.01, POL-05.04,
+  // POL-05.07; DEC-099; S2-F01-T04): Booking records Issued and Confirmed with their dates, since nothing is sent from
+  // the app, and proposes a cancellation of an undelivered balance or an extension of the window, which a different
+  // person approves through `access`'s decision route from My work. A change is a new Draft, saved and submitted as
+  // before.
+  recordBookingIssue: defineRoute({
+    method: 'POST',
+    path: '/api/booking/bookings/{bookingId}/issue',
+    params: z.strictObject({ bookingId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: BOOKING_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: bookingIssueDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: bookingRecordedSchema,
+    codes: [...BOOKING_LIFECYCLE_CODES, 'booking.already-issued', 'booking.date-in-future', 'booking.date-too-early'],
+  }),
+  recordBookingConfirmation: defineRoute({
+    method: 'POST',
+    path: '/api/booking/bookings/{bookingId}/confirmation',
+    params: z.strictObject({ bookingId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: BOOKING_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: bookingConfirmationDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: bookingRecordedSchema,
+    codes: [
+      ...BOOKING_LIFECYCLE_CODES,
+      'booking.not-issued',
+      'booking.already-confirmed',
+      'booking.date-in-future',
+      'booking.date-too-early',
+    ],
+  }),
+  proposeBookingCancellation: defineRoute({
+    method: 'POST',
+    path: '/api/booking/bookings/{bookingId}/cancellations',
+    params: z.strictObject({ bookingId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: BOOKING_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: bookingCancellationDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: bookingAmendmentProposedSchema,
+    codes: [...BOOKING_AMENDMENT_CODES, 'booking.nothing-outstanding'],
+  }),
+  proposeBookingExtension: defineRoute({
+    method: 'POST',
+    path: '/api/booking/bookings/{bookingId}/extensions',
+    params: z.strictObject({ bookingId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: BOOKING_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: bookingExtensionDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: bookingAmendmentProposedSchema,
+    codes: [...BOOKING_AMENDMENT_CODES, 'booking.not-an-extension'],
+  }),
+  // Receive Goods (goods-in 4.1 to 4.5, section 11; PRD-REC-001 to PRD-REC-008; DEC-133, DEC-138; S2-F02-T02): the
+  // inbox of a Site, the Arrival with its invoices first, the count line by line and the GRN. An Arrival and a GRN carry
+  // every scope fact, so each route authorises in its command with the record's facts (access-and-approvals 5.3).
+  // Recording an Arrival and issuing its GRN ask the policy gate for the unit's receiving activity (goods-in 10.5).
+  readReceivingInbox: defineRoute({
+    method: 'GET',
+    path: '/api/receiving/sites/{siteId}/inbox',
+    params: inboxParamsSchema,
+    query: inboxQuerySchema,
+    access: { kind: 'action', action: 'view', recordType: ARRIVAL_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: inboxSchema,
+    codes: [...HISTORY_CODES, 'receiving.record-not-found'],
+  }),
+  readArrival: defineRoute({
+    method: 'GET',
+    path: '/api/receiving/arrivals/{arrivalId}',
+    params: z.strictObject({ arrivalId: idSchema }),
+    access: { kind: 'action', action: 'view', recordType: ARRIVAL_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: arrivalReadSchema,
+    codes: [...HISTORY_CODES, 'receiving.record-not-found'],
+  }),
+  recordArrival: defineRoute({
+    method: 'POST',
+    path: '/api/receiving/arrivals',
+    access: { kind: 'action', action: 'create', recordType: ARRIVAL_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: arrivalDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: arrivalRecordedSchema,
+    codes: [
+      ...HISTORY_CODES,
+      'kernel.cross-site-request',
+      'configuration.operation-unavailable',
+      'receiving.unit-not-at-site',
+      'receiving.location-not-of-unit',
+      'receiving.brand-not-in-force',
+      'receiving.supplier-not-linked',
+      'receiving.arrival-in-future',
+      // Against a booking (goods-in 3.7, 4.2, 4.10; S2-F02-T04): one the receiver may see, approved, of the Arrival's
+      // supplier and brand.
+      'booking.record-not-found',
+      'booking.not-approved',
+      'receiving.booking-not-of-arrival',
+    ],
+  }),
+  recordArrivalInvoice: defineRoute({
+    method: 'POST',
+    path: '/api/receiving/arrivals/{arrivalId}/invoices',
+    params: z.strictObject({ arrivalId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: ARRIVAL_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: invoiceDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: invoiceRecordedSchema,
+    codes: [...RECEIVING_CHANGE_CODES, 'receiving.invoice-number-repeated', 'receiving.possible-duplicate-invoice'],
+  }),
+  attachArrivalPhotos: defineRoute({
+    method: 'POST',
+    path: '/api/receiving/arrivals/{arrivalId}/photos',
+    params: z.strictObject({ arrivalId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: ARRIVAL_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: photosDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: photosAttachedSchema,
+    codes: RECEIVING_CHANGE_CODES,
+  }),
+  saveCountLine: defineRoute({
+    method: 'POST',
+    path: '/api/receiving/arrivals/{arrivalId}/count-lines',
+    params: z.strictObject({ arrivalId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: ARRIVAL_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: countLineDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: countLineSavedSchema,
+    codes: [
+      ...RECEIVING_CHANGE_CODES,
+      // No attribute is marked as the size list (structure-and-masters 4.2 "As built"; RR-556).
+      'merchandise.attribute-not-marked',
+      'receiving.invoice-required',
+      'receiving.size-not-on-list',
+      'receiving.line-repeated',
+      'receiving.sku-not-of-line',
+    ],
+  }),
+  removeCountLine: defineRoute({
+    method: 'POST',
+    path: '/api/receiving/arrivals/{arrivalId}/count-lines/{lineId}/removal',
+    params: z.strictObject({ arrivalId: idSchema, lineId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: ARRIVAL_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: countLineRemovalSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: countLineSavedSchema,
+    codes: RECEIVING_CHANGE_CODES,
+  }),
+  issueGrn: defineRoute({
+    method: 'POST',
+    path: '/api/receiving/arrivals/{arrivalId}/grn',
+    params: z.strictObject({ arrivalId: idSchema }),
+    access: { kind: 'action', action: 'create', recordType: GRN_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: grnIssueSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: grnIssuedSchema,
+    codes: GRN_ISSUE_CODES,
+  }),
+  // A held line (goods-in 4.6, section 11; PRD-REC-013, POL-17.02, POL-17.11; S2-F02-T03): read with its GRN line for
+  // its decision's panel in My work, and the product of unidentified goods named by Booking before they are taken in.
+  // The decision itself is made through the approval panel (access-and-approvals 9.5). A held line carries every scope
+  // fact, so each route authorises in its command with the Arrival's facts (access-and-approvals 5.3).
+  readHeldLine: defineRoute({
+    method: 'GET',
+    path: '/api/receiving/held-lines/{heldLineId}',
+    params: heldLineParamsSchema,
+    access: { kind: 'action', action: 'view', recordType: ARRIVAL_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: heldLineReadSchema,
+    codes: [...HISTORY_CODES, 'receiving.record-not-found'],
+  }),
+  nameHeldLineProduct: defineRoute({
+    method: 'POST',
+    path: '/api/receiving/held-lines/{heldLineId}/product',
+    params: heldLineParamsSchema,
+    access: { kind: 'action', action: 'edit', recordType: HELD_LINE_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: heldLineProductDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: heldLineProductNamedSchema,
+    codes: [
+      ...HISTORY_CODES,
+      'kernel.cross-site-request',
+      'kernel.stale-version',
+      // No attribute is marked as the size list (structure-and-masters 4.2 "As built"; RR-556).
+      'merchandise.attribute-not-marked',
+      'receiving.record-not-found',
+      'receiving.held-line-decided',
+      'receiving.not-unidentified',
+      'receiving.size-not-on-list',
+      'receiving.sku-not-of-line',
+    ],
+  }),
+  // A recount of a GRN's lines (goods-in 4.7, 4.11, section 11; PRD-REC-019; S2-F02-T05): proposed with a reason on the
+  // GRN, and read with the GRN lines it names for its approval's panel in My work; approved or rejected through the
+  // approval panel by a different person (access-and-approvals 9.5). A recount carries every scope fact of its GRN, so
+  // each route authorises in its command with the Arrival's facts (access-and-approvals 5.3). Proposing records no
+  // business effect, so it asks no gate (DEC-116).
+  proposeRecount: defineRoute({
+    method: 'POST',
+    path: '/api/receiving/grns/{grnId}/recounts',
+    params: grnParamsSchema,
+    access: { kind: 'action', action: 'create', recordType: RECOUNT_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: recountDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: recountProposedSchema,
+    codes: [
+      ...HISTORY_CODES,
+      'kernel.cross-site-request',
+      'kernel.stale-version',
+      'receiving.recount-pending',
+      ...RECOUNT_LINE_CODES,
+    ],
+  }),
+  readRecount: defineRoute({
+    method: 'GET',
+    path: '/api/receiving/recounts/{recountId}',
+    params: recountParamsSchema,
+    access: { kind: 'action', action: 'view', recordType: ARRIVAL_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: recountReadSchema,
+    codes: [...HISTORY_CODES, 'receiving.record-not-found'],
+  }),
+  // The scan-in at the Site (goods-in 7, 7.5, section 11; PRD-REC-021, PRD-REC-022, PRD-MER-007; DEC-135, DEC-141;
+  // S2-F07-T01): once the GRN's PT is approved, one piece a scan, to a floor or backstore at a Store or a bin at a
+  // warehouse; a barcode the PT's products repeat asks which product it is; one the PT does not cover, or a product with
+  // nothing left, is refused and kept in the record. A scan carries its GRN's facts, so it authorises in its command
+  // with them (access-and-approvals 5.3); policy-gated as a GRN's issue is (goods-in 10.5). The read is the screen's.
+  scanPiece: defineRoute({
+    method: 'POST',
+    path: '/api/receiving/grns/{grnId}/scans',
+    params: grnParamsSchema,
+    access: { kind: 'action', action: 'create', recordType: SCAN_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: scanDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: scanAnsweredSchema,
+    codes: [
+      ...HISTORY_CODES,
+      'kernel.cross-site-request',
+      // Holding the actor's authority answers it when their role changed under the lock (code-house-rules 8.2).
+      'kernel.stale-version',
+      'configuration.operation-unavailable',
+      'receiving.record-not-found',
+      'receiving.pt-not-official',
+      'receiving.destination-not-allowed',
+      'receiving.barcode-repeated',
+      'receiving.product-not-of-barcode',
+      // The ledger's refusals of the acceptance, the location move and the ownership change (stock-ledger 13.8, 13.20):
+      // a piece held or taken since, a claim the scanner cannot see, a count freeze, and the ownership change of goods
+      // whose cost is established, which waits for SL-26.
+      'stock.invalid-item',
+      'stock.place-invalid',
+      'stock.plan-stale',
+      'stock.rule-not-set',
+      'stock.insufficient-available',
+      'stock.held',
+      'stock.reserved',
+      'stock.blocked',
+      'stock.count-freeze-active',
+      'stock.exceeds-source',
+    ],
+  }),
+  readScanIn: defineRoute({
+    method: 'GET',
+    path: '/api/receiving/grns/{grnId}/scan-in',
+    params: grnParamsSchema,
+    query: scanInQuerySchema,
+    access: { kind: 'action', action: 'view', recordType: ARRIVAL_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: scanInReadSchema,
+    codes: [...HISTORY_CODES, 'receiving.record-not-found'],
+  }),
+  // Booking's later link of GRN lines to the lines of one booking (goods-in 3.7, 4.10, section 11; PRD-BKG-008;
+  // POL-05.08; S2-F02-T04): a GRN received without a booking, or lines sent for review. Lines within the delivery window
+  // and the booking line's outstanding link at once; late or excess ones are proposed for a different person's approval
+  // through `access`. Authorised in the command with the booking's facts, and with view on the GRN's Arrival with its
+  // own facts (access-and-approvals 5.3); policy-gated as a booking's approval is (goods-in 10.5).
+  linkGrnToBooking: defineRoute({
+    method: 'POST',
+    path: '/api/receiving/grns/{grnId}/booking-links',
+    params: grnParamsSchema,
+    access: { kind: 'action', action: 'edit', recordType: BOOKING_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: grnBookingLinksDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: grnBookingLinkedSchema,
+    codes: [
+      ...HISTORY_CODES,
+      'kernel.cross-site-request',
+      // Holding the actor's authority answers it when their role changed under the lock (code-house-rules 8.2).
+      'kernel.stale-version',
+      'configuration.operation-unavailable',
+      'booking.record-not-found',
+      'booking.not-approved',
+      'booking.line-not-found',
+      'booking.goods-not-of-line',
+      'booking.receipt-already-linked',
+      'booking.receipt-link-proposed',
+      'booking.link-proposal-pending',
+      'receiving.record-not-found',
+      'receiving.booking-not-of-arrival',
+      'receiving.nothing-received',
+      'receiving.product-not-named',
+    ],
+  }),
+  // A PT file uploaded for a GRN (goods-in 5, section 11; DEC-134, DEC-135, DEC-137, DEC-138, DEC-140; S2-F04-T02): the
+  // file is handed in, staged, validated, submitted and published through the import routes, as a transaction batch
+  // about the GRN whose handler is `merchandise` · PT (imports-and-opening-data 4.1, 13.1, 13.2); these read the GRN's
+  // PT, preview a file, withdraw a draft and give the blank template. A PT carries every scope fact of its GRN, so each
+  // route authorises in its command with the GRN's facts (access-and-approvals 5.3).
+  readGrnPt: defineRoute({
+    method: 'GET',
+    path: '/api/merchandise/pt/grns/{grnId}',
+    params: z.strictObject({ grnId: idSchema }),
+    access: { kind: 'action', action: 'view', recordType: PT_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: grnPtReadSchema,
+    codes: [...HISTORY_CODES, 'merchandise.record-not-found'],
+  }),
+  previewPtUpload: defineRoute({
+    method: 'GET',
+    path: '/api/merchandise/pt/uploads/{batchId}/preview',
+    params: z.strictObject({ batchId: idSchema }),
+    query: ptPreviewQuerySchema,
+    access: { kind: 'action', action: 'view', recordType: PT_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: ptPreviewSchema,
+    codes: [...HISTORY_CODES, 'merchandise.record-not-found'],
+  }),
+  withdrawPtRevision: defineRoute({
+    method: 'POST',
+    path: '/api/merchandise/pt/revisions/{revisionId}/withdraw',
+    params: z.strictObject({ revisionId: idSchema }),
+    access: { kind: 'action', action: 'edit', recordType: PT_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: ptWithdrawalSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: ptWithdrawnSchema,
+    codes: [
+      ...HISTORY_CODES,
+      'kernel.cross-site-request',
+      'kernel.stale-version',
+      'merchandise.record-not-found',
+      'merchandise.pt-not-a-draft',
+    ],
+  }),
+  // The reversal of an Official PT before the scan-in, proposed with a reason by whoever may change the PT, and read as
+  // its approver reads it in My work (goods-in 6.4, 6.7, section 11; DEC-137, PRD-REC-019; S2-F09-T01). Approving or
+  // rejecting it is `access`'s Decide (access-and-approvals 9.5); its effect is `merchandise` · PT's (9.8b).
+  proposePtReversal: defineRoute({
+    method: 'POST',
+    path: '/api/merchandise/pt/revisions/{revisionId}/reversals',
+    params: ptRevisionParamsSchema,
+    access: { kind: 'action', action: 'edit', recordType: PT_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: ptReversalDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: ptReversalProposedSchema,
+    codes: [
+      ...HISTORY_CODES,
+      'kernel.cross-site-request',
+      'kernel.stale-version',
+      'merchandise.record-not-found',
+      'merchandise.pt-not-official',
+      'merchandise.pt-reversal-open',
+      'merchandise.pt-scanned-in',
+      'merchandise.pt-goods-held',
+    ],
+  }),
+  readPtReversal: defineRoute({
+    method: 'GET',
+    path: '/api/merchandise/pt/reversals/{reversalId}',
+    params: ptReversalParamsSchema,
+    access: { kind: 'action', action: 'view', recordType: PT_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: ptReversalReadSchema,
+    codes: [...HISTORY_CODES, 'merchandise.record-not-found'],
+  }),
+  // A PT revision as its approver reviews it in My work and its GRN's screen shows it, and an Official PT downloaded in
+  // its template's columns (goods-in 6.2, 6.5, 6.6, section 11; S2-F06-T01). Approving or rejecting it is `access`'s
+  // Decide (access-and-approvals 9.5); its effect is `merchandise` · PT's (9.8b).
+  readPtRevision: defineRoute({
+    method: 'GET',
+    path: '/api/merchandise/pt/revisions/{revisionId}',
+    params: ptRevisionParamsSchema,
+    query: ptPreviewQuerySchema,
+    access: { kind: 'action', action: 'view', recordType: PT_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: ptRevisionReadSchema,
+    codes: [...HISTORY_CODES, 'merchandise.record-not-found'],
+  }),
+  // An Official PT downloaded, a command since an export of a restricted field writes its access record (goods-in
+  // 6.5, 6.6; numbering-and-audit 5.1; code review 7): its answer is never kept, so a replay is not repeatable.
+  downloadPt: defineRoute({
+    method: 'POST',
+    path: '/api/merchandise/pt/revisions/{revisionId}/download',
+    params: ptRevisionParamsSchema,
+    access: { kind: 'action', action: 'view', recordType: PT_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: z.strictObject({}),
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'restricted-value',
+    response: ptDownloadSchema,
+    codes: [
+      ...HISTORY_CODES,
+      'kernel.cross-site-request',
+      'merchandise.record-not-found',
+      'merchandise.pt-not-official',
+      'files-imports.layout-not-found',
+    ],
+  }),
+  // A failed PT posted again once its cause is fixed (goods-in 6.6; access-and-approvals 9.8 step 5; books-and-posting
+  // 10 step 5; code review 7): a further request to post naming the same decision, by whoever may approve PTs there.
+  postPtAgain: defineRoute({
+    method: 'POST',
+    path: '/api/merchandise/pt/revisions/{revisionId}/post-again',
+    params: ptRevisionParamsSchema,
+    access: { kind: 'action', action: 'approve', recordType: PT_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: z.strictObject({}),
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: ptPostedAgainSchema,
+    codes: [
+      ...HISTORY_CODES,
+      'kernel.cross-site-request',
+      'merchandise.record-not-found',
+      'merchandise.pt-not-failed',
+      'configuration.operation-unavailable',
+    ],
+  }),
+  downloadPtTemplate: defineRoute({
+    method: 'GET',
+    path: '/api/merchandise/pt/grns/{grnId}/template',
+    params: z.strictObject({ grnId: idSchema }),
+    query: ptTemplateQuerySchema,
+    access: { kind: 'action', action: 'create', recordType: PT_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: ptTemplateSchema,
+    codes: [
+      ...HISTORY_CODES,
+      'merchandise.record-not-found',
+      'files-imports.layout-not-found',
+      // A list of the template not marked yet (structure-and-masters 4.2 "As built"; S2-F04-T02).
+      'merchandise.attribute-not-marked',
+    ],
+  }),
+  // Damage reports (goods-in 8, section 11; PRD-DMG-001 to PRD-DMG-006, PRD-STK-017; S2-F08-T01): anyone authorised at
+  // a Site reports damage on goods there, held at once; the decision is made in My work through the approval panel
+  // (access-and-approvals 9.5); a confirmation's reversal is proposed here and approved there. A report carries every
+  // scope fact, so each route authorises in its command with the report's facts (access-and-approvals 5.3), and each
+  // asks the policy gate (goods-in 10.5).
+  reportDamage: defineRoute({
+    method: 'POST',
+    path: '/api/stock/damage-reports',
+    access: { kind: 'action', action: 'create', recordType: DAMAGE_REPORT_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: damageReportDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: damageReportedSchema,
+    codes: [
+      ...HISTORY_CODES,
+      'kernel.cross-site-request',
+      'configuration.operation-unavailable',
+      'stock.location-not-found',
+      'stock.goods-not-found',
+      'stock.no-damage-report-series',
+      'stock.damage-report-series-paused',
+      // The exception-code series and the routing are the gate's checks (goods-in 10.5); the series may still be used
+      // up when the exception takes its number (numbering-and-audit 3.7).
+      'exceptions.exception-code-series-exhausted',
+      ...DAMAGE_HOLD_CODES,
+    ],
+  }),
+  readDamageReport: defineRoute({
+    method: 'GET',
+    path: '/api/stock/damage-reports/{damageReportId}',
+    params: z.strictObject({ damageReportId: idSchema }),
+    access: { kind: 'action', action: 'view', recordType: DAMAGE_REPORT_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: damageReportReadSchema,
+    codes: [...HISTORY_CODES, 'stock.record-not-found'],
+  }),
+  // The report a reversal belongs to, as its approval panel shows it (goods-in 8.3; access-and-approvals 9.5).
+  readDamageReversal: defineRoute({
+    method: 'GET',
+    path: '/api/stock/damage-reversals/{damageReversalId}',
+    params: z.strictObject({ damageReversalId: idSchema }),
+    access: { kind: 'action', action: 'view', recordType: DAMAGE_REPORT_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: damageReportReadSchema,
+    codes: [...HISTORY_CODES, 'stock.record-not-found'],
+  }),
+  renewDamageDecision: defineRoute({
+    method: 'POST',
+    path: '/api/stock/damage-reports/{damageReportId}/decision-renewal',
+    params: z.strictObject({ damageReportId: idSchema }),
+    access: { kind: 'action', action: 'create', recordType: DAMAGE_REPORT_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: damageDecisionRenewalSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: damageDecisionRenewedSchema,
+    codes: [...DAMAGE_CHANGE_CODES, 'stock.report-decided'],
+  }),
+  proposeDamageReversal: defineRoute({
+    method: 'POST',
+    path: '/api/stock/damage-reports/{damageReportId}/reversals',
+    params: z.strictObject({ damageReportId: idSchema }),
+    access: { kind: 'action', action: 'create', recordType: DAMAGE_REVERSAL_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: damageReversalDraftSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'nothing',
+    response: damageReversalProposedSchema,
+    codes: [...DAMAGE_CHANGE_CODES, 'stock.report-not-confirmed', 'stock.reversal-open'],
+  }),
+  // Stock search (goods-in 9.1, 9.2, 9.4, section 11; PRD-STK-001, PRD-STK-006, PRD-ACS-008; S2-F11-T01): read through
+  // the read-model gateway, each result shown to a reader whose grants of view on every stock record type it reads
+  // cover its place and brand, its cost only with the cost field class. The export of a search is a command, since a
+  // file with cost is an export of a restricted field, which writes the access record (code-house-rules 12.1 "Reads";
+  // numbering-and-audit 5.1); its answer is never kept, so a replay is not repeatable (12.4; DEC-114), as a file's
+  // download.
+  searchStock: defineRoute({
+    method: 'GET',
+    path: '/api/reports/stock-search',
+    query: stockSearchQuerySchema,
+    access: { kind: 'action', action: 'view', recordType: STOCK_BALANCE_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: stockSearchSchema,
+    codes: [...HISTORY_CODES],
+  }),
+  // The records behind a figure of stock search or the stock report (goods-in 9.1, 9.5; PRD-EXC-011; code reviews 8
+  // and 9 of stage 2): its GRNs, PTs and movements at the location, through the read-model gateway, shown only to a
+  // reader whose grants of view on the stock it is read from cover the figure; one they may not see is not found.
+  readStockRecords: defineRoute({
+    method: 'GET',
+    path: '/api/reports/stock-records',
+    query: stockRecordsQuerySchema,
+    access: { kind: 'action', action: 'view', recordType: STOCK_BALANCE_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: stockRecordsSchema,
+    codes: [...HISTORY_CODES, 'reports.record-not-found'],
+  }),
+  exportStockSearch: defineRoute({
+    method: 'POST',
+    path: '/api/reports/stock-search/export',
+    access: { kind: 'action', action: 'view', recordType: STOCK_BALANCE_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: stockSearchFiltersSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'restricted-value',
+    response: stockSearchExportSchema,
+    codes: [
+      ...HISTORY_CODES,
+      'kernel.cross-site-request',
+      // Holding the exporter's authority at step 0 answers it when their role changed under the lock (8.2; DEC-118).
+      'kernel.stale-version',
+      // More results than one export holds (STOCK_SEARCH_EXPORT_CAP): narrow the search (goods-in 9.4).
+      'reports.export-too-large',
+    ],
+  }),
+  // The stage 2 reports (goods-in 9.1, 9.3, 9.5, section 11; PRD-BKG-005, PRD-BKG-011, PRD-PRO-001, PRD-EXC-009 to
+  // PRD-EXC-011; S2-F11-T02): each read through the read-model gateway, each row shown to a reader whose grants of view
+  // cover its place and brand. The exports of the booking status, the receipt problems and the supplier report carry
+  // no restricted field, so each is a read (code-house-rules 12.1 "Reads"); the stock report's carries cost, so its
+  // export is a command that writes the access record (numbering-and-audit 5.1), as stock search's.
+  readBookingStatusReport: defineRoute({
+    method: 'GET',
+    path: '/api/reports/booking-status',
+    query: bookingStatusQuerySchema,
+    access: { kind: 'action', action: 'view', recordType: BOOKING_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: bookingStatusReportSchema,
+    codes: [...HISTORY_CODES],
+  }),
+  exportBookingStatusReport: defineRoute({
+    method: 'GET',
+    path: '/api/reports/booking-status/export',
+    query: bookingStatusFiltersSchema,
+    access: { kind: 'action', action: 'view', recordType: BOOKING_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: reportExportSchema,
+    // More bookings than one export holds (BOOKING_STATUS_EXPORT_CAP): narrow the report (goods-in 9.5).
+    codes: [...HISTORY_CODES, 'reports.export-too-large'],
+  }),
+  readReceiptProblemsReport: defineRoute({
+    method: 'GET',
+    path: '/api/reports/receipt-problems',
+    query: receiptProblemsQuerySchema,
+    access: { kind: 'action', action: 'view', recordType: ARRIVAL_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: receiptProblemsReportSchema,
+    codes: [...HISTORY_CODES],
+  }),
+  exportReceiptProblemsReport: defineRoute({
+    method: 'GET',
+    path: '/api/reports/receipt-problems/export',
+    query: receiptProblemsFiltersSchema,
+    access: { kind: 'action', action: 'view', recordType: ARRIVAL_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: reportExportSchema,
+    codes: [...HISTORY_CODES, 'reports.export-too-large'],
+  }),
+  // The supplier report reads bookings and GRNs: view on both (goods-in 9.5).
+  readSupplierPerformanceReport: defineRoute({
+    method: 'GET',
+    path: '/api/reports/supplier-performance',
+    query: supplierPerformanceFiltersSchema,
+    access: { kind: 'action', action: 'view', recordType: BOOKING_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: supplierPerformanceReportSchema,
+    // More bookings or GRN lines than the report reads (REPORT_BOOKING_READ_CAP, REPORT_LINE_READ_CAP).
+    codes: [...HISTORY_CODES, 'reports.report-too-large'],
+  }),
+  exportSupplierPerformanceReport: defineRoute({
+    method: 'GET',
+    path: '/api/reports/supplier-performance/export',
+    query: supplierPerformanceFiltersSchema,
+    access: { kind: 'action', action: 'view', recordType: BOOKING_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: reportExportSchema,
+    codes: [...HISTORY_CODES, 'reports.report-too-large'],
+  }),
+  readStockReport: defineRoute({
+    method: 'GET',
+    path: '/api/reports/stock',
+    query: stockReportQuerySchema,
+    access: { kind: 'action', action: 'view', recordType: STOCK_BALANCE_TYPE, authorisedIn: 'command' },
+    command: false,
+    response: stockReportSchema,
+    codes: [...HISTORY_CODES],
+  }),
+  exportStockReport: defineRoute({
+    method: 'POST',
+    path: '/api/reports/stock/export',
+    access: { kind: 'action', action: 'view', recordType: STOCK_BALANCE_TYPE, authorisedIn: 'command' },
+    command: true,
+    body: stockReportFiltersSchema,
+    secretFields: [],
+    restrictedFields: [],
+    shows: 'restricted-value',
+    response: reportExportSchema,
+    codes: [
+      ...HISTORY_CODES,
+      'kernel.cross-site-request',
+      // Holding the exporter's authority at step 0 answers it when their role changed under the lock (8.2; DEC-118).
+      'kernel.stale-version',
+      // More rows than one export holds (STOCK_REPORT_EXPORT_CAP): narrow the report (goods-in 9.5).
+      'reports.export-too-large',
+    ],
   }),
 } as const satisfies Readonly<Record<string, Route>>;
 

@@ -2,6 +2,9 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { PRODUCTION_COMPOSITION } from '../src/kernel/index.js';
+import { receivingStockCaller } from '../src/modules/receiving/index.js';
+import { ptStockCaller } from '../src/modules/merchandise/pt/index.js';
+import { stockDocumentsStockCaller } from '../src/modules/stock/documents/index.js';
 import type { LedgerSource } from '../src/modules/stock/ledger/index.js';
 // The registry itself, which the ledger builds from its registrations (stock-ledger 13.2).
 import { CallerRegistry, type CallerRegistration } from '../src/modules/stock/ledger/registry.js';
@@ -65,7 +68,7 @@ describe('registered callers (stock-ledger 13.2; DEC-112, H2)', () => {
     );
   });
 
-  it('stock-ledger 13.2 the production composition is the only one code under src can name, and it registers no caller', () => {
+  it('stock-ledger 13.2 the production composition is the only one code under src can name, and registers no synthetic caller', () => {
     // A test composition is a branded value made only in apps/server/test/support/composition.ts; a lint rule refuses
     // a cast to it under src/ (eslint.config.mjs), and src/ never imports a test folder (code-house-rules 11.2).
     expect(PRODUCTION_COMPOSITION.kind).toBe('production');
@@ -74,7 +77,54 @@ describe('registered callers (stock-ledger 13.2; DEC-112, H2)', () => {
       join(import.meta.dirname, '../src/modules/stock/ledger/stock-ledger.module.ts'),
       'utf8',
     );
-    expect(module).toMatch(/registrations: \[\]/);
+    // The ledger takes only the callers the composition root hands over, and none when it hands over none.
+    expect(module).toMatch(/registrations: callers \?\? \[\]/);
     expect(module).toMatch(/composition: PRODUCTION_COMPOSITION/);
+    const root = readFileSync(join(import.meta.dirname, '../src/app.module.ts'), 'utf8');
+    expect(root).toMatch(
+      /useValue: \[\s*receivingStockCaller,\s*stockDocumentsStockCaller,\s*(?:\/\/[^\n]*\s*)?ptStockCaller,\s*\]/,
+    );
+    // Since stage 2, `receiving`'s receipt counts from a GRN (goods-in 4.5; S2-F02-T02), and `stock` · documents'
+    // damage holds, decisions and reversals (goods-in 8; stock-ledger 13.15; S2-F08-T01), and `merchandise` · PT's
+    // approval (goods-in 6.6; stock-ledger 13.19; S2-F06-T01): none synthetic, so all three start in the production
+    // composition.
+    expect(receivingStockCaller.synthetic).toBe(false);
+    expect(stockDocumentsStockCaller.synthetic).toBe(false);
+    expect(ptStockCaller.synthetic).toBe(false);
+    const registry = new CallerRegistry(
+      [receivingStockCaller, stockDocumentsStockCaller, ptStockCaller],
+      PRODUCTION_COMPOSITION,
+    );
+    expect(
+      registry.check({ module: 'receiving', recordType: 'grn', recordId: line, versionId: line, importKind: 'none' }, [
+        { kind: 'receipt-count', lineId: line },
+      ]),
+    ).toBeUndefined();
+    const report = { module: 'stock', recordType: 'damage_report', recordId: line, versionId: line } as const;
+    expect(
+      registry.check({ ...report, importKind: 'none' }, [
+        { kind: 'place-hold', lineId: line },
+        { kind: 'release-hold', lineId: line },
+        { kind: 'condition-change', lineId: line },
+      ]),
+    ).toBeUndefined();
+    // A report never moves goods but by their condition: a reversal is its own record's (13.15).
+    expect(registry.check({ ...report, importKind: 'none' }, [{ kind: 'reversal', lineId: line }])?.code).toBe(
+      'stock.item-not-registered',
+    );
+    // A PT revision's approval ends the PT route's holds, gives the goods their SKUs, covers them and values them, and
+    // nothing else (goods-in 6.3).
+    const revision = { module: 'merchandise', recordType: 'pt_revision', recordId: line, versionId: line } as const;
+    expect(
+      registry.check({ ...revision, importKind: 'none' }, [
+        { kind: 'release-hold', lineId: line },
+        { kind: 'identity-resolved', lineId: line },
+        { kind: 'record-coverage', lineId: line },
+        { kind: 'cost-established', lineId: line },
+      ]),
+    ).toBeUndefined();
+    expect(registry.check({ ...revision, importKind: 'none' }, [{ kind: 'receipt-count', lineId: line }])?.code).toBe(
+      'stock.item-not-registered',
+    );
   });
 });

@@ -6,5 +6,13 @@ export type { PartiesDependencies, PartiesInterface } from './parties.js';
 export { partiesApprovals } from './commands/effects.js';
 export { agreementChanged } from './events.js';
 export { partiesSupplierRoles } from './queries/supplier-roles.js';
+// Whether a supplier is linked to a brand on a date, and the terms in force for a brand or supplier on a date, for
+// `receiving`'s Arrival and GRN (goods-in 4.2, 4.5; PRD-MER-021, PRD-ORG-014; S2-F02-T02).
+export { brandSupplierLinkedOn } from './queries/links.js';
+export { termsInForce } from './queries/records.js';
+// The terms of the Agreement version a booking's approval fixed, for `booking` (goods-in 3.2; DEC-132; S2-F01-T03).
+export { termsOfVersion } from './queries/records.js';
 export type { Page, PageRequest } from './queries/records.js';
 export { partiesRestoreParticipant } from './restore-participant.js';
+// The names of parties the stage 2 reports show, through the read-model gateway (goods-in 9.5; S2-F11-T02).
+export { PARTY_NAMES, partiesReadModels } from './queries/party-names.js';

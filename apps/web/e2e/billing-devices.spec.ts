@@ -1,8 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 import { Authenticator } from './support/authenticator';
-import { signIn } from './support/journey';
+import { signedIn, signIn } from './support/journey';
 import { watchSecurityPolicy } from './support/security-policy';
-import { readWorld, type EnrolledUser } from './support/world';
+import { readWorld } from './support/world';
 
 // S1-F12-T01: the Admin's journey on Setup › Devices, tills and bill series (offline-counter 3.1, 3.2 step 1, 12.1,
 // 14.1 test 12 in part; PRD-OFF-002, PRD-ORG-005, PRD-UXP-003, POL-02.03). The Admin registers a SYNTHETIC billing
@@ -13,13 +13,6 @@ import { readWorld, type EnrolledUser } from './support/world';
 // replaces a third, whose new code must be free (offline-counter 3.5, 12.1). Each action's refusal shows its reason:
 // the same units again and another Store's unit, sent as a tampered page would send it; revoking or retiring from a page
 // opened before the revocation; a replacement code taken. Every value is SYNTHETIC.
-
-async function signedIn(page: Page, code: string, user: EnrolledUser): Promise<void> {
-  const app = new Authenticator(Buffer.from(user.factorSecretHex, 'hex'));
-  await page.goto('/');
-  await signIn(page, { code, login: user.login, password: user.password, totp: await app.nextCode() });
-  await expect(page.getByLabel('Profile')).toHaveText(user.displayName);
-}
 
 test('PRD-OFF-002 PRD-ORG-005 the Admin registers a billing device for a Store and its units; a code already taken is refused with its reason', async ({
   page,

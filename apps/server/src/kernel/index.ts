@@ -8,7 +8,12 @@ export {
 } from './command-runner/command-errors.js';
 export { isInsideCommand, refuseInsideCommand } from './command-runner/command-mark.js';
 export { constraintOf, EXCLUSION_VIOLATION, UNIQUE_VIOLATION, withSavepoint } from './command-runner/savepoint.js';
-export type { CaughtViolation } from './command-runner/savepoint.js';
+export type {
+  CaughtViolation,
+  SavepointCaught,
+  SavepointDone,
+  SavepointRolledBack,
+} from './command-runner/savepoint.js';
 export { CommandRunner } from './command-runner/command-runner.js';
 export type { CommandRequest, CommandRunnerDependencies } from './command-runner/command-runner.js';
 export {
@@ -37,6 +42,7 @@ export type {
 export { connectionToDatabase } from './db/connection.js';
 export { createDb } from './db/create-db.js';
 export { insertInParts, MAX_BOUND_PARAMETERS, MAX_ROWS_PER_STATEMENT, partsOf, rowsPerInsert } from './db/in-parts.js';
+export { containsPattern } from './db/search.js';
 export type { Database, DatabaseHandle, PoolOptions } from './db/create-db.js';
 export { applyDatabasePrivileges } from './db/database-privileges.js';
 export {
@@ -157,6 +163,13 @@ export { LIVE_SETTINGS, LiveUpdates, PLATFORM_LIVE_SETTINGS } from './live/live-
 export type { LiveSettings } from './live/live-updates.js';
 export { LiveUpdatesModule } from './live/live.module.js';
 export { LIVE_UPDATES } from './live/live.module-tokens.js';
+export {
+  declareReadModel,
+  READ_MODEL_GATEWAY,
+  ReadModelGateway,
+  serveReadModel,
+} from './read-models/read-model-gateway.js';
+export type { ServedReadModel } from './read-models/read-model-gateway.js';
 export { defineEvent } from './outbox/event-definition.js';
 export type {
   EventDefinition,

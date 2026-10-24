@@ -20,6 +20,7 @@ import type {
   LegalEntityVersionDraft,
   NameVersionDraft,
   PlaceStatus,
+  SettingOrigin,
   SiteDraft,
   SiteVersionDraft,
   StateDraft,
@@ -32,6 +33,7 @@ import { and, eq, inArray, sql, type AnyColumn } from 'drizzle-orm';
 import { sqlStateOf, type CommandRefusal, type TransactionContext } from '../../../kernel/index.js';
 import type { AccessInterface } from '../../access/index.js';
 import type { AuditChange, AuditInterface } from '../../audit/index.js';
+import type { ConfigurationInterface } from '../../configuration/index.js';
 import type { LocationInUse } from '../contracts/location-in-use.js';
 import {
   accountingBook,
@@ -126,6 +128,11 @@ interface Change {
    * a unit's mapping's legal entity (structure-and-masters 6.1; product owner, 9 Oct 2026).
    */
   readonly movesTo?: (facts: PlaceFacts) => PlaceFacts;
+  /**
+   * Where the values came from, for a version that is a policy's value, as a unit's mapping is policy 10's: refused
+   * when this environment does not accept it (code-house-rules 12.14; structure-and-masters 3.4 "As built"; RR-558).
+   */
+  readonly origin?: SettingOrigin;
 }
 
 interface NewRecord {
@@ -178,6 +185,8 @@ export class StructurePreparation {
     private readonly access: Pick<AccessInterface, 'requestApproval'>,
     /** The location-in-use contract `stock` implements, or undefined while none answers (3.5). */
     protected readonly locationInUse: LocationInUse | undefined,
+    /** Whether this environment accepts a mapping's origin (code-house-rules 12.14); `configuration` answers it. */
+    private readonly origins: Pick<ConfigurationInterface, 'originRefusal'>,
   ) {}
 
   private async prepare(
@@ -189,6 +198,10 @@ export class StructurePreparation {
     const date = await today(context);
     if (typeof date !== 'string') return { kind: 'refusal', refusal: date };
     if (change.validFrom < date) return refusal('refused', 'organisation.starts-in-past');
+    if (change.origin !== undefined) {
+      const notHere = this.origins.originRefusal(context, change.origin);
+      if (notHere !== undefined) return { kind: 'refusal', refusal: notHere };
+    }
     if (record.kind === 'existing' && !(await exists(context, change.kind, record.id))) {
       return refusal('not-found', 'organisation.record-not-found', [notFound(change.kind, record.id)]);
     }
@@ -787,7 +800,7 @@ export class StructurePreparation {
       kind: 'business_unit',
       validFrom: draft.validFrom,
       references: mapping === undefined ? [] : mappingReferences(mapping),
-      ...(mapping === undefined ? {} : { movesTo: mappedTo(mapping) }),
+      ...(mapping === undefined ? {} : { movesTo: mappedTo(mapping), origin: mapping.origin }),
       changes: [value('name', draft.name), ...(mapping === undefined ? [] : mappingChanges(mapping))],
       writeVersion: async (context, common, recordId) => {
         await context.tx.insert(businessUnitVersion).values({
@@ -880,18 +893,23 @@ export class StructurePreparation {
     recordId: string,
     draft: BusinessUnitVersionDraft,
   ) {
-    const fields = [draft.legalEntityId, draft.taxRegistrationId, draft.accountingBookId];
+    const fields = [draft.legalEntityId, draft.taxRegistrationId, draft.accountingBookId, draft.origin];
     const given = fields.filter((field) => field !== undefined).length;
-    // A mapping is its three fields together, never some of them (3.4; product owner, 8 Oct 2026).
+    // A mapping is its three fields together, with its origin, never some of them (3.4; product owner, 8 Oct 2026;
+    // RR-558).
     if (given > 0 && given < fields.length) {
       return Promise.resolve(refusal<PreparedVersion>('refused', 'organisation.mapping-incomplete'));
     }
     const mapping =
-      draft.legalEntityId !== undefined && draft.taxRegistrationId !== undefined && draft.accountingBookId !== undefined
+      draft.legalEntityId !== undefined &&
+      draft.taxRegistrationId !== undefined &&
+      draft.accountingBookId !== undefined &&
+      draft.origin !== undefined
         ? {
             legalEntityId: draft.legalEntityId,
             taxRegistrationId: draft.taxRegistrationId,
             accountingBookId: draft.accountingBookId,
+            origin: draft.origin,
           }
         : undefined;
     const unitChange = this.unitChange(
@@ -938,6 +956,7 @@ export class StructurePreparation {
         validFrom: draft.validFrom,
         references: mappingReferences(mapping),
         movesTo: mappedTo(mapping),
+        origin: mapping.origin,
         changes: mappingChanges(mapping),
         writeVersion: async (c, common, recordId) => {
           await c.tx
@@ -1160,17 +1179,19 @@ async function writeClassifications(
   }
 }
 
-/** A mapping's three fields (3.4). */
+/** A mapping's three fields and where it came from (3.4; code-house-rules 12.14; RR-558). */
 interface MappingFields {
   readonly legalEntityId: string;
   readonly taxRegistrationId: string;
   readonly accountingBookId: string;
+  readonly origin: SettingOrigin;
 }
 
 const mappingOf = (draft: MappingFields): MappingFields => ({
   legalEntityId: draft.legalEntityId,
   taxRegistrationId: draft.taxRegistrationId,
   accountingBookId: draft.accountingBookId,
+  origin: draft.origin,
 });
 
 /** A unit's facts under a mapping: of the legal entity it names (POL-10.01). */
@@ -1195,6 +1216,7 @@ const mappingChanges = (mapping: MappingFields): AuditChange[] => [
   value('legalEntityId', mapping.legalEntityId),
   value('taxRegistrationId', mapping.taxRegistrationId),
   value('accountingBookId', mapping.accountingBookId),
+  value('origin', mapping.origin),
 ];
 
 /** Whether a unit has an approved version (3.4). */

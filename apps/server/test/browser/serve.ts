@@ -5,9 +5,15 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { known, paise, uuidv7 } from '@apparel-os/domain';
 import {
+  DAMAGE_DECISION,
+  HELD_LINE_DECISION,
+  PT_APPROVAL,
+  PT_REVERSAL_APPROVAL,
+  RECOUNT_APPROVAL,
   fieldClassSchema,
   permissionRegistry,
   setupRequestSchema,
+  type ApprovalLimitDraft,
   type PersonaId,
   type RecordTypeDeclaration,
 } from '@apparel-os/schemas';
@@ -32,6 +38,7 @@ import {
   ORGANISATION_KEYS_VARIABLE,
   runSetupStep,
   type ApprovalRule,
+  type ModuleApprovals,
 } from '../../src/modules/access/index.js';
 import { TEST_COMPOSITION } from '../support/composition.js';
 import { JOURNAL_KIND, type PostingEventKind } from '../../src/modules/finance/books/index.js';
@@ -53,11 +60,16 @@ import { jobIdentities } from '../../src/modules/access/commands/job-identities.
 import { FIRST_ADMIN_ROLE, FIRST_APPROVER_ROLE } from '../../src/modules/access/domain/first-roles.js';
 import { Audit } from '../../src/modules/audit/index.js';
 import type { GatedOperation, ValidityCheck } from '../../src/modules/configuration/index.js';
-import { EXCEPTION_CODE_KIND, Exceptions } from '../../src/modules/exceptions/index.js';
+import {
+  EXCEPTION_CODE_KIND,
+  Exceptions,
+  ROUTING_ACTION_TYPE,
+  routingApprovals,
+} from '../../src/modules/exceptions/index.js';
 import { Inbox, inboxConsumers } from '../../src/modules/inbox/index.js';
 import { Numbering } from '../../src/modules/numbering/index.js';
 import { IMPORT_BATCH_KIND, IMPORT_HANDLERS, type ImportHandlers } from '../../src/modules/files-imports/index.js';
-import { CATALOGUE, type CatalogueInterface } from '../../src/modules/merchandise/catalogue/index.js';
+import { CATALOGUE, SKU_CODE_KIND, type CatalogueInterface } from '../../src/modules/merchandise/catalogue/index.js';
 import { ORGANISATION, type OrganisationInterface } from '../../src/modules/organisation/index.js';
 import {
   cellsOf,
@@ -92,6 +104,7 @@ import {
   codeFor,
   startAccessApp,
   syntheticKeysEnvironment,
+  SYNTHETIC_TIMEZONE,
   syntheticTimezone,
   writeSyntheticReason,
   writeSyntheticSetting,
@@ -99,9 +112,11 @@ import {
   type SyntheticUser,
 } from '../support/access.js';
 import { assignSyntheticRole, grantSynthetic, writeSyntheticRole } from '../support/grants.js';
+import { writeSyntheticMarking } from '../support/marked-attributes.js';
 import { capturingLogger, writeSyntheticServiceIdentity } from '../support/jobs.js';
 import { startTestFileStore } from '../support/minio.js';
 import { approved, approvedGeography, structureSetup, writeSyntheticSites } from '../support/organisation.js';
+import { STORE_FILE_PATH, syntheticPdfUpload } from '../support/opening-app.js';
 import { masterKinds, recordTypeOf as organisationRecordType } from '../../src/modules/organisation/index.js';
 import {
   createTestExceptionsSchema,
@@ -112,6 +127,47 @@ import {
   writeTestDocument,
 } from '../support/exceptions.js';
 import { createSyntheticOrganisations } from '../support/organisations.js';
+import { GRN_KIND, receivingExceptionTypes } from '../../src/modules/receiving/index.js';
+import { receivingApprovalRules } from '../../src/modules/receiving/domain/kinds.js';
+import { BOOKING_KIND, overdueExceptionType } from '../../src/modules/booking/index.js';
+import { defineSyntheticGrnSeries } from '../fixtures/grn-series.js';
+import { syntheticPtFileName, syntheticPtWorkbook, type SyntheticPtRow } from '../fixtures/pt.js';
+import { ptWorld } from '../support/pt.js';
+import { ptGateOpen, syntheticPtBook } from '../support/pt-gate.js';
+import { defineSyntheticPtSeries, defineSyntheticSkuCodeSeries } from '../fixtures/pt-series.js';
+import { PT_KIND } from '../../src/modules/merchandise/pt/index.js';
+import { ptApprovalRules } from '../../src/modules/merchandise/pt/domain/kinds.js';
+import { STOCK_POSTING_EVENT_KINDS } from '../../src/modules/stock/ledger/index.js';
+import { defineSyntheticBookingSeries } from '../fixtures/booking-series.js';
+import {
+  BOOKING_POLICY_CHECKS,
+  bookingGateOpen,
+  syntheticPolicyValues,
+  bookingLimitApproved,
+  writeSyntheticBudget,
+} from '../support/booking.js';
+import { defineSyntheticDamageReportSeries } from '../fixtures/damage-report-series.js';
+import { DAMAGE_REPORT_KIND, damageExceptionType } from '../../src/modules/stock/documents/index.js';
+import { stockDocumentsApprovalRules } from '../../src/modules/stock/documents/domain/kinds.js';
+import {
+  damageGateOpen,
+  DECIDER_AUTHORITY,
+  LIMIT_ADMIN_AUTHORITY,
+  LIMIT_APPROVER_AUTHORITY,
+  RECEIVER_REPORTER_AUTHORITY,
+  SYNTHETIC_POLICY_17_VALUES,
+} from '../support/damage.js';
+import {
+  mappingsVerified,
+  placeScope,
+  RECEIVER_AUTHORITY,
+  RECEIVING_POLICY_CHECKS,
+  receivingFixture,
+  receivingGateOpen,
+  receivingGranted,
+  STOCK_VIEW,
+} from '../support/receiving.js';
+import { reportedValues, signedFixture } from '../support/signed-policies.js';
 import { connect, databaseUrl, dropDatabase, usePostgresServer } from '../support/postgres.js';
 import { startPostgresServer } from '../support/postgres-server.js';
 import { z } from 'zod';
@@ -258,7 +314,7 @@ const journeyRequest = setupRequestSchema.parse({
   },
   settings: {
     origin: 'synthetic',
-    timezone: 'Etc/UTC',
+    timezone: SYNTHETIC_TIMEZONE,
     passwordRules: SYNTHETIC_PASSWORD_RULES,
     signInThrottling: SYNTHETIC_THROTTLING,
     officeSessionLimits: SYNTHETIC_SESSION_LIMITS,
@@ -299,6 +355,16 @@ const settingsSetup = await runSetupStep({
 });
 if (settingsSetup.outcome !== 'created')
   throw new Error(`The settings setup step did not create: ${settingsSetup.outcome}`);
+
+// The Receive Goods journey's Organisation (S2-F02-T02), made by the setup step below.
+const receivingCode = syntheticCode('ORG-RECEIVING');
+const receivingDatabase = `syn_browser_receiving_${randomBytes(3).toString('hex')}`;
+
+// The readiness journey's Organisation (S1-F04-T02), made by the setup step below: its approvals queue behind no other
+// fixture's in the worker, and no other journey's mapping verification lapses its validation of policy 10, whose values
+// are the verified mappings (goods-in 10.5; RR-558).
+const readinessCode = syntheticCode('ORG-READINESS');
+const readinessDatabase = `syn_browser_readiness_${randomBytes(3).toString('hex')}`;
 
 // The posting maps journey's Organisation (S1-F09-T02), made by the setup step like the one above, so My work is fed.
 const postingCode = syntheticCode('ORG-POSTING');
@@ -366,6 +432,8 @@ const keyring = JSON.parse(keys[ORGANISATION_KEYS_VARIABLE] ?? '{}') as Record<s
 keyring[journeyCode] = randomBytes(32).toString('base64url');
 keyring[settingsCode] = randomBytes(32).toString('base64url');
 keyring[postingCode] = randomBytes(32).toString('base64url');
+keyring[receivingCode] = randomBytes(32).toString('base64url');
+keyring[readinessCode] = randomBytes(32).toString('base64url');
 keys[ORGANISATION_KEYS_VARIABLE] = JSON.stringify(keyring);
 
 const firstSignIn = await writeSyntheticUser(orgA.database, orgA.code, keys, { label: 'BROWSER-A', temporary: true });
@@ -522,6 +590,20 @@ const vocabularyAttributeAnswer = await structureFixture.asPreparerDo((c, p) =>
 if (vocabularyAttributeAnswer.kind !== 'success') {
   throw new Error(`The synthetic attribute was refused: ${vocabularyAttributeAnswer.refusal.code}`);
 }
+// The season and size attributes journey's SYNTHETIC list attribute for sizes (season-and-size-attributes.spec.ts;
+// structure-and-masters 4.2 "As built"; RR-556), recorded through the catalogue's real command by the fixture person;
+// the journey marks it as the size list.
+const markingAttribute = { code: syntheticCode('JOURNEY-SIZES'), name: syntheticName('Journey Sizes') };
+const markingAttributeAnswer = await structureFixture.asPreparerDo((c, p) =>
+  structureFixture.catalogue.prepareAttribute(c, p, {
+    ...markingAttribute,
+    valueKind: 'list',
+    validFrom: structureFixture.today(),
+  }),
+);
+if (markingAttributeAnswer.kind !== 'success') {
+  throw new Error(`The synthetic size list was refused: ${markingAttributeAnswer.refusal.code}`);
+}
 // The bank details journey (bank-details.spec.ts; S1-F03-T03): one SYNTHETIC supplier, recorded through the parties
 // part's real command by the fixture person (code-house-rules 11.2), whose bank details the journey changes.
 const bankSupplier = { code: syntheticCode('JOURNEY-SUPPLIER'), legalName: syntheticName('Journey Supplier') };
@@ -537,6 +619,26 @@ const bankSupplierAnswer = await structureFixture.asPreparerDo((c, p) =>
 );
 if (bankSupplierAnswer.kind !== 'success') {
   throw new Error(`The synthetic supplier was refused: ${bankSupplierAnswer.refusal.code}`);
+}
+// The agreement journey (agreement.spec.ts; S2-F01-T01): one SYNTHETIC supplier with no agreement yet, recorded
+// through the parties part's real command by the fixture person (code-house-rules 11.2), whose agreement the journey
+// prepares.
+const agreementSupplier = {
+  code: syntheticCode('JOURNEY-AGREEMENT-SUPPLIER'),
+  legalName: syntheticName('Journey Agreement Supplier'),
+};
+const agreementSupplierAnswer = await structureFixture.asPreparerDo((c, p) =>
+  structureFixture.parties.prepareParty(c, p, {
+    ...agreementSupplier,
+    taxIdentities: [],
+    msmeClassification: null,
+    contacts: [],
+    roles: ['supplier'],
+    validFrom: structureFixture.today(),
+  }),
+);
+if (agreementSupplierAnswer.kind !== 'success') {
+  throw new Error(`The synthetic supplier was refused: ${agreementSupplierAnswer.refusal.code}`);
 }
 // The products journey (products.spec.ts; S1-F03-T02): one SYNTHETIC brand and one category whose size set holds a
 // SYNTHETIC free size, recorded through the catalogue's real commands by the fixture person (code-house-rules 11.2),
@@ -629,8 +731,14 @@ const productsSeasonProposal = recordedCatalogue(
   ),
 );
 recordedCatalogue(await structureFixture.decide(productsSeasonProposal.requestId, productsSeasonProposal.proposalId));
-// The readiness journey (site-readiness.spec.ts; S1-F04-T02): an approved SYNTHETIC Site with one warehouse unit of
-// its own legal entity, its mapping verified as a fixture and one location, so every check but the stock plan passes.
+// That list attribute is the Organisation's season attribute, a SYNTHETIC setting written as a fixture, so the
+// open-to-buy journey's budget names its season from it (structure-and-masters 4.2 "As built"; RR-550). Written
+// directly, not through its routes (code-house-rules 11.2), for the clock, as writeSyntheticSetting writes a setting of
+// access: a marking approved through Decide is in force from the decision's instant on this composition's clock, which
+// may fall after the instant the journeys' requests read it at; this one is in force from a day before.
+await writeSyntheticMarking(settingsDatabase, 'season', productsSeasonAnswer.recordId, structureFixture.preparer.id);
+// A SYNTHETIC legal entity with a registration and a book, to which the devices journey's units are mapped. The
+// readiness journey's own Site and unit are in the receiving Organisation, below (RR-558).
 const readinessEntity = await approved(structureFixture, (c, p) =>
   structureFixture.organisation.prepareLegalEntity(c, p, {
     code: syntheticCode('JOURNEY-READY-LE'),
@@ -653,39 +761,6 @@ const readinessBook = await approved(structureFixture, (c, p) =>
     code: syntheticCode('JOURNEY-READY-BK'),
     legalEntityId: readinessEntity.recordId,
     name: syntheticName('Journey Ready Book'),
-    validFrom: structureFixture.today(),
-  }),
-);
-const readinessSite = await approved(structureFixture, (c, p) =>
-  structureFixture.organisation.prepareSite(c, p, {
-    code: syntheticCode('JOURNEY-READY-SITE'),
-    name: syntheticName('Journey Ready Site'),
-    physicalKind: 'regional-warehouse',
-    areaId: structureGeography.area.recordId,
-    addresses: [syntheticName('1 Ready Road')],
-    aliases: [],
-    validFrom: structureFixture.today(),
-  }),
-);
-const readinessUnit = { code: syntheticCode('JOURNEY-READY-UNIT'), name: syntheticName('Journey Ready Unit') };
-const readinessUnitAnswer = await approved(structureFixture, (c, p) =>
-  structureFixture.organisation.prepareBusinessUnit(c, p, {
-    ...readinessUnit,
-    siteId: readinessSite.recordId,
-    kind: 'warehouse',
-    legalEntityId: readinessEntity.recordId,
-    taxRegistrationId: readinessRegistration.recordId,
-    accountingBookId: readinessBook.recordId,
-    validFrom: structureFixture.today(),
-  }),
-);
-await approved(structureFixture, (c, p) =>
-  structureFixture.organisation.prepareLocation(c, p, {
-    code: syntheticCode('JOURNEY-READY-LOC'),
-    siteId: readinessSite.recordId,
-    businessUnitId: readinessUnitAnswer.recordId,
-    name: syntheticName('Journey Ready Floor'),
-    kind: 'floor',
     validFrom: structureFixture.today(),
   }),
 );
@@ -753,6 +828,7 @@ for (const unit of devicesUnits) {
       legalEntityId: readinessEntity.recordId,
       taxRegistrationId: readinessRegistration.recordId,
       accountingBookId: readinessBook.recordId,
+      origin: 'synthetic',
       validFrom: structureFixture.today(),
     }),
   );
@@ -859,6 +935,7 @@ const postingMapping = {
   legalEntityId: postingEntity.recordId,
   taxRegistrationId: postingRegistration.recordId,
   accountingBookId: postingBook.recordId,
+  origin: 'synthetic' as const,
 };
 const postingStoreUnit = await approved(postingFixture, (c, p) =>
   postingFixture.organisation.prepareBusinessUnit(c, p, {
@@ -1032,6 +1109,7 @@ const periodUnit = await approved(postingFixture, (c, p) =>
     legalEntityId: postingEntity.recordId,
     taxRegistrationId: postingRegistration.recordId,
     accountingBookId: periodBook.recordId,
+    origin: 'synthetic',
     validFrom: postingFixture.today(),
   }),
 );
@@ -1216,13 +1294,25 @@ const periodApprover = await postingUser('BROWSER-PERIOD-APPROVER', [
 ]);
 // The harness the journey asks to post the correction (code-house-rules 11.4: test code, composed only here), on a
 // local port of its own beside the server of the journeys. It also answers `GET /ready` once the world file is
-// written, which Playwright waits for: the API answers before the seeding done through it ends, so its health alone
-// would let the journeys read a world file that is missing or left by an earlier run.
+// written and the worker has delivered every event the fixtures recorded, which Playwright waits for: the API answers
+// before the seeding done through it ends, so its health alone would let the journeys read a world file that is
+// missing or left by an earlier run, and a journey would wait in My work behind other fixtures' approvals (code-house-
+// rules 10.1; code review 7 of stage 2). And `GET /now`, the server's clock, the one the application runs on, and
+// `GET /timezone`, the Organisation timezone the application reads for every Organisation, which the journeys' dates
+// and times are taken from (e2e/support/clock.ts; code-house-rules 9; code review 10 of stage 2).
 const harnessPort = port + 11;
 let worldWritten = false;
 const harness = createServer((request, response) => {
   if (request.method === 'GET' && request.url === '/ready') {
     response.writeHead(worldWritten ? 200 : 503).end();
+    return;
+  }
+  if (request.method === 'GET' && request.url === '/now') {
+    response.writeHead(200, { 'content-type': 'text/plain' }).end(new Date().toISOString());
+    return;
+  }
+  if (request.method === 'GET' && request.url === '/timezone') {
+    response.writeHead(200, { 'content-type': 'text/plain' }).end(SYNTHETIC_TIMEZONE);
     return;
   }
   if (request.method !== 'POST' || request.url !== '/post-period-correction') {
@@ -1346,6 +1436,27 @@ const vocabularyConfirmer = await provisionUser('BROWSER-VOCABULARY-CONFIRMER', 
   { recordType: 'access.approval_reason', action: 'view' },
 ]);
 
+// The season and size attributes journey's people (season-and-size-attributes.spec.ts; structure-and-masters 4.2 "As
+// built"; RR-556): an Admin (P-ADM) who marks the SYNTHETIC size list as the size list on Setup › Vocabularies and may approve too,
+// so the refusal of their own is for their preparation alone (POL-02.07); and the Owner (P-OWN), who approves it from
+// My work. No size attribute is marked in this Organisation before the journey. SYNTHETIC grants: who holds each is
+// the product owner's to name (V-01).
+const markingViews = [
+  ...catalogueViews,
+  { recordType: 'merchandise.marked_attribute', action: 'view' as const },
+  { recordType: 'access.approval_request', action: 'view' as const },
+  { recordType: 'access.approval_reason', action: 'view' as const },
+];
+const markingAdmin = await provisionUser('BROWSER-MARKING-ADMIN', 'P-ADM', [
+  ...markingViews,
+  { recordType: 'merchandise.marked_attribute', action: 'edit' },
+  { recordType: 'merchandise.marked_attribute', action: 'approve' },
+]);
+const markingOwner = await provisionUser('BROWSER-MARKING-OWNER', 'P-OWN', [
+  ...markingViews,
+  { recordType: 'merchandise.marked_attribute', action: 'approve' },
+]);
+
 // The products journey's people (S1-F03-T02): a Booking user who reads the catalogue, proposes products and may
 // confirm another person's, and a different person who confirms from My work and reads the SKUs. Who holds which is
 // KDPS's (V-01, RR-064).
@@ -1368,6 +1479,8 @@ const productsBooking = await provisionUser('BROWSER-PRODUCTS-BOOKING', 'P-BKG',
   { recordType: 'merchandise.product_proposal', action: 'create' },
   // Approve too, so the refusal of their own proposal is for the proposal alone (DM-5, DEC-105).
   { recordType: 'merchandise.product_proposal', action: 'approve' },
+  // Create on codes, so they map one brand barcode to both SKUs and see it flagged as repeated (S2-F04-T01).
+  { recordType: 'merchandise.external_code', action: 'create' },
   { recordType: 'access.approval_request', action: 'view' },
   { recordType: 'access.approval_reason', action: 'view' },
 ]);
@@ -1377,6 +1490,37 @@ const productsConfirmer = await provisionUser('BROWSER-PRODUCTS-CONFIRMER', 'P-B
   { recordType: 'access.approval_request', action: 'view' },
   { recordType: 'access.approval_reason', action: 'view' },
 ]);
+
+// The open-to-buy journey's people (open-to-buy.spec.ts; goods-in 3.3, section 11; POL-05.09; S2-F01-T02): a Booking
+// user who prepares a budget for the products journey's SYNTHETIC brand and season, and may check and approve too, so
+// each refusal of their own is for their preparation alone (POL-02.07); Accounts, who records the check from My work;
+// and the Owner, who approves it there. SYNTHETIC grants: who holds each is the product owner's to name (V-01).
+const openToBuyReads = [
+  { recordType: 'booking.open_to_buy_budget', action: 'view' as const },
+  { recordType: 'access.approval_request', action: 'view' as const },
+  { recordType: 'access.approval_reason', action: 'view' as const },
+];
+const openToBuyBooking = await provisionUser('BROWSER-OPEN-TO-BUY-BOOKING', 'P-BKG', [
+  ...openToBuyReads,
+  ...['merchandise.brand', 'merchandise.marked_attribute', 'merchandise.vocabulary_value'].map((recordType) => ({
+    recordType,
+    action: 'view' as const,
+  })),
+  { recordType: 'booking.open_to_buy_budget', action: 'create' },
+  { recordType: 'booking.open_to_buy_budget', action: 'edit' },
+  { recordType: 'booking.open_to_buy_budget', action: 'approve' },
+  { recordType: 'booking.open_to_buy_check', action: 'approve' },
+]);
+const openToBuyAccounts = await provisionUser('BROWSER-OPEN-TO-BUY-ACCOUNTS', 'P-ACC', [
+  ...openToBuyReads,
+  { recordType: 'booking.open_to_buy_check', action: 'view' },
+  { recordType: 'booking.open_to_buy_check', action: 'approve' },
+]);
+const openToBuyOwner = await provisionUser('BROWSER-OPEN-TO-BUY-OWNER', 'P-OWN', [
+  ...openToBuyReads,
+  { recordType: 'booking.open_to_buy_budget', action: 'approve' },
+]);
+const openToBuyReasonId = await writeSyntheticReason(settingsDatabase, 'approve');
 
 // The file intake journey (file-intake.spec.ts; S1-F06-T01), in the posting maps journey's Organisation, where its
 // catalogue, layout and series are recorded above: a Booking user who uploads the SYNTHETIC product file, stages it
@@ -1768,6 +1912,34 @@ await grantSynthetic(
   ],
   { fieldClasses: [{ fieldClass: 'bank-details', access: 'view' }] },
 );
+
+// The agreement journey's people (S2-F01-T01): Booking, who prepares an agreement with a supplier, and a different
+// person who approves it from My work. Who holds which is the product owner's to decide, with facts from KDPS
+// (DEC-125; V-01, RR-064); these SYNTHETIC grants decide nothing.
+const agreementPreparer = await writeSyntheticUser(settingsDatabase, settingsCode, keys, {
+  label: 'BROWSER-AGREEMENT-PREPARER',
+  enrolled: true,
+  personas: ['P-BKG'],
+});
+await grantSynthetic(settingsDatabase, { kind: 'user', id: agreementPreparer.id }, [
+  { recordType: 'merchandise.party', action: 'view' },
+  { recordType: 'merchandise.brand', action: 'view' },
+  { recordType: 'merchandise.agreement', action: 'view' },
+  { recordType: 'merchandise.agreement', action: 'create' },
+  { recordType: 'merchandise.agreement', action: 'edit' },
+  { recordType: 'access.approval_request', action: 'view' },
+]);
+const agreementApprover = await writeSyntheticUser(settingsDatabase, settingsCode, keys, {
+  label: 'BROWSER-AGREEMENT-APPROVER',
+  enrolled: true,
+  personas: ['P-OWN'],
+});
+await grantSynthetic(settingsDatabase, { kind: 'user', id: agreementApprover.id }, [
+  { recordType: 'merchandise.agreement', action: 'view' },
+  { recordType: 'merchandise.agreement', action: 'approve' },
+  { recordType: 'access.approval_request', action: 'view' },
+  { recordType: 'access.approval_reason', action: 'view' },
+]);
 
 // The exceptions journey (exceptions.spec.ts; S1-F08-T02), in the settings Organisation, whose worker identities the
 // setup step wrote: the test-only raising module's schema (code-house-rules 11.4), a SYNTHETIC exception-code series,
@@ -2161,11 +2333,9 @@ const policyValidator = await provisionUser('BROWSER-POLICY-VALIDATOR', 'P-ACC',
   { recordType: 'files_imports.stored_file', action: 'create' },
 ]);
 
-// The readiness journey (site-readiness.spec.ts; S1-F04-T02), in the settings Organisation: a test-only module's
-// SYNTHETIC receiving operation governed by policy 4, needing someone at the unit to run the checks and two different
-// people to prepare and approve them; policy 4 Signed and validated as SYNTHETIC fixtures, since that journey is
-// S1-F04-T01's; the unit's mapping verified as a fixture, since that journey is S1-F02-T02's (code-house-rules 11.2);
-// an Operations user who runs the checks and declares the unit holds no stock; and a different approver.
+// The readiness journey (site-readiness.spec.ts; S1-F04-T02), in the receiving Organisation below: a test-only
+// module's SYNTHETIC receiving operation governed by policy 4, needing someone at the unit to run the checks and two
+// different people to prepare and approve them. Its world is made with the receiving Organisation's (RR-558).
 const READINESS_GATE = syntheticIdentifier('readiness');
 /** One SYNTHETIC value of policy 4, so its SYNTHETIC validation covers something (RR-480). */
 const readinessValuesCheck: ValidityCheck = {
@@ -2192,40 +2362,6 @@ const readinessOperation: GatedOperation = {
     ],
   },
 };
-{
-  const owner = await connect(settingsDatabase, 'migration');
-  try {
-    await owner.query(
-      `insert into organisation.business_unit_mapping_verification
-         (id, business_unit_mapping_id, verified_by_user_id, verified_at, attachment_ids)
-       select $1, id, $2, now(), array[$3::uuid] from organisation.business_unit_mapping
-        where business_unit_id = $4 and decision = 'Approved'`,
-      [uuidv7(), uuidv7(), uuidv7(), readinessUnitAnswer.recordId],
-    );
-    await owner.query(
-      `insert into configuration.policy_signature (id, policy_number, signatory, signed_on, origin,
-         evidence_attachment_ids, recorded_by_user_id, role_assignment_id, recorded_at)
-       values ($1, 4, 'SYNTHETIC signatory', current_date, 'synthetic', array[$2::uuid], $3, $4, now())`,
-      [uuidv7(), uuidv7(), uuidv7(), uuidv7()],
-    );
-    await owner.query(
-      `insert into configuration.policy_validation (id, policy_number, origin, validated_values,
-         evidence_attachment_ids, validated_by_user_id, role_assignment_id, validated_at)
-       values ($1, 4, 'synthetic', array[$5], array[$2::uuid], $3, $4, now())`,
-      [uuidv7(), uuidv7(), uuidv7(), uuidv7(), `${readinessValuesCheck.code}:syn-readiness-value@v1`],
-    );
-  } finally {
-    await owner.end();
-  }
-}
-const readinessOps = await provisionUser('BROWSER-READINESS-OPS', 'P-OPS', [
-  { recordType: 'site_lifecycle.readiness_record', action: 'view' },
-  { recordType: 'site_lifecycle.readiness_record', action: 'create' },
-  { recordType: 'site_lifecycle.zero_stock_declaration', action: 'view' },
-  { recordType: 'site_lifecycle.zero_stock_declaration', action: 'create' },
-  // The unit list the screen chooses from (structure-and-masters 8).
-  { recordType: 'organisation.business_unit', action: 'view' },
-]);
 // The devices journey's Admin (S1-F12-T01, S1-F12-T02): register, view, enrol, revoke and replace billing devices, and
 // the Stores and units the form chooses from. SYNTHETIC grants: who registers devices is KDPS's (POL-02.03).
 const devicesAdmin = await provisionUser('BROWSER-DEVICES-ADMIN', 'P-ADM', [
@@ -2265,13 +2401,1285 @@ const numberingApprover = await provisionUser('BROWSER-NUMBERING-APPROVER', 'P-O
   { recordType: 'access.approval_request', action: 'view' },
   { recordType: 'access.approval_reason', action: 'view' },
 ]);
-const readinessApprover = await provisionUser('BROWSER-READINESS-APPROVER', 'P-OWN', [
+// The Receive Goods journeys (receive-goods.spec.ts; S2-F02-T02), in an Organisation of its own so its Sites, Stores
+// and brands change no other journey's lists: made by the setup step like the ones above. Each journey has a world of
+// its own, so neither sees the other's deliveries: a Site with two Stores, their units and receiving locations, their
+// mappings verified, a brand with a linked supplier and an approved Agreement, a size list and a batch-tracked product,
+// all through the real interfaces (support/receiving.ts); the capability switched on and policies 4 and 10 Signed and
+// validated through configuration's commands, and receiving granted after readiness at the Stores' units through
+// site-lifecycle's; a GRN series with a SYNTHETIC format (RR-449); a Warehouse receiver (P-WHS) over every place, and
+// a Store's staff (P-STM) who receives at their Store only.
+const receivingSetup = await runSetupStep({
+  migrationConnectionString: databaseUrl(world.directory, 'migration'),
+  runtimeConnectionString: databaseUrl(world.directory, 'runtime'),
+  request: setupRequestSchema.parse({
+    ...journeyRequest,
+    organisationCode: receivingCode,
+    databaseName: receivingDatabase,
+    firstAdmin: {
+      ...journeyRequest.firstAdmin,
+      temporaryPassword: journeyRequest.firstAdmin.temporaryPassword.reveal(),
+    },
+    firstApprover: {
+      ...journeyRequest.firstApprover,
+      temporaryPassword: journeyRequest.firstApprover.temporaryPassword.reveal(),
+    },
+  }),
+  serviceIdentities: serviceIdentitiesOf(jobRegistry),
+  logger: setupLog.logger,
+});
+if (receivingSetup.outcome !== 'created') {
+  throw new Error(`The receiving setup step did not create: ${receivingSetup.outcome}`);
+}
+const receivingStructure = await structureSetup({
+  directory: world.directory,
+  database: receivingDatabase,
+  organisationCode: receivingCode,
+  keysEnvironment: keys,
+  label: 'BROWSER-RCV',
+  // The stock ledger's posting event kinds, as the application declares them, so the PT approval journey's book maps
+  // `stock.cost-established` (books-and-posting 7.2; S2-F06-T01).
+  eventKinds: STOCK_POSTING_EVENT_KINDS,
+});
+const receivingWorld = await receivingFixture(receivingStructure, receivingDatabase, 'JOURNEY-RCV');
+const storeStaffWorld = await receivingFixture(receivingStructure, receivingDatabase, 'JOURNEY-STM');
+// The damage journey's world (damage-reports.spec.ts; S2-F08-T01), its own so its deliveries and reports change no
+// other journey's lists.
+const damageWorld = await receivingFixture(receivingStructure, receivingDatabase, 'JOURNEY-DMG');
+// The held-line journey's world (held-lines.spec.ts; S2-F02-T03), its own so its deliveries and decisions change no
+// other journey's lists.
+const heldWorld = await receivingFixture(receivingStructure, receivingDatabase, 'JOURNEY-HLD');
+// The receive-against-booking journey's world (receive-against-booking.spec.ts; S2-F02-T04), its own so its booking,
+// deliveries and links change no other journey's lists.
+const againstWorld = await receivingFixture(receivingStructure, receivingDatabase, 'JOURNEY-RAB');
+// The PT file journey's world (pt-upload.spec.ts; S2-F04-T02), its own so its GRN and PT change no other journey's lists.
+const ptReceivingWorld = await receivingFixture(receivingStructure, receivingDatabase, 'JOURNEY-PTF');
+// The PT approval journey's SYNTHETIC quantity tracking profile (pt-approval.spec.ts; S2-F06-T01), for the Sub category
+// its PT names, a value of policy 4, so made before receiving's gate validates policy 4 (goods-in 10.5; catalogue's
+// tracking-profiles check).
+const ptQuantityProfile = await receivingStructure.asPreparerDo((c, p) =>
+  receivingStructure.catalogue.prepareTrackingProfile(c, p, {
+    code: syntheticCode('JOURNEY-PTA-QTY'),
+    name: syntheticName('PT approval quantity profile'),
+    pieceTracked: false,
+    batchExpiryRequired: false,
+    requiredIdentifiers: [],
+    origin: 'synthetic',
+    validFrom: receivingStructure.today(),
+  }),
+);
+if (ptQuantityProfile.kind !== 'success') {
+  throw new Error(`The PT approval tracking profile was refused: ${ptQuantityProfile.refusal.code}`);
+}
+// Policies 4 and 10 validated on the values the modules report, the receiving worlds', and on the readiness journey's
+// SYNTHETIC value of policy 4, which the application registers for every Organisation.
+await receivingGateOpen(receivingStructure, receivingDatabase, [readinessValuesCheck]);
+for (const each of [receivingWorld, storeStaffWorld, damageWorld, heldWorld, againstWorld, ptReceivingWorld]) {
+  await receivingGranted(
+    receivingStructure,
+    receivingDatabase,
+    each.siteId,
+    [each.wholeStore, each.otherStoreUnit],
+    [readinessValuesCheck],
+  );
+}
+// The booking journey (booking.spec.ts; goods-in 3.1 to 3.4, section 11; S2-F01-T03), in the receiving Organisation,
+// on the Receive Goods world's Site, brand, linked supplier and approved Agreement: a SYNTHETIC season attribute marked
+// as the Organisation's season with one value; a SYNTHETIC approved open-to-buy budget for the brand and that season;
+// policies 5 and 1 Signed and validated on the TEST-ONLY values the application registers for them, since no module
+// reports either policy's values yet (RR-561; support/booking.ts), and the bookings capability switched on; a booking
+// series with a SYNTHETIC format (RR-449). Every value is SYNTHETIC.
+const bookingSeason = await (async () => {
+  const today = receivingStructure.today();
+  const attribute = await receivingStructure.asPreparerDo((c, p) =>
+    receivingStructure.catalogue.prepareAttribute(c, p, {
+      code: syntheticCode('JOURNEY-BKG-SEASON'),
+      valueKind: 'list',
+      name: syntheticName('Booking season'),
+      validFrom: today,
+    }),
+  );
+  if (attribute.kind !== 'success')
+    throw new Error(`The booking season attribute was refused: ${attribute.refusal.code}`);
+  const code = syntheticCode('JOURNEY-BKG-SS1');
+  const name = syntheticName('Booking SS1');
+  const proposed = await receivingStructure.asPreparerDo((c, p) =>
+    receivingStructure.catalogue.proposeVocabularyValue(c, p, { attributeId: attribute.answer.recordId, code, name }),
+  );
+  if (proposed.kind !== 'success') throw new Error(`The booking season value was refused: ${proposed.refusal.code}`);
+  const confirmed = await receivingStructure.decide(proposed.answer.requestId, proposed.answer.proposalId);
+  if (confirmed.kind !== 'success') throw new Error(`The booking season was not confirmed: ${confirmed.refusal.code}`);
+  const proposal = await receivingStructure.run(receivingStructure.preparer.id, (c) =>
+    receivingStructure.catalogue.proposal(c, proposed.answer.proposalId),
+  );
+  if (proposal?.valueId === undefined) throw new Error('The booking season value was not confirmed');
+  const markingVersionId = await writeSyntheticMarking(
+    receivingDatabase,
+    'season',
+    attribute.answer.recordId,
+    receivingStructure.preparer.id,
+  );
+  return { attributeId: attribute.answer.recordId, valueId: proposal.valueId, code, name, markingVersionId };
+})();
+await writeSyntheticBudget(receivingDatabase, {
+  brandId: receivingWorld.brand.id,
+  seasonAttributeId: bookingSeason.attributeId,
+  seasonValueId: bookingSeason.valueId,
+  markingVersionId: bookingSeason.markingVersionId,
+  // A SYNTHETIC ₹10,00,000.00.
+  amountPaise: 100_000_000,
+  preparedBy: receivingStructure.preparer.id,
+});
+// And for the receive-against-booking journey's brand and the same season, a SYNTHETIC budget of its own (S2-F02-T04).
+await writeSyntheticBudget(receivingDatabase, {
+  brandId: againstWorld.brand.id,
+  seasonAttributeId: bookingSeason.attributeId,
+  seasonValueId: bookingSeason.valueId,
+  markingVersionId: bookingSeason.markingVersionId,
+  // A SYNTHETIC ₹10,00,000.00.
+  amountPaise: 100_000_000,
+  preparedBy: receivingStructure.preparer.id,
+});
+await bookingGateOpen(receivingStructure, receivingDatabase);
+// The damage journey (damage-reports.spec.ts; S2-F08-T01): policy 17 Signed and validated on the test-only check's one
+// SYNTHETIC value, and the damage capability switched on (support/damage.ts), which records are policy 17's values
+// being the product owner's to say (goods-in 10.5); a Store's staff (P-STM) who receive and report damage at their
+// Store only (the lists of masters from a second assignment, below); and Operations (P-OPS), who decides reports over
+// every place from My work, with an individual SYNTHETIC limit on the decision covering an Unknown cost, prepared and
+// approved through `access`'s commands by the setup's two people (access-and-approvals 9.2). Who reports, who
+// decides and the limit are the product owner's: SYNTHETIC here.
+await damageGateOpen(receivingStructure, receivingDatabase);
+const damageReporter = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-DAMAGE-REPORTER',
+  enrolled: true,
+  personas: ['P-STM'],
+});
+await grantSynthetic(receivingDatabase, { kind: 'user', id: damageReporter.id }, RECEIVER_REPORTER_AUTHORITY, {
+  scope: placeScope([{ type: 'store', id: damageWorld.storeId }]),
+});
+const damageOperations = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-DAMAGE-OPS',
+  enrolled: true,
+  personas: ['P-OPS'],
+});
+const damageDecider = await grantSynthetic(
+  receivingDatabase,
+  { kind: 'user', id: damageOperations.id },
+  DECIDER_AUTHORITY,
+);
+/**
+ * An individual SYNTHETIC approval limit in the receiving Organisation, prepared by the setup's preparer and approved by
+ * its approver through `access` composed with the module's approval rules (access-and-approvals 9.2; code-house-rules
+ * 11.2); the setup stops, naming the refusal, when either is refused. The limits and who holds them are the product
+ * owner's: SYNTHETIC here.
+ */
+async function receivingLimitApproved(
+  what: string,
+  rules: ModuleApprovals['rules'],
+  draft: Omit<ApprovalLimitDraft, 'origin' | 'validFrom'>,
+): Promise<void> {
+  const limitAccess = receivingStructure.accessWith({ rules, effects: new Map() });
+  const preparer = receivingStructure.preparer;
+  const preparing = await grantSynthetic(receivingDatabase, { kind: 'user', id: preparer.id }, LIMIT_ADMIN_AUTHORITY);
+  const prepared = await receivingStructure.run(preparer.id, (context) =>
+    limitAccess.prepareApprovalLimit(
+      context,
+      { userId: preparer.id, roleAssignmentId: preparing.assignmentId },
+      { ...draft, origin: 'synthetic', validFrom: receivingStructure.today() },
+    ),
+  );
+  if (prepared.kind !== 'success') throw new Error(`The ${what} limit was refused: ${prepared.refusal.code}`);
+  const decided = await receivingStructure.decideThrough(
+    limitAccess,
+    prepared.answer.requestId,
+    prepared.answer.limitId,
+  );
+  if (decided.kind !== 'success') throw new Error(`The ${what} limit was not approved: ${decided.refusal.code}`);
+}
+await grantSynthetic(receivingDatabase, { kind: 'user', id: receivingStructure.approver.id }, LIMIT_APPROVER_AUTHORITY);
+await receivingLimitApproved('damage', stockDocumentsApprovalRules, {
+  actionType: DAMAGE_DECISION,
+  holder: { kind: 'individual', userId: damageOperations.id, roleAssignmentId: damageDecider.assignmentId },
+  limit: { kind: 'none' },
+  coversUnknown: true,
+});
+// The held-line journey (held-lines.spec.ts; goods-in 4.4 to 4.6, section 11; S2-F02-T03): Warehouse (P-WHS), who
+// counts excess on the world's Site, records it received and held and issues the GRN; and a Booking approver (P-BKG)
+// named for the Site and brand by role (POL-17.11), who takes the excess in from My work within an individual SYNTHETIC
+// limit on the decision covering an Unknown cost, prepared and approved through `access`'s commands by the setup's two
+// people (access-and-approvals 9.2). Policy 17 is Signed and validated above, for the damage journey. Who receives,
+// who decides and the limit are the product owner's: SYNTHETIC here.
+const heldReceiver = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-HELD-RECEIVER',
+  enrolled: true,
+  personas: ['P-WHS'],
+});
+await grantSynthetic(receivingDatabase, { kind: 'user', id: heldReceiver.id }, RECEIVER_AUTHORITY);
+const heldApprover = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-HELD-APPROVER',
+  enrolled: true,
+  personas: ['P-BKG'],
+});
+const heldDecider = await grantSynthetic(receivingDatabase, { kind: 'user', id: heldApprover.id }, [
+  { recordType: 'receiving.arrival', action: 'view' },
+  { recordType: 'receiving.held_line', action: 'approve' },
+  { recordType: 'access.approval_request', action: 'view' },
+  { recordType: 'access.approval_reason', action: 'view' },
+]);
+await receivingLimitApproved('held-line', receivingApprovalRules, {
+  actionType: HELD_LINE_DECISION,
+  holder: { kind: 'individual', userId: heldApprover.id, roleAssignmentId: heldDecider.assignmentId },
+  limit: { kind: 'none' },
+  coversUnknown: true,
+});
+// The recount journey (recount.spec.ts; goods-in 4.7, 4.11, section 11; S2-F02-T05), on the held-line world's Site:
+// Warehouse (P-WHS), who counts, issues the GRN and proposes its recount; and the Owner (P-OWN), who approves recounts
+// from My work within an individual SYNTHETIC limit covering an Unknown cost, prepared and approved through `access`'s
+// commands by the setup's two people (access-and-approvals 9.2), and sees the stock the approval posts (stock-ledger
+// 14.3). Who recounts, who approves and the limit are the product owner's: SYNTHETIC here.
+const recountReceiver = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-RECOUNT-RECEIVER',
+  enrolled: true,
+  personas: ['P-WHS'],
+});
+await grantSynthetic(receivingDatabase, { kind: 'user', id: recountReceiver.id }, [
+  ...RECEIVER_AUTHORITY,
+  { recordType: 'receiving.recount', action: 'create' },
+]);
+const recountApprover = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-RECOUNT-APPROVER',
+  enrolled: true,
+  personas: ['P-OWN'],
+});
+const recountDecider = await grantSynthetic(receivingDatabase, { kind: 'user', id: recountApprover.id }, [
+  { recordType: 'receiving.arrival', action: 'view' },
+  { recordType: 'receiving.recount', action: 'approve' },
+  { recordType: 'access.approval_request', action: 'view' },
+  { recordType: 'access.approval_reason', action: 'view' },
+  ...STOCK_VIEW,
+]);
+await receivingLimitApproved('recount', receivingApprovalRules, {
+  actionType: RECOUNT_APPROVAL,
+  holder: { kind: 'individual', userId: recountApprover.id, roleAssignmentId: recountDecider.assignmentId },
+  limit: { kind: 'none' },
+  coversUnknown: true,
+});
+const receivingRouter = new OrganisationRouter(
+  { directoryConnectionString: databaseUrl(world.directory, 'runtime'), poolMax: 2 },
+  fixtureLog.logger,
+);
+const receivingRouted = await receivingRouter.resolveForSignIn(receivingCode);
+if (!receivingRouted.routed) throw new Error('The receiving Organisation was not routed');
+const receivingReceiver = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-RECEIVER',
+  enrolled: true,
+  personas: ['P-WHS'],
+});
+/** The lists the Receive Goods screens choose from and name records by (structure-and-masters 8). */
+const RECEIVING_LISTS = [
+  { recordType: 'organisation.site', action: 'view' },
+  { recordType: 'merchandise.brand', action: 'view' },
+  { recordType: 'merchandise.party', action: 'view' },
+  { recordType: 'merchandise.attribute', action: 'view' },
+  { recordType: 'merchandise.marked_attribute', action: 'view' },
+  { recordType: 'merchandise.vocabulary_value', action: 'view' },
+  { recordType: 'merchandise.style', action: 'view' },
+  { recordType: 'merchandise.sku', action: 'view' },
+] as const;
+await grantSynthetic(receivingDatabase, { kind: 'user', id: receivingReceiver.id }, [
+  ...RECEIVER_AUTHORITY,
+  ...RECEIVING_LISTS,
+]);
+// A Store's staff: receiving at their own Store only, and the lists of masters, which carry no place, from a second
+// assignment (access-and-approvals 5.3; PRD-ACS-004). SYNTHETIC grants: who receives where is the product owner's.
+const receivingStoreStaff = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-STORE-STAFF',
+  enrolled: true,
+  personas: ['P-STM'],
+});
+await grantSynthetic(receivingDatabase, { kind: 'user', id: receivingStoreStaff.id }, RECEIVER_AUTHORITY, {
+  scope: placeScope([{ type: 'store', id: storeStaffWorld.storeId }]),
+});
+await grantSynthetic(receivingDatabase, { kind: 'user', id: receivingStoreStaff.id }, RECEIVING_LISTS);
+await fixtureRunner.run(
+  {
+    commandName: 'test-syn-receiving.fixture',
+    organisation: receivingRouted.organisation,
+    correlationId: newCorrelationId(),
+    actor: { kind: 'actor', actorId: receivingReceiver.id },
+  },
+  (context) => defineSyntheticGrnSeries(context, new Numbering({ kinds: [GRN_KIND] })),
+);
+// The booking journey's people (booking.spec.ts; S2-F01-T03): Booking (P-BKG), who records the booking with its grid,
+// attaches its document and submits it; and the Owner (P-OWN), who approves it from My work within a SYNTHETIC booking
+// limit on its value at cost (DM-8, DEC-105). SYNTHETIC grants and limit: who holds them is the product owner's (V-01,
+// V-02).
+const BOOKING_LISTS = [...RECEIVING_LISTS, { recordType: 'access.approval_request', action: 'view' }] as const;
+const bookingBooker = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-BOOKING',
+  enrolled: true,
+  personas: ['P-BKG'],
+});
+await grantSynthetic(receivingDatabase, { kind: 'user', id: bookingBooker.id }, [
+  ...BOOKING_LISTS,
+  { recordType: 'booking.booking', action: 'view' },
+  { recordType: 'booking.booking', action: 'create' },
+  { recordType: 'booking.booking', action: 'edit' },
+  { recordType: 'files_imports.stored_file', action: 'create' },
+]);
+const bookingOwner = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-BOOKING-OWNER',
+  enrolled: true,
+  personas: ['P-OWN'],
+});
+const bookingOwnerAssignment = await grantSynthetic(receivingDatabase, { kind: 'user', id: bookingOwner.id }, [
+  ...BOOKING_LISTS,
+  { recordType: 'booking.booking', action: 'view' },
+  { recordType: 'booking.booking', action: 'approve' },
+  { recordType: 'access.approval_reason', action: 'view' },
+]);
+// A SYNTHETIC limit of ₹10,00,000.00 on cost, prepared and approved by two other people through access's commands.
+await bookingLimitApproved(
+  receivingStructure,
+  receivingDatabase,
+  { userId: bookingOwner.id, roleAssignmentId: bookingOwnerAssignment.assignmentId },
+  100_000_000,
+);
+const bookingReasonId = await writeSyntheticReason(receivingDatabase, 'approve');
+await fixtureRunner.run(
+  {
+    commandName: 'test-syn-booking.fixture',
+    organisation: receivingRouted.organisation,
+    correlationId: newCorrelationId(),
+    actor: { kind: 'actor', actorId: bookingOwner.id },
+  },
+  (context) => defineSyntheticBookingSeries(context, new Numbering({ kinds: [BOOKING_KIND] })),
+);
+// The receive-against-booking journey's people (receive-against-booking.spec.ts; goods-in 4.10; S2-F02-T04): Warehouse
+// (P-WHS), who receives against the booking and so sees bookings; Booking (P-BKG), who reviews the GRN's lines,
+// proposes the excess into the booking and owns the review follow-up at the world's Site; and the Owner (P-OWN), who
+// approves the excess from My work, with no limit since it has no value. Two more, who record and approve the booking
+// the journey receives against through the API once the server listens (below), the Owner within a SYNTHETIC limit, so
+// the journey's people sign in with authenticator codes nobody used. SYNTHETIC grants and limit: who holds them is the
+// product owner's.
+const againstReceiver = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-RAB-RECEIVER',
+  enrolled: true,
+  personas: ['P-WHS'],
+});
+await grantSynthetic(receivingDatabase, { kind: 'user', id: againstReceiver.id }, [
+  ...RECEIVER_AUTHORITY,
+  ...RECEIVING_LISTS,
+  { recordType: 'booking.booking', action: 'view' },
+]);
+const againstBooker = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-RAB-BOOKING',
+  enrolled: true,
+  personas: ['P-BKG'],
+});
+await grantSynthetic(receivingDatabase, { kind: 'user', id: againstBooker.id }, [
+  ...BOOKING_LISTS,
+  { recordType: 'booking.booking', action: 'view' },
+  { recordType: 'booking.booking', action: 'create' },
+  { recordType: 'booking.booking', action: 'edit' },
+  { recordType: 'files_imports.stored_file', action: 'create' },
+  { recordType: 'receiving.arrival', action: 'view' },
+  { recordType: 'receiving.grn', action: 'view' },
+  { recordType: 'exceptions.exception', action: 'view' },
+]);
+const againstOwner = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-RAB-OWNER',
+  enrolled: true,
+  personas: ['P-OWN'],
+});
+await grantSynthetic(receivingDatabase, { kind: 'user', id: againstOwner.id }, [
+  ...BOOKING_LISTS,
+  { recordType: 'booking.booking', action: 'view' },
+  { recordType: 'booking.booking', action: 'approve' },
+  { recordType: 'access.approval_reason', action: 'view' },
+]);
+const againstFixtureBooker = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-RAB-FIXTURE-BOOKING',
+  enrolled: true,
+  personas: ['P-BKG'],
+});
+await grantSynthetic(receivingDatabase, { kind: 'user', id: againstFixtureBooker.id }, [
+  ...BOOKING_LISTS,
+  { recordType: 'booking.booking', action: 'view' },
+  { recordType: 'booking.booking', action: 'create' },
+  { recordType: 'booking.booking', action: 'edit' },
+  { recordType: 'files_imports.stored_file', action: 'create' },
+]);
+const againstFixtureOwner = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-RAB-FIXTURE-OWNER',
+  enrolled: true,
+  personas: ['P-OWN'],
+});
+const againstFixtureOwnerAssignment = await grantSynthetic(
+  receivingDatabase,
+  { kind: 'user', id: againstFixtureOwner.id },
+  [
+    ...BOOKING_LISTS,
+    { recordType: 'booking.booking', action: 'view' },
+    { recordType: 'booking.booking', action: 'approve' },
+    { recordType: 'access.approval_reason', action: 'view' },
+  ],
+);
+await bookingLimitApproved(
+  receivingStructure,
+  receivingDatabase,
+  { userId: againstFixtureOwner.id, roleAssignmentId: againstFixtureOwnerAssignment.assignmentId },
+  100_000_000,
+);
+// The reports journey (S2-F11-T02), in the receive-against-booking world: Booking (P-BKG), who reads the booking status
+// and the receipt problems and may not read stock; and a pair of fixture users who record and approve the booking it
+// reads, as the receive-against-booking journey's do theirs. SYNTHETIC grants and limit: who holds them is the product
+// owner's.
+const reportsReader = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-RPT-BOOKING',
+  enrolled: true,
+  personas: ['P-BKG'],
+});
+await grantSynthetic(receivingDatabase, { kind: 'user', id: reportsReader.id }, [
+  ...BOOKING_LISTS,
+  { recordType: 'booking.booking', action: 'view' },
+  { recordType: 'receiving.arrival', action: 'view' },
+  { recordType: 'receiving.grn', action: 'view' },
+]);
+const reportsFixtureBooker = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-RPT-FIXTURE-BOOKING',
+  enrolled: true,
+  personas: ['P-BKG'],
+});
+await grantSynthetic(receivingDatabase, { kind: 'user', id: reportsFixtureBooker.id }, [
+  ...BOOKING_LISTS,
+  { recordType: 'booking.booking', action: 'view' },
+  { recordType: 'booking.booking', action: 'create' },
+  { recordType: 'booking.booking', action: 'edit' },
+  { recordType: 'files_imports.stored_file', action: 'create' },
+]);
+const reportsFixtureOwner = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-RPT-FIXTURE-OWNER',
+  enrolled: true,
+  personas: ['P-OWN'],
+});
+const reportsFixtureOwnerAssignment = await grantSynthetic(
+  receivingDatabase,
+  { kind: 'user', id: reportsFixtureOwner.id },
+  [
+    ...BOOKING_LISTS,
+    { recordType: 'booking.booking', action: 'view' },
+    { recordType: 'booking.booking', action: 'approve' },
+    { recordType: 'access.approval_reason', action: 'view' },
+  ],
+);
+await bookingLimitApproved(
+  receivingStructure,
+  receivingDatabase,
+  { userId: reportsFixtureOwner.id, roleAssignmentId: reportsFixtureOwnerAssignment.assignmentId },
+  100_000_000,
+);
+// And for the damage journey: the reporter's lists of masters; an approve reason; the exception-code series and the damage-report series with SYNTHETIC
+// formats (RR-449; DEC-118); and the damage exception routed at the world's Site to Operations by a SYNTHETIC rule
+// approved here as a fixture (code-house-rules 11.2), as the other journeys' rules are. The routing is the product
+// owner's: SYNTHETIC here.
+await grantSynthetic(receivingDatabase, { kind: 'user', id: damageReporter.id }, RECEIVING_LISTS);
+await grantSynthetic(receivingDatabase, { kind: 'user', id: heldReceiver.id }, RECEIVING_LISTS);
+await grantSynthetic(receivingDatabase, { kind: 'user', id: heldApprover.id }, RECEIVING_LISTS);
+await grantSynthetic(receivingDatabase, { kind: 'user', id: recountReceiver.id }, RECEIVING_LISTS);
+await grantSynthetic(receivingDatabase, { kind: 'user', id: recountApprover.id }, RECEIVING_LISTS);
+const damageReasonId = await writeSyntheticReason(receivingDatabase, 'approve');
+const damageRouting = await fixtureRunner.run(
+  {
+    commandName: 'test-syn-damage.fixture',
+    organisation: receivingRouted.organisation,
+    correlationId: newCorrelationId(),
+    actor: { kind: 'actor', actorId: damageOperations.id },
+  },
+  async (context) => {
+    const numbering = new Numbering({ kinds: [EXCEPTION_CODE_KIND, DAMAGE_REPORT_KIND] });
+    await defineSyntheticCodeSeries(context, numbering);
+    await defineSyntheticDamageReportSeries(context, numbering);
+    const exceptions = new Exceptions({
+      numbering,
+      inbox: new Inbox(),
+      audit: new Audit(fixtureLog.logger),
+      types: [damageExceptionType],
+    });
+    return exceptions.prepareRouting(
+      context,
+      { userId: damageOperations.id, roleAssignmentId: damageDecider.assignmentId },
+      {
+        typeCode: damageExceptionType.code,
+        siteId: damageWorld.siteId,
+        owner: { kind: 'user', userId: damageOperations.id },
+        dueRule: { format: 'elapsed-minutes-v1', minutes: 60 },
+        escalation: { kind: 'user', userId: damageOperations.id },
+        validFrom: new Date().toISOString().slice(0, 10),
+        origin: 'synthetic',
+      },
+    );
+  },
+);
+if (damageRouting.kind !== 'done') throw new Error(`The damage rule was refused: ${damageRouting.refusal.code}`);
+// The held-line journey's excess routed at its world's Site to the Booking approver by a SYNTHETIC rule. The routing is
+// the product owner's: SYNTHETIC here.
+const heldRouting = await fixtureRunner.run(
+  {
+    commandName: 'test-syn-held-lines.fixture',
+    organisation: receivingRouted.organisation,
+    correlationId: newCorrelationId(),
+    actor: { kind: 'actor', actorId: damageOperations.id },
+  },
+  (context) =>
+    new Exceptions({
+      numbering: new Numbering({ kinds: [EXCEPTION_CODE_KIND] }),
+      inbox: new Inbox(),
+      audit: new Audit(fixtureLog.logger),
+      types: [damageExceptionType, ...receivingExceptionTypes],
+    }).prepareRouting(
+      context,
+      { userId: damageOperations.id, roleAssignmentId: damageDecider.assignmentId },
+      {
+        typeCode: 'receiving.excess',
+        siteId: heldWorld.siteId,
+        owner: { kind: 'user', userId: heldApprover.id },
+        dueRule: { format: 'elapsed-minutes-v1', minutes: 60 },
+        escalation: { kind: 'user', userId: heldApprover.id },
+        validFrom: new Date().toISOString().slice(0, 10),
+        origin: 'synthetic',
+      },
+    ),
+);
+if (heldRouting.kind !== 'done') throw new Error(`The excess rule was refused: ${heldRouting.refusal.code}`);
+// The recount journey's shortage routed at the held-line world's Site to the Owner who approves recounts by a SYNTHETIC
+// rule: its GRN counts short, and every follow-up needs an owner (goods-in 4.9). The routing is the product owner's:
+// SYNTHETIC here.
+const recountRouting = await fixtureRunner.run(
+  {
+    commandName: 'test-syn-recount.fixture',
+    organisation: receivingRouted.organisation,
+    correlationId: newCorrelationId(),
+    actor: { kind: 'actor', actorId: damageOperations.id },
+  },
+  (context) =>
+    new Exceptions({
+      numbering: new Numbering({ kinds: [EXCEPTION_CODE_KIND] }),
+      inbox: new Inbox(),
+      audit: new Audit(fixtureLog.logger),
+      types: [damageExceptionType, ...receivingExceptionTypes],
+    }).prepareRouting(
+      context,
+      { userId: damageOperations.id, roleAssignmentId: damageDecider.assignmentId },
+      {
+        typeCode: 'receiving.shortage',
+        siteId: heldWorld.siteId,
+        owner: { kind: 'user', userId: recountApprover.id },
+        dueRule: { format: 'elapsed-minutes-v1', minutes: 60 },
+        escalation: { kind: 'user', userId: recountApprover.id },
+        validFrom: new Date().toISOString().slice(0, 10),
+        origin: 'synthetic',
+      },
+    ),
+);
+if (recountRouting.kind !== 'done') throw new Error(`The shortage rule was refused: ${recountRouting.refusal.code}`);
+// The receive-against-booking journey's review of GRN lines routed at its world's Site to its Booking user by a
+// SYNTHETIC rule (goods-in 4.10). The routing is the product owner's: SYNTHETIC here.
+const againstRouting = await fixtureRunner.run(
+  {
+    commandName: 'test-syn-against-booking.fixture',
+    organisation: receivingRouted.organisation,
+    correlationId: newCorrelationId(),
+    actor: { kind: 'actor', actorId: damageOperations.id },
+  },
+  (context) =>
+    new Exceptions({
+      numbering: new Numbering({ kinds: [EXCEPTION_CODE_KIND] }),
+      inbox: new Inbox(),
+      audit: new Audit(fixtureLog.logger),
+      types: [damageExceptionType, ...receivingExceptionTypes],
+    }).prepareRouting(
+      context,
+      { userId: damageOperations.id, roleAssignmentId: damageDecider.assignmentId },
+      {
+        typeCode: 'receiving.booking-review',
+        siteId: againstWorld.siteId,
+        owner: { kind: 'user', userId: againstBooker.id },
+        dueRule: { format: 'elapsed-minutes-v1', minutes: 60 },
+        escalation: { kind: 'user', userId: againstBooker.id },
+        validFrom: receivingStructure.today(),
+        origin: 'synthetic',
+      },
+    ),
+);
+if (againstRouting.kind !== 'done') throw new Error(`The review rule was refused: ${againstRouting.refusal.code}`);
+// A GRN received without a booking goes to Booking for review too (goods-in 4.10; 12 test 6; RR-580), so each other
+// receiving journey's Site has the review routed to the receive-against-booking journey's Booking user by a SYNTHETIC
+// rule, as a GRN with findings waits for its follow-ups' routing (goods-in 4.9). The routing is the product owner's:
+// SYNTHETIC here.
+const unbookedRoutings: { readonly routingId: string; readonly versionId: string }[] = [];
+for (const world of [receivingWorld, storeStaffWorld, damageWorld, heldWorld, ptReceivingWorld]) {
+  const routed = await fixtureRunner.run(
+    {
+      commandName: 'test-syn-unbooked-review.fixture',
+      organisation: receivingRouted.organisation,
+      correlationId: newCorrelationId(),
+      actor: { kind: 'actor', actorId: damageOperations.id },
+    },
+    (context) =>
+      new Exceptions({
+        numbering: new Numbering({ kinds: [EXCEPTION_CODE_KIND] }),
+        inbox: new Inbox(),
+        audit: new Audit(fixtureLog.logger),
+        types: [damageExceptionType, ...receivingExceptionTypes],
+      }).prepareRouting(
+        context,
+        { userId: damageOperations.id, roleAssignmentId: damageDecider.assignmentId },
+        {
+          typeCode: 'receiving.booking-review',
+          siteId: world.siteId,
+          owner: { kind: 'user', userId: againstBooker.id },
+          dueRule: { format: 'elapsed-minutes-v1', minutes: 60 },
+          escalation: { kind: 'user', userId: againstBooker.id },
+          validFrom: receivingStructure.today(),
+          origin: 'synthetic',
+        },
+      ),
+  );
+  if (routed.kind !== 'done') throw new Error(`An unbooked review rule was refused: ${routed.refusal.code}`);
+  unbookedRoutings.push(routed.value);
+}
+// The rules approved through the real commands, as Setup › Exception rules has them approved (access-and-approvals
+// 12.2; code-house-rules 11.2): each asked of `access` for a different person, the setup's approver, holding approve on
+// the rules, who decides it through Decide.
+{
+  const routingAccess = receivingStructure.accessWith(routingApprovals(new Audit(fixtureLog.logger)));
+  await grantSynthetic(receivingDatabase, { kind: 'user', id: receivingStructure.approver.id }, [
+    { recordType: 'exceptions.exception_routing', action: 'view' },
+    { recordType: 'exceptions.exception_routing', action: 'approve' },
+  ]);
+  for (const rule of [
+    damageRouting.value,
+    heldRouting.value,
+    againstRouting.value,
+    recountRouting.value,
+    ...unbookedRoutings,
+  ]) {
+    const requestId = await receivingStructure.run(damageOperations.id, (context) =>
+      routingAccess.requestApproval(context, {
+        actionType: ROUTING_ACTION_TYPE,
+        document: {
+          module: 'exceptions',
+          recordType: 'exceptions.exception_routing',
+          recordId: rule.routingId,
+          versionId: rule.versionId,
+        },
+        value: { kind: 'none' },
+        preparers: [damageOperations.id],
+        requestedBy: { userId: damageOperations.id, roleAssignmentId: damageDecider.assignmentId },
+      }),
+    );
+    const decided = await receivingStructure.decideThrough(routingAccess, requestId, rule.versionId);
+    if (decided.kind !== 'success') throw new Error(`An exception rule was not approved: ${decided.refusal.code}`);
+  }
+}
+// The PT file journey (pt-upload.spec.ts; goods-in 5, section 11; S2-F04-T02), in the receiving Organisation, in a
+// world of its own: the master sheet's lists as SYNTHETIC vocabularies, each value confirmed by a different person and
+// each list marked as the Organisation's, the season being the booking journey's marked one; the Sub category list as
+// categories; the PT template's SYNTHETIC layout and mapping, Confirmed by a different person (support/pt.ts); the
+// import batch series with a SYNTHETIC format (RR-449); and Warehouse (P-WHS), also assigned to make PTs and granted
+// the cost and margin field classes, who counts, issues the GRN and uploads its PT file. Two SYNTHETIC files of the
+// GRN's style and size: one refused, its MARGIN wrong and its QTY one short of the count, and one that passes. Who
+// makes PTs, the lists and the template are the product owner's: SYNTHETIC here.
+const ptLists = await ptWorld(
+  receivingStructure,
+  receivingDatabase,
+  'JOURNEY-PTF',
+  { proposer: receivingStructure.preparer.id, confirmer: receivingStructure.approver.id },
+  // The size sets of the categories, the PT approval journey's sizes, which its approval asks (S2-F06-T01).
+  { sizes: ptReceivingWorld.sizes.values.map((each) => each.code) },
+);
+const ptMaker = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-PT-MAKER',
+  enrolled: true,
+  personas: ['P-WHS'],
+});
+await grantSynthetic(
+  receivingDatabase,
+  { kind: 'user', id: ptMaker.id },
+  [
+    ...RECEIVER_AUTHORITY,
+    ...RECEIVING_LISTS,
+    { recordType: 'files_imports.import_batch', action: 'view' },
+    { recordType: 'files_imports.import_batch', action: 'create' },
+    { recordType: 'files_imports.import_batch', action: 'edit' },
+    { recordType: 'merchandise.pt', action: 'view' },
+    { recordType: 'merchandise.pt', action: 'create' },
+    { recordType: 'merchandise.pt', action: 'edit' },
+    { recordType: 'access.approval_request', action: 'view' },
+  ],
+  {
+    fieldClasses: [
+      { fieldClass: 'cost', access: 'view' },
+      { fieldClass: 'margin', access: 'view' },
+    ],
+  },
+);
+await fixtureRunner.run(
+  {
+    commandName: 'test-syn-pt.fixture',
+    organisation: receivingRouted.organisation,
+    correlationId: newCorrelationId(),
+    actor: { kind: 'actor', actorId: ptMaker.id },
+  },
+  (context) => defineSyntheticImportBatchSeries(context, new Numbering({ kinds: [IMPORT_BATCH_KIND] })),
+);
+const ptStyle = syntheticCode(`JOURNEY-PTF-STYLE-${randomBytes(3).toString('hex').toUpperCase()}`);
+const ptSize = ptReceivingWorld.sizes.values[0]?.code ?? '';
+/** MARGIN at MRP 1,999.00 and P RATE 945.00, worked by hand: (1,999.00 − 945.00) ÷ 1,999.00 = 52.73. */
+const MARGIN_AT_945 = 52.73;
+/** MARGIN at MRP 1,999.00 and P RATE 900.00, worked by hand: (1,999.00 − 900.00) ÷ 1,999.00 = 54.98. */
+const MARGIN_AT_900 = 54.98;
+/** A row of the GRN's brand, style and size, one piece at MRP 1,999.00 and P RATE 945.00 (MARGIN_AT_945). */
+const ptRowOf = (barcode: string, values: SyntheticPtRow = {}): SyntheticPtRow => ({
+  SEASON: ptLists.season.values.SPRING?.code,
+  BRAND: ptReceivingWorld.brand.code,
+  COLOR: ptLists.colour.values.NAVY?.code,
+  GENDER: ptLists.gender.values.MALE?.code,
+  'SUB CATEGORY': ptLists.categories.CASUAL?.code,
+  TYPE: ptLists.type.values.TOP?.code,
+  ITEM: ptLists.item.values.TSHIRT?.code,
+  FIT: ptLists.fit.values.SLIM?.code,
+  SIZE: ptSize,
+  BARCODE: barcode,
+  DESIGN: ptStyle,
+  HSN: 61091000,
+  QTY: 1,
+  MRP: 1999,
+  BASIC: 700,
+  'P RATE': 945,
+  'INPUT TAX': ptLists.gstRate.values['GST-5']?.code,
+  'OUTPUT TAX': ptLists.gstRate.values['GST-18']?.code,
+  NAG: 1,
+  MARGIN: MARGIN_AT_945,
+  ...values,
+});
+const ptRefusedFile = join(dirname(worldFile), syntheticPtFileName('journey-pt-refused'));
+writeFileSync(
+  ptRefusedFile,
+  await syntheticPtWorkbook({ rows: [ptRowOf('8900000000011', { MARGIN: 50 })], marker: 'JOURNEY-PT-REFUSED' }),
+);
+const ptGoodFile = join(dirname(worldFile), syntheticPtFileName('journey-pt'));
+writeFileSync(
+  ptGoodFile,
+  await syntheticPtWorkbook({
+    rows: [ptRowOf('8900000000011'), ptRowOf('8900000000028')],
+    marker: 'JOURNEY-PT-GOOD',
+  }),
+);
+// The PT approval journey (pt-approval.spec.ts; goods-in 6, section 11; S2-F06-T01), in the receiving Organisation, in
+// the PT file journey's world, on its lists and template, with a style of its own, since a world of its own would add
+// the many approvals of a receiving world to the events My work is fed from before the journeys start: the casual Sub
+// category takes the SYNTHETIC quantity tracking profile made above; the world's book a SYNTHETIC cost setting, chart, period, journal series and map of
+// `stock.cost-established` to a SYNTHETIC receipt account (support/pt-gate.ts; DEC-140); the PT and SKU code series
+// with SYNTHETIC formats (RR-449, RR-585); policies 3 and 9 Signed and validated, 1 and 10 being already, and the PT
+// approval capability switched on (goods-in 10.5); Warehouse (P-WHS), also assigned to make PTs, who counts, issues
+// the GRN and uploads its PT file; and Operations (P-OPS), assigned to approve PTs and to see cost and margin, within an
+// individual SYNTHETIC limit on the PT's cost, prepared and approved through `access`'s commands by the setup's two
+// people (access-and-approvals 9.2). One SYNTHETIC file of the world's style and first size. Who makes and who
+// approves PTs, the limit, the accounts and the series' formats are the product owner's: SYNTHETIC here.
+{
+  const casual = ptLists.categories.CASUAL?.id ?? '';
+  const link = await receivingStructure.run(receivingStructure.preparer.id, (c) =>
+    receivingStructure.catalogue.record(c, 'category_tracking_profile', casual, receivingStructure.today()),
+  );
+  const linked = await receivingStructure.asPreparerDo((c, p) =>
+    receivingStructure.catalogue.prepareCategoryTrackingProfileVersion(c, p, casual, {
+      trackingProfileId: ptQuantityProfile.answer.recordId,
+      validFrom: receivingStructure.today(),
+      versionToken: link?.versionToken,
+    }),
+  );
+  if (linked.kind !== 'success') throw new Error(`The PT approval tracking link was refused: ${linked.refusal.code}`);
+}
+await syntheticPtBook(receivingStructure, 'JOURNEY-PTA', ptReceivingWorld.bookId);
+await fixtureRunner.run(
+  {
+    commandName: 'test-syn-pt-series.fixture',
+    organisation: receivingRouted.organisation,
+    correlationId: newCorrelationId(),
+    actor: { kind: 'actor', actorId: receivingStructure.preparer.id },
+  },
+  async (context) => {
+    const numbering = new Numbering({ kinds: [PT_KIND, SKU_CODE_KIND] });
+    await defineSyntheticPtSeries(context, numbering);
+    await defineSyntheticSkuCodeSeries(context, numbering);
+  },
+);
+await ptGateOpen(receivingStructure, receivingDatabase, [3, 9]);
+const ptApprovalMaker = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-PTA-MAKER',
+  enrolled: true,
+  personas: ['P-WHS'],
+});
+await grantSynthetic(
+  receivingDatabase,
+  { kind: 'user', id: ptApprovalMaker.id },
+  [
+    ...RECEIVER_AUTHORITY,
+    ...RECEIVING_LISTS,
+    // And scans the pieces in once the PT is approved (goods-in 7.1; S2-F07-T01).
+    { recordType: 'receiving.scan', action: 'create' },
+    // And reports damage on a product at its location from Stock search (goods-in 8.1, 9.2; S2-F11-T01).
+    { recordType: 'stock.damage_report', action: 'create' },
+    { recordType: 'files_imports.import_batch', action: 'view' },
+    { recordType: 'files_imports.import_batch', action: 'create' },
+    { recordType: 'files_imports.import_batch', action: 'edit' },
+    { recordType: 'merchandise.pt', action: 'view' },
+    { recordType: 'merchandise.pt', action: 'create' },
+    { recordType: 'merchandise.pt', action: 'edit' },
+    { recordType: 'access.approval_request', action: 'view' },
+  ],
+  {
+    fieldClasses: [
+      { fieldClass: 'cost', access: 'view' },
+      { fieldClass: 'margin', access: 'view' },
+    ],
+  },
+);
+// A Store's staff (P-STM) at the PT world's Store, who scans its second piece in at their own Store and finds the goods
+// in Stock search and the stock report there (goods-in 7.1, 9.2, 9.5, section 11; code-house-rules 10.1; code reviews
+// 8 and 9 of stage 2): the receiver's grants and the scan at that Store only, the lists of masters from a second
+// assignment; no cost field class. Who holds them is the product owner's: SYNTHETIC here.
+const ptApprovalStoreStaff = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-PTA-STORE',
+  enrolled: true,
+  personas: ['P-STM'],
+});
+await grantSynthetic(
+  receivingDatabase,
+  { kind: 'user', id: ptApprovalStoreStaff.id },
+  [...RECEIVER_AUTHORITY, { recordType: 'receiving.scan', action: 'create' }],
+  { scope: placeScope([{ type: 'store', id: ptReceivingWorld.storeId }]) },
+);
+await grantSynthetic(receivingDatabase, { kind: 'user', id: ptApprovalStoreStaff.id }, RECEIVING_LISTS);
+const ptApprovalApprover = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-PTA-APPROVER',
+  enrolled: true,
+  personas: ['P-OPS'],
+});
+const ptApprovalDecider = await grantSynthetic(
+  receivingDatabase,
+  { kind: 'user', id: ptApprovalApprover.id },
+  [
+    { recordType: 'merchandise.pt', action: 'view' },
+    { recordType: 'merchandise.pt', action: 'approve' },
+    { recordType: 'receiving.arrival', action: 'view' },
+    { recordType: 'receiving.grn', action: 'view' },
+    { recordType: 'access.approval_request', action: 'view' },
+    { recordType: 'access.approval_reason', action: 'view' },
+    // The users, so My work names who prepared each PT: the PT file journey submits one in this world too.
+    { recordType: 'access.user', action: 'view' },
+    ...STOCK_VIEW,
+  ],
+  {
+    fieldClasses: [
+      { fieldClass: 'cost', access: 'view' },
+      { fieldClass: 'margin', access: 'view' },
+    ],
+  },
+);
+/** A SYNTHETIC ₹10,00,000.00 on a PT's total proposed acquisition cost, the PT approval journeys' limit. */
+const SYNTHETIC_PT_LIMIT = { kind: 'amount', amount: paise(100_000_000) } as const;
+// A PT's approval, and its reversal before the scan-in, on the cost it reverses (goods-in 6.7; S2-F09-T01).
+for (const actionType of [PT_APPROVAL, PT_REVERSAL_APPROVAL]) {
+  await receivingLimitApproved('PT', ptApprovalRules, {
+    actionType,
+    holder: { kind: 'individual', userId: ptApprovalApprover.id, roleAssignmentId: ptApprovalDecider.assignmentId },
+    limit: SYNTHETIC_PT_LIMIT,
+    coversUnknown: false,
+  });
+}
+const ptApprovalStyle = syntheticCode(`JOURNEY-PTA-STYLE-${randomBytes(3).toString('hex').toUpperCase()}`);
+const ptApprovalFile = join(dirname(worldFile), syntheticPtFileName('journey-pt-approval'));
+// Two rows of the journey's style and the world's first size, each one piece at MRP 1,999.00, BASIC 700.00 and P RATE
+// 945.00.
+writeFileSync(
+  ptApprovalFile,
+  await syntheticPtWorkbook({
+    rows: [
+      ptRowOf('8900000000035', { DESIGN: ptApprovalStyle }),
+      ptRowOf('8900000000042', { DESIGN: ptApprovalStyle }),
+    ],
+    marker: 'JOURNEY-PT-APPROVAL',
+  }),
+);
+// The corrected file once the PT is reversed (goods-in 6.4; S2-F09-T01): the same two pieces at P RATE 900.00, so
+// MARGIN_AT_900.
+const ptApprovalCorrectedFile = join(dirname(worldFile), syntheticPtFileName('journey-pt-corrected'));
+writeFileSync(
+  ptApprovalCorrectedFile,
+  await syntheticPtWorkbook({
+    rows: [
+      ptRowOf('8900000000035', { DESIGN: ptApprovalStyle, 'P RATE': 900, MARGIN: MARGIN_AT_900 }),
+      ptRowOf('8900000000042', { DESIGN: ptApprovalStyle, 'P RATE': 900, MARGIN: MARGIN_AT_900 }),
+    ],
+    marker: 'JOURNEY-PT-CORRECTED',
+  }),
+);
+// The scan-in's destination at the Store (goods-in 7.2; S2-F07-T01): a floor of the PT world's Store unit, SYNTHETIC,
+// apart from the receiving zone the goods are received into.
+const PT_APPROVAL_FLOOR = { code: syntheticCode('JOURNEY-PTA-FLOOR'), name: syntheticName('Journey shop floor') };
+/** How the screens name the floor: its code and name (Stock search, S2-F11-T01; the scan-in's choice with its kind). */
+const ptApprovalFloorName = `${PT_APPROVAL_FLOOR.code} · ${PT_APPROVAL_FLOOR.name}`;
+const ptApprovalFloor = await approved(receivingStructure, (c, p) =>
+  receivingStructure.organisation.prepareLocation(c, p, {
+    code: PT_APPROVAL_FLOOR.code,
+    siteId: ptReceivingWorld.siteId,
+    businessUnitId: ptReceivingWorld.wholeStore,
+    name: PT_APPROVAL_FLOOR.name,
+    kind: 'floor',
+    validFrom: receivingStructure.today(),
+  }),
+);
+// The joined journey of the first version (goods-in-journey.spec.ts; goods-in 12 test 22, section 11; roadmap 2.2;
+// S2-F07-T02), in the receiving Organisation, in the PT file journey's world, on its lists, template, book and floor,
+// with a style of its own, as the PT approval journey's: Booking (P-BKG), who records the booking, prepares the
+// open-to-buy budget of the world's brand and the booking journey's season, may not see stock and reads the booking
+// status; Accounts (P-ACC), who checks the budget from My work, holds approve on budgets too, so the refusal of their
+// approving it is for having checked it alone (DEC-142), and sees stock with its cost; the Owner (P-OWN), who approves
+// the budget and, at the world's Site only, the booking within an individual SYNTHETIC limit below the other Owners',
+// so the booking is offered to this Owner alone and no other journey's booking to them (access-and-approvals 9.4 "As
+// built"); Warehouse (P-WHS), also assigned to make PTs, who receives against the booking, counts, issues the GRN and
+// uploads its PT files; Operations (P-OPS), who rejects the first PT and approves the corrected one within a SYNTHETIC
+// limit equal to the PT approval journey's approver's, so each of them is offered both journeys' PTs and chooses its
+// own maker's; and a Store's staff (P-STM) at the world's Store, who scans the pieces in and finds them in Stock search.
+// A reject reason in force. Three SYNTHETIC files of the style and the world's first size, two pieces: one refused,
+// its MARGIN wrong and one piece short; one at P RATE 900.00, which Operations rejects; and the corrected one at P RATE
+// 945.00. Who holds what, the limits and every value are the product owner's: SYNTHETIC here.
+const goodsInBooker = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-GI-BOOKING',
+  enrolled: true,
+  personas: ['P-BKG'],
+});
+await grantSynthetic(receivingDatabase, { kind: 'user', id: goodsInBooker.id }, [
+  ...BOOKING_LISTS,
+  { recordType: 'booking.booking', action: 'view' },
+  { recordType: 'booking.booking', action: 'create' },
+  { recordType: 'booking.booking', action: 'edit' },
+  { recordType: 'booking.open_to_buy_budget', action: 'view' },
+  { recordType: 'booking.open_to_buy_budget', action: 'create' },
+  { recordType: 'booking.open_to_buy_budget', action: 'edit' },
+  { recordType: 'files_imports.stored_file', action: 'create' },
+  // The booking status report reads the receipts that deliver to a booking (goods-in 9.3).
+  { recordType: 'receiving.arrival', action: 'view' },
+  { recordType: 'receiving.grn', action: 'view' },
+]);
+const goodsInAccounts = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-GI-ACCOUNTS',
+  enrolled: true,
+  personas: ['P-ACC'],
+});
+await grantSynthetic(
+  receivingDatabase,
+  { kind: 'user', id: goodsInAccounts.id },
+  [
+    ...BOOKING_LISTS,
+    ...STOCK_VIEW,
+    { recordType: 'booking.open_to_buy_budget', action: 'view' },
+    { recordType: 'booking.open_to_buy_budget', action: 'approve' },
+    { recordType: 'booking.open_to_buy_check', action: 'view' },
+    { recordType: 'booking.open_to_buy_check', action: 'approve' },
+    { recordType: 'access.approval_reason', action: 'view' },
+  ],
+  { fieldClasses: [{ fieldClass: 'cost', access: 'view' }] },
+);
+const goodsInOwner = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-GI-OWNER',
+  enrolled: true,
+  personas: ['P-OWN'],
+});
+await grantSynthetic(receivingDatabase, { kind: 'user', id: goodsInOwner.id }, [
+  ...BOOKING_LISTS,
+  { recordType: 'booking.open_to_buy_budget', action: 'view' },
+  { recordType: 'booking.open_to_buy_budget', action: 'approve' },
+  { recordType: 'access.approval_reason', action: 'view' },
+  // The users, so My work names who prepared each request.
+  { recordType: 'access.user', action: 'view' },
+]);
+const goodsInOwnerBookings = await grantSynthetic(
+  receivingDatabase,
+  { kind: 'user', id: goodsInOwner.id },
+  [
+    { recordType: 'booking.booking', action: 'view' },
+    { recordType: 'booking.booking', action: 'approve' },
+    { recordType: 'access.approval_request', action: 'view' },
+    { recordType: 'access.approval_reason', action: 'view' },
+  ],
+  { scope: placeScope([{ type: 'site', id: ptReceivingWorld.siteId }]) },
+);
+// A SYNTHETIC limit of ₹5,00,000.00 on cost, prepared and approved by two other people through access's commands.
+await bookingLimitApproved(
+  receivingStructure,
+  receivingDatabase,
+  { userId: goodsInOwner.id, roleAssignmentId: goodsInOwnerBookings.assignmentId },
+  50_000_000,
+);
+const goodsInReceiver = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-GI-WAREHOUSE',
+  enrolled: true,
+  personas: ['P-WHS'],
+});
+await grantSynthetic(
+  receivingDatabase,
+  { kind: 'user', id: goodsInReceiver.id },
+  [
+    ...RECEIVER_AUTHORITY,
+    ...RECEIVING_LISTS,
+    { recordType: 'booking.booking', action: 'view' },
+    { recordType: 'files_imports.import_batch', action: 'view' },
+    { recordType: 'files_imports.import_batch', action: 'create' },
+    { recordType: 'files_imports.import_batch', action: 'edit' },
+    { recordType: 'merchandise.pt', action: 'view' },
+    { recordType: 'merchandise.pt', action: 'create' },
+    { recordType: 'merchandise.pt', action: 'edit' },
+    { recordType: 'access.approval_request', action: 'view' },
+  ],
+  {
+    fieldClasses: [
+      { fieldClass: 'cost', access: 'view' },
+      { fieldClass: 'margin', access: 'view' },
+    ],
+  },
+);
+const goodsInOperations = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-GI-OPS',
+  enrolled: true,
+  personas: ['P-OPS'],
+});
+const goodsInDecider = await grantSynthetic(
+  receivingDatabase,
+  { kind: 'user', id: goodsInOperations.id },
+  [
+    { recordType: 'merchandise.pt', action: 'view' },
+    { recordType: 'merchandise.pt', action: 'approve' },
+    { recordType: 'receiving.arrival', action: 'view' },
+    { recordType: 'receiving.grn', action: 'view' },
+    { recordType: 'access.approval_request', action: 'view' },
+    { recordType: 'access.approval_reason', action: 'view' },
+    // The users, so My work names who prepared each PT: the PT file and PT approval journeys submit some here too.
+    { recordType: 'access.user', action: 'view' },
+    ...STOCK_VIEW,
+  ],
+  {
+    fieldClasses: [
+      { fieldClass: 'cost', access: 'view' },
+      { fieldClass: 'margin', access: 'view' },
+    ],
+  },
+);
+// The PT approval journey's approver's limit, so each of them is offered both journeys' PTs.
+await receivingLimitApproved("the joined journey's PT", ptApprovalRules, {
+  actionType: PT_APPROVAL,
+  holder: { kind: 'individual', userId: goodsInOperations.id, roleAssignmentId: goodsInDecider.assignmentId },
+  limit: SYNTHETIC_PT_LIMIT,
+  coversUnknown: false,
+});
+const goodsInStoreStaff = await writeSyntheticUser(receivingDatabase, receivingCode, keys, {
+  label: 'BROWSER-GI-STORE',
+  enrolled: true,
+  personas: ['P-STM'],
+});
+await grantSynthetic(
+  receivingDatabase,
+  { kind: 'user', id: goodsInStoreStaff.id },
+  [...RECEIVER_AUTHORITY, { recordType: 'receiving.scan', action: 'create' }],
+  { scope: placeScope([{ type: 'store', id: ptReceivingWorld.storeId }]) },
+);
+await grantSynthetic(receivingDatabase, { kind: 'user', id: goodsInStoreStaff.id }, RECEIVING_LISTS);
+const goodsInRejectReasonId = await writeSyntheticReason(receivingDatabase, 'reject');
+const goodsInStyle = syntheticCode(`JOURNEY-GI-STYLE-${randomBytes(3).toString('hex').toUpperCase()}`);
+const goodsInBarcodes = ['8900000000059', '8900000000066'] as const;
+/** The journey's style on a row of the PT world's, at the P RATE given: MARGIN (MRP − P RATE) ÷ MRP, by hand. */
+const goodsInRow = (barcode: string, pRate: 900 | 945, values: SyntheticPtRow = {}): SyntheticPtRow =>
+  ptRowOf(barcode, {
+    DESIGN: goodsInStyle,
+    'P RATE': pRate,
+    MARGIN: pRate === 900 ? MARGIN_AT_900 : MARGIN_AT_945,
+    ...values,
+  });
+const goodsInRefusedFile = join(dirname(worldFile), syntheticPtFileName('journey-gi-refused'));
+writeFileSync(
+  goodsInRefusedFile,
+  await syntheticPtWorkbook({
+    rows: [goodsInRow(goodsInBarcodes[0], 945, { MARGIN: 50 })],
+    marker: 'JOURNEY-GI-REFUSED',
+  }),
+);
+const goodsInRejectedFile = join(dirname(worldFile), syntheticPtFileName('journey-gi-rejected'));
+writeFileSync(
+  goodsInRejectedFile,
+  await syntheticPtWorkbook({
+    rows: [goodsInRow(goodsInBarcodes[0], 900), goodsInRow(goodsInBarcodes[1], 900)],
+    marker: 'JOURNEY-GI-REJECTED',
+  }),
+);
+const goodsInCorrectedFile = join(dirname(worldFile), syntheticPtFileName('journey-gi-corrected'));
+writeFileSync(
+  goodsInCorrectedFile,
+  await syntheticPtWorkbook({
+    rows: [goodsInRow(goodsInBarcodes[0], 945), goodsInRow(goodsInBarcodes[1], 945)],
+    marker: 'JOURNEY-GI-CORRECTED',
+  }),
+);
+
+// The setup's people approved the exception rules above, so its connections end only now.
+await receivingStructure.close();
+await receivingRouter.close();
+
+// The readiness journey's world (site-readiness.spec.ts; S1-F04-T02), in its own Organisation made by the setup step:
+// an approved SYNTHETIC Site with one warehouse unit of its own legal entity, its mapping verified as a fixture, since
+// that journey is S1-F02-T02's (code-house-rules 11.2), and one location, so every check but the stock plan passes;
+// policies 4 and 10 Signed and validated as SYNTHETIC fixtures, since that journey is S1-F04-T01's, the validations
+// covering the values the modules report, the unit's verified mapping among them, and the journey's SYNTHETIC value of
+// policy 4 (RR-558); an Operations user who runs the checks and declares the unit holds no stock, a different approver,
+// and someone at the unit who records Arrivals, counts and issues GRNs (PRD-ACS-006).
+const readinessSetup = await runSetupStep({
+  migrationConnectionString: databaseUrl(world.directory, 'migration'),
+  runtimeConnectionString: databaseUrl(world.directory, 'runtime'),
+  request: setupRequestSchema.parse({
+    ...journeyRequest,
+    organisationCode: readinessCode,
+    databaseName: readinessDatabase,
+    firstAdmin: {
+      ...journeyRequest.firstAdmin,
+      temporaryPassword: journeyRequest.firstAdmin.temporaryPassword.reveal(),
+    },
+    firstApprover: {
+      ...journeyRequest.firstApprover,
+      temporaryPassword: journeyRequest.firstApprover.temporaryPassword.reveal(),
+    },
+  }),
+  serviceIdentities: serviceIdentitiesOf(jobRegistry),
+  logger: setupLog.logger,
+});
+if (readinessSetup.outcome !== 'created') {
+  throw new Error(`The readiness setup step did not create: ${readinessSetup.outcome}`);
+}
+const readinessStructure = await structureSetup({
+  directory: world.directory,
+  database: readinessDatabase,
+  organisationCode: readinessCode,
+  keysEnvironment: keys,
+  label: 'BROWSER-READY',
+});
+const readyGeography = await approvedGeography(readinessStructure, 'READY');
+const readyEntity = await approved(readinessStructure, (c, p) =>
+  readinessStructure.organisation.prepareLegalEntity(c, p, {
+    code: syntheticCode('JOURNEY-READY-LE'),
+    legalName: syntheticName('Journey Ready Entity'),
+    validFrom: readinessStructure.today(),
+  }),
+);
+const readyRegistration = await approved(readinessStructure, (c, p) =>
+  readinessStructure.organisation.prepareTaxRegistration(c, p, {
+    code: syntheticCode('JOURNEY-READY-GSTIN'),
+    legalEntityId: readyEntity.recordId,
+    registrationNumber: 'SYNTHETIC-GSTIN-READY',
+    stateId: readyGeography.state.recordId,
+    validityFrom: readinessStructure.today(),
+    validFrom: readinessStructure.today(),
+  }),
+);
+const readyBook = await approved(readinessStructure, (c, p) =>
+  readinessStructure.organisation.prepareAccountingBook(c, p, {
+    code: syntheticCode('JOURNEY-READY-BK'),
+    legalEntityId: readyEntity.recordId,
+    name: syntheticName('Journey Ready Book'),
+    validFrom: readinessStructure.today(),
+  }),
+);
+const readinessSite = await approved(readinessStructure, (c, p) =>
+  readinessStructure.organisation.prepareSite(c, p, {
+    code: syntheticCode('JOURNEY-READY-SITE'),
+    name: syntheticName('Journey Ready Site'),
+    physicalKind: 'regional-warehouse',
+    areaId: readyGeography.area.recordId,
+    addresses: [syntheticName('1 Ready Road')],
+    aliases: [],
+    validFrom: readinessStructure.today(),
+  }),
+);
+const readinessUnit = { code: syntheticCode('JOURNEY-READY-UNIT'), name: syntheticName('Journey Ready Unit') };
+const readinessUnitAnswer = await approved(readinessStructure, (c, p) =>
+  readinessStructure.organisation.prepareBusinessUnit(c, p, {
+    ...readinessUnit,
+    siteId: readinessSite.recordId,
+    kind: 'warehouse',
+    legalEntityId: readyEntity.recordId,
+    taxRegistrationId: readyRegistration.recordId,
+    accountingBookId: readyBook.recordId,
+    origin: 'synthetic',
+    validFrom: readinessStructure.today(),
+  }),
+);
+await approved(readinessStructure, (c, p) =>
+  readinessStructure.organisation.prepareLocation(c, p, {
+    code: syntheticCode('JOURNEY-READY-LOC'),
+    siteId: readinessSite.recordId,
+    businessUnitId: readinessUnitAnswer.recordId,
+    name: syntheticName('Journey Ready Floor'),
+    kind: 'floor',
+    validFrom: readinessStructure.today(),
+  }),
+);
+// Its mapping verified through organisation's command by the setup's approver, who did not make it, with a SYNTHETIC
+// stored file as its evidence (structure-and-masters 3.4; POL-10.08; code-house-rules 11.2).
+await mappingsVerified(readinessStructure, readinessDatabase, [readinessUnitAnswer.recordId]);
+/** An enrolled SYNTHETIC user of the readiness Organisation holding one persona and the authorities given. */
+async function provisionReadinessUser(
+  label: string,
+  persona: PersonaId,
+  authorities: Parameters<typeof grantSynthetic>[2],
+): Promise<SyntheticUser> {
+  const user = await writeSyntheticUser(readinessDatabase, readinessCode, keys, {
+    label,
+    enrolled: true,
+    personas: [persona],
+  });
+  await grantSynthetic(readinessDatabase, { kind: 'user', id: user.id }, authorities);
+  return user;
+}
+const readinessOps = await provisionReadinessUser('BROWSER-READINESS-OPS', 'P-OPS', [
+  { recordType: 'site_lifecycle.readiness_record', action: 'view' },
+  { recordType: 'site_lifecycle.readiness_record', action: 'create' },
+  { recordType: 'site_lifecycle.zero_stock_declaration', action: 'view' },
+  { recordType: 'site_lifecycle.zero_stock_declaration', action: 'create' },
+  // The unit list the screen chooses from (structure-and-masters 8).
+  { recordType: 'organisation.business_unit', action: 'view' },
+]);
+const readinessApprover = await provisionReadinessUser('BROWSER-READINESS-APPROVER', 'P-OWN', [
   { recordType: 'site_lifecycle.readiness_record', action: 'view' },
   { recordType: 'site_lifecycle.readiness_record', action: 'approve' },
   { recordType: 'access.approval_request', action: 'view' },
   { recordType: 'access.approval_reason', action: 'view' },
 ]);
-const readinessReasonId = await writeSyntheticReason(settingsDatabase, 'approve');
+const readinessReasonId = await writeSyntheticReason(readinessDatabase, 'approve');
+await provisionReadinessUser('BROWSER-READINESS-RECEIVER', 'P-WHS', [
+  { recordType: 'receiving.arrival', action: 'create' },
+  { recordType: 'receiving.arrival', action: 'edit' },
+  { recordType: 'receiving.grn', action: 'create' },
+]);
+for (const policy of [4, 10] as const) {
+  await signedFixture(readinessDatabase, policy, [
+    ...(policy === 4 ? [`${readinessValuesCheck.code}:syn-readiness-value@v1`] : []),
+    ...(await reportedValues(
+      (work) => readinessStructure.run(readinessStructure.preparer.id, work),
+      RECEIVING_POLICY_CHECKS.filter((check) => check.policy === policy),
+    )),
+  ]);
+}
+await readinessStructure.close();
 
 // The built web app from the same origin as the API, as the `app` service serves it (deployment.md section 3;
 // S1-F01-T27): this file runs from apps/server/dist-browser/test/browser/.
@@ -2293,15 +3701,27 @@ const app = await startAccessApp(
     webApp,
     counterApp,
     fileStoreEnvironment: fileStore.environment,
-    exceptionTypes: [syntheticMismatch],
+    // And the damage exception, receiving's follow-ups and the overdue booking balance the application registers
+    // (S2-F08-T01, S2-F02-T03, S2-F01-T04).
+    exceptionTypes: [syntheticMismatch, damageExceptionType, ...receivingExceptionTypes, overdueExceptionType],
     // The approval limits journey's test-only valued action type (S1-F05-T01; code-house-rules 11.4).
     extraRecordTypes: [limitsBookingType, bulkBookingType],
     extraApprovalRules: [limitsBookingRule, bulkBookingRule],
-    // The policy readiness journey's test-only operation and validity check (S1-F04-T01; code-house-rules 11.4).
+    // The policy readiness journey's test-only operation and validity check (S1-F04-T01; code-house-rules 11.4), the
+    // booking journey's TEST-ONLY values of policies 5 and 1 (RR-561; S2-F01-T03) and policy 17's test-only check of the
+    // damage journey (support/damage.ts; S2-F08-T01).
     gatedOperations: [policyOperation, readinessOperation],
-    validityChecks: [policyValuesCheck, readinessValuesCheck],
-    // The posting maps journey's SYNTHETIC event kinds (S1-F09-T02; code-house-rules 11.4).
-    postingEventKinds: POSTING_JOURNEY_KINDS,
+    validityChecks: [
+      policyValuesCheck,
+      readinessValuesCheck,
+      ...BOOKING_POLICY_CHECKS,
+      SYNTHETIC_POLICY_17_VALUES,
+      // Policy 3's TEST-ONLY value, for the PT approval journey, as no module reports policy 3's values yet (RR-605).
+      syntheticPolicyValues(3),
+    ],
+    // The stock ledger's event kinds, as the application declares them, which the PT approval journey posts
+    // (S2-F06-T01), and the posting maps journey's SYNTHETIC event kinds (S1-F09-T02; code-house-rules 11.4).
+    postingEventKinds: [...STOCK_POSTING_EVENT_KINDS, ...POSTING_JOURNEY_KINDS],
   },
 );
 
@@ -2332,12 +3752,114 @@ const app = await startAccessApp(
       owner: { kind: 'user', userId: exceptionsOps.id },
       dueRule: { format: 'elapsed-minutes-v1', minutes: 60 },
       escalation: { kind: 'user', userId: exceptionsOps.id },
-      validFrom: new Date().toISOString().slice(0, 10),
+      validFrom: structureFixture.today(),
       origin: 'synthetic',
     }),
   });
   if (prepared.status !== 200) throw new Error(`The evidence rule change was refused: ${await prepared.text()}`);
 }
+
+/**
+ * An approved booking for a journey, recorded with its document and submitted by a fixture's Booking user, and approved
+ * by a fixture's Owner, through the API once the server listens, as the booking journey proves on screen
+ * (booking.spec.ts): one line of the style given, in the receive-against-booking world's first size. Each
+ * authenticator code is for a step not used before: sign-in one step back, the decision now, both within the step
+ * either side of now the server accepts (access-and-approvals 3.1); so each pair of fixture users records one booking.
+ * Answers its number. Every value is SYNTHETIC.
+ */
+async function journeyBooking(
+  fixtureBooker: SyntheticUser,
+  fixtureOwner: SyntheticUser,
+  style: string,
+  quantity: number,
+  label: string,
+): Promise<string> {
+  const at = { 'content-type': 'application/json', origin, 'x-forwarded-for': '10.8.8.51' };
+  const signIn = async (user: SyntheticUser) => {
+    const signedIn = await fetch(`${app.baseUrl}/api/access/sign-in`, {
+      method: 'POST',
+      headers: at,
+      body: JSON.stringify({
+        organisationCode: receivingCode,
+        login: user.login,
+        password: user.password,
+        totpCode: codeFor(user.factorSecret ?? Buffer.alloc(0), -1),
+      }),
+    });
+    if (signedIn.status !== 200)
+      throw new Error(`A booking fixture user was not signed in: ${String(signedIn.status)}`);
+    return (signedIn.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+  };
+  const call = async (cookie: string, path: string, body: unknown) => {
+    const answer = await fetch(`${app.baseUrl}${path}`, {
+      method: 'POST',
+      headers: { ...at, cookie, 'idempotency-key': crypto.randomUUID() },
+      body: JSON.stringify(body),
+    });
+    if (answer.status !== 200) throw new Error(`The booking fixture was refused at ${path}: ${await answer.text()}`);
+    return (await answer.json()) as Record<string, string>;
+  };
+  const booker = await signIn(fixtureBooker);
+  const stored = await call(booker, STORE_FILE_PATH, syntheticPdfUpload('BOOKING', label));
+  const made = await call(booker, '/api/booking/bookings', {
+    brandId: againstWorld.brand.id,
+    destinationSiteId: againstWorld.siteId,
+    supplierPartyId: againstWorld.supplier.id,
+    seasonValueId: bookingSeason.valueId,
+    deliveryWindow: { from: receivingStructure.today(), to: receivingStructure.day(30) },
+    lines: [
+      {
+        styleCode: style,
+        colour: 'SYNTHETIC NAVY',
+        size: againstWorld.sizes.values[0]?.code ?? null,
+        quantity,
+        indicativeCost: 50_000,
+        mrp: 99_900,
+        deliveryDate: null,
+      },
+    ],
+  });
+  const bookingId = made.bookingId ?? '';
+  const attached = await call(booker, `/api/booking/bookings/${bookingId}/documents`, {
+    files: [{ storedFileId: stored.storedFileId, fileReceiptId: stored.receiptId }],
+    versionToken: made.versionToken,
+  });
+  const submitted = await call(booker, `/api/booking/bookings/${bookingId}/submission`, {
+    versionToken: attached.versionToken,
+  });
+  const owner = await signIn(fixtureOwner);
+  await call(owner, `/api/access/approval-requests/${submitted.requestId ?? ''}/decision`, {
+    versionId: submitted.versionId,
+    outcome: 'approve',
+    reason: { kind: 'listed', reasonId: bookingReasonId },
+    totpCode: codeFor(fixtureOwner.factorSecret ?? Buffer.alloc(0)),
+  });
+  const read = await fetch(`${app.baseUrl}/api/booking/bookings/${bookingId}`, { headers: { cookie: owner } });
+  const number = ((await read.json()) as { booking: { number?: string } }).booking.number;
+  if (number === undefined) throw new Error(`The booking of the ${label} journey has no number`);
+  return number;
+}
+
+// The booking the receive-against-booking journey receives against (S2-F02-T04): two pieces of one style and size, so
+// a delivery of three is excess (POL-05.08).
+const againstStyle = syntheticCode('JOURNEY-RAB-STYLE');
+const againstBookingNumber = await journeyBooking(
+  againstFixtureBooker,
+  againstFixtureOwner,
+  againstStyle,
+  2,
+  'JOURNEY-RAB',
+);
+// The booking the reports journey reads (S2-F11-T02): four pieces of a style of its own, in the same world, by a pair
+// of fixture users of its own, so the receive-against-booking journey, which runs at once, never changes it.
+const reportsStyle = syntheticCode('JOURNEY-RPT-STYLE');
+const reportsBookingNumber = await journeyBooking(
+  reportsFixtureBooker,
+  reportsFixtureOwner,
+  reportsStyle,
+  4,
+  'JOURNEY-RPT',
+);
 
 // The import outcomes report journey's two batches, one in each Store, started through the API by the seeding
 // importer once the server listens (imports-and-opening-data 13.1; S1-F06-T04). Every value is SYNTHETIC.
@@ -2464,6 +3986,53 @@ let openingBatchCode: string;
   openingBatchCode = ((await started.json()) as { code: string }).code;
 }
 
+/**
+ * Waits until the worker has delivered every event the fixtures recorded for its consumers, in every Organisation the
+ * directory lists: none left undispatched since its consumer registered, and no delivery job created, retried or
+ * active. So no journey waits in My work behind another's fixtures (code-house-rules 10.1; code review 7 of stage 2).
+ * At most ten minutes, a technical bound of this test plumbing.
+ */
+async function fixtureEventsDelivered(): Promise<void> {
+  const directory = await connect(world.directory, 'migration');
+  let databases: string[];
+  try {
+    databases = (
+      await directory.query<{ name: string }>('select database_name as name from kernel.directory_entry')
+    ).rows.map((row) => row.name);
+  } finally {
+    await directory.end();
+  }
+  const until = Date.now() + 600_000;
+  for (;;) {
+    let waiting = 0;
+    for (const database of databases) {
+      const owner = await connect(database, 'migration');
+      try {
+        const [undispatched] = (
+          await owner.query<{ count: number }>(
+            `select count(*)::int as count from kernel.outbox_event e
+               join kernel.outbox_consumer c on c.event_type = e.event_type and e.recorded_at >= c.recorded_at
+              where not exists (select 1 from kernel.outbox_dispatch d
+                                 where d.outbox_event_id = e.id and d.outbox_consumer_id = c.id)`,
+          )
+        ).rows;
+        const [delivering] = (
+          await owner.query<{ count: number }>(
+            `select count(*)::int as count from pgboss.job where state in ('created', 'retry', 'active')`,
+          )
+        ).rows;
+        waiting += (undispatched?.count ?? 0) + (delivering?.count ?? 0);
+      } finally {
+        await owner.end();
+      }
+    }
+    if (waiting === 0) return;
+    if (Date.now() > until) throw new Error(`The worker still had ${String(waiting)} fixture events to deliver`);
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+  }
+}
+await fixtureEventsDelivered();
+
 mkdirSync(dirname(worldFile), { recursive: true });
 writeFileSync(
   worldFile,
@@ -2508,6 +4077,13 @@ writeFileSync(
       confirmer: credentialsOf(vocabularyConfirmer),
       attributeName: vocabularyAttribute.name,
     },
+    markedAttributes: {
+      organisationCode: settingsCode,
+      admin: credentialsOf(markingAdmin),
+      owner: credentialsOf(markingOwner),
+      // How the attribute form names the SYNTHETIC size list (budget.option).
+      attributeOption: `${markingAttribute.code} · ${markingAttribute.name}`,
+    },
     products: {
       organisationCode: settingsCode,
       booking: credentialsOf(productsBooking),
@@ -2519,6 +4095,121 @@ writeFileSync(
       seasonName: productsSeason.name,
       seasonValueOption: `${productsSeasonValue.code} · ${productsSeasonValue.name}`,
       fitName: productsFit.name,
+    },
+    receiving: {
+      organisationCode: receivingCode,
+      receiver: credentialsOf(receivingReceiver),
+      // How the screens name the SYNTHETIC Site, units, location, supplier, brand and size (receive.option).
+      options: receivingWorld.options,
+      storeStaff: credentialsOf(receivingStoreStaff),
+      storeOptions: storeStaffWorld.options,
+      storeBatchStyleCode: storeStaffWorld.batchSku.styleCode,
+    },
+    booking: {
+      organisationCode: receivingCode,
+      booker: credentialsOf(bookingBooker),
+      owner: credentialsOf(bookingOwner),
+      reasonId: bookingReasonId,
+      // How the booking form names the SYNTHETIC brand, Site, supplier and season (receive.option).
+      brandOption: receivingWorld.options.brand,
+      siteOption: receivingWorld.options.site,
+      supplierOption: receivingWorld.options.supplier,
+      seasonOption: `${bookingSeason.code} · ${bookingSeason.name}`,
+    },
+    damage: {
+      organisationCode: receivingCode,
+      reporter: credentialsOf(damageReporter),
+      operations: credentialsOf(damageOperations),
+      reasonId: damageReasonId,
+      options: damageWorld.options,
+    },
+    heldLines: {
+      organisationCode: receivingCode,
+      receiver: credentialsOf(heldReceiver),
+      approver: credentialsOf(heldApprover),
+      reasonId: damageReasonId,
+      options: heldWorld.options,
+    },
+    recount: {
+      organisationCode: receivingCode,
+      receiver: credentialsOf(recountReceiver),
+      approver: credentialsOf(recountApprover),
+      reasonId: damageReasonId,
+      options: heldWorld.options,
+    },
+    againstBooking: {
+      organisationCode: receivingCode,
+      receiver: credentialsOf(againstReceiver),
+      booker: credentialsOf(againstBooker),
+      owner: credentialsOf(againstOwner),
+      reasonId: bookingReasonId,
+      options: againstWorld.options,
+      bookingNumber: againstBookingNumber,
+      styleCode: againstStyle,
+    },
+    reports: {
+      organisationCode: receivingCode,
+      reader: credentialsOf(reportsReader),
+      options: againstWorld.options,
+      bookingNumber: reportsBookingNumber,
+      styleCode: reportsStyle,
+    },
+    ptUpload: {
+      organisationCode: receivingCode,
+      maker: credentialsOf(ptMaker),
+      options: ptReceivingWorld.options,
+      styleCode: ptStyle,
+      refusedFile: ptRefusedFile,
+      goodFile: ptGoodFile,
+    },
+    ptApproval: {
+      organisationCode: receivingCode,
+      maker: credentialsOf(ptApprovalMaker),
+      approver: credentialsOf(ptApprovalApprover),
+      storeStaff: credentialsOf(ptApprovalStoreStaff),
+      reasonId: bookingReasonId,
+      options: ptReceivingWorld.options,
+      styleCode: ptApprovalStyle,
+      file: ptApprovalFile,
+      correctedFile: ptApprovalCorrectedFile,
+      // The file's two barcodes, one a piece, and the floor the scan-in puts them on, as the screen names it.
+      barcodes: ['8900000000035', '8900000000042'],
+      floor: `Floor: ${ptApprovalFloorName}`,
+      floorId: ptApprovalFloor.recordId,
+      floorName: ptApprovalFloorName,
+    },
+    goodsIn: {
+      organisationCode: receivingCode,
+      booker: credentialsOf(goodsInBooker),
+      accounts: credentialsOf(goodsInAccounts),
+      owner: credentialsOf(goodsInOwner),
+      receiver: credentialsOf(goodsInReceiver),
+      operations: credentialsOf(goodsInOperations),
+      storeStaff: credentialsOf(goodsInStoreStaff),
+      approveReasonId: bookingReasonId,
+      rejectReasonId: goodsInRejectReasonId,
+      options: ptReceivingWorld.options,
+      // How the booking and budget forms name the booking journey's SYNTHETIC season (receive.option, budget.option).
+      seasonOption: `${bookingSeason.code} · ${bookingSeason.name}`,
+      styleCode: goodsInStyle,
+      refusedFile: goodsInRefusedFile,
+      rejectedFile: goodsInRejectedFile,
+      correctedFile: goodsInCorrectedFile,
+      barcodes: goodsInBarcodes,
+      // The PT approval journey's floor, where the scan-in puts the pieces, as the screens name it.
+      floor: `Floor: ${ptApprovalFloorName}`,
+      floorName: ptApprovalFloorName,
+    },
+    openToBuy: {
+      organisationCode: settingsCode,
+      booking: credentialsOf(openToBuyBooking),
+      accounts: credentialsOf(openToBuyAccounts),
+      owner: credentialsOf(openToBuyOwner),
+      reasonId: openToBuyReasonId,
+      // How the budget form names the products journey's SYNTHETIC brand and season, a value of the attribute marked
+      // as the season (budget.option; RR-550).
+      brandOption: `${productsBrand.code} · ${productsBrand.name}`,
+      seasonOption: `${productsSeasonValue.code} · ${productsSeasonValue.name}`,
     },
     fileIntake: {
       organisationCode: postingCode,
@@ -2566,6 +4257,13 @@ writeFileSync(
       preparer: credentialsOf(bankPreparer),
       approver: credentialsOf(bankApprover),
       supplierCode: bankSupplier.code,
+    },
+    agreement: {
+      organisationCode: settingsCode,
+      preparer: credentialsOf(agreementPreparer),
+      approver: credentialsOf(agreementApprover),
+      supplierCode: agreementSupplier.code,
+      supplierName: agreementSupplier.legalName,
     },
     scope: {
       organisationCode: settingsCode,
@@ -2638,7 +4336,7 @@ writeFileSync(
     // S1-F04-T02: the Operations user who runs the checks, the approver who decides from My work, the reason they
     // give, and how the screen names the unit.
     readiness: {
-      organisationCode: settingsCode,
+      organisationCode: readinessCode,
       operations: credentialsOf(readinessOps),
       approver: credentialsOf(readinessApprover),
       reasonId: readinessReasonId,
@@ -2718,6 +4416,8 @@ async function stop(): Promise<void> {
   await dropDatabase(journeyDatabase).catch(() => undefined);
   await dropDatabase(settingsDatabase).catch(() => undefined);
   await dropDatabase(postingDatabase).catch(() => undefined);
+  await dropDatabase(receivingDatabase).catch(() => undefined);
+  await dropDatabase(readinessDatabase).catch(() => undefined);
   await world.reset().catch(() => undefined);
   await postgres.stop().catch(() => undefined);
   process.exit(0);

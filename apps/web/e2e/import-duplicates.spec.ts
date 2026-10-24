@@ -1,20 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
-import { Authenticator } from './support/authenticator';
-import { signIn } from './support/journey';
-import { readWorld, type EnrolledUser } from './support/world';
+import { signedIn } from './support/journey';
+import { readWorld } from './support/world';
 
 // S1-F06-T04: duplicate control and the import outcomes report (imports-and-opening-data 7.2, 7.4, 14, 16;
 // PRD-IMP-011, PRD-IMP-013, PRD-MOD-003, PRD-SEC-005). A Booking user (P-BKG) publishes a SYNTHETIC product file; the
 // same file again cannot start a second batch while the first stands; a later file holding the same style unchanged
 // and a new one publishes the new one, and its repeat counts as a duplicate. A reader whose assignment covers one Store
 // sees, on the Outcomes tab, only that Store's batch, with the report's as-of time. Every value is SYNTHETIC.
-
-async function signedIn(page: Page, code: string, user: EnrolledUser): Promise<void> {
-  const app = new Authenticator(Buffer.from(user.factorSecretHex, 'hex'));
-  await page.goto('/');
-  await signIn(page, { code, login: user.login, password: user.password, totp: await app.nextCode() });
-  await expect(page.getByLabel('Profile')).toHaveText(user.displayName);
-}
 
 async function openIntake(page: Page): Promise<void> {
   await page

@@ -1,10 +1,12 @@
 import type { Paise } from '@apparel-os/domain';
+import type { HoldKind, StockCondition } from '@apparel-os/schemas';
 import type { CommandRefusal, MissingItem } from '../../../../kernel/index.js';
 
 // The ledger request of stock-ledger 13.1 and 13.3 and the unvalued items of 13.4 and 13.5 (S1-F10-T02). Pure types:
 // no database, no clock (code-house-rules 2). The valued items of 13.4 (S1-F10-T03) follow them.
 
-export type Condition = 'good' | 'damaged' | 'wrong' | 'unidentified';
+/** A condition of stock (2.2, 14.1), one list with the shared schemas' (`stockConditionSchema`). */
+export type Condition = StockCondition;
 
 /**
  * The import kind a source carries (imports-and-opening-data 4.1; stock-ledger 13.2): none, one of the kinds that may
@@ -20,6 +22,12 @@ export interface LedgerSource {
   readonly versionId: string;
   readonly importKind: ImportKind;
 }
+
+/**
+ * A record a ledger source names, by module, record type and identifier (2.1, 13.2): what a read answers of where
+ * goods or a movement came from, for the source's own module to name. One shape for every read and caller.
+ */
+export type SourceRecord = Pick<LedgerSource, 'module' | 'recordType' | 'recordId'>;
 
 /**
  * The record type a source's journals carry (books-and-posting 5.1, 4.3): the record type as the permission registry
@@ -59,6 +67,22 @@ export interface Goods {
   readonly pieceCodes?: readonly string[];
 }
 
+/**
+ * Goods of a product not yet set up, named by their receipt origin (stock-ledger 13.15; goods-in 8.2; PRD-DMG-005;
+ * S2-F08-T01): no SKU names them before the identity step, so a hold, the damaged condition and the reversal of a
+ * condition change name the origin they were counted under. They are counted by quantity, in pieces (DEC-137), so they
+ * carry no piece codes.
+ */
+export interface OriginGoods {
+  readonly skuId: null;
+  readonly receiptOriginId: string;
+  readonly quantity: number;
+  readonly pieceCodes?: undefined;
+}
+
+/** Goods a hold, a condition change or its reversal names: of a SKU, or of Unknown SKU by their origin (13.15). */
+export type NamedGoods = Goods | OriginGoods;
+
 /** The owner a receipt count records on its origin (PRD-ORG-014, PRD-ORG-019), or Unknown. */
 export type Owner =
   | { readonly kind: 'organisation'; readonly legalEntityId: string; readonly agreementVersionId?: string }
@@ -66,24 +90,95 @@ export type Owner =
   | { readonly kind: 'brand'; readonly brandId: string; readonly agreementVersionId: string }
   | { readonly kind: 'unknown' };
 
-/** The hold kinds a Place hold item may raise (6.1); a count freeze has items of its own (13.5). */
-export type PlacedHoldKind =
-  'damage' | 'quarantine' | 'excess' | 'source-conflict' | 'expiry' | 'ordinary' | 'inspection' | 'write-off';
+/**
+ * The hold kinds a Place hold item may raise (6.1), one list with the shared schemas' (`holdKindSchema`); a count freeze
+ * has items of its own (13.5).
+ */
+export type PlacedHoldKind = HoldKind;
 
 export type ReservationKind = 'transfer' | 'supplier-return' | 'held-goods' | 'offline-protected';
 
+/**
+ * The identity of goods of a product not yet set up, as the count describes it (stock-ledger 13.14; goods-in 4.3, 4.5;
+ * GI-1): the style code as the invoice writes it, the colour as the invoice names it (DEC-138) and the size from the
+ * Organisation's size list. A colour or size the invoice does not state is null, Unknown, never a default
+ * (PRD-MER-005, PRD-MOD-015).
+ */
+export interface DescribedIdentity {
+  readonly styleCode: string;
+  readonly colour: string | null;
+  readonly size: string | null;
+}
+
+/**
+ * One part of an identity step (stock-ledger 13.14; goods-in 6.3 step 4): units of one receipt origin that take one SKU.
+ * A part that names a new origin moves its units into it, a new receipt origin of the kind identity-resolved with the
+ * named one as its parent and the SKU given, in good condition; a part that names none keeps its origin and the SKU
+ * the origin already names, and returns any of its units held wrong or unidentified to good (POL-17.02).
+ */
+export interface IdentityPart {
+  readonly receiptOriginId: string;
+  readonly skuId: string;
+  readonly quantity: number;
+  /** The new origin's identifier, a UUIDv7 the caller makes (PRD-MOD-008), so later items can name it. */
+  readonly newReceiptOriginId?: string;
+}
+
+/**
+ * What a receipt count counts (stock-ledger 13.14, 13.16): goods of a SKU, with no identity as described, whose brand is
+ * the SKU's; goods of a product not yet set up, their SKU null, Unknown, with their identity as described and the brand
+ * they are counted under, counted in good condition and not quarantined (stock-ledger 2.2, 14.1; PRD-DMG-005; GI-1,
+ * RR-555); or unidentified goods, their SKU and identity both Unknown, `described` null, under the brand they are
+ * counted under, in the unidentified condition, which their quarantine in the same request holds (goods-in 4.4;
+ * PRD-REC-012, POL-17.02; S2-F02-T03). Receiving names its Arrival's brand, so a person scoped to that brand sees the
+ * goods before PT approval names their SKU.
+ */
+export type CountedGoods =
+  | { readonly skuId: string; readonly described?: undefined; readonly brandId?: undefined }
+  | { readonly skuId: null; readonly described: DescribedIdentity | null; readonly brandId: string };
+
+/**
+ * Whether the goods a receipt count names give their brand wrongly (13.14, 14.1; RR-555): goods of Unknown SKU name the
+ * brand they are counted under, never none; a SKU's goods are of the SKU's brand and name none. The item's type holds
+ * it (`CountedGoods`); Plan, before it locks their SKU balance, and the Recheck still check every request they are given.
+ */
+export function countedBrandRefused(goods: {
+  readonly skuId: string | null;
+  readonly brandId?: string | undefined;
+}): boolean {
+  if (goods.skuId !== null) return goods.brandId !== undefined;
+  return typeof goods.brandId !== 'string' || goods.brandId.trim() === '';
+}
+
 /** One item of a request (13.4, 13.5). `lineId` is the source line, kept without a foreign key (PRD-ACS-007). */
 export type LedgerItem =
-  | {
+  | ({
       readonly kind: 'receipt-count';
       readonly lineId: string;
-      readonly skuId: string;
+      /**
+       * The identifier of the receipt origin the count makes, a UUIDv7 the caller makes (PRD-MOD-008), so later items
+       * of the same request can name its goods, as a GRN's holds do (stock-ledger 13.16; goods-in 4.5); the ledger
+       * makes one when it is left out.
+       */
+      readonly receiptOriginId?: string;
       readonly quantity: number;
       readonly to: Place;
       readonly condition: Condition;
       readonly owner: Owner;
       readonly pieceCodes?: readonly string[];
       readonly batch?: { readonly code: string; readonly expiryDate: string };
+    } & CountedGoods)
+  | {
+      /**
+       * Identity resolved (stock-ledger 2.3, 13.4, 13.14; goods-in 6.3 step 4; PRD-DMG-005, POL-17.02; GI-1): the free
+       * units of the origins named, at one Site and business unit, take the SKUs of the parts, by quantity, under the
+       * approved identity route the request's approval carries. Every free unit of a named origin there takes exactly
+       * one part.
+       */
+      readonly kind: 'identity-resolved';
+      readonly lineId: string;
+      readonly at: UnitPlace;
+      readonly parts: readonly IdentityPart[];
     }
   | {
       /**
@@ -118,7 +213,7 @@ export type LedgerItem =
       readonly at: Place;
       readonly from: Condition;
       readonly to: Condition;
-      readonly goods: Goods;
+      readonly goods: NamedGoods;
     }
   | {
       readonly kind: 'record-coverage';
@@ -129,7 +224,18 @@ export type LedgerItem =
       readonly pieceCodes?: readonly string[];
     }
   | { readonly kind: 'remove-coverage'; readonly lineId: string; readonly coverageId: string }
-  | { readonly kind: 'record-acceptance'; readonly lineId: string; readonly at: Place; readonly goods: Goods }
+  | {
+      /**
+       * Record acceptance (13.5; PRD-REC-021, PRD-REC-022): the barcode verified and the units physically accepted at
+       * the place. With a condition, only units in it are accepted, as the scan-in accepts good pieces only, never
+       * damaged ones (13.20; goods-in 7.2; PRD-DMG-010); with none, any condition at the place, as before.
+       */
+      readonly kind: 'record-acceptance';
+      readonly lineId: string;
+      readonly at: Place;
+      readonly goods: Goods;
+      readonly condition?: Condition;
+    }
   | {
       readonly kind: 'place-hold';
       readonly lineId: string;
@@ -139,7 +245,7 @@ export type LedgerItem =
       readonly withinReservationId?: string;
       readonly at: Place;
       readonly condition: Condition;
-      readonly goods: readonly Goods[];
+      readonly goods: readonly NamedGoods[];
     }
   | { readonly kind: 'release-hold'; readonly lineId: string; readonly holdId: string; readonly event: string }
   | {
@@ -294,14 +400,30 @@ export type ValuedItem =
       /**
        * Reversal (13.4, 7.5; PRD-MOD-011, PRD-ACS-014, PRD-LED-017, PRD-LED-018): undoes units of the movement named,
        * at the place the units are, or come back to. A count loss linked to a surplus names the surplus origin whose
-       * units it takes the place of (8.4; S1-F10-T06).
+       * units it takes the place of (8.4; S1-F10-T06). A condition change made in error, such as a mistaken damage
+       * confirmation, has its units return to the condition they had, under the approval the request carries (13.15;
+       * PRD-STK-017; S2-F08-T01); goods of Unknown SKU are named by their origin.
        */
       readonly kind: 'reversal';
       readonly lineId: string;
       readonly movementId: string;
       readonly at: Place;
-      readonly goods: Goods;
+      readonly goods: NamedGoods;
       readonly replacesOriginId?: string;
+    }
+  | {
+      /**
+       * Ownership change (2.3, 13.4, 13.20; PRD-ORG-014, POL-01.05; DEC-141): at the Agreement's ownership event, the
+       * units of the origin named pass from the brand or supplier its owner names to the owner given, the Organisation,
+       * as the legal entity of the receiving unit. Units of known cost would then enter a pool, for which no posting
+       * event kind exists yet: refused `rule-not-set` naming SL-26 until the product owner settles it (S2-F07-T01).
+       */
+      readonly kind: 'ownership-change';
+      readonly lineId: string;
+      readonly receiptOriginId: string;
+      readonly quantity: number;
+      readonly at: Place;
+      readonly owner: Owner;
     }
   | {
       /**
@@ -335,6 +457,7 @@ export const VALUED_ITEM_KINDS: readonly ValuedItemKind[] = [
   'count-difference',
   'reversal',
   'piece-correction',
+  'ownership-change',
 ];
 
 export type LedgerItemKind = LedgerItem['kind'];
@@ -345,6 +468,7 @@ export type FreezeScope = { readonly locationId: string } | { readonly brandId: 
 /** Every item kind this ledger takes so far (13.4, 13.5). */
 export const ITEM_KINDS: readonly LedgerItemKind[] = [
   'receipt-count',
+  'identity-resolved',
   'opening-count',
   'location-move',
   'condition-change',
@@ -373,7 +497,24 @@ export interface LedgerRequest {
   readonly approval?: { readonly decisionId: string; readonly useId: string };
   /** The command's idempotency key, for the audit record (code-house-rules 12.4). */
   readonly idempotencyKey?: string;
+  /**
+   * SKUs the caller's command makes, written in its transaction once every lock is held, which no read of `merchandise`
+   * answers before (stock-ledger 13.19; goods-in 6.3 step 2): their facts as the SKU read would give them, at the Site
+   * and on the request's business date. Plan takes these for them instead of reading. Their identifiers are UUIDv7s the
+   * caller made (PRD-MOD-008), which its own write of the SKUs holds unique.
+   */
+  readonly madeSkus?: readonly MadeSku[];
   readonly items: readonly LedgerItem[];
+}
+
+/** A SKU a request's command makes (13.19): its identifiers and facts, as `merchandise`'s SKU read would answer. */
+export interface MadeSku {
+  readonly skuId: string;
+  readonly versionId: string;
+  readonly brandId: string;
+  readonly stockUnit: 'piece' | 'pair' | 'pack';
+  readonly pieceTracked: boolean;
+  readonly batchTracked: boolean;
 }
 
 /** The reasons of 13.8, without the `stock.` of their codes. */

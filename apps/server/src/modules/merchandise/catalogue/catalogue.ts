@@ -1,7 +1,9 @@
 import type {
+  AttributeMark,
   CatalogueKind,
   CodeMappingDraft,
   CodeMappingEnd,
+  MarkedAttributeVersionDraft,
   ProductProposalDraft,
   ResolveCodeQuery,
   VocabularyProposalDraft,
@@ -9,14 +11,18 @@ import type {
 import type { TransactionContext } from '../../../kernel/index.js';
 import type { AccessInterface } from '../../access/index.js';
 import type { AuditInterface } from '../../audit/index.js';
+import type { ConfigurationInterface } from '../../configuration/index.js';
 import type { Preparer } from '../../organisation/index.js';
-import { endCodeMapping, mapCode, resolveCode } from './commands/codes.js';
+import { endCodeMapping, mapCode } from './commands/codes.js';
+import { resolveCode } from './queries/codes.js';
 import { CataloguePreparation } from './commands/maintain.js';
+import { prepareMarkedAttributeVersion } from './commands/marks.js';
 import { proposeProduct } from './commands/products.js';
 import { proposeVocabularyValue } from './commands/proposals.js';
 import { recordTrackingSiteChange, type SiteChangeActor, type SiteChangeRequest } from './commands/tracking.js';
 import type { StockPresence } from './contracts/stock-presence.js';
 import type { SupplierRoles } from './contracts/supplier-roles.js';
+import { markedAttributeAt, markedAttributeViews, markVersionPage, markVersionRead } from './queries/marks.js';
 import { codeMappingPage, productProposalPage, productProposalRecord } from './queries/products.js';
 import {
   cataloguePage,
@@ -30,7 +36,15 @@ import { skuOn } from './queries/sku.js';
 
 export interface CatalogueDependencies {
   readonly audit: AuditInterface;
-  readonly access: Pick<AccessInterface, 'requestApproval' | 'approvalRequestsOf'>;
+  readonly access: Pick<
+    AccessInterface,
+    'requestApproval' | 'approvalRequestsOf' | 'requestLockTargets' | 'supersedeRequest'
+  >;
+  /**
+   * Which origins of a value this environment accepts: for a tracking profile version's origin (RR-558) and for the
+   * season and size attributes (code-house-rules 12.14; RR-550, RR-556).
+   */
+  readonly origins: Pick<ConfigurationInterface, 'originRefusal'>;
   /** Whether a party holds the supplier role, for a code scoped to a supplier (4.3); the parties part implements it. */
   readonly suppliers: SupplierRoles;
   /** The stock-presence contract `stock` · ledger implements (4.4, 4.6); none answers when left out. */
@@ -51,7 +65,7 @@ export class Catalogue extends CataloguePreparation {
   private readonly suppliers: SupplierRoles;
 
   constructor(dependencies: CatalogueDependencies) {
-    super(dependencies.audit, dependencies.access, dependencies.stockPresence);
+    super(dependencies.audit, dependencies.access, dependencies.origins, dependencies.stockPresence);
     this.approvals = dependencies.access;
     this.suppliers = dependencies.suppliers;
   }
@@ -124,6 +138,46 @@ export class Catalogue extends CataloguePreparation {
   /** An attribute's approved values in force on a date; never an unconfirmed proposal (4.2; PRD-IMP-008). */
   vocabularyOn(context: TransactionContext, attributeId: string, date: string) {
     return vocabularyOn(context, attributeId, date);
+  }
+
+  /**
+   * Prepare a version of the season or size attribute, which a different person approves (4.2 "As built"; RR-550,
+   * RR-556; POL-02.07).
+   */
+  prepareMarkedAttributeVersion(context: TransactionContext, preparer: Preparer, draft: MarkedAttributeVersionDraft) {
+    return prepareMarkedAttributeVersion(
+      context,
+      { audit: this.audit, access: this.approvals, origins: this.origins },
+      preparer,
+      draft,
+    );
+  }
+
+  /** Both markings, each with what is in force now and its newest version's identifier (4.2 "As built"). */
+  markedAttributes(context: TransactionContext) {
+    return markedAttributeViews(context);
+  }
+
+  /** A page of a marking's versions, newest first (4.2 "As built"; code-house-rules 12.1 "Reads"). */
+  markedAttributeVersions(
+    context: TransactionContext,
+    mark: AttributeMark,
+    page: { readonly after?: string | undefined; readonly limit: number },
+  ) {
+    return markVersionPage(context, mark, page, this.requests(context));
+  }
+
+  /** One version of a marking with what the marking has in force, or undefined (4.2 "As built"). */
+  markedAttributeVersion(context: TransactionContext, versionId: string) {
+    return markVersionRead(context, versionId, this.requests(context));
+  }
+
+  /**
+   * The attribute marked as the season or the size list at the command's start, or not set with the refusal that names
+   * the setting (4.2 "As built"; code-house-rules 12.14): what a budget's season and a count line's size are read under.
+   */
+  markedAttributeAt(context: TransactionContext, mark: AttributeMark) {
+    return markedAttributeAt(context, mark);
   }
 }
 

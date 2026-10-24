@@ -1,7 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
-import { Authenticator } from './support/authenticator';
-import { signIn } from './support/journey';
-import { readWorld, type EnrolledUser } from './support/world';
+import { signedIn } from './support/journey';
+import { readWorld } from './support/world';
 
 // S1-F03-T01: the vocabularies journey (structure-and-masters 4.2, 8; PRD-IMP-008, POL-02.07). A Booking user
 // proposes a value of the Organisation's SYNTHETIC colour attribute on Setup › Vocabularies; their own confirmation
@@ -10,14 +9,6 @@ import { readWorld, type EnrolledUser } from './support/world';
 
 const suffix = String(Date.now()).slice(-6);
 const VALUE = { code: `SYN-TEAL-${suffix}`, name: 'SYNTHETIC Journey Teal' };
-
-async function signedIn(page: Page, code: string, user: EnrolledUser): Promise<Authenticator> {
-  const app = new Authenticator(Buffer.from(user.factorSecretHex, 'hex'));
-  await page.goto('/');
-  await signIn(page, { code, login: user.login, password: user.password, totp: await app.nextCode() });
-  await expect(page.getByLabel('Profile')).toHaveText(user.displayName);
-  return app;
-}
 
 async function openVocabularies(page: Page, tab: string): Promise<void> {
   await page
