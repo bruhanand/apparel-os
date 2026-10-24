@@ -49,6 +49,10 @@ export const receiptOrigin = stock.table('receipt_origin', {
   bookId: uuid('book_id').notNull(),
   occurredAt: at('occurred_at').notNull(),
   recordedAt: at('recorded_at').notNull().defaultNow(),
+  // The identity as described of goods whose SKU is Unknown (migration `stock.ledger__described_goods`; stock-ledger 13.14; GI-1).
+  describedStyleCode: text('described_style_code'),
+  describedColour: text('described_colour'),
+  describedSize: text('described_size'),
 });
 
 export const movement = stock.table('movement', {
@@ -342,6 +346,8 @@ export const holdRelease = stock.table('hold_release', {
   releaseEvent: text('release_event').notNull(),
   quantity: integer('quantity'),
   pieceId: uuid('piece_id'),
+  // For `moved`: the movement that carried the claim's units to another balance (0100; stock-ledger 13.17).
+  movementId: uuid('movement_id'),
   sourceModule: text('source_module').notNull(),
   sourceRecordType: text('source_record_type').notNull(),
   sourceRecordId: uuid('source_record_id').notNull(),

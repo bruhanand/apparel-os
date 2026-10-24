@@ -1,20 +1,12 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { Authenticator } from './support/authenticator';
-import { organisationToday, signIn } from './support/journey';
-import { readWorld, type EnrolledUser } from './support/world';
+import { signedIn } from './support/journey';
+import { readWorld } from './support/world';
+import { organisationDate } from './support/clock';
 
 // S1-F02-T03: scope by place (access-and-approvals 5, 7.1, 14; structure-and-masters 3.9, 6.1; PRD-ACS-021,
 // PRD-ACS-006, PRD-UXP-003). An Admin prepares a role assignment selecting one synthetic Store from the place tree; a
 // different authorised person approves it from My work; the person then reads that Store's records, sees no other
 // Store, and is refused at the other Store with the place named. Every value is SYNTHETIC.
-
-async function signedIn(page: Page, code: string, user: EnrolledUser): Promise<Authenticator> {
-  const app = new Authenticator(Buffer.from(user.factorSecretHex, 'hex'));
-  await page.goto('/');
-  await signIn(page, { code, login: user.login, password: user.password, totp: await app.nextCode() });
-  await expect(page.getByLabel('Profile')).toHaveText(user.displayName);
-  return app;
-}
 
 async function openScreen(page: Page, name: string): Promise<void> {
   await page.getByRole('navigation', { name: 'Main menu' }).getByRole('link', { name, exact: true }).click();
@@ -51,7 +43,7 @@ test('PRD-ACS-021 PRD-UXP-003 an assignment selecting one Store lets its person 
       await expect(
         drawer.getByText(/a selected Store covers its business units, including ones added later/),
       ).toBeVisible();
-      await drawer.getByLabel(/^Starts on/).fill(organisationToday());
+      await drawer.getByLabel(/^Starts on/).fill(await organisationDate());
       await drawer.getByTestId('drawer-footer').getByRole('button', { name: 'Request approval' }).click();
       await expect(drawer.getByRole('status').filter({ hasText: 'Sent for approval' })).toBeVisible();
       await admin.keyboard.press('Escape');

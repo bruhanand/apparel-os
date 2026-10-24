@@ -111,6 +111,19 @@ export const layoutStructureSchema = z
     /** The column whose value is the document reference (7.1); a row is data only when it is filled (6.6). */
     documentReference: z.string().regex(/\S/),
     controlTotals: z.array(controlTotalRuleSchema).max(20).optional(),
+    /**
+     * Where given, the header is found by its column names on the first of these rows that holds every required
+     * column, the first being `headerRow`, and the data start as far below it as `dataStartRow` is below `headerRow`
+     * (6.5; goods-in 5.2: a PT work tab has a subtotal row above its header, a copy saved as values does not;
+     * S2-F04-T02).
+     */
+    headerRows: z.array(z.number().int().positive()).min(2).max(5).optional(),
+    /**
+     * Where true, the sheet is the one whose header holds every required column, whatever its name, `sheet` naming the
+     * sheet of a blank template; a file where several sheets do is refused (6.5; goods-in 5.2: each preparer's work tab
+     * has a name of its own; S2-F04-T02).
+     */
+    sheetByHeader: z.literal(true).optional(),
   })
   .superRefine((value, issues) => {
     const names = value.columns.map((column) => normalisedName(column.name));
@@ -133,6 +146,17 @@ export const layoutStructureSchema = z
     }
     if (value.dataStartRow <= value.headerRow) {
       issues.addIssue({ code: 'custom', message: 'Data starts below the header', path: ['dataStartRow'] });
+    }
+    const rows = value.headerRows;
+    if (
+      rows !== undefined &&
+      (rows[0] !== value.headerRow || rows.some((row, at) => at > 0 && row <= (rows[at - 1] ?? 0)))
+    ) {
+      issues.addIssue({
+        code: 'custom',
+        message: 'The header rows start with the header row and go down',
+        path: ['headerRows'],
+      });
     }
   });
 export type LayoutStructure = z.infer<typeof layoutStructureSchema>;
@@ -403,16 +427,27 @@ export const importScopeSchema = z.strictObject({
  * and mapping versions, the scope facts, and the supplier or brand the file comes from, whose mapping rules apply
  * (6.3).
  */
-export const startImportRequestSchema = z.strictObject({
-  storedFileId: idSchema,
-  fileReceiptId: idSchema,
-  kind: importKindSchema,
-  target: z.string().min(1).max(60),
-  layoutVersionId: idSchema,
-  mappingVersionId: idSchema,
-  scope: importScopeSchema.optional(),
-  source: z.strictObject({ supplierId: idSchema.optional(), brandId: idSchema.optional() }).optional(),
-});
+export const startImportRequestSchema = z
+  .strictObject({
+    storedFileId: idSchema,
+    fileReceiptId: idSchema,
+    kind: importKindSchema,
+    target: z.string().min(1).max(60),
+    layoutVersionId: idSchema,
+    mappingVersionId: idSchema,
+    scope: importScopeSchema.optional(),
+    source: z.strictObject({ supplierId: idSchema.optional(), brandId: idSchema.optional() }).optional(),
+    /**
+     * The record the file is for, where the target's handler imports a file for one record, such as the GRN a PT file
+     * is uploaded for (13.1, 13.2; goods-in 5.6; S2-F04-T02). The batch then takes the record's place as its scope, so
+     * no scope is named beside it.
+     */
+    subject: z.strictObject({ recordId: idSchema }).optional(),
+  })
+  .refine((request) => request.subject === undefined || request.scope === undefined, {
+    message: 'A batch about one record takes its place from the record',
+    path: ['scope'],
+  });
 export type StartImportRequest = z.infer<typeof startImportRequestSchema>;
 
 export const importStartedSchema = z.strictObject({
@@ -796,6 +831,8 @@ export const importBatchReadSchema = z.strictObject({
      * with the job's state beside it (3.2; 10.6; S1-F13-T03).
      */
     posting: z.strictObject({ publishRequestId: idSchema, requestedAt: asOf, state: z.literal('queued') }).optional(),
+    /** The record the batch is about, where its handler imports a file for one record (13.1; S2-F04-T02). */
+    subject: z.strictObject({ recordType: z.string(), recordId: idSchema }).optional(),
   }),
   documents: z.array(
     z.strictObject({
@@ -899,7 +936,16 @@ export const importPublishedSchema = z.strictObject({
   /** The request to post a queued publish (10.6; S1-F13-T03). */
   publishRequestId: idSchema.optional(),
   documents: z.array(
-    z.strictObject({ documentId: idSchema, result: documentResultSchema, refusalCode: z.string().optional() }),
+    z.strictObject({
+      documentId: idSchema,
+      result: documentResultSchema,
+      refusalCode: z.string().optional(),
+      /**
+       * What the handler's refusal of the document names, identifiers and codes only, such as every problem a PT file
+       * meets at its submit (goods-in 5.6, 5.8; S2-F04-T02); kept with this answer, not with the outcome.
+       */
+      missing: z.array(missingItemSchema).optional(),
+    }),
   ),
 });
 

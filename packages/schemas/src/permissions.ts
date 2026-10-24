@@ -289,6 +289,10 @@ const merchandiseRecordTypes = [
   declare('merchandise.attribute', ['view', 'create', 'edit'], NONE),
   declare('merchandise.vocabulary_value', ['view', 'edit'], NONE),
   declare('merchandise.vocabulary_proposal', ['view', 'create', 'approve'], NONE),
+  // The season attribute and the size attribute, two Organisation settings (4.2 "As built"; RR-550, RR-556): as the
+  // access settings are, view reads them, edit prepares a version and approve decides it, by a different person; no
+  // permission creates or removes a setting.
+  declare('merchandise.marked_attribute', ['view', 'edit', 'approve'], NONE),
   // Tracking profiles, styles, SKUs, packs, external codes and product proposals (structure-and-masters 4; S1-F03-T02),
   // the Organisation's as the catalogue is, so they carry no scope fact (5.3). A style or SKU is created only by
   // confirming a product proposal: create proposes, approve confirms or rejects, by a different person (4.2; DM-5,
@@ -410,6 +414,90 @@ const eboImportsRecordTypes = [
   declare('ebo_imports.reference_document', ['view', 'create'], LEGAL_ENTITY_AND_PLACE),
 ] as const;
 
+const BRAND: ScopeFactsDeclared = { legalEntity: false, place: false, brand: true };
+
+/**
+ * `booking` (goods-in 3.3, 10.1, section 11; module-map section 5; POL-05.09, POL-02.07; S2-F01-T02). An open-to-buy
+ * budget is for one brand and one season across the Organisation, so it carries the brand as its one scope fact, and an
+ * assignment's brand scope decides whose budgets a person prepares, reads, checks or approves (access-and-approvals
+ * 5.3). Booking prepares a budget (create) and its later versions (edit); approve on the budget is the Owner's, or
+ * whoever holds the approval. Accounts' check is decided under a record type of its own, approve on
+ * `booking.open_to_buy_check`, which no permission on the budget gives, so the check and the approval are held apart
+ * (POL-05.09); view on it reads the check's evidence. **Design choice**; who holds them is the product owner's to
+ * name (V-01).
+ *
+ * A booking (goods-in 3.1 to 3.4; S2-F01-T03) belongs to its destination, one Site, and to its brand, so it carries
+ * the place and the brand; several Stores may trade at one Site and the business unit is chosen when the goods arrive,
+ * so it carries no Store, no unit and no legal entity, and a place scope covering its Site covers it. Create records a booking as a Draft; edit saves its next Draft, attaches its documents and submits
+ * it; approve decides it, within the approver's booking limit on its value at cost (DM-8, DEC-105). **Design
+ * choice**; who holds them is the product owner's to name (V-01).
+ */
+const bookingRecordTypes = [
+  declare('booking.open_to_buy_budget', PREPARED, BRAND),
+  declare('booking.open_to_buy_check', ['view', 'approve'], BRAND),
+  declare('booking.booking', PREPARED, PLACE_AND_BRAND),
+] as const;
+
+/**
+ * `receiving` (goods-in 4.1 to 4.5, 10.1, section 11; module-map section 5; S2-F02-T02). An Arrival and its GRN belong
+ * to the place where the goods physically are, the legal entity of the unit's mapping and the Arrival's brand, so both
+ * carry every scope fact, and an assignment's place scope decides whose receipts a person records and reads
+ * (access-and-approvals 5.3; goods-in 12 test 20). Create on the Arrival records one; edit records its invoices and
+ * photos and saves its count; view reads it with its GRN; create on the GRN issues it, with no approval (goods-in
+ * 4.5), and view on the GRN reads its history. **Design choice**; who holds them is the product owner's to name
+ * (V-01).
+ *
+ * A held line (goods-in 4.6, 4.9; S2-F02-T03), the excess, wrong or unidentified goods of a GRN line received and
+ * held, belongs to the GRN's place, legal entity and brand, so it carries every scope fact: an assignment's place and
+ * brand scope names the Booking approvers by Site and brand (POL-17.11). Edit names the product of unidentified goods;
+ * approve decides it, taking the goods in or leaving them held, within the approver's limit on its cost (DM-8,
+ * DEC-105). It is read with its Arrival, under view on `receiving.arrival`, so it declares no view of its own.
+ * **Design choice**; who holds them is the product owner's to name (V-01).
+ *
+ * A recount (goods-in 4.7, 4.11; PRD-REC-019; S2-F02-T05), a linked recount of a GRN's lines, belongs to the GRN's
+ * place, legal entity and brand, so it carries every scope fact. Create proposes one; approve decides it, within the
+ * approver's limit on the goods' cost, Unknown before their PT (DM-8, DEC-105). It is read with its Arrival, under view
+ * on `receiving.arrival`, so it declares no view of its own. **Design choice**; who holds them is the product owner's
+ * to name (V-01).
+ *
+ * A scan (goods-in 7.2, 7.5; PRD-REC-021, PRD-REC-022; S2-F07-T01), one piece scanned in at the GRN's Site, belongs to
+ * the GRN's place, legal entity and brand, so it carries every scope fact: create scans a piece in, needing no second
+ * person (PRD-REC-022). It is read with its Arrival, under view on `receiving.arrival`, so it declares no view of its
+ * own. **Design choice**; who holds it is the product owner's to name (V-01): at a Store its staff, at a warehouse
+ * Warehouse (goods-in 7.1).
+ */
+const receivingRecordTypes = [
+  declare('receiving.arrival', ['view', 'create', 'edit'], ALL),
+  declare('receiving.grn', ['view', 'create'], ALL),
+  declare('receiving.held_line', ['edit', 'approve'], ALL),
+  declare('receiving.recount', ['create', 'approve'], ALL),
+  declare('receiving.scan', ['create'], ALL),
+] as const;
+
+/**
+ * `stock` · documents' damage reports (goods-in 8, 10.1, section 11; module-map section 5; S2-F08-T01). A report belongs
+ * to the place where the goods are, the legal entity of the unit's mapping and the goods' brand, so it carries every
+ * scope fact, and an assignment's place scope decides whose reports a person makes, reads and decides
+ * (access-and-approvals 5.3). Create on the report reports damage and asks for its decision again; approve on it
+ * confirms or rejects one made by someone else (PRD-DMG-002). A reversal of a confirmation is proposed (create) and
+ * approved (approve) under its own type, so proposing and approving are held apart from deciding (PRD-STK-017).
+ * **Design choice**; who holds them is the product owner's to name (V-01).
+ */
+/**
+ * `merchandise` · PT (goods-in 5, 6, 10.1, section 11; module-map section 5; S2-F04-T02). A PT belongs to its GRN's
+ * place, the legal entity of the GRN's unit's mapping and the GRN's brand, so it carries every scope fact, and an
+ * assignment's place scope names who prepares PTs for a GRN's Site and business unit (goods-in 5.1; PRD-REC-014): the
+ * uploader may work at another Site, the goods staying at the GRN's. Create uploads and submits a PT file; edit
+ * withdraws a draft; view reads a GRN's PT; approve decides it, within the approver's limit on its total proposed
+ * acquisition cost (PRD-ACS-015; S2-F06-T01). **Design choice**; who holds them is the product owner's to name (V-01).
+ */
+const ptRecordTypes = [declare('merchandise.pt', ['view', 'create', 'edit', 'approve'], ALL)] as const;
+
+const stockDocumentsRecordTypes = [
+  declare('stock.damage_report', ['view', 'create', 'approve'], ALL),
+  declare('stock.damage_reversal', ['view', 'create', 'approve'], ALL),
+] as const;
+
 /** Every record type declared so far. */
 export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...accessRecordTypes,
@@ -428,6 +516,10 @@ export const permissionRegistry: readonly RecordTypeDeclaration[] = [
   ...financeRecordTypes,
   ...posRecordTypes,
   ...eboImportsRecordTypes,
+  ...bookingRecordTypes,
+  ...receivingRecordTypes,
+  ...ptRecordTypes,
+  ...stockDocumentsRecordTypes,
 ];
 
 /** The code of a declared record type. */
@@ -446,7 +538,10 @@ export type RecordTypeCode =
   | (typeof financeTaxRulesRecordTypes)[number]['code']
   | (typeof financeRecordTypes)[number]['code']
   | (typeof posRecordTypes)[number]['code']
-  | (typeof eboImportsRecordTypes)[number]['code'];
+  | (typeof eboImportsRecordTypes)[number]['code']
+  | (typeof bookingRecordTypes)[number]['code']
+  | (typeof receivingRecordTypes)[number]['code']
+  | (typeof stockDocumentsRecordTypes)[number]['code'];
 
 /** Whether a record type is service-only: declared as such, never held by a person's role (S1-F01-T29). */
 export function isServiceOnly(

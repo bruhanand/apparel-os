@@ -23,6 +23,9 @@ export type {
   ValiditySubject,
 } from './domain/gate.js';
 export { SYNTHETIC_GATE_PREFIX } from './domain/gate.js';
+// The values of a check whose values are approved versions dated by business days (module-map 4.4).
+export { approvedVersionValues } from './queries/version-values.js';
+export type { DatedVersions } from './queries/version-values.js';
 export { POLICY_EVIDENCE } from './contracts/policy-evidence.js';
 export type { PolicyEvidence, PolicyEvidenceLink } from './contracts/policy-evidence.js';
 export { activityChanged, capabilityChanged, policyStatusChanged } from './events.js';

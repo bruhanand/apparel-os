@@ -1,5 +1,5 @@
 import type { FieldClass, MissingItem, PermissionAction, RecordTypeDeclaration } from '@apparel-os/schemas';
-import type { CommandRefusal, TransactionContext } from '../../../kernel/index.js';
+import type { CommandRefusal, ReplayAccessRefusal, TransactionContext } from '../../../kernel/index.js';
 import { scopeCoversMove, type AssignmentInForce, type RecordFacts, type StoredPermission } from '../domain/scope.js';
 import { assignmentsInForce } from './assignments.js';
 
@@ -35,6 +35,21 @@ export interface AuthoriseRequest {
 export type Authorisation =
   | { readonly kind: 'allowed'; readonly roleAssignmentId: string }
   | { readonly kind: 'refused'; readonly refusal: CommandRefusal<'not-authorised' | 'unavailable'> };
+
+/**
+ * A refusal of a route's access checks as a replay answers it (code-house-rules 12.3, 12.4 "Replay"; CH-14), keeping
+ * its own kind: not found for a record the actor may not view, which never says the record exists (PRD-SEC-005), and
+ * not authorised for an authority that no longer holds. Authorising a replay reruns no availability check or
+ * validation: any other refusal on the way means Authorise cannot be asked now, as with no business date while no
+ * timezone is in force, which admits no grant (code-house-rules 6.2), or facts of a record that no longer has them, so
+ * the replay is not authorised, naming what is missing.
+ */
+export function replayRefusal(refusal: CommandRefusal): ReplayAccessRefusal {
+  if (refusal.kind === 'not-found' || refusal.kind === 'not-authorised') {
+    return { kind: refusal.kind, code: refusal.code, missing: refusal.missing };
+  }
+  return { kind: 'not-authorised', code: 'access.not-authorised', missing: refusal.missing };
+}
 
 /** Whether one assignment's role grants a field class for a use (4.1: view, or view and edit). */
 function grantsFieldClass(assignment: AssignmentInForce, use: FieldClassUse): boolean {

@@ -17,7 +17,7 @@
 
 "Needed by stage" in the table below is the earliest stage at which any value of that policy is needed. Each value's own stage is listed in the alignment report.
 
-Apparel OS switches on no policy-dependent live operation by default. All 19 answers are recorded, but their status remains Open until KDPS signs them; an answer does not mean its live values are configured. Product design, development and synthetic-data tests may proceed using documented shapes. A real operation stays unavailable until its required policy is signed and the relevant Organisation, entity, Store, user, approval and accounting values are configured and validated. The policies and their required definitions come from "Required policy configuration" in [prd.md](prd.md). The stages are described in [phases.md](phases.md).
+Apparel OS switches on no policy-dependent live operation by default. All 19 answers are recorded, but their status remains Open until the product owner signs them (`DEC-126`); an answer does not mean its live values are configured. Product design, development and synthetic-data tests may proceed using documented shapes. A real operation stays unavailable until its required policy is signed and the relevant Organisation, entity, Store, user, approval and accounting values are configured and validated. The policies and their required definitions come from "Required policy configuration" in [prd.md](prd.md). The stages are described in [phases.md](phases.md).
 
 | # | Policy | Decided by | Needed by stage | Status |
 | --- | --- | --- | --- | --- |
@@ -51,19 +51,19 @@ Apparel OS switches on no policy-dependent live operation by default. All 19 ans
 **Answer:**
 
 - `POL-01.01` Supported commercial models: outright purchase, purchase with return rights (sale-or-return), and consignment.
-- `POL-01.02` For each brand, a configured default commercial model is preselected on every new booking. The model can be changed for an individual booking.
-- `POL-01.03` Commercial models and related commercial terms are configurable at both the brand and booking levels and may be revised later.
-- `POL-01.04` Commercial terms may be edited directly while the booking is a draft. Once goods or accounting entries exist, subsequent changes use a recorded amendment that preserves prior transaction history.
-- `POL-01.05` The ownership-transfer event is configurable per brand agreement and inherited by its bookings. Options include supplier dispatch, receipt and acceptance by KDPS, sale to the customer (typically for consignment), or another explicitly agreed event.
+- `POL-01.02` The commercial model is set in the brand's Agreement and applies to every booking of that brand. A booking cannot change it.
+- `POL-01.03` Commercial models and related commercial terms are configured in the Agreement, recorded from the signed MOU, and may be revised later through a new Agreement version. Bookings carry no terms of their own.
+- `POL-01.04` A booking never edits commercial terms. A change of terms is a new effective-dated Agreement version, which preserves prior transaction history. A booking keeps the version in force when it was approved and takes a later one only when it is approved again.
+- `POL-01.05` The ownership-transfer event is configurable per brand agreement and inherited by its bookings. Options include supplier dispatch, receipt and acceptance by KDPS, sale to the customer (typically for consignment), or another explicitly agreed event. Under receipt and acceptance, the brand owns counted goods until they are scanned in at the receiving Site, which is their acceptance (`DEC-141`).
 - `POL-01.06` Receipt and acceptance may be proposed for a new purchase agreement, but must be confirmed against the actual supplier terms. The configured event does not automatically assign ownership or override the governing agreement.
 - `POL-01.07` Sale-or-return rights are separate from ownership transfer. PT approval confirms merchandise data and approved cost; it does not automatically change legal ownership.
-- `POL-01.08` Supplier return rights are configured per brand agreement, inherited by each booking, and may be overridden per booking.
+- `POL-01.08` Supplier return rights are configured in the brand's Agreement and apply to every booking of that brand; a booking cannot override them.
 - `POL-01.09` Each agreement specifies whether unsold goods may be returned, the return window in days or as a fixed season-end date, and whether the window starts at dispatch, receipt, or acceptance.
 - `POL-01.10` Each agreement also specifies eligible condition tags, packaging and quantity limits, supplier-approval requirements, freight responsibility and deductions, and whether accepted returns settle by credit note, replacement, or refund.
 - `POL-01.11` The agreement determines the applicable return terms; there is no universal return-window default. Defective or incorrectly supplied goods follow a separate claims process, including under outright purchase.
 - `POL-01.12` For outright and purchase-with-return-rights agreements, supplier payment follows the booking’s agreed due dates, advances, and instalments; unsold stock does not automatically defer payment.
 - `POL-01.13` For consignment, settlement follows the agreed sale or consumption event and reporting cycle, reconciling customer returns and adjustments.
-- `POL-01.14` Payment terms are configurable per brand and may be overridden per booking. Track disputed amounts separately from undisputed amounts due.
+- `POL-01.14` Payment terms are configured in the brand's Agreement and apply to every booking of that brand; a booking cannot override them. Track disputed amounts separately from undisputed amounts due.
 - `POL-01.15` Accounting recognition remains unresolved here and belongs to the Financial posting policy.
 
 **Signed by, date:**
@@ -181,7 +181,7 @@ Apparel OS switches on no policy-dependent live operation by default. All 19 ans
 - `POL-05.06` When the delivery window expires, mark the remaining balance overdue and raise a follow-up exception. Expiry alone does not cancel the balance.
 - `POL-05.07` An authorised user may extend the window or cancel undelivered balance under the supplier terms and required approval.
 - `POL-05.08` Late or excess goods may be recorded into physical custody, but require approval before acceptance into the booking.
-- `POL-05.09` Booking prepares the buying budget, Accounts checks it, and the Owner approves it before use. Actual budgets, names and authority remain to be supplied.
+- `POL-05.09` Booking prepares the buying budget, Accounts checks it, and the Owner approves it before use: three different people for each budget version, the approval without a value limit (`DEC-142`). Actual budgets, names and authority remain to be supplied.
 - `POL-05.10` Booking proposes material booking changes or cancellation; an authorised approver approves them under the signed brand agreement and configured authority. Actual rights and time windows come from each agreement.
 
 **Signed by, date:**
@@ -271,7 +271,7 @@ Apparel OS switches on no policy-dependent live operation by default. All 19 ans
 - `POL-09.03` Genuine supplier-owned consignment remains outside owned inventory until its relevant recognition event. Sale-or-return ownership follows the agreement; the label alone does not determine it.
 - `POL-09.04` Recognise ordinary-sale revenue and COGS at the applicable transfer event, normally customer handover. Payment or invoicing alone does not determine recognition. Billed-retained goods require a separate assessment of readiness and remaining obligations, including alteration.
 - `POL-09.05` Keep physical receipt of returned goods, credit/refund entitlement and repayment as distinct events. PT approval is a valuation control, not a universal accounting-recognition trigger.
-- `POL-09.06` Conditional preferred inventory-costing baseline: support FIFO and weighted-average methods; moving weighted average is preferred for KDPS interchangeable stock, subject to CA confirmation of the existing/applicable policy and validation with representative purchase, sale, return and late-cost cases before activation. This is a preference for evaluation, not an activated method.
+- `POL-09.06` Inventory-costing formulas: support FIFO and moving weighted average only (`PRD-LED-014`; periodic average is out, `DEC-031`). The product owner chooses each book's formula and pool mode as that book's approved cost setting, after validation with representative purchase, sale, return and late-cost cases and before activation (`DEC-127`).
 - `POL-09.07` Retain receipt- and piece-level source cost history regardless of the financial cost formula. A unique barcode alone does not justify specific-identification costing for interchangeable goods. Apply a consistent formula to inventories of similar nature and use, not a separate formula casually per booking.
 - `POL-09.08` Trace later approved cost changes to their effects on remaining inventory and COGS for goods already sold. Support lower-of-cost-and-net-realisable-value write-downs under applicable rules.
 - `POL-09.09` KDPS’s existing cost method is unknown. If it changes, reconcile the transition and opening stock; no operational method change or validation is claimed here.
@@ -286,7 +286,7 @@ Apparel OS switches on no policy-dependent live operation by default. All 19 ans
 - `POL-09.18` Reconcile voucher values, tax and totals before marking a batch reconciled.
 - `POL-09.19` The cost pool (each SKU across the accounting book, or each SKU at each Site) remains to be confirmed by the CA.
 - `POL-09.20` Accounts and the CA approve allocation bases for merchandise cost, commissions, brand support and shared expenses in Store P&L and brand-by-Store profit. Use causal shared-cost drivers appropriate to the expense, and show results before and after allocation. Actual drivers and formulas remain unset; do not allocate until configured for stage 5.
-- `POL-09.21` Initially retain KDPS's current CA-approved inventory-cost method and pool. Their actual method and pool are unknown until verified; do not switch methods based on a preferred future option.
+- `POL-09.21` KDPS's current CA-approved inventory-cost method and pool are facts Accounts and the CA supply; they inform the product owner's choice under `POL-09.06` and do not bind it (`DEC-127`).
 - `POL-09.22` Accounts and the CA define supported goods-in-transit and supplier-liability postings from the actual agreement and applicable accounting framework. Until validated, preserve unknown amounts and do not create an unsupported posting.
 - `POL-09.23` Use the current KDPS chart of accounts, reviewed by Accounts and the CA, as the starting map. Actual accounts and posting rules remain to be verified.
 - `POL-09.24` Accounts sets invoice and rounding tolerance values only after reviewing representative real examples; no value is assumed. Apply the zero-tolerance safeguards in `POL-09.13` separately.

@@ -1,16 +1,34 @@
 import {
   ACTIVITY_APPROVAL,
+  BOOKING_APPROVAL,
+  BOOKING_CANCELLATION,
+  BOOKING_EXTENSION,
+  BOOKING_RECEIPT_LINK,
+  BOOKING_TYPE,
+  OPEN_TO_BUY_APPROVAL,
+  OPEN_TO_BUY_BUDGET_TYPE,
+  OPEN_TO_BUY_CHECK,
   AGREEMENT_CHANGE,
   BANK_DETAILS_CHANGE,
   BILL_FORMAT_CHANGE_APPROVAL,
   BILL_FORMAT_CHANGE_TYPE,
+  DAMAGE_DECISION,
+  DAMAGE_REPORT_TYPE,
+  DAMAGE_REVERSAL_APPROVAL,
   FINANCIAL_YEAR_CHANGE_APPROVAL,
   FINANCIAL_YEAR_CHANGE_TYPE,
+  HELD_LINE_DECISION,
+  ARRIVAL_TYPE,
   LAYOUT_CONFIRMATION,
   MAPPING_CONFIRMATION,
+  MARKED_ATTRIBUTE_CHANGE,
+  MARKED_ATTRIBUTE_TYPE,
   MAPPING_RULE_CONFIRMATION,
   PERIOD_REOPENING_APPROVAL,
   PRODUCT_CONFIRMATION,
+  PT_APPROVAL,
+  PT_REVERSAL_APPROVAL,
+  RECOUNT_APPROVAL,
   SITE_READINESS_APPROVAL,
   VOCABULARY_CONFIRMATION,
   type ApprovalRequestView,
@@ -24,12 +42,22 @@ import { PersonaChip } from '../shell/AppShell';
 import { useSession, useTimeZone } from '../shell/session';
 import { limitHolderText, limitText, permissionText, scopeText } from '../setup/describe';
 import { formatText } from '../setup/format-parts';
-import { formatDate } from '../setup/format';
+import { formatDate, formatList, formatPaise, formatQuantity } from '../setup/format';
 import { stateIdOf } from '../setup/states';
 import { MasterFacts } from '../organisation/MasterFacts';
 import { formatDateTime } from '../history/format';
 import { missingText } from '../components/UnavailableState';
+import { AttributeName } from '../merchandise/AttributeName';
+import { MARK_LABEL } from '../merchandise/marked';
+import { AmendmentLines, extensionEnd } from '../booking/AmendmentLines';
+import { ReceiptLinkLines } from '../booking/ReceiptLinkLines';
+import { OpenToBuyFacts, TermsFacts, TotalsView, valueAtCostOf } from '../booking/facts';
+import { StatusView } from '../booking/StatusView';
+import { useBookingNames } from '../booking/names';
 import { ImportFacts } from './ImportFacts';
+import { DamageReportFacts } from '../stock/DamageReport';
+import { PtReview } from '../receiving/PtReview';
+import { PtReversalFacts } from '../receiving/PtReversal';
 import { actionTitle } from './subject';
 
 // The material facts of the version an approval request binds to (PRD-ACS-007; access-and-approvals 9.1; spec
@@ -429,6 +457,300 @@ function BillFormatFacts({ view }: { view: ApprovalRequestView }) {
   );
 }
 
+/**
+ * An open-to-buy budget version, for Accounts' check and for its approval: the brand and season, the amount of the
+ * version decided, where it came from, and, at the approval, when Accounts checked it (goods-in 3.3; POL-05.09;
+ * S2-F01-T02). The budget is read with view on its own type, within the reader's brand scope.
+ */
+function BudgetFacts({ view }: { view: ApprovalRequestView }) {
+  const timeZone = useTimeZone();
+  const query = useQuery({
+    ...readQuery(api, 'readOpenToBuyBudget', { params: { budgetId: view.document.recordId } }),
+    enabled: useViewable(OPEN_TO_BUY_BUDGET_TYPE),
+  });
+  const budget = query.data?.budget;
+  const version = budget?.versions.find((each) => each.id === view.document.versionId);
+  if (budget === undefined || version === undefined) return null;
+  return (
+    <Facts>
+      <Fact label="budget.brand">
+        <span className="font-mono">{budget.brand.code}</span> {budget.brand.name}
+      </Fact>
+      <Fact label="budget.season">
+        <span className="font-mono">{budget.season.code ?? t('organisation.unknown')}</span> {budget.season.name}
+      </Fact>
+      <Fact label="budget.amount">
+        <span className="tabular-nums">{formatPaise(version.amount)}</span>
+      </Fact>
+      <Fact label="rules.origin">{t(`rules.origin.${version.origin}`)}</Fact>
+      <Fact label="budget.check">
+        {version.check === undefined
+          ? t('budget.awaiting.check')
+          : t('budget.checked-at', { at: formatDateTime(version.check.checkedAt, timeZone) })}
+      </Fact>
+    </Facts>
+  );
+}
+
+/**
+ * A booking version, for its approval (goods-in 3.4; S2-F01-T03): its brand, season, supplier, destination and window,
+ * its totals at cost and MRP by style, its documents, the brand's Agreement terms and the remaining open-to-buy of its
+ * brand and season, so the approver decides on what was entered and on what the budget leaves. The booking is read with
+ * view on its own type, within the reader's scope.
+ */
+function BookingFacts({ view }: { view: ApprovalRequestView }) {
+  const names = useBookingNames();
+  const query = useQuery({
+    ...readQuery(api, 'readBooking', { params: { bookingId: view.document.recordId } }),
+    enabled: useViewable(BOOKING_TYPE),
+  });
+  const booking = query.data?.booking;
+  if (booking?.version.id !== view.document.versionId) return null;
+  const { version } = booking;
+  return (
+    <div className="flex flex-col gap-3">
+      <Facts>
+        <Fact label="booking.brand">{names.brand.field(booking.brandId)}</Fact>
+        <Fact label="booking.season">{names.season.field(version.season.valueId)}</Fact>
+        <Fact label="booking.supplier">{names.party.field(version.supplierPartyId)}</Fact>
+        <Fact label="booking.destination">{names.site.field(booking.destinationSiteId)}</Fact>
+        <Fact label="booking.window">
+          {t('booking.window.range', {
+            from: formatDate(version.deliveryWindow.from),
+            to: formatDate(version.deliveryWindow.to),
+          })}
+        </Fact>
+        <Fact label="booking.documents">{t('booking.documents.count', { count: booking.documents.length })}</Fact>
+      </Facts>
+      <TotalsView lines={version.lines} />
+      <section aria-label={t('booking.open-to-buy')} className="flex flex-col gap-1">
+        <h4 className="text-label font-semibold text-text-2">{t('booking.open-to-buy')}</h4>
+        <OpenToBuyFacts remaining={booking.openToBuy} {...valueAtCostOf(booking)} />
+      </section>
+      <section aria-label={t('booking.terms')} className="flex flex-col gap-1">
+        <h4 className="text-label font-semibold text-text-2">{t('booking.terms')}</h4>
+        <TermsFacts terms={booking.terms} />
+      </section>
+    </div>
+  );
+}
+
+/**
+ * A cancellation of a booking's undelivered balance, or an extension of its window, for its approval (goods-in 3.5;
+ * S2-F01-T04): the booking's brand, supplier and destination, what it cancels line by line or the dates it gives, and
+ * the version in force with each line's quantities now, so the approver sees what is outstanding. The booking is read
+ * with view on its own type, within the reader's scope.
+ */
+function AmendmentFacts({ view }: { view: ApprovalRequestView }) {
+  const names = useBookingNames();
+  const query = useQuery({
+    ...readQuery(api, 'readBooking', { params: { bookingId: view.document.recordId } }),
+    enabled: useViewable(BOOKING_TYPE),
+  });
+  const booking = query.data?.booking;
+  const amendment = booking?.amendments.find((each) => each.id === view.document.versionId);
+  if (booking === undefined || amendment === undefined) return null;
+  return (
+    <div className="flex flex-col gap-3">
+      <Facts>
+        <Fact label="booking.brand">{names.brand.field(booking.brandId)}</Fact>
+        <Fact label="booking.supplier">{names.party.field(booking.version.supplierPartyId)}</Fact>
+        <Fact label="booking.destination">{names.site.field(booking.destinationSiteId)}</Fact>
+        {amendment.kind === 'extension' && (
+          <Fact label="booking.extend.window-to">{formatDate(extensionEnd(amendment))}</Fact>
+        )}
+        <Fact label="booking.amendments">
+          <AmendmentLines amendment={amendment} status={booking.status} />
+        </Fact>
+      </Facts>
+      {booking.status !== undefined && <StatusView status={booking.status} />}
+    </div>
+  );
+}
+
+/**
+ * A proposal to link late or excess goods into a booking, for its approval (goods-in 3.7, 4.10; POL-05.08; RR-577;
+ * S2-F02-T04): the booking's brand, supplier, destination and window as extended, each GRN line proposed with the goods
+ * and pieces it delivers, the day they arrived and why it needs approval, and the version in force with each line's
+ * quantities now, so the approver sees what would be delivered or over-delivered. The booking is read with view on its
+ * own type, within the reader's scope.
+ */
+function ReceiptLinkFacts({ view }: { view: ApprovalRequestView }) {
+  const names = useBookingNames();
+  const query = useQuery({
+    ...readQuery(api, 'readBooking', { params: { bookingId: view.document.recordId } }),
+    enabled: useViewable(BOOKING_TYPE),
+  });
+  const booking = query.data?.booking;
+  const proposal = booking?.receiptLinkProposals.find((each) => each.id === view.document.versionId);
+  if (booking === undefined || proposal === undefined) return null;
+  return (
+    <div className="flex flex-col gap-3">
+      <Facts>
+        <Fact label="booking.brand">{names.brand.field(booking.brandId)}</Fact>
+        <Fact label="booking.supplier">{names.party.field(booking.version.supplierPartyId)}</Fact>
+        <Fact label="booking.destination">{names.site.field(booking.destinationSiteId)}</Fact>
+        {booking.status !== undefined && (
+          <Fact label="booking.window">
+            {t('booking.window.range', {
+              from: formatDate(booking.status.deliveryWindow.from),
+              to: formatDate(booking.status.deliveryWindow.to),
+            })}
+          </Fact>
+        )}
+      </Facts>
+      <ReceiptLinkLines proposal={proposal} status={booking.status} />
+      {booking.status !== undefined && <StatusView status={booking.status} />}
+    </div>
+  );
+}
+
+/**
+ * A version of the season or size attribute: which it marks, the attribute it names and what is in force now, and
+ * where the choice came from (structure-and-masters 4.2 "As built"; RR-550, RR-556).
+ */
+function MarkedAttributeFacts({ view }: { view: ApprovalRequestView }) {
+  const query = useQuery({
+    ...readQuery(api, 'readMarkedAttributeVersion', { params: { versionId: view.document.versionId } }),
+    enabled: useViewable(MARKED_ATTRIBUTE_TYPE),
+  });
+  if (query.data === undefined) return null;
+  const { mark, inForce, version } = query.data;
+  return (
+    <Facts>
+      <Fact label="marked.title">{t(MARK_LABEL[mark])}</Fact>
+      <Fact label="marked.attribute">
+        <AttributeName attributeId={version.attributeId} />
+      </Fact>
+      <Fact label="marked.in-force">
+        {inForce.kind === 'set' ? <AttributeName attributeId={inForce.attributeId} /> : t('marked.not-set')}
+      </Fact>
+      <Fact label="rules.origin">{t(`rules.origin.${version.origin}`)}</Fact>
+    </Facts>
+  );
+}
+
+/**
+ * A damage report, for its decision, or the report a reversal of its confirmation belongs to, for the reversal's
+ * approval: the goods and quantity, what is wrong, the photos and the decisions so far (goods-in 8.3, 8.5; S2-F08-T01).
+ * The report is read with view on its own type, within the reader's scope.
+ */
+function DamageFacts({ view, reversal }: { view: ApprovalRequestView; reversal: boolean }) {
+  const viewable = useViewable(DAMAGE_REPORT_TYPE);
+  const report = useQuery({
+    ...readQuery(api, 'readDamageReport', { params: { damageReportId: view.document.recordId } }),
+    enabled: viewable && !reversal,
+  });
+  const ofReversal = useQuery({
+    ...readQuery(api, 'readDamageReversal', { params: { damageReversalId: view.document.recordId } }),
+    enabled: viewable && reversal,
+  });
+  const read = (reversal ? ofReversal : report).data?.report;
+  if (read === undefined) return null;
+  const proposed = read.reversals.find((each) => each.id === view.document.recordId);
+  return (
+    <Facts>
+      <Fact label="damage.number">{read.number}</Fact>
+      {proposed !== undefined && <Fact label="damage.reversal.reason">{proposed.reason}</Fact>}
+      <div className="sm:col-span-2">
+        <DamageReportFacts report={read} />
+      </div>
+    </Facts>
+  );
+}
+
+/**
+ * A held line, for its decision (goods-in 4.6, section 11; S2-F02-T03): the GRN and its line as counted, with what the
+ * count found, how many pieces are held and how, and the product Booking named for unidentified goods. Read with view
+ * on the Arrival, within the reader's scope.
+ */
+function HeldLineFacts({ view }: { view: ApprovalRequestView }) {
+  const query = useQuery({
+    ...readQuery(api, 'readHeldLine', { params: { heldLineId: view.document.recordId } }),
+    enabled: useViewable(ARRIVAL_TYPE),
+  });
+  const read = query.data;
+  const held = read?.line.heldLine;
+  if (read === undefined || held === undefined || held === null) return null;
+  const { line } = read;
+  const counted = formatList(
+    line.countedBy.map((userId) => read.people.find((each) => each.userId === userId)?.name ?? t('receive.unknown')),
+  );
+  const identity = (parts: readonly (string | null | undefined)[]) =>
+    formatList(parts.filter((part): part is string => part !== null && part !== undefined));
+  return (
+    <Facts>
+      <Fact label="held.grn">{read.grnNumber}</Fact>
+      <Fact label="held.kind">{t(`held.kind.${held.kind}`)}</Fact>
+      <Fact label="held.quantity">{formatQuantity(held.quantity)}</Fact>
+      <Fact label="held.line">{identity([line.styleCode ?? line.description, line.colour, line.size])}</Fact>
+      <Fact label="receive.invoice-quantity">{formatQuantity(line.invoiceQuantity)}</Fact>
+      <Fact label="receive.counted-quantity">{formatQuantity(line.countedQuantity)}</Fact>
+      {held.named !== null && (
+        <Fact label="held.named">{identity([held.named.styleCode, held.named.colour, held.named.size?.code])}</Fact>
+      )}
+      <Fact label="held.counted-by">{counted}</Fact>
+    </Facts>
+  );
+}
+
+/**
+ * A recount of a GRN's lines, for its approval (goods-in 4.7, 4.11, section 11; PRD-REC-019; S2-F02-T05): the GRN, why it
+ * was recounted and by whom, and each line with its identity, its count and its count as recounted. Read with view on
+ * the Arrival, within the reader's scope; a person the reader cannot name is Unknown (PRD-MOD-015).
+ */
+function RecountFacts({ view }: { view: ApprovalRequestView }) {
+  const query = useQuery({
+    ...readQuery(api, 'readRecount', { params: { recountId: view.document.recordId } }),
+    enabled: useViewable(ARRIVAL_TYPE),
+  });
+  const read = query.data;
+  if (read === undefined) return null;
+  const { recount } = read;
+  const nameOf = (userId: string) => read.people.find((each) => each.userId === userId)?.name ?? t('receive.unknown');
+  const identity = (parts: readonly (string | null | undefined)[]) =>
+    formatList(parts.filter((part): part is string => part !== null && part !== undefined));
+  return (
+    <div className="flex flex-col gap-3">
+      <Facts>
+        <Fact label="recount.grn">{read.grnNumber}</Fact>
+        <Fact label="recount.proposed-by">{nameOf(recount.proposedBy)}</Fact>
+        <Fact label="recount.reason">{recount.reason}</Fact>
+      </Facts>
+      <table className="w-full border-collapse text-body" aria-label={t('recount.lines')}>
+        <thead>
+          <tr>
+            {(['recount.line', 'held.line', 'recount.before', 'recount.after'] as const).map((label) => (
+              <th key={label} scope="col" className="h-10 bg-sunken px-3 text-left text-body-sm font-semibold">
+                {t(label)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {recount.lines.map((each) => {
+            const line = read.lines.find((one) => one.id === each.grnLineId);
+            return (
+              <tr key={each.grnLineId} className="h-10 border-t border-border">
+                <td className="px-3 tabular-nums">{formatQuantity(each.lineNumber)}</td>
+                <td className="px-3">
+                  {line === undefined ? (
+                    <span className="sr-only">{t('receive.unknown')}</span>
+                  ) : (
+                    identity([line.styleCode ?? line.description, line.colour, line.size])
+                  )}
+                </td>
+                <td className="px-3 tabular-nums">{formatQuantity(each.countedBefore)}</td>
+                <td className="px-3 tabular-nums">{formatQuantity(each.countedAfter)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 /** The facts of the request's version, by its action type; nothing where the reader may not read them. */
 export function DocumentFacts({ view }: { view: ApprovalRequestView }) {
   switch (view.actionType) {
@@ -463,6 +785,40 @@ export function DocumentFacts({ view }: { view: ApprovalRequestView }) {
       return <FinancialYearFacts view={view} />;
     case BILL_FORMAT_CHANGE_APPROVAL:
       return <BillFormatFacts view={view} />;
+    // An open-to-buy budget version's check and approval (goods-in 3.3; S2-F01-T02).
+    case OPEN_TO_BUY_CHECK:
+    case OPEN_TO_BUY_APPROVAL:
+      return <BudgetFacts view={view} />;
+    // A booking version's approval (goods-in 3.4; S2-F01-T03).
+    case BOOKING_APPROVAL:
+      return <BookingFacts view={view} />;
+    // A cancellation of a booking's balance and an extension of its window (goods-in 3.5; S2-F01-T04).
+    case BOOKING_CANCELLATION:
+    case BOOKING_EXTENSION:
+      return <AmendmentFacts view={view} />;
+    // Late or excess goods proposed into a booking (goods-in 4.10; POL-05.08; S2-F02-T04).
+    case BOOKING_RECEIPT_LINK:
+      return <ReceiptLinkFacts view={view} />;
+    // A damage report's decision and a reversal's approval (goods-in 8.3; S2-F08-T01).
+    case DAMAGE_DECISION:
+      return <DamageFacts view={view} reversal={false} />;
+    case DAMAGE_REVERSAL_APPROVAL:
+      return <DamageFacts view={view} reversal />;
+    // A held line's decision (goods-in 4.6; S2-F02-T03).
+    case HELD_LINE_DECISION:
+      return <HeldLineFacts view={view} />;
+    // A recount's approval (goods-in 4.7, 4.11; S2-F02-T05).
+    case RECOUNT_APPROVAL:
+      return <RecountFacts view={view} />;
+    // A PT revision's approval: the PT review (goods-in 6.2; S2-F06-T01).
+    case PT_APPROVAL:
+      return <PtReview revisionId={view.document.versionId} />;
+    // A PT's reversal before the scan-in: its reason, then the PT it reverses (goods-in 6.7; S2-F09-T01).
+    case PT_REVERSAL_APPROVAL:
+      return <PtReversalFacts reversalId={view.document.versionId} />;
+    // The season or size attribute (structure-and-masters 4.2 "As built"; RR-550, RR-556).
+    case MARKED_ATTRIBUTE_CHANGE:
+      return <MarkedAttributeFacts view={view} />;
     // Layout, mapping and mapping rule versions (imports-and-opening-data 6.4; S1-F06-T03).
     case LAYOUT_CONFIRMATION:
     case MAPPING_CONFIRMATION:

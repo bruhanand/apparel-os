@@ -104,6 +104,7 @@ export function syntheticStores(setup: StructureSetup, geography: { stateId: str
             legalEntityId: legalEntity.recordId,
             taxRegistrationId: registrationId,
             accountingBookId: book.recordId,
+            origin: 'synthetic',
             validFrom: setup.today(),
           }),
         ),

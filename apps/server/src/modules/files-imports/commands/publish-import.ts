@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { uuidv7 } from '@apparel-os/domain';
-import { IMPORT_BATCH_TYPE } from '@apparel-os/schemas';
+import { IMPORT_BATCH_TYPE, type MissingItem } from '@apparel-os/schemas';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import {
@@ -142,6 +142,19 @@ export async function handlerAuthority(
   const assignments = new Map<string, string>();
   for (const document of documents) {
     const need = await handler.publishNeeds(context, document);
+    if (need === undefined) {
+      // The record the batch is about, no longer one the person may see: not found (13.1; code-house-rules 12.3).
+      const { subject } = document;
+      if (subject === undefined) throw new CommandDefect(`${handler.target} names no permission for a document`);
+      return {
+        kind: 'refused',
+        refusal: {
+          kind: 'not-found',
+          code: 'files-imports.subject-not-found',
+          missing: [{ kind: 'record', recordType: subject.recordType, recordId: subject.recordId }],
+        },
+      };
+    }
     const asked = JSON.stringify(need);
     let held = further.get(asked);
     if (held === undefined) {
@@ -496,6 +509,10 @@ export async function publishOne(
     documentId,
     stagedRowIds: document.rows.map((row) => row.stagedRowId),
     firstRowNumber: document.rows[0]?.rowNumber ?? 1,
+    storedFileId: batch.storedFileId,
+    layoutVersionId: batch.layoutVersionId,
+    mappingVersionId: batch.mappingVersionId,
+    preparers: await batchPreparers(context, batch, publishing.publisher.userId),
   });
   if (published.kind === 'refused') {
     // Everything the document's run wrote rolls back; the batch's run keeps its outcome (7.4; PRD-IMP-012).
@@ -535,6 +552,16 @@ export async function publishOne(
     ...(revises === null ? {} : { revisesDocumentId: revises }),
   };
   return { kind: 'success', answer: { ...answer, records: [...answer.records] }, shows: 'nothing' };
+}
+
+/**
+ * What a document's run refused by its handler names besides the document, such as every problem a PT file meets at its
+ * submit (goods-in 5.6, 5.8; S2-F04-T02): identifiers and codes only (code-house-rules 12.3), answered with the batch's
+ * outcome so the screen lists them; none for another answer.
+ */
+function problemsOf(answer: IdempotentAnswer<JsonValue>): readonly MissingItem[] {
+  if (answer.kind !== 'refusal' || answer.refusal.code !== 'files-imports.document-refused') return [];
+  return answer.refusal.missing.filter((item) => item.kind !== 'import-document');
 }
 
 /** What became of one document's run, as the batch's outcome keeps it (7.4). */
@@ -594,6 +621,7 @@ export async function writeOutcome(
   attempting: Attempting,
   start: Pick<Held, 'batch' | 'handler' | 'approvalCheck'>,
   attempts: ReadonlyMap<string, Omit<OutcomeDocument, 'documentId' | 'rows'>>,
+  problems: ReadonlyMap<string, readonly MissingItem[]> = new Map(),
 ): Promise<CommandOutcome<JsonValue>> {
   const { batch, handler } = start;
   const documents = await documentsOf(context, batch);
@@ -689,11 +717,15 @@ export async function writeOutcome(
       state,
       outcomeId,
       result,
-      documents: outcome.documents.map((document) => ({
-        documentId: document.documentId,
-        result: document.result,
-        ...(document.refusalCode === undefined ? {} : { refusalCode: document.refusalCode }),
-      })),
+      documents: outcome.documents.map((document) => {
+        const named = problems.get(document.documentId) ?? [];
+        return {
+          documentId: document.documentId,
+          result: document.result,
+          ...(document.refusalCode === undefined ? {} : { refusalCode: document.refusalCode }),
+          ...(named.length === 0 ? {} : { missing: named.map((item) => ({ ...item })) }),
+        };
+      }),
     },
     shows: 'nothing',
   };
@@ -838,6 +870,7 @@ export async function publishImport(
     return authority.kind === 'refused' ? [] : documents.map((document) => document.documentId);
   });
   const attempts = new Map<string, Omit<OutcomeDocument, 'documentId' | 'rows'>>();
+  const problems = new Map<string, readonly MissingItem[]>();
   for (const documentId of chosen) {
     const answer = await deps.helper.run(header(DOCUMENT_COMMAND), {
       key: documentKey(input.key, documentId),
@@ -854,6 +887,7 @@ export async function publishImport(
     // A refusal of the batch, such as a stale version or a missing review, is the batch run's to answer.
     if (attempt === 'stop') break;
     if (attempt !== undefined) attempts.set(documentId, attempt);
+    problems.set(documentId, problemsOf(answer));
   }
   return deps.helper.run(header(COMMAND), {
     key: input.key,
@@ -876,6 +910,7 @@ export async function publishImport(
         },
         start.held,
         attempts,
+        problems,
       );
     },
   });

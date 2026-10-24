@@ -12,6 +12,8 @@ export { actionTypeOf, masterKinds, organisationApprovalRules, recordTypeOf } fr
 export type { MasterKind } from './domain/kinds.js';
 export type { InForce, PageRequest, RecordPage, RecordView, Structure, UnitMapping } from './queries/records.js';
 export { mappingOn, mappingVersionStart } from './queries/records.js';
+// The structure in force on a date, for `receiving`'s Arrival and inbox (goods-in 4.1, 4.2; S2-F02-T02).
+export { structureOn } from './queries/records.js';
 export { mappingChanged, structureChanged } from './events.js';
 export { isPlaceScoped, organisationScopeMembers, placeScopedKinds } from './queries/scope.js';
 export type { PlaceFacts, PlaceScopedKind } from './queries/scope.js';
@@ -28,3 +30,7 @@ export type { BusinessUnitHead, UnitReadinessAnswer } from './queries/units.js';
 // A tax registration's code, for the registration applicability of `finance` · tax rules (S1-F09-T04).
 export { taxRegistrationCodes } from './queries/tax-registrations.js';
 export { organisationRestoreParticipant } from './restore-participant.js';
+// The verified mappings as policy 10's values, for the policy gate (module-map 4.4; goods-in 10.5; RR-558).
+export { VERIFIED_MAPPINGS_CHECK, verifiedMappingsCheck } from './queries/validity.js';
+// The places a report names, served through the kernel's read-model gateway (goods-in 9.4; S2-F11-T01).
+export { ORGANISATION_PLACES, organisationReadModels } from './queries/places.js';

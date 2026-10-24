@@ -1,16 +1,49 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Client } from 'pg';
 import {
+  CommandRunner,
   connectionToDatabase,
+  createDb,
+  deploymentEnvironmentFromEnvironment,
   listDirectory,
   migrateDatabase,
   migrationSetFolder,
+  newCorrelationId,
   PinoLoggerService,
+  systemClock,
+  type DeploymentEnvironment,
   type DirectoryEntry,
+  type TransactionContext,
 } from '../../src/kernel/index.js';
-import { runSetupStep } from '../../src/modules/access/index.js';
+import { Access, runSetupStep, SETUP_IDENTITY } from '../../src/modules/access/index.js';
+// The code of the role the setup step gives the first Admin, an identifier of its own records (9.11).
+import { FIRST_ADMIN_ROLE } from '../../src/modules/access/domain/first-roles.js';
+import { Audit } from '../../src/modules/audit/index.js';
+import { BOOKING_KIND } from '../../src/modules/booking/index.js';
+// configuration's own rule of which origins an environment accepts, as its interface answers it (code-house-rules
+// 12.14), for the seed's composition, which builds no Configuration (11.2).
+import { originRefusal } from '../../src/modules/configuration/commands/policy-status.js';
+import { configurationTimezoneSource, type ConfigurationInterface } from '../../src/modules/configuration/index.js';
+import { Catalogue } from '../../src/modules/merchandise/catalogue/index.js';
+import { partiesSupplierRoles } from '../../src/modules/merchandise/parties/index.js';
+import { Numbering } from '../../src/modules/numbering/index.js';
+import { GRN_KIND } from '../../src/modules/receiving/index.js';
+import { DAMAGE_REPORT_KIND } from '../../src/modules/stock/documents/index.js';
 import { serviceIdentitiesOf } from '../../src/setup-organisation.js';
 import { jobRegistry } from '../../src/worker.module.js';
+import { defineSyntheticBookingSeries } from '../fixtures/booking-series.js';
+import { defineSyntheticDamageReportSeries } from '../fixtures/damage-report-series.js';
+import { defineSyntheticGrnSeries } from '../fixtures/grn-series.js';
+import {
+  addSyntheticItemMap,
+  addSyntheticValues,
+  markSyntheticAttribute,
+  SEEDED_MARKS,
+  SYNTHETIC_MARKED_ATTRIBUTES,
+  syntheticAttributeToMark,
+  syntheticSubCategory,
+} from '../fixtures/marked-attributes.js';
+import { addSyntheticPtTemplate } from '../fixtures/pt-template.js';
 import { isSyntheticCode, SYNTHETIC_ORGANISATIONS, syntheticDatabaseName } from '../fixtures/synthetic.js';
 import { seedRefusal } from './environment.js';
 import {
@@ -37,6 +70,18 @@ import {
 // Then it migrates the directory database, which refuses any other role or a database that role does not own, and
 // runs the setup step for each Organisation the directory does not list yet. A finished Organisation, one the
 // directory lists and whose setup record exists, is left as it is, so a second run changes nothing.
+//
+// No screen defines a number series yet (RR-449), and on `dev` nobody can mark the attributes or confirm a layout without
+// a second person to approve it, so the seed gives each of its Organisations, set up now or before, what `dev` needs as
+// labelled synthetic settings (DEC-118), each only where it is missing, so a rerun changes nothing: the GRN series
+// (goods-in 4.8; DEC-143), the booking series and the damage-report series (goods-in 3.9, 8.5; DEC-144), each defined
+// under the `setup` identity; a SYNTHETIC list attribute marked as each mark where none is marked in force: the season,
+// the size list and the PT template's colour, gender, type, item, fit and GST rate lists (goods-in 3.3, 4.3, 5.2;
+// DEC-144; fixtures/marked-attributes.ts), each attribute recorded by the first Admin and each marking written under the
+// `setup` identity with the first Admin as its preparer, with a few SYNTHETIC values written the same way; the item
+// map of the SYNTHETIC items, to a SYNTHETIC category the first Admin records (RR-583); and the PT template's SYNTHETIC
+// layout and mapping, Confirmed (fixtures/pt-template.ts), so budgets, count lines and PT files can be made on `dev`
+// without further role setup.
 const logger = new PinoLoggerService();
 
 interface Target {
@@ -52,7 +97,156 @@ interface Connections {
   readonly firstUsersFile: string;
 }
 
-async function seed(connections: Connections, targets: readonly Target[]): Promise<void> {
+/** Who acts for the seed in one Organisation: its `setup` identity, and its first Admin with their assignment. */
+interface SeedActors {
+  readonly setupIdentityId: string;
+  readonly firstAdmin: { readonly userId: string; readonly roleAssignmentId: string };
+}
+
+/** The `setup` identity and the first Admin of a set-up Organisation, read as its owner (access-and-approvals 9.11). */
+async function seedActors(target: Target): Promise<SeedActors> {
+  const owner = new Client({ connectionString: target.connectionString });
+  await owner.connect();
+  try {
+    const identity = await owner.query<{ id: string }>(
+      "select id::text as id from access.service_identity where code = $1 and kind = 'internal'",
+      [SETUP_IDENTITY],
+    );
+    // The first Admin's assignment of the role the setup step gave them (access-and-approvals 9.11).
+    const admin = await owner.query<{ userId: string; roleAssignmentId: string }>(
+      `select r.first_admin_user_id::text as "userId", a.id::text as "roleAssignmentId"
+         from access.setup_record r
+         join access.role_assignment a on a.app_user_id = r.first_admin_user_id and a.decision = 'Approved'
+         join access.role role on role.id = a.role_id and role.code = $1
+        order by a.id
+        limit 1`,
+      [FIRST_ADMIN_ROLE.code],
+    );
+    const setupIdentityId = identity.rows[0]?.id;
+    const firstAdmin = admin.rows[0];
+    if (setupIdentityId === undefined) throw new Error(`${target.code} has no setup identity`);
+    if (firstAdmin === undefined) throw new Error(`${target.code} has no first Admin with an assignment`);
+    return { setupIdentityId, firstAdmin };
+  } finally {
+    await owner.end();
+  }
+}
+
+/** Runs one command in a seed Organisation as the runtime role, under an actor, on the system clock. */
+async function runIn<T>(
+  target: Target,
+  runtime: string,
+  commandName: string,
+  actorId: string,
+  work: (context: TransactionContext) => Promise<T>,
+): Promise<T> {
+  const connectionTo = connectionToDatabase(runtime);
+  if (connectionTo === undefined) throw new Error('The runtime connection cannot be pointed at a database');
+  const handle = createDb(connectionTo(target.database), { max: 1 });
+  try {
+    const runner = new CommandRunner({ clock: systemClock, timezones: configurationTimezoneSource, logger });
+    return await runner.run(
+      {
+        commandName,
+        organisation: { organisationCode: target.code, databaseName: target.database, db: handle.db },
+        correlationId: newCorrelationId(),
+        actor: { kind: 'actor', actorId },
+      },
+      work,
+    );
+  } finally {
+    await handle.close();
+  }
+}
+
+/** The SYNTHETIC series the seed defines, each through its fixture (DEC-118, DEC-143, DEC-144; RR-449). */
+const SEEDED_SERIES = [
+  { label: 'GRN', define: defineSyntheticGrnSeries },
+  { label: 'booking', define: defineSyntheticBookingSeries },
+  { label: 'damage-report', define: defineSyntheticDamageReportSeries },
+] as const;
+
+/**
+ * Gives one seed Organisation what `dev` needs and it lacks, as labelled synthetic settings (DEC-118, DEC-143,
+ * DEC-144), and answers what was added: each SYNTHETIC series it has none of, defined under its `setup` identity as the
+ * runtime role in one transaction; then each mark with nothing marked in force, its attribute recorded through the
+ * catalogue's command as the first Admin, then its marking written under the `setup` identity, the first Admin its
+ * preparer: two transactions, since an audit record names its command's actor; then the SYNTHETIC values the marked
+ * SYNTHETIC attribute lacks, written under the `setup` identity, the first Admin their proposer.
+ */
+async function syntheticSettingsAdded(
+  target: Target,
+  runtime: string,
+  origins: Pick<ConfigurationInterface, 'originRefusal'>,
+): Promise<string[]> {
+  const actors = await seedActors(target);
+  const numbering = new Numbering({ kinds: [GRN_KIND, BOOKING_KIND, DAMAGE_REPORT_KIND] });
+  const added: string[] = [];
+  const series = await runIn(target, runtime, 'seed.define-series', actors.setupIdentityId, async (context) => {
+    const defined: string[] = [];
+    for (const each of SEEDED_SERIES) {
+      if ((await each.define(context, numbering)) === 'defined') {
+        defined.push(`the SYNTHETIC ${each.label} series defined`);
+      }
+    }
+    return defined;
+  });
+  added.push(...series);
+  // The catalogue composed as the application composes it, with `access` for its approval requests (none is asked:
+  // an attribute takes effect when recorded; structure-and-masters 4.1 "As built", RR-467).
+  const audit = new Audit(logger);
+  const catalogue = new Catalogue({
+    audit,
+    access: new Access({ audit, origins }),
+    origins,
+    suppliers: partiesSupplierRoles,
+  });
+  const writer = { kind: 'service-identity' as const, id: actors.setupIdentityId };
+  for (const mark of SEEDED_MARKS) {
+    const { code } = SYNTHETIC_MARKED_ATTRIBUTES[mark];
+    const attributeId = await runIn(target, runtime, 'seed.record-attribute', actors.firstAdmin.userId, (context) =>
+      syntheticAttributeToMark(context, catalogue, actors.firstAdmin, mark),
+    );
+    if (attributeId !== undefined) {
+      const outcome = await runIn(target, runtime, 'seed.mark-attribute', actors.setupIdentityId, (context) =>
+        markSyntheticAttribute(
+          context,
+          { audit, origins },
+          { mark, attributeId, preparedBy: actors.firstAdmin.userId, writer },
+        ),
+      );
+      if (outcome === 'marked') added.push(`${code} marked as the ${mark} attribute`);
+    }
+    // Its SYNTHETIC values, each where missing, while the SYNTHETIC attribute is the one marked (DEC-144).
+    const values = await runIn(target, runtime, 'seed.add-values', actors.setupIdentityId, (context) =>
+      addSyntheticValues(context, { audit, origins }, { mark, proposedBy: actors.firstAdmin.userId, writer }),
+    );
+    if (values.length > 0) added.push(`${values.join(', ')} added as values of ${code}`);
+  }
+  // The item map of the SYNTHETIC items, while they are the items marked (goods-in 5.2, 5.3; RR-583): its category
+  // recorded by the first Admin, then the map written under the `setup` identity, each where missing.
+  const categoryId = await runIn(target, runtime, 'seed.record-category', actors.firstAdmin.userId, (context) =>
+    syntheticSubCategory(context, catalogue, actors.firstAdmin),
+  );
+  if (categoryId !== undefined) {
+    const mapped = await runIn(target, runtime, 'seed.add-item-map', actors.setupIdentityId, (context) =>
+      addSyntheticItemMap(context, { audit, origins }, { categoryId, writer }),
+    );
+    if (mapped.length > 0) added.push(`${mapped.join(', ')} added to the item map`);
+  }
+  // The PT template's SYNTHETIC layout and mapping, Confirmed, where its layout is missing (goods-in 5.2, 5.8).
+  const template = await runIn(target, runtime, 'seed.add-pt-template', actors.setupIdentityId, (context) =>
+    addSyntheticPtTemplate(context, { audit, origins }, { proposedBy: actors.firstAdmin.userId, writer }),
+  );
+  if (template === 'written') added.push('the SYNTHETIC PT template layout and mapping defined, Confirmed');
+  return added;
+}
+
+async function seed(
+  connections: Connections,
+  targets: readonly Target[],
+  environment: DeploymentEnvironment,
+): Promise<void> {
   const listed = await readDirectoryIfPresent(connections.migration);
   const refusal = directoryRefusal(listed, targets) ?? (await unfinishedRefusal(listed, targets));
   if (refusal !== undefined) throw new Error(`Seed refused, nothing changed: ${refusal}`);
@@ -81,6 +275,15 @@ async function seed(connections: Connections, targets: readonly Target[]): Promi
         `${target.code} (${target.name}): set up in database ${target.database} (${outcome.outcome}), with its first Admin and first approver`,
         'Seed',
       );
+    }
+  }
+  // Which origins this environment accepts: configuration's own rule (code-house-rules 12.14).
+  const origins: Pick<ConfigurationInterface, 'originRefusal'> = {
+    originRefusal: (context, origin) => originRefusal(environment, context, origin),
+  };
+  for (const target of targets) {
+    for (const added of await syntheticSettingsAdded(target, connections.runtime, origins)) {
+      logger.log(`${target.code} (${target.name}): ${added}`, 'Seed');
     }
   }
   logger.log(
@@ -200,7 +403,8 @@ if (refusal !== undefined) {
     process.exitCode = 1;
   } else {
     try {
-      await seed({ migration, runtime, firstUsersFile }, targets);
+      // seedRefusal has accepted local or dev, so this reads one of them.
+      await seed({ migration, runtime, firstUsersFile }, targets, deploymentEnvironmentFromEnvironment(process.env));
     } catch (error) {
       logger.error(error, 'Seed');
       process.exitCode = 1;

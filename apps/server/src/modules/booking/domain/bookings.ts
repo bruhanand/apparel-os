@@ -1,0 +1,164 @@
+import {
+  BOOKING_APPROVAL,
+  BOOKING_CANCELLATION,
+  BOOKING_EXTENSION,
+  BOOKING_RECEIPT_LINK,
+  BOOKING_TYPE,
+  type MissingItem,
+} from '@apparel-os/schemas';
+import type { ApprovalRule } from '../../access/index.js';
+import type { ExceptionFacts } from '../../exceptions/index.js';
+import type { BookingChangeKind } from '../db/schema.js';
+
+// The rules of a booking (goods-in 3.1 to 3.4; PRD-BKG-001 to PRD-BKG-004; POL-05.01, POL-02.07, POL-02.09;
+// S2-F01-T03). Pure: no database, no clock (code-house-rules 2).
+
+/**
+ * The approval rule of a booking version (access-and-approvals 8; goods-in 3.4; domain-model section 5): decided under
+ * approve on the booking, by a different authorised person from its preparers, which can never be switched off
+ * (POL-02.07), whose booking limit covers the booking's value at cost (DM-8, DEC-105; POL-02.09). The reasons are
+ * configured, with no default (POL-02.23). Its decision's evidence carries no restricted field class.
+ */
+export const bookingApprovalRule: ApprovalRule = {
+  actionType: BOOKING_APPROVAL,
+  module: 'booking',
+  recordType: BOOKING_TYPE,
+  independent: true,
+  value: 'cost',
+  freeTextReason: false,
+  decisionEvidenceClasses: [],
+  synthetic: false,
+};
+
+/**
+ * The approval rules of a cancellation of an undelivered balance and an extension of the window (goods-in 3.5, 3.10;
+ * POL-05.07, POL-05.10; S2-F01-T04): each decided under approve on the booking by a different authorised person from
+ * its proposer, which can never be switched off (POL-02.07). Neither has a value basis: no source names one
+ * (domain-model section 5 names none for either), a cancellation releases open-to-buy and an extension moves dates
+ * only, so neither needs an approval limit (access-and-approvals 9.3). Decided by the product owner, 22 Oct 2026, as
+ * built (RR-574). The reasons are configured, with no default (POL-02.23).
+ */
+export const amendmentApprovalRules: readonly ApprovalRule[] = [BOOKING_CANCELLATION, BOOKING_EXTENSION].map(
+  (actionType): ApprovalRule => ({
+    actionType,
+    module: 'booking',
+    recordType: BOOKING_TYPE,
+    independent: true,
+    value: 'none',
+    freeTextReason: false,
+    decisionEvidenceClasses: [],
+    synthetic: false,
+  }),
+);
+
+/**
+ * The approval rule of a proposal to link late or excess goods into a booking (goods-in 3.7, 4.10; POL-05.08; RR-577,
+ * decided by the product owner on 22 Oct 2026; S2-F02-T04): decided under approve on the booking by a different
+ * authorised person from its proposer, which can never be switched off (POL-02.07), as a cancellation and an extension
+ * are. No value basis: no source names one (domain-model section 5 names none), and a link moves no money and reserves
+ * no open-to-buy, so no approval limit applies (access-and-approvals 9.3). **Design choice**, as RR-574 decided for a
+ * cancellation. The reasons are configured, with no default (POL-02.23).
+ */
+export const receiptLinkApprovalRule: ApprovalRule = {
+  actionType: BOOKING_RECEIPT_LINK,
+  module: 'booking',
+  recordType: BOOKING_TYPE,
+  independent: true,
+  value: 'none',
+  freeTextReason: false,
+  decisionEvidenceClasses: [],
+  synthetic: false,
+};
+
+/** The document a proposal's approval decides: the booking, at the proposal (module-map 6.2 flow A). */
+export const receiptLinkDocument = (bookingId: string, proposalId: string) =>
+  ({ module: 'booking', recordType: BOOKING_TYPE, recordId: bookingId, versionId: proposalId }) as const;
+
+/** The document an amendment's approval decides: the booking, at the amendment (module-map 6.2 flow A). */
+export const amendmentDocument = (bookingId: string, amendmentId: string) =>
+  ({ module: 'booking', recordType: BOOKING_TYPE, recordId: bookingId, versionId: amendmentId }) as const;
+
+/** The evidence kinds of the supplier's files on a booking (imports-and-opening-data 11; goods-in 3.4, 3.5). */
+export const SUPPLIER_CONFIRMATION = { kind: 'booking.supplier-confirmation', restrictedClasses: [] } as const;
+export const SUPPLIER_COMMUNICATION = { kind: 'booking.supplier-communication', restrictedClasses: [] } as const;
+
+/** A line of a booking named in a refusal, by its key (PRD-UXP-003; goods-in 3.10). */
+export const lineItem = (bookingId: string, lineKey: string): MissingItem => ({
+  kind: 'booking-line',
+  recordId: bookingId,
+  lineKey,
+});
+
+/** The evidence kind of a booking document on its booking (imports-and-opening-data 11; goods-in 3.1). */
+export const BOOKING_DOCUMENT = { kind: 'booking.booking-document', restrictedClasses: [] } as const;
+
+/** The document a version's approval decides (module-map 6.2 flow A). */
+export const bookingDocument = (bookingId: string, versionId: string) =>
+  ({ module: 'booking', recordType: BOOKING_TYPE, recordId: bookingId, versionId }) as const;
+
+/** The record a booking's audit record names (numbering-and-audit 4.1). */
+export const bookingAuditRecord = (bookingId: string, versionId?: string) =>
+  ({ module: 'booking', type: 'booking', id: bookingId, ...(versionId === undefined ? {} : { versionId }) }) as const;
+
+/**
+ * The facts of an exception about a booking (access-and-approvals 12.1; goods-in 3.10): its destination Site and its
+ * brand. A booking names no Store or business unit (3.9), so neither is a fact of it.
+ */
+export const exceptionFactsOf = (row: { readonly siteId: string; readonly brandId: string }): ExceptionFacts => ({
+  siteId: row.siteId,
+  storeId: null,
+  businessUnitId: null,
+  brandId: row.brandId,
+});
+
+/** A booking named in a refusal (PRD-UXP-003). */
+export const bookingItem = (bookingId: string): MissingItem => ({
+  kind: 'record',
+  recordType: BOOKING_TYPE,
+  recordId: bookingId,
+});
+
+/** The record type a proposal to link late or excess goods into a booking is named by (goods-in 4.10). */
+export const RECEIPT_LINK_PROPOSAL_TYPE = 'booking.booking_receipt_link_proposal';
+
+/** A proposal to link late or excess goods into a booking, named in a refusal by itself (PRD-UXP-003; 12.3). */
+export const receiptLinkProposalItem = (proposalId: string): MissingItem => ({
+  kind: 'record',
+  recordType: RECEIPT_LINK_PROPOSAL_TYPE,
+  recordId: proposalId,
+});
+
+/** A booking version named in a refusal (PRD-UXP-003). */
+export const bookingVersionItem = (bookingId: string, versionId: string): MissingItem => ({
+  kind: 'version',
+  recordType: BOOKING_TYPE,
+  recordId: bookingId,
+  versionId,
+});
+
+/** The kinds of change made by preparing the version under approval, as against deciding it (9.1; GC3-1). */
+export const PREPARING_CHANGES: readonly BookingChangeKind[] = ['draft', 'documents', 'submission'];
+
+/**
+ * The preparers of the version submitted (access-and-approvals 9.1; GC3-1, DEC-105): everyone who saved a version,
+ * attached documents or submitted it since the booking's last approval, the version's content being theirs; so whoever
+ * made a rejected version stays a preparer of the next one built on it.
+ */
+export function preparersOf(
+  changes: readonly { readonly change: BookingChangeKind; readonly changedByUserId: string }[],
+): string[] {
+  const lastApproval = changes.map((each) => each.change).lastIndexOf('approval');
+  const since = changes.slice(lastApproval + 1);
+  return [
+    ...new Set(since.filter((each) => PREPARING_CHANGES.includes(each.change)).map((each) => each.changedByUserId)),
+  ];
+}
+
+/**
+ * The item of an approval refused for open-to-buy (goods-in 3.3, 3.9): the brand and season whose remainder is short of
+ * the booking's value at cost, by identifier only (code-house-rules 12.3). The screen shows the amounts from the
+ * booking's read, its value at cost, and the remaining open-to-buy it reads with it.
+ */
+export function shortfallItem(of: { readonly brandId: string; readonly seasonValueId: string }): MissingItem {
+  return { kind: 'open-to-buy-shortfall', brandId: of.brandId, seasonValueId: of.seasonValueId };
+}

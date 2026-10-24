@@ -1,5 +1,10 @@
 import { uuidv7 } from '@apparel-os/domain';
-import { BRAND_COVERAGE_CHANGE, PRODUCT_CONFIRMATION, VOCABULARY_CONFIRMATION } from '@apparel-os/schemas';
+import {
+  BRAND_COVERAGE_CHANGE,
+  MARKED_ATTRIBUTE_CHANGE,
+  PRODUCT_CONFIRMATION,
+  VOCABULARY_CONFIRMATION,
+} from '@apparel-os/schemas';
 import { eq, sql } from 'drizzle-orm';
 import {
   lockTable,
@@ -10,6 +15,7 @@ import {
 } from '../../../../kernel/index.js';
 import type { DocumentEffect, EffectDecider, EffectOutcome, ModuleApprovals } from '../../../access/index.js';
 import type { AuditInterface } from '../../../audit/index.js';
+import type { ConfigurationInterface } from '../../../configuration/index.js';
 import { businessUnitInForce } from '../../../organisation/index.js';
 import {
   businessUnitBrand,
@@ -21,6 +27,7 @@ import {
 } from '../db/schema.js';
 import { catalogueApprovalRules } from '../domain/kinds.js';
 import { approvedOn, referencesInForce, refused, takeEffect, today } from './common.js';
+import { markedAttributeEffect } from './marks.js';
 import { listAttributeRefusal, vocabularyCodeTaken } from './proposals.js';
 import { productProposalEffect } from './products.js';
 import { coverageRules } from './rules.js';
@@ -218,9 +225,13 @@ function proposalEffect(audit: AuditInterface): DocumentEffect {
 
 /**
  * The approval rules and decision effects `merchandise` · catalogue declares to `access` (access-and-approvals 8,
- * 9.8b; module-map section 3, rule 6), which the composition root hands to `access` at start.
+ * 9.8b; module-map section 3, rule 6), which the composition root hands to `access` at start, with `configuration`'s
+ * check of a value's origin (code-house-rules 12.14).
  */
-export function catalogueApprovals(audit: AuditInterface): ModuleApprovals {
+export function catalogueApprovals(
+  audit: AuditInterface,
+  origins: Pick<ConfigurationInterface, 'originRefusal'>,
+): ModuleApprovals {
   return {
     rules: catalogueApprovalRules,
     effects: new Map<string, DocumentEffect>([
@@ -228,6 +239,8 @@ export function catalogueApprovals(audit: AuditInterface): ModuleApprovals {
       [VOCABULARY_CONFIRMATION, proposalEffect(audit)],
       // A product proposal's confirmation (4.2; DM-5, DEC-105; S1-F03-T02).
       [PRODUCT_CONFIRMATION, productProposalEffect(audit)],
+      // The season attribute or the size attribute (4.2 "As built"; RR-550, RR-556).
+      [MARKED_ATTRIBUTE_CHANGE, markedAttributeEffect({ audit, origins })],
     ]),
   };
 }

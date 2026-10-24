@@ -195,7 +195,12 @@ function skuRead(
   );
 }
 
-/** The SKU a barcode or supplier code names today, or undefined (Resolve a code; structure-and-masters 4.7). */
+/**
+ * The SKU a barcode or supplier code names today, or undefined (Resolve a code; structure-and-masters 4.7): a code
+ * that names more than one SKU is the person's choice, so the row stays unresolved. It names no brand, so every
+ * brand's mappings answer it, and a barcode a brand repeats across products names several (PRD-MER-007, DEC-135;
+ * RR-554).
+ */
 function skuOf(
   context: TransactionContext,
   catalogue: OpeningStockDependencies['catalogue'],
@@ -225,7 +230,7 @@ async function resolvedSku(
   const found = new Set<string>();
   for (const each of tries) {
     const resolved = await catalogue.resolveCode(context, { ...each, date });
-    if ('resolved' in resolved) found.add(resolved.resolved.skuId);
+    if ('resolved' in resolved) for (const candidate of resolved.resolved.candidates) found.add(candidate.skuId);
   }
   const [only] = found;
   return found.size === 1 ? only : undefined;

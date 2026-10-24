@@ -1,0 +1,32 @@
+# S2-F02-T05 — Recount
+
+Status: done
+Blocked by: S2-F02-T03, S2-F04-T02 (the GRN's "PT attached" mark is built there)
+Feature: [Stage 2 first version](../../spec.md)
+
+## Build
+
+- A linked recount of a GRN's lines, proposed with a reason and approved by a different person; it adds or reverses receipt counts for the difference and keeps the original count ([goods-in.md](../../../../design/goods-in/goods-in.md) 4.7; `PRD-REC-019`).
+- Refused once a PT is uploaded for the GRN. `receiving` keeps a "PT attached" mark on the GRN, which `merchandise` · PT sets at submit and clears at withdrawal, rejection or reversal (`S2-F04-T02`, `S2-F06-T01`, `S2-F09-T01`); this ticket builds the mark and its refusal.
+
+## Expected outputs
+
+`receiving` changes; routes and schemas; the screen; integration tests.
+
+## Done when
+
+A recount corrects custody with the original kept; the recounter cannot approve their own; a recount is refused while the mark is set; every check passes.
+
+## Notes
+
+- The mark is built in S2-F04-T02 (goods-in 5.8): `receiving.grn_pt_mark`, set and cleared through `receiving`'s `setPtMark` and `clearPtMark` under the GRN's row lock (`ptMarkLock`), and read by `ptMark`. This ticket builds only the recount's refusal while it is set.
+- **Built** 22 Oct 2026 on `s2/f02-t05-recount` (goods-in 4.7 design choices, 4.11 "As built"): `receiving`'s recount, proposed on the GRN with a reason (`POST /api/receiving/grns/{grnId}/recounts`) and decided through `access` by a different person (`receiving.recount.approval`, on the goods' cost), read for its panel (`GET /api/receiving/recounts/{recountId}`); migrations `0107__receiving__recounts` and `0108__booking__grn_lines_delivering` (provisional numbers; the merger renumbers them); the GRN screen's recounts and proposal, and the panel's facts in My work; the journey `apps/web/e2e/recount.spec.ts`. Questions for the product owner: RR-587 to RR-591.
+- **Beyond the ticket**, each needed for the recount to be right:
+  - `stock` · ledger (stock-ledger 13.18, **For review**): a receipt count of goods of a product not yet set up may be reversed by its origin, and a reversal of a receipt count whose cost is not established names no pool and asks no posting check; the read `receiptCountOfLine`; `receiving`'s registration of the record type `recount`.
+  - `booking`: the narrowly authorised read `booking.grn_lines_delivering` and `grnLinesDelivering` on its interface, so a recount refuses a line delivering to a booking whatever the proposer sees (DEC-117).
+  - `merchandise` · PT: the upload waits for a recount of its GRN, named in `merchandise.pt-held-lines-open`; a recounted line, whose goods may be on several origins, is named once in the coverage's GRN lines.
+  - `receiving`: Booking's later link takes a line's pieces as recounted, and the screen's booking standing too; a recount that makes a shortage larger raises its own shortage follow-up; `receivingApprovals` moved to `commands/approvals.ts` with the recount's effect beside the held line's.
+  - `module-map` section 5: `receiving` holds the recount (`PRD-REC-019`) and reads which GRN lines deliver to a booking.
+  - The journeys' server and world (`apps/server/test/browser/serve.ts`, `apps/web/e2e/support/world.ts`): the recount journey's receiver, assigned to propose recounts, its Owner with a SYNTHETIC limit over Unknown value, and the world entries the journey reads.
+- **Review 7 changes** (code review 7 of stage 2, 23 Oct 2026; `Status:` unchanged): a recount that moves nothing is worth a known zero, never Unknown (`PRD-MOD-015`), so its approver needs a limit on known value (RR-621); a recount's posting refused under the locks raises `receiving.recount-posting-refused` through `access`'s follow-up of a refused decision, and is approved again once the cause is fixed (goods-in 4.11; books-and-posting 10), not reachable through the routes in the first version and tested by calling the follow-up; the ledger refuses a receipt count with no leg as a defect, never a blank origin; `receivingApprovals` moved to `receiving/approvals.ts` beside the exception types; one `GRN_LINE_TYPE`, the `refused()` helper for inline refusals; the journeys' server delivers its fixtures' events before the journeys start and answers its clock, so the recount journey's My work wait is back to 180 seconds and its Arrival time is the server's (`e2e/support/clock.ts`).
+- Done 23 Oct 2026: reviewed (code review 7) with its fixes in; every check and 47 browser journeys pass on the integration branch. Commits 30d2d81, 9414fb9, merged in 01e1f7e; review 7 fixes on `s2/review-7-fixes`, merged in 29e69bf8.

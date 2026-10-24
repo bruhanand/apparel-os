@@ -13,6 +13,7 @@ import { useRouteForm } from '../forms/use-route-form';
 import { t, type MessageId } from '../messages/catalogue';
 import { MasterTab, useAllRecords, type MasterRecord } from '../organisation/MasterTab';
 import { formatDate } from '../setup/format';
+import { MarkedAttributesCard } from './MarkedAttributes';
 import { Card, GrantedButton, inputClass, ListRead, SubmissionBanner, Th, Toolbar } from '../setup/parts';
 import { FormActions, RecordDrawer } from '../setup/RecordDrawer';
 import { stateIdOf } from '../setup/states';
@@ -20,8 +21,9 @@ import { stateIdOf } from '../setup/states';
 // Setup › Vocabularies (structure-and-masters 4.2, 8; ui-blueprint Setup › Vocabularies; S1-F03-T01): Brand edits the
 // brand records, Sub category the category tree and Size the size sets; each list-type attribute the Organisation
 // configures, such as a season or a colour, has a tab of its own with its approved values and its proposals, each
-// confirmed by a different person from My work (PRD-IMP-008, POL-02.07); Attributes configures them. No attribute or
-// value is set in the app: the tabs are the Organisation's own. Each master shows its version history and the version
+// confirmed by a different person from My work (PRD-IMP-008, POL-02.07); Attributes configures them, and marks which
+// is the season and which the size list, each approved by a different person (4.2 "As built"; RR-550, RR-556). No
+// attribute or value is set in the app: the tabs are the Organisation's own. Each master shows its version history and the version
 // in force on a chosen date.
 
 type Tab =
@@ -249,7 +251,12 @@ export function VocabulariesScreen() {
       </div>
       {shown !== undefined && (
         <div id="vocabulary-tab-panel" role="tabpanel" aria-labelledby={`vocabulary-tab-${keyOf(shown)}`}>
-          {shown.kind === 'master' ? (
+          {shown.kind === 'master' && shown.master === 'attribute' ? (
+            <div className="flex flex-col gap-4">
+              <MarkedAttributesCard />
+              <MasterTab key={shown.master} kind={shown.master} />
+            </div>
+          ) : shown.kind === 'master' ? (
             <MasterTab key={shown.master} kind={shown.master} />
           ) : (
             <ValuesTab key={shown.attribute.id} attribute={shown.attribute} />

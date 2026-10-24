@@ -330,6 +330,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@apparel-os/calculations':
+        specifier: workspace:*
+        version: link:../../packages/calculations
       '@apparel-os/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas

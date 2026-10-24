@@ -14,6 +14,7 @@ import {
   catalogueKinds,
   catalogueRecordType,
   EXTERNAL_CODE_TYPE,
+  MARKED_ATTRIBUTE_TYPE,
   permissionRegistry,
   PRODUCT_PROPOSAL_TYPE,
   VOCABULARY_PROPOSAL_TYPE,
@@ -26,7 +27,7 @@ import {
   type RoutedOrganisation,
   type TransactionContext,
 } from '../../src/kernel/index.js';
-import { Access, type DecisionOutcome } from '../../src/modules/access/index.js';
+import { Access, type DecisionOutcome, type ModuleApprovals } from '../../src/modules/access/index.js';
 // The access module's own key reader, so the fresh-code check opens the synthetic factor secrets (11.2).
 import { OrganisationKeys } from '../../src/modules/access/domain/organisation-keys.js';
 import { Audit } from '../../src/modules/audit/index.js';
@@ -106,6 +107,20 @@ export interface StructureSetup {
     by?: SyntheticUser,
     hold?: (context: TransactionContext) => Promise<void>,
   ): Promise<DecisionOutcome>;
+  /**
+   * `access` composed as this setup's is, with the approval rules and decision effects of another module instead,
+   * such as `site-lifecycle`'s, so a fixture asks for and decides that module's approvals through the real interfaces
+   * (code-house-rules 11.2).
+   */
+  accessWith(approvals: ModuleApprovals): Access;
+  /** Decides a request through an `access` of accessWith, as decide does, on this setup's clock. */
+  decideThrough(
+    access: Access,
+    requestId: string,
+    versionId: string,
+    outcome?: 'approve' | 'reject',
+    by?: SyntheticUser,
+  ): Promise<DecisionOutcome>;
   /** Another enrolled approver, holding view and approve on every organisation type. */
   anotherApprover(label: string): Promise<SyntheticUser>;
   /** Today under the synthetic timezone (Etc/UTC), on this setup's clock. */
@@ -150,28 +165,34 @@ export async function structureSetup(options: {
   const routed: RoutedOrganisation = found.organisation;
   const audit = new Audit(log.logger);
   const structure = organisationApprovals(audit, options.locationInUse);
-  const catalogueModule = catalogueApprovals(audit);
+  const catalogueModule = catalogueApprovals(audit, localOrigins);
   const partiesModule = partiesApprovals(audit);
   const booksModule = booksApprovals(audit, options.bookHeldStock);
   const keys = OrganisationKeys.fromEnvironment(options.keysEnvironment);
-  const access = new Access({
-    origins: localOrigins,
-    audit,
-    keys,
-    approvalRules: [...structure.rules, ...catalogueModule.rules, ...partiesModule.rules, ...booksModule.rules],
-    documentEffects: new Map([
+  const accessWith = (approvals: ModuleApprovals) =>
+    new Access({
+      origins: localOrigins,
+      audit,
+      keys,
+      approvalRules: approvals.rules,
+      documentEffects: approvals.effects,
+      scopeMembers: [organisationScopeMembers, catalogueScopeMembers],
+    });
+  const access = accessWith({
+    rules: [...structure.rules, ...catalogueModule.rules, ...partiesModule.rules, ...booksModule.rules],
+    effects: new Map([
       ...structure.effects,
       ...catalogueModule.effects,
       ...partiesModule.effects,
       ...booksModule.effects,
     ]),
-    scopeMembers: [organisationScopeMembers, catalogueScopeMembers],
   });
   // The catalogue's contracts as the composition root hands them over (S1-F03-T02): supplier roles from the parties
   // part, and stock presence where the test gives one; none answers when left out.
   const catalogue = new Catalogue({
     audit,
     access,
+    origins: localOrigins,
     suppliers: partiesSupplierRoles,
     stockPresence: options.stockPresence,
   });
@@ -190,6 +211,7 @@ export async function structureSetup(options: {
     access,
     files: new FilesImports(audit),
     locationInUse: options.locationInUse,
+    origins: localOrigins,
   });
   const write = (label: string) =>
     writeSyntheticUser(options.database, options.organisationCode, options.keysEnvironment, { label, enrolled: true });
@@ -200,6 +222,8 @@ export async function structureSetup(options: {
   const catalogueTypes = [
     ...catalogueKinds.map(catalogueRecordType),
     VOCABULARY_PROPOSAL_TYPE,
+    // The season and size attributes (structure-and-masters 4.2 "As built"; RR-550, RR-556).
+    MARKED_ATTRIBUTE_TYPE,
     // Product proposals and external codes (S1-F03-T02).
     PRODUCT_PROPOSAL_TYPE,
     EXTERNAL_CODE_TYPE,
@@ -247,6 +271,33 @@ export async function structureSetup(options: {
       },
       work,
     );
+  const decideIn = (
+    through: Access,
+    requestId: string,
+    versionId: string,
+    outcome: 'approve' | 'reject',
+    by: SyntheticUser,
+    hold?: (context: TransactionContext) => Promise<void>,
+  ) => {
+    offsetMs += 30_000;
+    if (by.factorSecret === undefined) throw new Error('not enrolled');
+    const totpCode = codeFor(by.factorSecret, 0, now());
+    return run(by.id, async (context) => {
+      const decided = await through.decide(
+        context,
+        { kind: 'user', id: by.id },
+        {
+          requestId,
+          versionId,
+          outcome,
+          reason: { kind: 'listed', reasonId: outcome === 'approve' ? approveReason : rejectReason },
+          totpCode,
+        },
+      );
+      await hold?.(context);
+      return decided;
+    });
+  };
   // The preparer's assignment grants edit on a unit's mapping too, held as the route holds it (RR-444).
   const asPreparer: Preparer = {
     userId: preparer.id,
@@ -266,26 +317,11 @@ export async function structureSetup(options: {
     run,
     prepare: (work) => run(preparer.id, (context) => work(context, asPreparer)),
     asPreparerDo: (work) => run(preparer.id, (context) => work(context, asPreparer)),
-    decide: (requestId, versionId, outcome = 'approve', by = approver, hold) => {
-      offsetMs += 30_000;
-      if (by.factorSecret === undefined) throw new Error('not enrolled');
-      const totpCode = codeFor(by.factorSecret, 0, now());
-      return run(by.id, async (context) => {
-        const decided = await access.decide(
-          context,
-          { kind: 'user', id: by.id },
-          {
-            requestId,
-            versionId,
-            outcome,
-            reason: { kind: 'listed', reasonId: outcome === 'approve' ? approveReason : rejectReason },
-            totpCode,
-          },
-        );
-        await hold?.(context);
-        return decided;
-      });
-    },
+    decide: (requestId, versionId, outcome = 'approve', by = approver, hold) =>
+      decideIn(access, requestId, versionId, outcome, by, hold),
+    accessWith,
+    decideThrough: (through, requestId, versionId, outcome = 'approve', by = approver) =>
+      decideIn(through, requestId, versionId, outcome, by),
     anotherApprover: async (label) => {
       const user = await write(`${options.label}-${label}`);
       await grantApprove(user);

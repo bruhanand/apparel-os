@@ -18,6 +18,7 @@ import {
   type CatalogueNameVersionDraft,
   type CategoryDraft,
   type CategoryVersionDraft,
+  type SettingOrigin,
   type SizeSetDraft,
   type SizeSetVersionDraft,
 } from '@apparel-os/schemas';
@@ -33,6 +34,7 @@ import {
 } from '../../../../kernel/index.js';
 import type { AccessInterface } from '../../../access/index.js';
 import type { AuditChange, AuditInterface } from '../../../audit/index.js';
+import type { ConfigurationInterface } from '../../../configuration/index.js';
 import { businessUnitHeads, type Preparer } from '../../../organisation/index.js';
 import {
   attribute,
@@ -129,6 +131,11 @@ interface Change {
   readonly parent?: { readonly kind: 'brand' | 'category'; readonly id: string | undefined };
   /** What the change does once its version is written, such as the event module-map section 8 names (2.5). */
   readonly after?: (context: TransactionContext, recordId: string, versionId: string) => Promise<void>;
+  /**
+   * Where the version's values came from, for a kind whose versions are a policy's values, as a tracking profile's are
+   * policy 4's: refused when this environment does not accept it (code-house-rules 12.14; 4.6 "As built"; RR-558).
+   */
+  readonly origin?: SettingOrigin;
 }
 
 interface NewRecord {
@@ -146,6 +153,8 @@ export class CataloguePreparation {
   constructor(
     protected readonly audit: AuditInterface,
     protected readonly access: Pick<AccessInterface, 'requestApproval'>,
+    /** Whether this environment accepts a version's origin (code-house-rules 12.14); `configuration` answers it. */
+    protected readonly origins: Pick<ConfigurationInterface, 'originRefusal'>,
     /** The stock-presence contract `stock` implements (4.4, 4.6); none answers when left out. */
     protected readonly presence?: StockPresence,
   ) {}
@@ -160,6 +169,10 @@ export class CataloguePreparation {
     if (typeof date !== 'string') return { kind: 'refusal', refusal: date };
     // GC2-7, DEC-105: no version ever starts on a past date (structure-and-masters 2.2).
     if (change.validFrom < date) return refused('refused', 'merchandise.starts-in-past');
+    if (change.origin !== undefined) {
+      const notHere = this.origins.originRefusal(context, change.origin);
+      if (notHere !== undefined) return { kind: 'refusal', refusal: notHere };
+    }
     const tables = catalogueTables[change.kind];
     const recordId = target.kind === 'new' ? uuidv7() : target.id;
     if (target.kind === 'existing') {
@@ -565,6 +578,7 @@ export class CataloguePreparation {
       validFrom: draft.validFrom,
       versionToken: 'versionToken' in draft ? draft.versionToken : undefined,
       references: [],
+      origin: draft.origin,
       changes: [
         value('name', draft.name),
         value('pieceTracked', draft.pieceTracked),
@@ -572,6 +586,7 @@ export class CataloguePreparation {
         value('requiredIdentifiers', [...draft.requiredIdentifiers]),
         value('receivingShelfLifeDays', draft.receivingShelfLifeDays ?? null),
         value('sellingShelfLifeDays', draft.sellingShelfLifeDays ?? null),
+        value('origin', draft.origin),
       ],
       // PRD-MER-018, DEC-054: a change to piece-tracked is refused while stock of the profile's goods is recorded at a
       // Site with no labelling count planned there. Labelling counts are stage 2's, so none is planned yet: any Site
@@ -599,6 +614,7 @@ export class CataloguePreparation {
           requiredIdentifiers: [...draft.requiredIdentifiers],
           receivingShelfLifeDays: draft.receivingShelfLifeDays ?? null,
           sellingShelfLifeDays: draft.sellingShelfLifeDays ?? null,
+          origin: draft.origin,
         });
       },
       after: async (c, recordId, versionId) => {

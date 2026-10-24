@@ -114,6 +114,7 @@ async function entity() {
     legalEntityId: legalEntity.recordId,
     taxRegistrationId: registration.recordId,
     accountingBookId: book.recordId,
+    origin: 'synthetic' as const,
   };
 }
 

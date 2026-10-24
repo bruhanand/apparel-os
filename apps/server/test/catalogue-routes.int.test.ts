@@ -5,6 +5,10 @@ import {
   brandReadSchema,
   catalogueKinds,
   catalogueRecordType,
+  codeMappingListSchema,
+  EXTERNAL_CODE_TYPE,
+  productProposalReadSchema,
+  resolveCodeAnswerSchema,
   VOCABULARY_PROPOSAL_TYPE,
   vocabularyProposalReadSchema,
   vocabularyValueListSchema,
@@ -30,6 +34,7 @@ import { createSyntheticOrganisations, type SyntheticWorld } from './support/org
 // S1-F03-T01: the routes of the merchandise catalogue through the whole application (structure-and-masters 4.7, 8;
 // code-house-rules 12.1, 12.3, 12.4, 12.7): recording masters and versions, the version token, proposing a vocabulary
 // value and confirming it through the approval route, and the refusals that name what is missing (PRD-UXP-003).
+// S2-F04-T01: a brand barcode on two products through the code routes (goods-in 12 test 10; PRD-MER-007, DEC-135).
 // Every value here is SYNTHETIC.
 
 const TYPES = [...catalogueKinds.map(catalogueRecordType), VOCABULARY_PROPOSAL_TYPE];
@@ -118,6 +123,8 @@ beforeAll(async () => {
     { recordType: 'merchandise.vocabulary_proposal', action: 'approve' },
     { recordType: 'merchandise.product_proposal', action: 'view' },
     { recordType: 'merchandise.product_proposal', action: 'create' },
+    { recordType: EXTERNAL_CODE_TYPE, action: 'view' },
+    { recordType: EXTERNAL_CODE_TYPE, action: 'create' },
     { recordType: 'access.approval_request', action: 'view' },
   ]);
   confirmer = await enrolled('CAT-CONFIRMER', [
@@ -259,5 +266,161 @@ describe('product proposals through the routes (structure-and-masters 4.2; DM-5)
     expect(none.body).toMatchObject({ error: { code: 'kernel.invalid-request' } });
     const confirmed = await decide(freshCode(confirmer));
     expect(confirmed.status, JSON.stringify(confirmed.body)).toBe(200);
+  });
+});
+
+describe('a brand barcode on two products through the routes (goods-in 12 test 10; structure-and-masters 4.3, 4.7)', () => {
+  /** A confirmed product of one SKU, of a brand and a category with no identity attribute; answers its SKU. */
+  async function confirmedSku(brandId: string, categoryId: string): Promise<string> {
+    const proposed = await post(booking, '/api/merchandise/product-proposals', {
+      style: { code: code('STYLE'), brandId, categoryId, attributes: [] },
+      skus: [{ code: code('SKU'), identity: [], stockUnit: 'piece', purpose: 'merchandise' }],
+    });
+    expect(proposed.status, JSON.stringify(proposed.body)).toBe(200);
+    const confirmed = await post(
+      confirmer,
+      `/api/access/approval-requests/${proposed.body.requestId as string}/decision`,
+      {
+        versionId: proposed.body.proposalId,
+        outcome: 'approve',
+        reason: { kind: 'listed', reasonId: approveReason },
+        totpCode: freshCode(confirmer),
+      },
+    );
+    expect(confirmed.status, JSON.stringify(confirmed.body)).toBe(200);
+    const read = productProposalReadSchema.parse(
+      (await get(booking, `/api/merchandise/product-proposals/${proposed.body.proposalId as string}`)).body,
+    );
+    const [skuId] = read.proposal.skuIds;
+    if (skuId === undefined) throw new Error('The SYNTHETIC proposal made no SKU');
+    return skuId;
+  }
+
+  it('PRD-MER-007 DEC-135 RR-554 keeps a brand’s barcode for both products, flags it as repeated and resolves it to both; another kind, or the Organisation’s barcode, is refused', async () => {
+    const brand = await post(booking, '/api/merchandise/brands', {
+      code: code('BRAND'),
+      name: syntheticName('Route brand'),
+      aliases: [],
+      validFrom: today(),
+    });
+    const category = await post(booking, '/api/merchandise/categories', {
+      code: code('CAT'),
+      name: syntheticName('Route category'),
+      identityAttributeIds: [],
+      validFrom: today(),
+    });
+    expect([brand.status, category.status]).toEqual([200, 200]);
+    const brandId = brand.body.recordId as string;
+    const first = await confirmedSku(brandId, category.body.recordId as string);
+    const second = await confirmedSku(brandId, category.body.recordId as string);
+    const barcode = `0${String(randomInt(100_000_000, 999_999_999))}`;
+    const map = (skuId: string, kind: string) =>
+      post(booking, '/api/merchandise/external-codes', {
+        code: barcode,
+        kind,
+        scope: { kind: 'brand', brandId },
+        skuId,
+        alias: false,
+        validFrom: today(),
+      });
+    const mapped = [await map(first, 'supplier-barcode'), await map(second, 'supplier-barcode')];
+    expect(
+      mapped.map((each) => each.status),
+      JSON.stringify(mapped.map((each) => each.body)),
+    ).toEqual([200, 200]);
+    const query = new URLSearchParams({ code: barcode, kind: 'supplier-barcode', brandId, date: today() });
+    const resolved = await get(booking, `/api/merchandise/external-codes/resolve?${query.toString()}`);
+    expect(resolved.status, JSON.stringify(resolved.body)).toBe(200);
+    expect(resolveCodeAnswerSchema.parse(resolved.body).resolved).toEqual({
+      candidates: [
+        { skuId: first, mappingId: mapped[0]?.body.mappingId },
+        { skuId: second, mappingId: mapped[1]?.body.mappingId },
+      ],
+      repeated: true,
+      alias: false,
+    });
+    for (const skuId of [first, second]) {
+      const list = codeMappingListSchema.parse(
+        (await get(booking, `/api/merchandise/external-codes?skuId=${skuId}`)).body,
+      );
+      expect(list.records).toEqual([expect.objectContaining({ code: barcode, skuId, repeated: true })]);
+    }
+    // Only a brand's barcode may repeat: the same code as another kind names one SKU, and a second is refused.
+    expect((await map(first, 'other')).status).toBe(200);
+    const refused = await map(second, 'other');
+    expect(refused.status).toBe(422);
+    expect(refused.body).toMatchObject({ error: { code: 'merchandise.code-conflict' } });
+    // A barcode recorded for the whole Organisation is no brand's: it names one SKU too (RR-554).
+    const organisationBarcode = `0${String(randomInt(100_000_000, 999_999_999))}`;
+    const forOrganisation = (skuId: string) =>
+      post(booking, '/api/merchandise/external-codes', {
+        code: organisationBarcode,
+        kind: 'supplier-barcode',
+        scope: { kind: 'organisation' },
+        skuId,
+        alias: false,
+        validFrom: today(),
+      });
+    expect((await forOrganisation(first)).status).toBe(200);
+    const notRepeated = await forOrganisation(second);
+    expect(notRepeated.status).toBe(422);
+    expect(notRepeated.body).toMatchObject({ error: { code: 'merchandise.code-conflict' } });
+  });
+
+  it('code-house-rules 12.1 answers a code of one SKU with its SKU and mapping at the top level too, for one deploy; a repeated code without them', async () => {
+    const brand = await post(booking, '/api/merchandise/brands', {
+      code: code('BRAND'),
+      name: syntheticName('Compatible brand'),
+      aliases: [],
+      validFrom: today(),
+    });
+    const category = await post(booking, '/api/merchandise/categories', {
+      code: code('CAT'),
+      name: syntheticName('Compatible category'),
+      identityAttributeIds: [],
+      validFrom: today(),
+    });
+    expect([brand.status, category.status]).toEqual([200, 200]);
+    const brandId = brand.body.recordId as string;
+    const first = await confirmedSku(brandId, category.body.recordId as string);
+    const second = await confirmedSku(brandId, category.body.recordId as string);
+    const barcode = `0${String(randomInt(100_000_000, 999_999_999))}`;
+    const map = async (skuId: string) => {
+      const mapped = await post(booking, '/api/merchandise/external-codes', {
+        code: barcode,
+        kind: 'supplier-barcode',
+        scope: { kind: 'brand', brandId },
+        skuId,
+        alias: false,
+        validFrom: today(),
+      });
+      expect(mapped.status, JSON.stringify(mapped.body)).toBe(200);
+      return mapped.body.mappingId as string;
+    };
+    const resolve = async () => {
+      const query = new URLSearchParams({ code: barcode, kind: 'supplier-barcode', brandId, date: today() });
+      const resolved = await get(booking, `/api/merchandise/external-codes/resolve?${query.toString()}`);
+      expect(resolved.status, JSON.stringify(resolved.body)).toBe(200);
+      return resolveCodeAnswerSchema.parse(resolved.body).resolved;
+    };
+    const firstMapping = await map(first);
+    // A client of the earlier deploy reads the SKU and the mapping where they were (12.1 "Compatible changes").
+    expect(await resolve()).toEqual({
+      candidates: [{ skuId: first, mappingId: firstMapping }],
+      repeated: false,
+      alias: false,
+      skuId: first,
+      mappingId: firstMapping,
+    });
+    // A repeated code names no one SKU: only its candidates, for the person to choose from (DEC-135).
+    const secondMapping = await map(second);
+    expect(await resolve()).toEqual({
+      candidates: [
+        { skuId: first, mappingId: firstMapping },
+        { skuId: second, mappingId: secondMapping },
+      ],
+      repeated: true,
+      alias: false,
+    });
   });
 });

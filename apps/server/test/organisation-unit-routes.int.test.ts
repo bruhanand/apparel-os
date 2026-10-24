@@ -178,6 +178,7 @@ async function entity() {
     legalEntityId: legalEntity.recordId,
     taxRegistrationId: registration.recordId,
     accountingBookId: book.recordId,
+    origin: 'synthetic' as const,
   };
 }
 
@@ -386,6 +387,45 @@ describe('verified mappings (structure-and-masters 3.4, 3.8; POL-10.08)', () => 
         missing: [{ kind: 'record', recordType: 'organisation.accounting_book', recordId: theirs.accountingBookId }],
       },
     });
+  });
+
+  it('code-house-rules 12.14 POL-10.08 RR-558 a mapping states where it came from; one of an origin this environment does not accept is refused', async () => {
+    const at = await site();
+    const mapping = await entity();
+    // No origin is chosen for the person (AGENTS.md "Never invent a value"): a mapping without one is invalid.
+    const unstated = await post(admin, '/api/organisation/business-units', {
+      ...unitBody(at.recordId, mapping),
+      origin: undefined,
+    });
+    expect(unstated.status).toBe(400);
+    // The test setup's values belong on `kdps-test` only; these tests run as local work.
+    const refusedOrigin = {
+      error: {
+        kind: 'refused',
+        code: 'configuration.origin-not-allowed',
+        missing: [{ kind: 'origin', origin: 'test-setup', environment: 'local' }],
+      },
+    };
+    const withUnit = await post(admin, '/api/organisation/business-units', {
+      ...unitBody(at.recordId, mapping),
+      origin: 'test-setup',
+    });
+    expect(withUnit.body).toMatchObject(refusedOrigin);
+    const unit = await approved('/api/organisation/business-units', unitBody(at.recordId, mapping));
+    const later = await post(admin, `/api/organisation/business-unit-mappings/${unit.recordId}/versions`, {
+      legalEntityId: mapping.legalEntityId,
+      taxRegistrationId: mapping.taxRegistrationId,
+      accountingBookId: mapping.accountingBookId,
+      origin: 'test-setup',
+      validFrom: today(),
+    });
+    expect(later.body).toMatchObject(refusedOrigin);
+    // The mapping read back names its origin (structure-and-masters 3.4 "As built").
+    const read = await get(admin, `/api/organisation/business-unit-mappings/${unit.recordId}`);
+    expect(read.status, JSON.stringify(read.body)).toBe(200);
+    expect((read.body as { record: { versions: { origin: string }[] } }).record.versions).toEqual([
+      expect.objectContaining({ origin: 'synthetic' }),
+    ]);
   });
 });
 

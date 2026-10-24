@@ -12,6 +12,11 @@ export const SERVER_PORT = 3000;
  * service does (deployment.md section 3; code-house-rules 12.1; S1-F01-T27).
  */
 export const WEB_ORIGIN = `http://localhost:${String(SERVER_PORT)}`;
+/**
+ * The harness beside the server of the journeys, on its port + 11: `/ready` once its world is written and its
+ * fixtures' events delivered, `/now` its clock (apps/server/test/browser/serve.ts).
+ */
+export const HARNESS_ORIGIN = `http://127.0.0.1:${String(SERVER_PORT + 11)}`;
 /** Git ignores this folder. */
 export const WORLD_FILE = join(import.meta.dirname, '..', '.synthetic', 'world.json');
 
@@ -28,6 +33,20 @@ export interface EnrolledUser {
   readonly displayName: string;
   readonly password: string;
   readonly factorSecretHex: string;
+}
+
+/** How the Receive Goods screens name one SYNTHETIC world's records ("CODE · Name"). */
+export interface ReceivingOptions {
+  readonly site: string;
+  readonly wholeStore: string;
+  readonly otherStoreUnit: string;
+  readonly warehouse: string;
+  readonly storeLocation: string;
+  readonly otherStoreLocation: string;
+  readonly supplier: string;
+  readonly brand: string;
+  readonly sizes: readonly string[];
+  readonly batchSku: string;
 }
 
 export interface SyntheticWorld {
@@ -176,6 +195,16 @@ export interface SyntheticWorld {
     readonly attributeName: string;
   };
   /**
+   * The season and size attributes journey (structure-and-masters 4.2 "As built"; RR-556), in the security settings
+   * Organisation: an Admin who marks the SYNTHETIC size list, the Owner who approves it, and how the form names it.
+   */
+  readonly markedAttributes: {
+    readonly organisationCode: string;
+    readonly admin: EnrolledUser;
+    readonly owner: EnrolledUser;
+    readonly attributeOption: string;
+  };
+  /**
    * The products journey (S1-F03-T02), in the security settings Organisation: a Booking user who proposes a style, a
    * different person who confirms it, how the form names the SYNTHETIC brand and category, and the category's
    * SYNTHETIC free size.
@@ -191,6 +220,180 @@ export interface SyntheticWorld {
     readonly seasonName: string;
     readonly seasonValueOption: string;
     readonly fitName: string;
+  };
+  /**
+   * The open-to-buy journey (S2-F01-T02), in the security settings Organisation: a Booking user who prepares a budget,
+   * Accounts who checks it and the Owner who approves it, the approve reason, and how the budget form names the
+   * products journey's SYNTHETIC brand, season list and season.
+   */
+  /**
+   * The Receive Goods journeys (S2-F02-T02), in an Organisation of its own, each in a world of its own: a Warehouse
+   * receiver (P-WHS) and a Store's staff (P-STM), who receives at their Store only, and how the screens name each
+   * world's SYNTHETIC Site, units, locations, supplier, brand, size list, sizes and batch-tracked product ("CODE ·
+   * Name"); and the style code of the Store's batch-tracked product.
+   */
+  readonly receiving: {
+    readonly organisationCode: string;
+    readonly receiver: EnrolledUser;
+    readonly options: ReceivingOptions;
+    readonly storeStaff: EnrolledUser;
+    readonly storeOptions: ReceivingOptions;
+    readonly storeBatchStyleCode: string;
+  };
+  /**
+   * The damage journey (S2-F08-T01), in the receiving Organisation, in a world of its own: a Store's staff (P-STM) who
+   * receive and report damage at their Store only, Operations (P-OPS), who decides reports from My work, the approve
+   * reason in force, and how the screens name the world's records.
+   */
+  readonly damage: {
+    readonly organisationCode: string;
+    readonly reporter: EnrolledUser;
+    readonly operations: EnrolledUser;
+    readonly reasonId: string;
+    readonly options: ReceivingOptions;
+  };
+  /**
+   * The held-line journey (S2-F02-T03), in the receiving Organisation, in a world of its own: Warehouse (P-WHS), who
+   * counts excess and issues the GRN, a Booking approver (P-BKG), who takes it in from My work, the approve reason in
+   * force, and how the screens name the world's records.
+   */
+  readonly heldLines: {
+    readonly organisationCode: string;
+    readonly receiver: EnrolledUser;
+    readonly approver: EnrolledUser;
+    readonly reasonId: string;
+    readonly options: ReceivingOptions;
+  };
+  /**
+   * The recount journey (S2-F02-T05), in the receiving Organisation, on the held-line world's Site: Warehouse (P-WHS),
+   * who counts short, issues the GRN and proposes its recount; the Owner (P-OWN), who approves it from My work and owns
+   * the shortage; the approve reason in force; and how the screens name the world's records.
+   */
+  readonly recount: {
+    readonly organisationCode: string;
+    readonly receiver: EnrolledUser;
+    readonly approver: EnrolledUser;
+    readonly reasonId: string;
+    readonly options: ReceivingOptions;
+  };
+  /**
+   * The receive-against-booking journey (S2-F02-T04), in the receiving Organisation, in a world of its own: Warehouse
+   * (P-WHS), who receives against the booking; Booking (P-BKG), who proposes the excess into it; the Owner (P-OWN), who
+   * approves that from My work; the approve reason in force; how the screens name the world's records; and the number and
+   * style of the approved booking, two pieces of the first size, the server recorded through the API.
+   */
+  readonly againstBooking: {
+    readonly organisationCode: string;
+    readonly receiver: EnrolledUser;
+    readonly booker: EnrolledUser;
+    readonly owner: EnrolledUser;
+    readonly reasonId: string;
+    readonly options: ReceivingOptions;
+    readonly bookingNumber: string;
+    readonly styleCode: string;
+  };
+  /**
+   * The reports journey (S2-F11-T02), in the receiving Organisation, in the receive-against-booking world: Booking
+   * (P-BKG), who reads the booking status and the receipt problems and may not read stock; how the screens name the
+   * world's records; and the number and style of the approved booking it reads, four pieces of the first size, which
+   * the server recorded through the API and no other journey changes.
+   */
+  readonly reports: {
+    readonly organisationCode: string;
+    readonly reader: EnrolledUser;
+    readonly options: ReceivingOptions;
+    readonly bookingNumber: string;
+    readonly styleCode: string;
+  };
+  /**
+   * The PT file journey (S2-F04-T02), in the receiving Organisation, in a world of its own: Warehouse (P-WHS), also
+   * assigned to make PTs, who counts, issues the GRN and uploads its PT file; the GRN's style code; and two SYNTHETIC
+   * PT files of that style and the world's first size: one the check refuses, one it passes.
+   */
+  readonly ptUpload: {
+    readonly organisationCode: string;
+    readonly maker: EnrolledUser;
+    readonly options: ReceivingOptions;
+    readonly styleCode: string;
+    readonly refusedFile: string;
+    readonly goodFile: string;
+  };
+  /**
+   * The PT approval journey (S2-F06-T01), in the receiving Organisation, in the PT file journey's world, on its lists
+   * and template, with a style of its own: Warehouse (P-WHS), also assigned to make PTs, who counts, issues the GRN and
+   * uploads its PT file; Operations (P-OPS), assigned to approve PTs within a SYNTHETIC limit; the approve reason; the
+   * GRN's style code; and one SYNTHETIC PT file of two pieces of that style and the world's first size, a new product.
+   */
+  readonly ptApproval: {
+    readonly organisationCode: string;
+    readonly maker: EnrolledUser;
+    readonly approver: EnrolledUser;
+    /** A Store's staff (P-STM) at the PT world's Store, who scans in and searches stock there (code review 8). */
+    readonly storeStaff: EnrolledUser;
+    readonly reasonId: string;
+    readonly options: ReceivingOptions;
+    readonly styleCode: string;
+    readonly file: string;
+    /** The corrected file uploaded once the PT is reversed, at another P RATE (S2-F09-T01). */
+    readonly correctedFile: string;
+    /** The barcodes of the file's two pieces, and the Store's floor they are scanned in to (S2-F07-T01). */
+    readonly barcodes: readonly string[];
+    readonly floor: string;
+    readonly floorId: string;
+    /** How Stock search names the floor in a result's place: its code and name (S2-F11-T01). */
+    readonly floorName: string;
+  };
+  /**
+   * The joined journey of the first version (goods-in 12 test 22; S2-F07-T02), in the receiving Organisation, in the PT
+   * approval journey's world, on its lists, template and floor, with a style of its own: Booking (P-BKG), Accounts
+   * (P-ACC), the Owner (P-OWN), Warehouse (P-WHS), also assigned to make PTs, Operations (P-OPS) and a Store's staff
+   * (P-STM) at the world's Store; the approve and reject reasons; how the booking and budget forms name the booking
+   * journey's SYNTHETIC season; and three SYNTHETIC PT files of the style and the world's first size, two pieces: one
+   * refused, one Operations rejects, and the corrected one, with their two barcodes.
+   */
+  readonly goodsIn: {
+    readonly organisationCode: string;
+    readonly booker: EnrolledUser;
+    readonly accounts: EnrolledUser;
+    readonly owner: EnrolledUser;
+    readonly receiver: EnrolledUser;
+    readonly operations: EnrolledUser;
+    readonly storeStaff: EnrolledUser;
+    readonly approveReasonId: string;
+    readonly rejectReasonId: string;
+    readonly options: ReceivingOptions;
+    readonly seasonOption: string;
+    readonly styleCode: string;
+    readonly refusedFile: string;
+    readonly rejectedFile: string;
+    readonly correctedFile: string;
+    readonly barcodes: readonly string[];
+    readonly floor: string;
+    readonly floorName: string;
+  };
+  readonly openToBuy: {
+    readonly organisationCode: string;
+    readonly booking: EnrolledUser;
+    readonly accounts: EnrolledUser;
+    readonly owner: EnrolledUser;
+    readonly reasonId: string;
+    readonly brandOption: string;
+    readonly seasonOption: string;
+  };
+  /**
+   * The booking journey (S2-F01-T03), in the receiving Organisation: Booking, who records and submits a booking; the
+   * Owner, who approves it within a SYNTHETIC limit; the approve reason; and how the form names the SYNTHETIC brand,
+   * Site, supplier and season, whose approved SYNTHETIC budget the booking reserves.
+   */
+  readonly booking: {
+    readonly organisationCode: string;
+    readonly booker: EnrolledUser;
+    readonly owner: EnrolledUser;
+    readonly reasonId: string;
+    readonly brandOption: string;
+    readonly siteOption: string;
+    readonly supplierOption: string;
+    readonly seasonOption: string;
   };
   /**
    * The file intake journey (S1-F06-T01), in the posting maps journey's Organisation: a Booking user who imports the
@@ -263,6 +466,17 @@ export interface SyntheticWorld {
     readonly preparer: EnrolledUser;
     readonly approver: EnrolledUser;
     readonly supplierCode: string;
+  };
+  /**
+   * The agreement journey (S2-F01-T01), in the security settings Organisation: Booking, who prepares an agreement, a
+   * different person who approves it from My work, and the SYNTHETIC supplier with no agreement yet.
+   */
+  readonly agreement: {
+    readonly organisationCode: string;
+    readonly preparer: EnrolledUser;
+    readonly approver: EnrolledUser;
+    readonly supplierCode: string;
+    readonly supplierName: string;
   };
   /**
    * The policy readiness journey (S1-F04-T01), in the security settings Organisation: the Admin who records policy 14

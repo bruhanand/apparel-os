@@ -132,11 +132,12 @@ export const supplierTermSchema = z.strictObject({
   from: textSchema.nullable(),
 });
 
-/** An agreement version's terms other than margins, which are restricted (PRD-ACS-008) and kept apart. */
+/**
+ * An agreement version's terms other than margins, which are restricted (PRD-ACS-008) and kept apart. Every booking
+ * takes the agreement's commercial model, so no other model is kept for new bookings (POL-01.02; DEC-129, RR-545).
+ */
 export const agreementTermsSchema = z.strictObject({
   commercialModel: commercialModelSchema.nullable(),
-  /** The default model for new bookings of the brand (POL-01.02). */
-  defaultModel: commercialModelSchema.nullable(),
   ownershipEvent: ownershipEventSchema.nullable(),
   returnRights: returnRightsSchema,
   returnConditions: returnConditionsSchema,
@@ -151,6 +152,18 @@ export const agreementTermsSchema = z.strictObject({
 });
 export type AgreementTerms = z.infer<typeof agreementTermsSchema>;
 
+/**
+ * An agreement version's terms as a draft gives them: the terms, and, for one deploy, the retired default model for
+ * new bookings that a client of the earlier deploy may still send. It is accepted and ignored, never stored and never
+ * answered (code-house-rules 12.1 "Compatible changes"; DEC-129, POL-01.02); a later deploy removes it, so a draft
+ * naming it is refused as any unknown field is (open-items section 4). Every other unknown field is refused now.
+ */
+export const agreementTermsDraftSchema = agreementTermsSchema.extend({
+  /** Deprecated, retired (DEC-129, POL-01.02): accepted for one deploy and ignored. */
+  defaultModel: commercialModelSchema.nullable().optional().meta({ deprecated: true }),
+});
+export type AgreementTermsDraft = z.infer<typeof agreementTermsDraftSchema>;
+
 /** Who the agreement is with: a brand or a supplier, fixed at creation (5.2). */
 export const agreementCounterpartySchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('brand'), brandId: idSchema }),
@@ -158,7 +171,7 @@ export const agreementCounterpartySchema = z.discriminatedUnion('kind', [
 ]);
 
 const agreementVersionFields = {
-  terms: agreementTermsSchema,
+  terms: agreementTermsDraftSchema,
   /** Margins (PRD-ORG-016), a restricted field class (PRD-ACS-008), or Unknown. */
   margins: textSchema.nullable(),
   /** The signed agreement: stored files attached to the version as evidence (S1-F06-T05; DEC-116). */

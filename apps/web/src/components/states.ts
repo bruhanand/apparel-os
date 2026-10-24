@@ -81,6 +81,7 @@ export const stateFamilies = {
   unresolved: 'attention',
   superseded: 'neutral',
   withdrawn: 'neutral',
+  posting: 'pending',
 } as const satisfies Record<string, Family>;
 
 export type StateId = keyof typeof stateFamilies;

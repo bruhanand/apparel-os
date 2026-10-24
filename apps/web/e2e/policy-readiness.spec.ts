@@ -1,7 +1,7 @@
-import { expect, test, type Page } from '@playwright/test';
-import { Authenticator } from './support/authenticator';
-import { organisationToday, signIn } from './support/journey';
-import { readWorld, type EnrolledUser } from './support/world';
+import { expect, test } from '@playwright/test';
+import { signedIn } from './support/journey';
+import { readWorld } from './support/world';
+import { organisationDate } from './support/clock';
 
 // S1-F04-T01: the stage 1 exit check on screen (access-and-approvals 15 test 1; module-map 4.4; design-language 7,
 // 10.17; DM-6; PRD-SEC-017, PRD-UXP-003; DEC-092, DEC-116). A test-only module's SYNTHETIC business-effect operation,
@@ -14,13 +14,6 @@ const PDF = Buffer.from(
   '%PDF-1.4\n% SYNTHETIC signed policy 14\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n',
   'latin1',
 );
-
-async function signedIn(page: Page, code: string, user: EnrolledUser): Promise<void> {
-  const app = new Authenticator(Buffer.from(user.factorSecretHex, 'hex'));
-  await page.goto('/');
-  await signIn(page, { code, login: user.login, password: user.password, totp: await app.nextCode() });
-  await expect(page.getByLabel('Profile')).toHaveText(user.displayName);
-}
 
 test('PRD-SEC-017 a gated action names policy 14 until it is Signed and its values validated, then it is available', async ({
   browser,
@@ -57,7 +50,7 @@ test('PRD-SEC-017 a gated action names policy 14 until it is Signed and its valu
 
     await test.step('the Admin records it as Signed, with a SYNTHETIC file, and switches the capability on', async () => {
       await drawer.getByLabel('Signed by', { exact: true }).fill('SYNTHETIC signatory');
-      await drawer.getByLabel('Signed on', { exact: true }).fill(organisationToday());
+      await drawer.getByLabel('Signed on', { exact: true }).fill(await organisationDate());
       await drawer.getByLabel('Origin', { exact: true }).selectOption('synthetic');
       await drawer.getByLabel('Evidence file', { exact: true }).setInputFiles({
         name: 'SYNTHETIC-policy-14-signed.pdf',

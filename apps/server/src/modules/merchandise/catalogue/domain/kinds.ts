@@ -1,6 +1,8 @@
 import {
   BRAND_COVERAGE_CHANGE,
   catalogueRecordType,
+  MARKED_ATTRIBUTE_CHANGE,
+  MARKED_ATTRIBUTE_TYPE,
   PRODUCT_CONFIRMATION,
   PRODUCT_PROPOSAL_TYPE,
   VOCABULARY_CONFIRMATION,
@@ -9,6 +11,7 @@ import {
   type RecordState,
 } from '@apparel-os/schemas';
 import type { ApprovalRule, LatestRequest } from '../../../access/index.js';
+import type { NumberedKind } from '../../../numbering/index.js';
 import type { Decision } from '../db/schema.js';
 
 // The catalogue's kinds as `merchandise` records, audits and approves them (structure-and-masters 2.3, 4.1, 4.2, 6.2;
@@ -28,8 +31,8 @@ export const approved = (kind: CatalogueKind): boolean => kind !== 'business_uni
 
 /**
  * The approval rules `merchandise` declares (access-and-approvals 8; structure-and-masters 2.3): brand coverage,
- * decided by a different authorised person (GC2-2, DEC-105), and the confirmation of a vocabulary value, by a different
- * person from its proposer (PRD-IMP-008, POL-02.07). Neither has a value (DM-8); the reasons are configured, with no
+ * decided by a different authorised person (GC2-2, DEC-105), the confirmation of a vocabulary value, by a different
+ * person from its proposer (PRD-IMP-008, POL-02.07), and the season and size attributes. None has a value (DM-8); the reasons are configured, with no
  * default (POL-02.23); their decision evidence carries no restricted field class (access-and-approvals 9.5).
  */
 export const catalogueApprovalRules: readonly ApprovalRule[] = [
@@ -64,6 +67,18 @@ export const catalogueApprovalRules: readonly ApprovalRule[] = [
     decisionEvidenceClasses: [],
     synthetic: false,
   },
+  // The season attribute or the size attribute, an Organisation setting approved by a different person from its
+  // preparer (4.2 "As built"; RR-550, RR-556; POL-02.07).
+  {
+    actionType: MARKED_ATTRIBUTE_CHANGE,
+    module: 'merchandise',
+    recordType: MARKED_ATTRIBUTE_TYPE,
+    independent: true,
+    value: 'none',
+    freeTextReason: false,
+    decisionEvidenceClasses: [],
+    synthetic: false,
+  },
 ];
 
 /** What decides the state a version shows (design-language 7; DM-4, DEC-105; code-house-rules 7.3). */
@@ -85,3 +100,19 @@ export function versionState(version: {
       return version.requestState === 'Superseded' ? 'Superseded' : 'Awaiting approval';
   }
 }
+
+/**
+ * The SKU code a PT approval draws for each new product it confirms (structure-and-masters 4.2 "As built with
+ * S2-F06-T01"; numbering-and-audit 2; RR-585, decided by the product owner, 22 Oct 2026): one series for the
+ * Organisation, not restarted each financial year. No format is set here: the Organisation chooses it, as for the GRN
+ * (numbering-and-audit 3.5; RR-449). **Design choice.**
+ */
+export const SKU_CODE_KIND: NumberedKind = {
+  kind: 'merchandise.sku-code',
+  yearly: false,
+  scopeKeyStandsFor: 'the Organisation as a whole: one SKU code series',
+  displayScope: { standsFor: 'the Organisation as a whole', perYear: false },
+};
+
+/** The one scope key of the SKU code kind: the Organisation itself (one database per Organisation). */
+export const SKU_CODE_SCOPE_KEY = 'organisation';

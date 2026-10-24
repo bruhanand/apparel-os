@@ -1,7 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 import { Authenticator } from './support/authenticator';
-import { organisationToday, signIn } from './support/journey';
-import { readWorld, type EnrolledUser } from './support/world';
+import { organisationDate } from './support/clock';
+import { signedIn } from './support/journey';
+import { readWorld } from './support/world';
 
 // S1-F09-T02: the posting maps journey (books-and-posting 6.3, 12, 14; POL-09.01, POL-09.12, POL-11.01; PRD-SEC-005,
 // PRD-PRF-004; DEC-112, GC4-2). An Accounts user prepares a version of a SYNTHETIC book's map on Setup › Posting maps
@@ -14,16 +15,6 @@ const CA_FILE = {
   mimeType: 'application/pdf',
   buffer: Buffer.from('%PDF-1.4\n% SYNTHETIC CA approval\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n'),
 };
-
-const tomorrow = () => new Date(Date.parse(`${organisationToday()}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
-
-async function signedIn(page: Page, code: string, user: EnrolledUser): Promise<Authenticator> {
-  const app = new Authenticator(Buffer.from(user.factorSecretHex, 'hex'));
-  await page.goto('/');
-  await signIn(page, { code, login: user.login, password: user.password, totp: await app.nextCode() });
-  await expect(page.getByLabel('Profile')).toHaveText(user.displayName);
-  return app;
-}
 
 async function openPostingMaps(page: Page, bookOption: string) {
   await page
@@ -61,7 +52,7 @@ test('POL-09.01 POL-09.12 a posting map version prepared with the CA’s evidenc
         await group.getByLabel('Debit account').selectOption({ label: `${debit} · ${debitName(debit)}` });
         await group.getByLabel('Credit account').selectOption({ label: `${credit} · ${debitName(credit)}` });
       }
-      await form.getByLabel('Starts on').fill(tomorrow());
+      await form.getByLabel('Starts on').fill(await organisationDate(1));
       await preparer.getByRole('button', { name: 'Request approval' }).click();
       await expect(form.getByRole('status').filter({ hasText: 'Sent for approval' })).toBeVisible();
       await preparer.keyboard.press('Escape');
@@ -111,7 +102,7 @@ test('POL-09.01 POL-09.12 a posting map version prepared with the CA’s evidenc
 
     await test.step('the Posting maps screen shows the version in force on a chosen date', async () => {
       await openPostingMaps(approver, world.bookOption);
-      await approver.getByLabel('Show the version in force on').fill(tomorrow());
+      await approver.getByLabel('Show the version in force on').fill(await organisationDate(1));
       await approver.getByRole('button', { name: world.eventKind }).click();
       const drawer = approver.getByRole('dialog');
       const shown = drawer.getByRole('listitem').filter({ hasText: 'In force on the date shown' });

@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { Authenticator } from './support/authenticator';
-import { signIn } from './support/journey';
-import { readWorld, type EnrolledUser } from './support/world';
+import { signedIn } from './support/journey';
+import { readWorld } from './support/world';
 
 // S1-F02-T02: the business units journey (structure-and-masters 3.3, 3.4, 8, 9 tests 1 and 16; README 7.1 exit check
 // 1, mapping part; PRD-ORG-005, PRD-ACS-006, POL-10.08; GC2-2, DEC-105). An Admin prepares two units at one Site,
@@ -19,14 +19,6 @@ const EVIDENCE = {
   mimeType: 'application/pdf',
   buffer: Buffer.from('%PDF-1.4\n% SYNTHETIC mapping evidence\n%%EOF\n', 'latin1'),
 };
-
-async function signedIn(page: Page, code: string, user: EnrolledUser): Promise<Authenticator> {
-  const app = new Authenticator(Buffer.from(user.factorSecretHex, 'hex'));
-  await page.goto('/');
-  await signIn(page, { code, login: user.login, password: user.password, totp: await app.nextCode() });
-  await expect(page.getByLabel('Profile')).toHaveText(user.displayName);
-  return app;
-}
 
 async function openStructure(page: Page, tab: string): Promise<void> {
   await page
@@ -101,6 +93,8 @@ test('PRD-ORG-005 POL-10.08 two units at one Site mapped to different books and 
         await drawer.getByLabel(/^Legal entity/).selectOption({ label: entity.legalEntityOption });
         await drawer.getByLabel(/^Tax registration/).selectOption({ label: entity.registrationOption });
         await drawer.getByLabel(/^Accounting book/).selectOption({ label: entity.bookOption });
+        // Verified, the mapping is policy 10's value, so it says where it comes from (RR-558).
+        await drawer.getByLabel(/^Where the mapping comes from/).selectOption({ label: 'SYNTHETIC' });
         await drawer.getByTestId('drawer-footer').getByRole('button', { name: 'Request approval' }).click();
         await expect(drawer.getByRole('status').filter({ hasText: 'Sent for approval' })).toBeVisible();
         await admin.keyboard.press('Escape');

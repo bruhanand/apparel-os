@@ -98,7 +98,8 @@ const SAME_TIER_CALLS: Readonly<Record<string, readonly string[]>> = {
   'finance/tax-rules': ['organisation', 'exceptions', 'finance/books'],
   // Tier 4 (section 5)
   'merchandise/pt': ['receiving'],
-  receiving: ['booking'],
+  // `stock/documents` raises damage reports at the count and the scan-in (module-map section 5; goods-in 10.2).
+  receiving: ['booking', 'stock/documents'],
   pos: ['offers'],
 };
 

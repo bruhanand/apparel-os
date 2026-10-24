@@ -26,22 +26,61 @@ export interface CaughtViolation {
   readonly constraint: string | undefined;
 }
 
+/** The work ran and its writes stand. */
+export interface SavepointDone<T> {
+  readonly kind: 'done';
+  readonly value: T;
+}
+
+/** The work failed with one of the SQLSTATEs named, and was rolled back to the savepoint. */
+export interface SavepointCaught {
+  readonly kind: 'caught';
+  readonly violation: CaughtViolation;
+}
+
+/** The work answered what its caller does not keep, and was rolled back to the savepoint. */
+export interface SavepointRolledBack<T> {
+  readonly kind: 'rolled-back';
+  readonly value: T;
+}
+
 /**
  * Runs the work under a savepoint. When it fails with one of the SQLSTATEs named, the work is rolled back to the
  * savepoint and the violation answered; any other error is thrown as it was, and fails the command.
  */
+export function withSavepoint<T>(
+  context: TransactionContext,
+  name: string,
+  sqlStates: readonly string[],
+  work: () => Promise<T>,
+): Promise<SavepointDone<T> | SavepointCaught>;
+/**
+ * With `keep`, the work's answer also says whether its writes stay: when `keep` is false, such as for a refusal an
+ * effect answers after the decision it uses was written, the work is rolled back to the savepoint and its answer is
+ * given back, for the caller to answer in turn (access-and-approvals 9.8b; code-house-rules 8.1).
+ */
+export function withSavepoint<T>(
+  context: TransactionContext,
+  name: string,
+  sqlStates: readonly string[],
+  work: () => Promise<T>,
+  keep: (value: T) => boolean,
+): Promise<SavepointDone<T> | SavepointCaught | SavepointRolledBack<T>>;
 export async function withSavepoint<T>(
   context: TransactionContext,
   name: string,
   sqlStates: readonly string[],
   work: () => Promise<T>,
-): Promise<
-  { readonly kind: 'done'; readonly value: T } | { readonly kind: 'caught'; readonly violation: CaughtViolation }
-> {
+  keep?: (value: T) => boolean,
+): Promise<SavepointDone<T> | SavepointCaught | SavepointRolledBack<T>> {
   if (!/^[a-z][a-z0-9_]*$/.test(name)) throw new CommandDefect(`Savepoint name ${name} is not a plain identifier`);
   await context.tx.execute(sql.raw(`savepoint ${name}`));
   try {
     const value = await work();
+    if (keep !== undefined && !keep(value)) {
+      await context.tx.execute(sql.raw(`rollback to savepoint ${name}`));
+      return { kind: 'rolled-back', value };
+    }
     await context.tx.execute(sql.raw(`release savepoint ${name}`));
     return { kind: 'done', value };
   } catch (error) {

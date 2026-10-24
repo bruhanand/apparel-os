@@ -148,6 +148,12 @@ export const codeMappingSchema = z.strictObject({
   alias: z.boolean(),
   validFrom: businessDateSchema,
   validTo: businessDateSchema.optional(),
+  /**
+   * Whether this brand barcode is repeated: it is a supplier barcode recorded under a brand, and another mapping of it
+   * under the same brand, active or alias as this one, names another SKU over a day this one covers, so a scan asks
+   * which (PRD-MER-007; RR-554).
+   */
+  repeated: z.boolean(),
 });
 export type CodeMapping = z.infer<typeof codeMappingSchema>;
 export const codeMappingListQuerySchema = z.strictObject({
@@ -173,13 +179,47 @@ export const resolveCodeQuerySchema = z.strictObject({
   date: businessDateSchema,
 });
 export type ResolveCodeQuery = z.infer<typeof resolveCodeQuerySchema>;
-/** The SKU and unit the code names: a pack, or the stock unit when no pack; whether it matched a historical alias. */
-export const codeResolvedSchema = z.strictObject({
+/** A SKU and unit a code names: a pack, or the stock unit when no pack; and the mapping that names it (4.3). */
+export const codeCandidateSchema = z.strictObject({
   skuId: idSchema,
   packId: idSchema.optional(),
   mappingId: idSchema,
-  alias: z.boolean(),
 });
+export type CodeCandidate = z.infer<typeof codeCandidateSchema>;
+/**
+ * What the code names (4.7; PRD-MER-006, PRD-MER-007): one candidate; or, for a barcode recorded under the brand given,
+ * or under any brand where the query names none, whose tags repeat it across products, one candidate for each SKU,
+ * flagged as repeated, for the person to choose from at each scan, never one chosen silently (DEC-135; RR-554).
+ * Whether they matched historical aliases.
+ */
+export const codeResolvedSchema = z
+  .strictObject({
+    candidates: z.array(codeCandidateSchema).min(1),
+    repeated: z.boolean(),
+    alias: z.boolean(),
+    /**
+     * Deprecated: the one candidate's SKU, kept for the clients of the deploy before `candidates` (code-house-rules 12.1
+     * "Compatible changes"): present exactly when the code names one SKU. Read `candidates`; removed in a later deploy.
+     */
+    skuId: idSchema.optional().meta({ deprecated: true }),
+    /** Deprecated: the one candidate's pack, as `skuId` is kept. Read `candidates`. */
+    packId: idSchema.optional().meta({ deprecated: true }),
+    /** Deprecated: the one candidate's mapping, as `skuId` is kept. Read `candidates`. */
+    mappingId: idSchema.optional().meta({ deprecated: true }),
+  })
+  .refine((resolved) => resolved.repeated === resolved.candidates.length > 1, {
+    message: 'A code is repeated exactly when it names more than one SKU',
+  })
+  .refine(
+    (resolved) => {
+      const [only] = resolved.candidates;
+      if (resolved.candidates.length !== 1 || only === undefined) {
+        return [resolved.skuId, resolved.packId, resolved.mappingId].every((each) => each === undefined);
+      }
+      return resolved.skuId === only.skuId && resolved.packId === only.packId && resolved.mappingId === only.mappingId;
+    },
+    { message: 'The kept SKU, pack and mapping are those of the one candidate, and none for a repeated code' },
+  );
 export type CodeResolved = z.infer<typeof codeResolvedSchema>;
 export const resolveCodeAnswerSchema = z.strictObject({ asOf, resolved: codeResolvedSchema });
 

@@ -11,6 +11,11 @@
 - **Acceptance evidence** names the design's synthetic tests, the stage exit check or the feature's acceptance tests.
 - A stage exits only when every bullet whose **Complete at** falls in that stage passes its whole acceptance, and every bullet it owns passes the part it builds ([stage 1](stage-1/README.md) section 7, [roadmap](roadmap.md) for later stages).
 - Checked on 5 Oct 2026: all 520 PRD bullets have one owner, none twice, and no placed ID is missing from the PRD. Re-check by hand when the PRD changes.
+- 21 Oct 2026: `PRD-BKG-014` and the new `PRD-BKG-015` placed under `S2-F01`. The counts in section 2 are not re-checked yet, and `PRD-MER-019` to `PRD-MER-021`, `PRD-PAY-015`, `PRD-LIF-030` and `PRD-LIF-031` (`DEC-123`) are still unplaced.
+- 21 Oct 2026 (`DEC-134`): the first version of stage 2 builds the PT only as an upload of the fixed PT template for a GRN. The rest of `PRD-PTW-001` to `PRD-PTW-013` and `PRD-PRO-002` (`S2-F04`), and the XLS, XLSB, CSV, PDF and photograph PT files of `PRD-IMP-001` (`S2-F13`, `S2-F05`), follow after it; their placement is OPEN (RR-546).
+- 21 Oct 2026 (`DEC-136`): the AI part of `PRD-BKG-015` (`S2-F05`) and the labels of `PRD-MER-008` and `PRD-REC-020` (`S2-F07`) also follow after the first version (RR-546).
+- 21 Oct 2026 (`DEC-139`): inbound ownership (`PRD-ORG-017` to `PRD-ORG-019`, `PRD-ACP-020`, `S2-F03`) follows after the first version (RR-546).
+- 21 Oct 2026 (`DEC-137`): `S2-F10` moves to stage 5 with `S5-F04`, so `PRD-REC-010`, `PRD-LED-005` and the invoice-matching part of `PRD-ORG-019` complete there. `PRD-REC-011`, the supplemental PTs of `PRD-REC-015`, corrections after scan-in (`PRD-REC-019`) and piece IDs (`PRD-MER-003`, `PRD-MER-015`, `PRD-MER-016`, `PRD-MER-018`) follow after the first version (RR-546).
 
 ## 2. Summary
 
@@ -74,7 +79,7 @@
 | `PRD-IMP-001` | Formats: spreadsheets, CSV, PDF, photographs | S2-F13 | S2-F05 | S1-F06 (XLSX), S2-F05 (photographs) | imports-and-opening-data 17 test 1 |
 | `PRD-IMP-002` to `PRD-IMP-005`, `PRD-IMP-007` to `PRD-IMP-013` | Intake, mappings, staging, review, duplicates, outcomes | S1-F06 | Same | S2-F13, S1-F13, S2-F12 | imports-and-opening-data 17 tests 2–17 |
 | `PRD-IMP-006` | Supplied, calculated, mapped and AI-suggested values kept apart | S1-F06 | S2-F05 | S2-F05 (AI origin) | imports-and-opening-data 17 test 11 |
-| `PRD-BKG-001` to `PRD-BKG-006`, `PRD-BKG-009`, `PRD-BKG-010`, `PRD-BKG-013` | Bookings, terms, open-to-buy, tracking, confirmations | S2-F01 | Same | — | Stage 2 exit and reports |
+| `PRD-BKG-001` to `PRD-BKG-006`, `PRD-BKG-009`, `PRD-BKG-010`, `PRD-BKG-013` to `PRD-BKG-015` | Bookings, terms from the Agreement, supplier, open-to-buy, tracking, confirmations, booking documents read from a photo or PDF | S2-F01 | Same | S2-F05 (AI reading of the booking document) | Stage 2 exit and reports |
 | `PRD-BKG-007`, `PRD-BKG-008` | GRN links to bookings; deliveries without booking | S2-F02 | Same | S2-F01 | Stage 2 exit |
 | `PRD-BKG-011` | Supplier fill rate and timeliness | S2-F11 | Same | — | Stage 2 reports |
 | `PRD-BKG-012` | Buying suggestions from sales history | S6-F04 | Same | — | Stage 6 exit |
@@ -232,7 +237,7 @@ All 19 policies are Open. A policy's bullets shape the build now, as the `DEC-10
 
 | Policy | Bullets | Built in | Live gate |
 | --- | --- | --- | --- |
-| 1 Commercial ownership | `POL-01.01` to `POL-01.15` | Agreement terms in `S1-F03`; booking-level model and terms in `S2-F01`; ownership before receipt in `S2-F03`; return rights in `S3-F07`, `S3-F08`; payment terms in `S5-F04` | Live S2 |
+| 1 Commercial ownership | `POL-01.01` to `POL-01.15` | Agreement terms in `S1-F03`; bookings that take the Agreement's terms in `S2-F01` (`DEC-129`); ownership before receipt in `S2-F03`; return rights in `S3-F07`, `S3-F08`; payment terms in `S5-F04` | Live S2 |
 | 2 Permissions and approvals | `POL-02.01` to `POL-02.25` | Roles, independence, sign-in and sessions, reasons in `S1-F01`; limits, bulk and stand-ins in `S1-F05`; exception routing in `S1-F08`; sensitive fields in `S1-F03`; count rules in `S3-F05`; day-close variance in `S4-F08`; daily summary and phone approval in `S5-F11` | Live S1 |
 | 3 Source conflicts and pricing | `POL-03.01` to `POL-03.08` | `S2-F04`, `S2-F06`; the source-conflict exception type in `S1-F08` | Live S2 |
 | 4 Merchandise tracking | `POL-04.01` to `POL-04.09` | `S1-F03`; batch and expiry through receiving in `S2-F02`; piece IDs in `S2-F07` | Live S1 |

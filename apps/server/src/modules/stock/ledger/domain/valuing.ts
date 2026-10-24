@@ -7,8 +7,9 @@ import type { Touch } from './working.js';
 // that undo an outflow at the cost it left with (7.5), value held on a dispatch or a supplier-return shipment between
 // pools (7.8), cost established and late cost changes following their goods (7.6, 7.7). Pure: no database, no clock
 // (code-house-rules 2). The items are split by kind under `valuing/`: the common part (`core.ts`), cost established
-// and changed (`cost.ts`), reservations, transfers and supplier returns (`transfer.ts`), sales and customer returns
-// (`sale.ts`), and disposal, counts, reversals and piece corrections (`corrections.ts`).
+// and changed (`cost.ts`), reservations, transfers and supplier returns (`transfer.ts`), a damage hold and a condition
+// change (`damage.ts`, 13.15), sales and customer returns (`sale.ts`), and disposal, counts, reversals and piece
+// corrections (`corrections.ts`).
 
 export type {
   PostShare,
@@ -45,6 +46,8 @@ export class Valuing extends Corrections {
         return this.reversal(item);
       case 'piece-correction':
         return this.pieceCorrection(item);
+      case 'ownership-change':
+        return this.ownershipChange(item);
       default:
         throw new Error(`Not a valued item: ${item.kind}`);
     }
@@ -75,8 +78,20 @@ export class Valuing extends Corrections {
         return at(item.from.siteId, item.from.businessUnitId, null, item.goods.skuId);
       case 'disposal':
       case 'count-difference':
-      case 'reversal':
         return at(item.at.siteId, item.at.businessUnitId, item.at.locationId, item.goods.skuId);
+      case 'reversal': {
+        if (item.goods.skuId !== null) {
+          return at(item.at.siteId, item.at.businessUnitId, item.at.locationId, item.goods.skuId);
+        }
+        // Goods of Unknown SKU touch their location and the brand they were counted under (13.15; RR-555).
+        const brand = this.goodsBrand(item.goods);
+        return [
+          { siteId: item.at.siteId, businessUnitId: item.at.businessUnitId, kind: 'location', id: item.at.locationId },
+          ...(brand === null
+            ? []
+            : [{ siteId: item.at.siteId, businessUnitId: item.at.businessUnitId, kind: 'brand' as const, id: brand }]),
+        ];
+      }
       case 'piece-correction': {
         const found = this.piecesByCode.get(item.foundPieceCode);
         const missing = this.piecesByCode.get(item.missingPieceCode);

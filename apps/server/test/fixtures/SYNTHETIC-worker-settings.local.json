@@ -24,6 +24,18 @@
       "retryDelaySeconds": 10,
       "retryBackoff": true,
       "activeLimitSeconds": 300
+    },
+    "merchandise.post-pt-approval": {
+      "retries": 4,
+      "retryDelaySeconds": 10,
+      "retryBackoff": true,
+      "activeLimitSeconds": 300
+    },
+    "merchandise.raise-pt-posting-refused": {
+      "retries": 4,
+      "retryDelaySeconds": 10,
+      "retryBackoff": true,
+      "activeLimitSeconds": 300
     }
   },
   "jobKinds": {
@@ -75,6 +87,13 @@
       "retryBackoff": true,
       "activeLimitSeconds": 300,
       "everySeconds": 60
+    },
+    "booking.mark-overdue": {
+      "retries": 4,
+      "retryDelaySeconds": 10,
+      "retryBackoff": true,
+      "activeLimitSeconds": 300,
+      "everySeconds": 3600
     }
   }
 }
