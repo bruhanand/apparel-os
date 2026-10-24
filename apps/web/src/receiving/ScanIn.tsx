@@ -66,14 +66,27 @@ function ScanResult({ answer, barcode, read }: { answer: ScanAnswered; barcode: 
   );
 }
 
+/** The answer of the last scan and the barcode it was for, kept by the screen so the last piece's answer stays shown. */
+interface LastScan {
+  readonly answer: ScanAnswered;
+  readonly barcode: string;
+}
+
 /** The scan field, where the pieces go and the choice of a repeated barcode's product (goods-in 7.2). */
-function ScanForm({ read }: { read: ScanInRead }) {
+function ScanForm({
+  read,
+  onSend,
+  onAnswer,
+}: {
+  read: ScanInRead;
+  onSend: () => void;
+  onAnswer: (last: LastScan) => void;
+}) {
   const mayScan = useGranted(SCAN_TYPE, 'create');
   const [destination, setDestination] = useState('');
   const [barcode, setBarcode] = useState('');
-  // The barcode last sent, and what its scan answered once it did.
+  // The barcode last sent, for the choice of a repeated barcode's product.
   const [sent, setSent] = useState<string | null>(null);
-  const [answer, setAnswer] = useState<ScanAnswered | null>(null);
   const field = useRef<HTMLInputElement>(null);
   const submission = useSubmission('scanPiece', SCAN_READS);
   const only = read.destinations.length === 1 ? read.destinations[0]?.id : undefined;
@@ -81,13 +94,13 @@ function ScanForm({ read }: { read: ScanInRead }) {
   const pending = submission.state.kind === 'pending';
   const send = async (code: string, skuId?: string) => {
     setSent(code);
-    setAnswer(null);
+    onSend();
     const answered = await submission.submit({
       params: { grnId: read.grnId },
       body: { barcode: code, destinationLocationId: destinationId, ...(skuId === undefined ? {} : { skuId }) },
     });
     if (answered !== undefined) {
-      setAnswer(answered);
+      onAnswer({ answer: answered, barcode: code });
       setBarcode('');
     }
     field.current?.focus();
@@ -173,7 +186,6 @@ function ScanForm({ read }: { read: ScanInRead }) {
       ) : (
         refusal !== null && <SubmissionBanner state={submission.state} />
       )}
-      {answer !== null && sent !== null && <ScanResult answer={answer} barcode={sent} read={read} />}
     </form>
   );
 }
@@ -280,6 +292,9 @@ export function ScanIn({ grnId, onBack }: { grnId: string; onBack: () => void })
   const queryClient = useQueryClient();
   const read = readQuery(api, 'readScanIn', { params: { grnId }, query: {} });
   const query = useQuery(read);
+  // The last scan's answer lives here, not in the form: the last piece accepted completes the scan-in, which ends the
+  // form, and its answer is still shown (goods-in 7.3).
+  const [last, setLast] = useState<LastScan | null>(null);
   return (
     <div className="mx-auto flex w-full max-w-xl flex-col gap-4">
       <Toolbar>
@@ -306,9 +321,22 @@ export function ScanIn({ grnId, onBack }: { grnId: string; onBack: () => void })
               <UnavailableState missing={scanIn.blocking} />
             ) : (
               <>
-                {scanIn.state === 'scanning' && (
+                {(scanIn.state === 'scanning' || last !== null) && (
                   <Card title="scan.scan">
-                    <ScanForm read={scanIn} />
+                    {scanIn.state === 'scanning' && (
+                      <ScanForm
+                        read={scanIn}
+                        onSend={() => {
+                          setLast(null);
+                        }}
+                        onAnswer={setLast}
+                      />
+                    )}
+                    {last !== null && (
+                      <section aria-label={t('scan.last')} className="flex flex-col gap-2">
+                        <ScanResult answer={last.answer} barcode={last.barcode} read={scanIn} />
+                      </section>
+                    )}
                   </Card>
                 )}
                 <Card title="scan.progress">

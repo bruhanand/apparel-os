@@ -3517,6 +3517,7 @@ export const englishIndia = {
   'scan.waiting-for-pt': 'The GRN’s PT is not approved yet. Its pieces are scanned in once it is.',
   'scan.scan': 'Scan',
   'scan.form': 'Scan a piece',
+  'scan.last': 'Last scan',
   'scan.destination': 'Where the pieces go',
   'scan.destination.choose': 'Choose where the pieces go',
   'scan.destination.option': '{kind}: {place}',

@@ -249,11 +249,15 @@ test('PRD-REC-017 PRD-REC-018 POL-02.07 PRD-REC-019 PRD-REC-021 PRD-STK-006 a PT
       // Refused once with the reason shown, and kept in the record (code-house-rules 10.1; goods-in 7.2).
       await barcode.fill('8900000099999');
       await barcode.press('Enter');
-      await expect(form.getByRole('alert').filter({ hasText: 'Not on this PT' })).toBeVisible();
+      await expect(
+        maker.getByRole('region', { name: 'Last scan' }).getByRole('alert').filter({ hasText: 'Not on this PT' }),
+      ).toBeVisible();
       await barcode.fill(world.barcodes[0] ?? '');
       // The scanner's Enter sends it.
       await barcode.press('Enter');
-      await expect(form.getByRole('status').filter({ hasText: 'Accepted' })).toBeVisible();
+      await expect(
+        maker.getByRole('region', { name: 'Last scan' }).getByRole('status').filter({ hasText: 'Accepted' }),
+      ).toBeVisible();
       await expect(maker.getByText('1 piece left to scan in')).toBeVisible();
       const scans = maker.getByRole('list', { name: 'Scans' });
       await expect(scans.getByRole('listitem')).toHaveCount(2);
@@ -284,10 +288,14 @@ test('PRD-REC-017 PRD-REC-018 POL-02.07 PRD-REC-019 PRD-REC-021 PRD-STK-006 a PT
       // A tag of another supplier's goods: on no product of this PT, the reason shown and the scan kept (goods-in 7.2).
       await barcode.fill('8900000099998');
       await barcode.press('Enter');
-      await expect(form.getByRole('alert').filter({ hasText: 'Not on this PT' })).toBeVisible();
+      await expect(
+        staff.getByRole('region', { name: 'Last scan' }).getByRole('alert').filter({ hasText: 'Not on this PT' }),
+      ).toBeVisible();
       await barcode.fill(world.barcodes[1] ?? '');
       await barcode.press('Enter');
-      await expect(form.getByRole('status').filter({ hasText: 'Accepted' })).toBeVisible();
+      await expect(
+        staff.getByRole('region', { name: 'Last scan' }).getByRole('status').filter({ hasText: 'Accepted' }),
+      ).toBeVisible();
       await expect(staff.getByText('Every piece is scanned in or under a damage report.')).toBeVisible();
       await expect(staff.getByRole('list', { name: 'Scans' }).getByRole('listitem')).toHaveCount(4);
     });

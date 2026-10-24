@@ -444,17 +444,23 @@ test('PRD-ACP-001 PRD-REC-017 PRD-STK-003 POL-02.07 goods-in 12 test 22 a bookin
       // A tag of another supplier's goods: on no product of this PT, the reason shown and the scan kept (goods-in 7.2).
       await barcode.fill('8900000099997');
       await barcode.press('Enter');
-      await expect(form.getByRole('alert').filter({ hasText: 'Not on this PT' })).toBeVisible();
+      await expect(
+        store.getByRole('region', { name: 'Last scan' }).getByRole('alert').filter({ hasText: 'Not on this PT' }),
+      ).toBeVisible();
       await barcode.fill(present(firstBarcode, "the PT's first barcode"));
       await barcode.press('Enter');
-      await expect(form.getByRole('status').filter({ hasText: 'Accepted' })).toBeVisible();
+      await expect(
+        store.getByRole('region', { name: 'Last scan' }).getByRole('status').filter({ hasText: 'Accepted' }),
+      ).toBeVisible();
       await expect(store.getByText('1 piece left to scan in')).toBeVisible();
       // The browser restarts after one piece; the scan-in resumes where it stopped (goods-in 7.3; 12 test 14).
       await store.reload();
       const resumed = await openScanIn('1 piece left to scan in');
       await resumed.getByLabel('Barcode').fill(present(secondBarcode, "the PT's second barcode"));
       await resumed.getByLabel('Barcode').press('Enter');
-      await expect(resumed.getByRole('status').filter({ hasText: 'Accepted' })).toBeVisible();
+      await expect(
+        store.getByRole('region', { name: 'Last scan' }).getByRole('status').filter({ hasText: 'Accepted' }),
+      ).toBeVisible();
       await expect(store.getByText('Every piece is scanned in or under a damage report.')).toBeVisible();
       await expect(store.getByRole('list', { name: 'Scans' }).getByRole('listitem')).toHaveCount(3);
       expect(await store.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
