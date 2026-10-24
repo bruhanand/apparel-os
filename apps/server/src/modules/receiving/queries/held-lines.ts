@@ -6,7 +6,7 @@ import {
   type HeldLineState,
   type NamedProduct,
 } from '@apparel-os/schemas';
-import { and, asc, desc, eq, gte, inArray, isNotNull, lt, lte, ne, or, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNotNull, lte, ne, or, sql, type SQL } from 'drizzle-orm';
 import { CommandDefect, type TransactionContext } from '../../../kernel/index.js';
 import type { LatestRequest } from '../../access/index.js';
 import type { ResolutionAnswer, ResolutionSubject } from '../../exceptions/index.js';
@@ -453,6 +453,11 @@ export interface ReceiptProblem {
   readonly line: GrnLine;
 }
 
+/** The lines after the cursor's line in the receipt problems order: an older GRN, or a later line of the same GRN. */
+function afterLine(lineId: string): SQL {
+  return sql`(${grnLine.grnId}, -${grnLine.lineNumber}) < (select l.grn_id, -l.line_number from ${grnLine} l where l.id = ${lineId})`;
+}
+
 /**
  * The receipt problems read model (goods-in 9.3; PRD-REC-006): every GRN line the reader may see with a shortage,
  * extra pieces or damage at the count, newest first, a page of at most RECEIPT_PROBLEMS_PAGE_CAP by a cursor, with its
@@ -478,7 +483,7 @@ export async function receiptProblems(
     query.supplierPartyId === undefined ? undefined : eq(arrival.supplierPartyId, query.supplierPartyId),
     query.from === undefined ? undefined : gte(grn.businessDate, query.from),
     query.to === undefined ? undefined : lte(grn.businessDate, query.to),
-    query.after === undefined ? undefined : lt(grnLine.id, query.after),
+    query.after === undefined ? undefined : afterLine(query.after),
   ];
   const page = await context.tx
     .select({ line: grnLine, grn, supplierPartyId: arrival.supplierPartyId })
@@ -486,7 +491,9 @@ export async function receiptProblems(
     .innerJoin(grn, eq(grn.id, grnLine.grnId))
     .innerJoin(arrival, eq(arrival.id, grn.arrivalId))
     .where(and(...filters))
-    .orderBy(desc(grnLine.id))
+    // The newest GRN first, its lines in their count order: a GRN's lines are made in one millisecond, where UUIDv7
+    // identifiers are not ordered, so their own identifiers would give them in no fixed order (goods-in 4.9).
+    .orderBy(desc(grnLine.grnId), asc(grnLine.lineNumber))
     .limit(limit + 1);
   const found = page.slice(0, limit);
   const next = page.length > limit ? (found.at(-1)?.line.id ?? null) : null;
