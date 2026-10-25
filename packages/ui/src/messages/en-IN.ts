@@ -87,6 +87,7 @@ export const englishIndia = {
   'sign-in.totp-code.help':
     'The code your authenticator app shows. Leave it empty only if you have not set up an authenticator app yet.',
   'sign-in.submit': 'Sign in',
+  'sign-in.back': 'Back to sign in',
   'demo-sign-in.title': 'Test sign-in (dev only)',
   'demo-sign-in.intro':
     'Signs in a SYNTHETIC person straight away, without the password or the authenticator code. Never on KDPS test or production.',

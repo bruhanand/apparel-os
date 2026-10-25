@@ -93,6 +93,26 @@ export function SignInScreens({ initial = { stage: 'read-session' } }: { initial
   }
 }
 
+/**
+ * The way back from a step of first sign-in to the sign-in screen (product owner, 25 Oct 2026): it ends the
+ * unfinished session first, so the next sign-in starts again, and the steps resume where they stopped
+ * (access-and-approvals 3.2). Whatever the server answers, the screen goes back: a session it no longer knows is over
+ * anyway (code-house-rules 12.1).
+ */
+function BackToSignIn({ onNext }: { onNext: (stage: SignInStage) => void }) {
+  const [busy, setBusy] = useState(false);
+  const back = async () => {
+    setBusy(true);
+    try {
+      await api.call('signOut', { body: {} });
+    } catch {
+      // No answer: the screen goes back all the same.
+    }
+    onNext({ stage: 'sign-in' });
+  };
+  return <Button label="sign-in.back" variant="ghost" disabled={busy} onClick={() => void back()} />;
+}
+
 /** One step on a solid card: its title, which takes focus when the step changes, its intro and its form. */
 function Card({ title, intro, children }: { title: MessageId; intro?: MessageId; children: ReactNode }) {
   const heading = useRef<HTMLHeadingElement>(null);
@@ -345,6 +365,7 @@ function EnrolmentForm({ onNext }: { onNext: (stage: SignInStage) => void }) {
           </form>
         </>
       )}
+      <BackToSignIn onNext={onNext} />
     </Card>
   );
 }
@@ -428,6 +449,7 @@ function PasswordChangeForm({ onNext }: { onNext: (stage: SignInStage) => void }
         </FormField>
         <Button label="password-change.submit" variant="primary" type="submit" disabled={isSubmitting} />
       </form>
+      <BackToSignIn onNext={onNext} />
     </Card>
   );
 }

@@ -141,6 +141,16 @@ describe('enrolment and the password change (access-and-approvals 3.2)', () => {
     expect(text(html)).toContain('ABCD EFGH IJKL MNOP QRST UVWX YZ23 4567');
   });
 
+  it('product owner, 25 Oct 2026: each step of first sign-in offers a way back to the sign-in screen', () => {
+    for (const stage of ['enrolment', 'password-change'] as const) {
+      const html = render({ stage });
+      expect(html).toMatch(/<button[^>]*type="button"[^>]*>Back to sign in<\/button>/);
+      // The way back is not a second primary action (design-language 10.1).
+      expect(html.match(/bg-accent text-on-accent/g)).toHaveLength(1);
+    }
+    expect(text(render({ stage: 'sign-in' }))).not.toContain('Back to sign in');
+  });
+
   it('the password change asks for the new password twice and a fresh authenticator code', () => {
     const html = render({ stage: 'password-change' });
     expect(text(html)).toContain('Choose your own password');
