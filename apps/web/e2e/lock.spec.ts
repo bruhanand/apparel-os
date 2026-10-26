@@ -45,13 +45,12 @@ test('PRD-ACS-017 a locked session keeps the unfinished new user, drops the secr
   });
 
   const drawer = await openNewUser(page);
-  await test.step('design-language 5, 6 A: the page fits the window, and the drawer starts under the banner and top bar', async () => {
+  await test.step('design-language 5, 6 A: the page fits the window, and the drawer starts under the top bar', async () => {
     const layout = await page.evaluate(() => {
       const bottom = (selector: string) => document.querySelector(selector)?.getBoundingClientRect().bottom ?? -1;
       const top = (selector: string) => document.querySelector(selector)?.getBoundingClientRect().top ?? -1;
       return {
         overflow: document.documentElement.scrollHeight - window.innerHeight,
-        banner: bottom('[data-testid="environment-banner"]'),
         header: bottom('[data-testid="top-bar"]'),
         headerTop: top('[data-testid="top-bar"]'),
         scrim: top('[data-testid="drawer-scrim"]'),
@@ -60,8 +59,8 @@ test('PRD-ACS-017 a locked session keeps the unfinished new user, drops the secr
     });
     // Visual review finding 1: no blank band below the page, and no overlay over part of the top bar.
     expect(layout.overflow).toBeLessThanOrEqual(0);
-    expect(layout.headerTop).toBe(layout.banner);
-    expect(layout.scrim).toBe(layout.banner);
+    expect(layout.headerTop).toBe(0);
+    expect(layout.scrim).toBe(0);
     expect(layout.drawer).toBe(layout.header);
   });
 

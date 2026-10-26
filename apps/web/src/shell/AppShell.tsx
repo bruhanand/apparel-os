@@ -1,11 +1,9 @@
 import type { PersonaId } from '@apparel-os/schemas';
 import { cn } from '@apparel-os/ui';
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { Banner } from '../components/Banner';
+import { useState, type ReactNode } from 'react';
 import { EmptyState } from '../components/StandardStates';
 import { LockOverlay } from '../lock/LockOverlay';
 import { t } from '../messages/catalogue';
-import type { EnvironmentBanner } from './environment';
 import { landingScreen } from './landing';
 import { NoAccessAssigned } from './NoAccessAssigned';
 import { openScreens, screens, sections, type ScreenId } from './screens';
@@ -64,37 +62,13 @@ function DrawerProfile({
 }
 
 /**
- * Keeps the CSS variable `--banner-h` on <html> equal to the environment banner's height, so the sticky top bar sits
- * under the banner and every overlay (drawer, dialog, lock) starts at the banner's lower edge, the banner staying
- * visible above it (design-language 5, 6 A "As built").
- */
-function useBannerHeight() {
-  const banner = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    const element = banner.current;
-    if (element === null) return undefined;
-    const set = () => {
-      document.documentElement.style.setProperty('--banner-h', `${String(element.offsetHeight)}px`);
-    };
-    set();
-    const observer = new ResizeObserver(set);
-    observer.observe(element);
-    return () => {
-      observer.disconnect();
-    };
-  }, []);
-  return banner;
-}
-
-/**
- * The back-office shell (design-language 6 A): skip link, environment banner, glass top bar, a solid sidebar listing
+ * The back-office shell (design-language 6 A): skip link, glass top bar, a solid sidebar listing
  * only what the person's role assignments grant (PRD-ACS-002), the page header and the screen. A locked session keeps
  * the page, inert, under the lock overlay (access-and-approvals 3.3). Signed out, it shows no menu and no screen: only the sign-in screens.
  * The scope chip and the search field arrive with the records they act on (S1-F02, S1-F03).
  */
 export function AppShell({
   session,
-  banner,
   current,
   children,
   renderLink = anchor,
@@ -105,7 +79,6 @@ export function AppShell({
   defaultMenuOpen = false,
 }: {
   session: ShellSession;
-  banner: EnvironmentBanner;
   current: ScreenId | null;
   children?: ReactNode;
   renderLink?: RenderLink;
@@ -122,15 +95,11 @@ export function AppShell({
 }) {
   const [menuOpen, setMenuOpen] = useState(defaultMenuOpen);
   const [collapsed, setCollapsed] = useState(false);
-  const bannerRef = useBannerHeight();
   return (
     <div className="flex min-h-screen flex-col bg-bg text-text">
       <a href="#content" className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:bg-surface focus:p-2">
         {t('shell.skip-to-content')}
       </a>
-      <div ref={bannerRef} className="sticky top-0 z-30" data-testid="environment-banner">
-        <Banner tone={banner.tone} message={banner.message} />
-      </div>
       {session.state === 'signed-out' ? (
         <main id="content" className="flex-1 p-4 sm:p-8">
           {signIn ?? <EmptyState title="session.signed-out.title" body="session.signed-out.body" />}
@@ -148,7 +117,7 @@ export function AppShell({
           <div className="flex flex-1 flex-col" inert={session.state === 'locked'}>
             <header
               data-testid="top-bar"
-              className="glass sticky top-[var(--banner-h)] z-30 flex h-14 items-center gap-2 border-b px-4 sm:gap-4"
+              className="glass sticky top-0 z-30 flex h-14 items-center gap-2 border-b px-4 sm:gap-4"
             >
               <button
                 type="button"
@@ -194,7 +163,7 @@ export function AppShell({
                   'border-r border-border bg-surface',
                   collapsed ? 'lg:w-16' : 'lg:w-[232px]',
                   menuOpen
-                    ? 'glass fixed bottom-0 left-0 top-[calc(var(--banner-h)+56px)] z-20 flex w-[300px] flex-col overflow-y-auto lg:static lg:z-auto lg:block lg:overflow-visible'
+                    ? 'glass fixed bottom-0 left-0 top-14 z-20 flex w-[300px] flex-col overflow-y-auto lg:static lg:z-auto lg:block lg:overflow-visible'
                     : 'hidden lg:block',
                 )}
               >

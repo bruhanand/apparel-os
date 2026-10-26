@@ -61,14 +61,6 @@ export const englishIndia = {
   'persona.P-HRS': 'HR',
   'persona.P-AUD': 'Auditor',
 
-  // Environment banner (deployment.md section 1; design-language 10.17; RR-193).
-  'environment.local': 'Local work · SYNTHETIC data only',
-  'environment.dev': 'dev · SYNTHETIC data only',
-  'environment.kdps-test':
-    'kdps-test · side-by-side test: the earlier POS stays the system of record, and actions whose policy is not signed stay unavailable',
-  'environment.not-named':
-    'Environment not named: AOS_ENVIRONMENT was not set to local, dev or kdps-test when this app was built',
-
   // Session (access-and-approvals 3.3).
   'session.signed-out.title': 'Sign in to continue',
   'session.signed-out.body': 'Sign in with your Organisation code, login and password.',
@@ -3215,7 +3207,6 @@ export const englishIndia = {
   'budget.what': 'open-to-buy budgets',
   'budget.intro':
     'One budget for each brand and season. Booking prepares it, Accounts checks it and the Owner approves it, each a different person, from My work. Only an approved version is used.',
-  'budget.intro.synthetic': 'Every amount here is SYNTHETIC: this environment holds synthetic data only.',
   'budget.list': 'Open-to-buy budgets',
   'budget.empty.title': 'No open-to-buy budget yet',
   'budget.empty.body':

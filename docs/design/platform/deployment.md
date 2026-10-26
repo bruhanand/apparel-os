@@ -6,6 +6,8 @@ Status: **Current**, 3 Oct 2026; amended 6 Oct 2026 for the product owner's deci
 
 Implements: PRD "Technical platform" (Stack: Hosting, Authentication, Live updates, Jobs, Files, Hardware, Diagnostics); `PRD-MOD-001`; `PRD-ACS-017`, `PRD-ACS-020`; `PRD-INT-006`, `PRD-INT-007`, `PRD-INT-009`; `PRD-SEC-001`, `PRD-SEC-005`, `PRD-SEC-009`, `PRD-SEC-010`, `PRD-SEC-012`, `PRD-SEC-014`; `PRD-OFF-002`; `PRD-PRF-001`; `PRD-PTW-008`; `PRD-LIF-013`, `PRD-LIF-014`, `PRD-LIF-016`, `PRD-LIF-026`. Decisions: DEC-027, DEC-028, DEC-053, DEC-071, DEC-084, DEC-093, DEC-102, DEC-103, DEC-105. Policies: 2 (sessions, `POL-02.17`, `POL-02.18`), 18 (`POL-18.01`, `POL-18.03`).
 
+> **Amended 26 Oct 2026 (`DEC-145`).** Test hosting is no longer Railway. Sections 2 to 5 and 8 describe Railway and stay as the record of the design until rewritten: what holds now is a VPS running PostgreSQL, MinIO, `app`, `worker` and Caddy in Docker Compose, with the web app on Vercel forwarding `/api/*` and `/counter/*` to the VPS (one origin kept), `AOS_TRUSTED_PROXY_HOPS` 2, and deploys run from the laptop (`deploy/README.md`). The environment banner of section 1 is gone from the screens.
+
 **Covers test hosting only.** Production hosting is chosen before the first Store switch (`PRD-LIF-026`) and gets its own document.
 
 ---

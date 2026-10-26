@@ -104,10 +104,7 @@ export function RecordDrawer({
   }, []);
   return (
     <DrawerSlotsContext value={slots}>
-      <div
-        className="fixed inset-x-0 bottom-0 top-[var(--banner-h)] z-40 flex justify-end bg-scrim"
-        data-testid="drawer-scrim"
-      >
+      <div className="fixed inset-x-0 bottom-0 top-0 z-40 flex justify-end bg-scrim" data-testid="drawer-scrim">
         <div
           role="dialog"
           aria-modal="true"

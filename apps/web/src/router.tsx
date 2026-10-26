@@ -9,7 +9,6 @@ import {
 } from '@tanstack/react-router';
 import { EmptyState } from './components/StandardStates';
 import { UnavailableState } from './components/UnavailableState';
-import { banner } from './banner';
 import { AuditLogScreen } from './history/AuditLogScreen';
 import { BookingsScreen } from './booking/BookingsScreen';
 import { OpenToBuyScreen } from './booking/OpenToBuyScreen';
@@ -68,7 +67,6 @@ function Root() {
   return (
     <AppShell
       session={session}
-      banner={banner}
       current={screenAt(pathname)}
       renderLink={renderLink}
       signIn={<SignInScreens />}

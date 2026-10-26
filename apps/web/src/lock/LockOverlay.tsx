@@ -15,7 +15,7 @@ export function LockOverlay({ children }: { children?: ReactNode }) {
   }, []);
   return (
     <div
-      className="fixed inset-x-0 bottom-0 top-[var(--banner-h)] z-50 flex items-center justify-center bg-scrim p-4"
+      className="fixed inset-x-0 bottom-0 top-0 z-50 flex items-center justify-center bg-scrim p-4"
       data-testid="lock-overlay"
     >
       <div

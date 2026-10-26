@@ -144,8 +144,8 @@ describe('UnavailableState (design-language 10.17; PRD-UXP-003)', () => {
 
 describe('Banner (design-language 10.12)', () => {
   it('shows its glyph beside its text: info (i), success, warning, danger', () => {
-    expect(text(renderToStaticMarkup(<Banner tone="info" message="environment.dev" />))).toBe(
-      'i dev · SYNTHETIC data only',
+    expect(text(renderToStaticMarkup(<Banner tone="info" message="session.signed-out.title" />))).toBe(
+      'i Sign in to continue',
     );
   });
 });

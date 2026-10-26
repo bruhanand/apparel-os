@@ -1,0 +1,110 @@
+# Runs on the VPS (deploy/README.md). Only Caddy is published; PostgreSQL and the file store stay on the private network.
+name: aos
+
+x-aos-env: &aos-env
+  AOS_ENVIRONMENT: dev
+  AOS_PUBLIC_ORIGIN: ${AOS_PUBLIC_ORIGIN}
+  AOS_TRUSTED_PROXY_HOPS: '2'
+  AOS_RUNTIME_DATABASE_URL: postgresql://aos_runtime:${AOS_RUNTIME_PASSWORD}@postgres:5432/aos_directory
+  AOS_DATABASE_POOL_MAX: '5'
+  AOS_ORGANISATION_KEYS: ${AOS_ORGANISATION_KEYS}
+  AOS_INTAKE_MAX_UPLOAD_BYTES: '10485760'
+  AOS_INTAKE_MAX_EXPANDED_BYTES: '104857600'
+  AOS_INTAKE_MAX_ROWS: '150000'
+  AOS_INTAKE_MAX_PARSER_MEMORY_MB: '1024'
+  AOS_INTAKE_MAX_PROCESSING_MS: '60000'
+  AOS_FILE_STORE_ENDPOINT: http://minio:9000
+  AOS_FILE_STORE_REGION: us-east-1
+  AOS_FILE_STORE_BUCKET: aos-files
+  AOS_FILE_STORE_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+  AOS_FILE_STORE_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+  AOS_FILE_STORE_ADDRESSING: path
+
+x-aos-image: &aos-image
+  image: aos-app:local
+  build:
+    context: ..
+    dockerfile: Dockerfile
+
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    command: ['postgres', '-c', 'max_connections=200']
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      AOS_MIGRATION_PASSWORD: ${AOS_MIGRATION_PASSWORD}
+      AOS_RUNTIME_PASSWORD: ${AOS_RUNTIME_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+      - ../apps/server/db:/aos-db:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: cgr.dev/chainguard/minio:latest
+    restart: unless-stopped
+    command: ['server', '/data']
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - miniodata:/data
+
+  app:
+    <<: *aos-image
+    restart: unless-stopped
+    environment: *aos-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+
+  worker:
+    <<: *aos-image
+    restart: unless-stopped
+    environment: *aos-env
+    command:
+      - sh
+      - -c
+      - AOS_WORKER_SETTINGS="$$(cat test/fixtures/SYNTHETIC-worker-settings.local.json)" exec node dist/worker.js
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # One-off operator commands: `docker compose run --rm tools node dist/migrate.js` and the others in AGENTS.md.
+  tools:
+    <<: *aos-image
+    profiles: [tools]
+    environment:
+      <<: *aos-env
+      AOS_MIGRATION_DATABASE_URL: postgresql://aos_migration:${AOS_MIGRATION_PASSWORD}@postgres:5432/aos_directory
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      AOS_HOST: ${AOS_HOST}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    depends_on:
+      - app
+
+volumes:
+  pgdata:
+  miniodata:
+  caddydata:
+  caddyconfig:

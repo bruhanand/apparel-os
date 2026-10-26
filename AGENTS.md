@@ -57,7 +57,7 @@ The toolchain, from the PRD's "Technical platform" section, is pnpm workspaces w
 - UI design lives in `docs/design/ui/`: `design-language.md` (tokens, states, components), `ui-blueprint.html` (screens, menus by persona), `design-system.html` (the live visual version of the design language) and `design-system-preview.html` (visual examples only). Each names the PRD sections and KDPS policies it implements.
 - `ui-blueprint.html` renders only with `support.js` beside it and an internet connection (it loads React from unpkg). Its content lives in the `<script data-dc-script>` block at the end of the file.
 - `design-system.html` is a self-contained bundle that opens offline. Its page is one JSON string in `<script type="__bundler/template">`: unpack it with `json.loads`, edit, and repack with `json.dumps(page, ensure_ascii=False).replace('</', '<\\u002F')`. Leave the manifest (fonts, React, runtime) alone.
-- Test hosting (Railway environments, services, one origin, what the test setup never does) is in `docs/design/platform/deployment.md`. Production hosting is not designed yet.
+- Test hosting (the VPS and Vercel, one origin, what the test setup never does) is in `docs/design/platform/deployment.md`; how to deploy is in `deploy/README.md`. Production hosting is not designed yet.
 - The stock ledger (movements, the five separate stock facts, holds and reservations, cost pools and layers, counts, locking, golden scenarios) is in `docs/design/stock/stock-ledger.md`. Every stage posts stock through it.
 - The module map (modules, what each owns, interfaces, events, transaction boundaries, where every PRD ID lives) is in `docs/design/architecture/module-map.md`. The domain model (records, identities, lifecycles, invariants, approval boundaries) is in `docs/design/architecture/domain-model.md`. Every other design and all code follow them. Their open questions are MM-n and DM-n.
 - The business structure and masters (legal entities, registrations, books, Sites, Stores, business units, locations, the place tree for access; brands, SKUs, external codes, units and packs, tracking profiles, parties, agreements; their tables) are in `docs/design/masters/structure-and-masters.md` (GC-2). Its open questions are GC2-n.
@@ -137,7 +137,7 @@ Work runs through the skills in `.claude/skills/` (decided by the product owner,
 
 - CI (`.github/workflows/code-check.yml`) runs every check, both test suites and the browser journeys on each push; leave them passing.
 - When a fix would change business behaviour or a ticket's scope, stop and ask the product owner. A fix never fills an OPEN value.
-- The skills commit on their working or integration branch. Pushing, merging into `main` and anything on Railway wait for the product owner's go-ahead; because `main` deploys to `dev` automatically, an approval to merge must say it includes that deployment. Commits and pull requests carry no AI attribution lines.
+- The skills commit on their working or integration branch. Pushing, merging into `main` and deploying wait for the product owner's go-ahead. Deploying is `deploy/deploy.sh`, run from the product owner's laptop; GitHub runs the checks only, and a merge deploys nothing (`DEC-145`). Commits and pull requests carry no AI attribution lines.
 - Never throw away uncommitted work, even if it looks obsolete: save it to a `saved/<name>` branch first.
 - A change that touches only documents needs no code review: keep the document order, log PRD and policy changes in `docs/decisions.md` first, and run the link check.
 
@@ -183,7 +183,7 @@ From the PRD's "Technical platform" section. Use these; do not add others withou
 | Messaging       | Email, WhatsApp Business Platform and SMS adapters                                                                      |
 | Diagnostics     | pino structured JSON logs; OpenTelemetry-ready traces                                                                   |
 | Verification    | Vitest, Playwright, Testcontainers with real PostgreSQL, ESLint and Prettier                                            |
-| Hosting         | Test, including KDPS's side-by-side test: Railway for the server, jobs, PostgreSQL, web app and counter PWA. Files on test: a Railway bucket, S3-compatible (`deployment.md` D-2, DEC-105). Production chosen before the first Store switch |
+| Hosting         | Test, including KDPS's side-by-side test: a Hostinger VPS (Docker Compose: server, worker, PostgreSQL, S3-compatible MinIO, Caddy) with the web app on Vercel in front (`DEC-145`). Production chosen before the first Store switch |
 
 
 ## Planned architecture

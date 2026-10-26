@@ -1,0 +1,36 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "pnpm turbo run build --filter=@apparel-os/web...",
+  "outputDirectory": "apps/web/dist",
+  "cleanUrls": false,
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://__VPS_HOST__/api/:path*" },
+    { "source": "/counter", "destination": "https://__VPS_HOST__/counter" },
+    { "source": "/counter/:path*", "destination": "https://__VPS_HOST__/counter/:path*" },
+    { "source": "/:path((?!assets/)[^.]*)", "destination": "/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/((?!api/|counter).*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'"
+        },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Referrer-Policy", "value": "same-origin" }
+      ]
+    },
+    {
+      "source": "/assets/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+    },
+    {
+      "source": "/index.html",
+      "headers": [{ "key": "Cache-Control", "value": "no-store" }]
+    }
+  ]
+}

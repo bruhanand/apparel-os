@@ -813,7 +813,7 @@ Example: ₹10 lakh net sales − ₹6 lakh goods cost − ₹3 lakh expenses, d
 | Messaging | Email, WhatsApp Business Platform and SMS adapters |
 | Diagnostics | pino structured JSON logs and OpenTelemetry-ready traces |
 | Verification | Vitest, Playwright, Testcontainers with real PostgreSQL, ESLint and Prettier |
-| Hosting | Test environments, including a customer's side-by-side test: Railway for the server, jobs, PostgreSQL, web app and counter PWA. Production hosting is chosen before the first Store switch |
+| Hosting | Test environments, including a customer's side-by-side test: a VPS (Docker Compose) for the server, jobs, PostgreSQL and files, with the web app on Vercel in front (`DEC-145`). Production hosting is chosen before the first Store switch |
 
 ### Module and data boundaries
 

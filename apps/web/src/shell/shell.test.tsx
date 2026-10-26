@@ -25,13 +25,11 @@ const user = {
   timeZone: 'UTC',
   idleLockSeconds: 900,
 } as const;
-const banner = { environment: 'dev', message: 'environment.dev', tone: 'info' } as const;
 
 function render(session: ShellSession, menuOpen = false) {
   return renderToStaticMarkup(
     <AppShell
       session={session}
-      banner={banner}
       current="setup.users"
       defaultMenuOpen={menuOpen}
       signOut={<Button label="shell.sign-out" />}
@@ -50,12 +48,9 @@ describe('AppShell (design-language 6 A)', () => {
     expect(text(nav)).toBe('Home My work Setup Users Roles Role assignments');
   });
 
-  it('puts the skip link first and the environment banner on every screen', () => {
+  it('puts the skip link first on every screen', () => {
     const html = render({ state: 'active', user, grants });
-    expect(text(html).startsWith('Skip to content i dev · SYNTHETIC data only')).toBe(true);
-    expect(
-      text(renderToStaticMarkup(<AppShell session={{ state: 'signed-out' }} banner={banner} current={null} />)),
-    ).toContain('dev · SYNTHETIC data only');
+    expect(text(html).startsWith('Skip to content')).toBe(true);
   });
 
   it('shows the personas held as chips with their IDs (design-language 10.18)', () => {
@@ -78,7 +73,6 @@ describe('AppShell (design-language 6 A)', () => {
     const html = renderToStaticMarkup(
       <AppShell
         session={{ state: 'active', user: { ...user, roleAssignmentInForce: false }, grants: [] }}
-        banner={banner}
         current="my-work"
         signOut={<Button label="shell.sign-out" />}
       >
@@ -130,7 +124,7 @@ describe('AppShell (design-language 6 A)', () => {
   });
 
   it('shows no screen and no menu while signed out', () => {
-    const html = renderToStaticMarkup(<AppShell session={{ state: 'signed-out' }} banner={banner} current={null} />);
+    const html = renderToStaticMarkup(<AppShell session={{ state: 'signed-out' }} current={null} />);
     expect(html).not.toContain('<nav');
     expect(text(html)).toContain('Sign in to continue');
   });
