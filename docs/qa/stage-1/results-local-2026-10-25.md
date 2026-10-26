@@ -11,3 +11,5 @@
 | --- | --- | --- |
 | QA-01 | Pass | |
 | QA-02 | Pass | A and P each set up the authenticator and chose a password; the mismatch message showed. P was signed in from `/setup/users`, so the app returned there instead of My work, as it should. |
+| QA-03 | Pass | |
+| QA-04 | Pass | |
